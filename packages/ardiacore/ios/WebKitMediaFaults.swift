@@ -28,6 +28,8 @@ enum WebKitMediaFaults {
     "audible.co.jp",
     "audible.in",
     "audible.com.br",
+    "canalplus.com",
+    "mycanal.fr",
   ]
 
   static let reasons: Set<String> = [
