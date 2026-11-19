@@ -253,7 +253,10 @@ export function enablePlugin(name: string, hash: string): boolean {
   const builtIn = keepsInstalledFlag(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
   const current = currentPlugins().listings[name];
   const previous = candidate && recordApproves(current, before) ? (approvalMatches(current, before.approved) ? before.approved : before.previous) : undefined;
-  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn, ...(previous ? { previous } : {}) } }, consent)) return false;
+  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn, ...(previous ? { previous } : {}) } }, consent)) {
+    settleInstall(name, { ok: false, reason: "plugins.json couldn't be saved." });
+    return false;
+  }
   if (candidate) void promoteCandidate(name, listing, consent);
   const asksControl = manifest.permissions.control;
   applySettingsPatch(kept || !asksControl || programControlOn(useBrowser.getState()) || userTurnedControlOff() ? plan.patch : { ...plan.patch, cliControl: true });
