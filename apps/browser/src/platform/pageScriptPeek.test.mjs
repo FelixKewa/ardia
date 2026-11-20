@@ -673,7 +673,7 @@ test("a scripted click on a link is noted only with a user activation, a new-tab
   const editable = env.link("/edit", { target: "_blank" });
   editable.editable = true;
   editable.click();
-  const cancelled =env.link("/cancelled", { target: "_blank" });
+  const cancelled = env.link("/cancelled", { target: "_blank" });
   cancelled.onclick = (e) => e.preventDefault();
   cancelled.click();
   const rewritten = env.link("/tracked", { target: "_blank" });
