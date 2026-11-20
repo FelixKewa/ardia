@@ -681,6 +681,21 @@ test("a scripted click on a link is noted only with a user activation, a new-tab
   assert.equal(env.clicked.length, 10, "every call still reaches the browser's own click");
 });
 
+test("a scripted click is judged by the link its handlers leave: a target they add counts, a download they add doesn't", () => {
+  const env = environment();
+  env.activation.active = true;
+  const targeted = env.link("/targeted");
+  targeted.onclick = () => targeted.setAttribute("target", "_blank");
+  targeted.click();
+  const downloaded = env.link("/export.csv", { target: "_blank" });
+  downloaded.onclick = () => downloaded.setAttribute("download", "export.csv");
+  downloaded.click();
+  const kept = env.link("/kept", { target: "_blank" });
+  kept.onclick = () => kept.setAttribute("target", "_self");
+  kept.click();
+  assert.deepEqual(newTabLinks(env), ["https://page.example/targeted"]);
+});
+
 test("a named target or the page's <base target> counts; _self, _top, _parent and no target don't", () => {
   const env = environment();
   for (const target of ["_self", "_TOP", "_parent"]) env.gesture([env.link(`/${target}`, { target })], {});

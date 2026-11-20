@@ -1647,9 +1647,8 @@
     const tracksActivation = !!(userActivationOf && activeOf);
     const clickDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "click");
     if (tracksActivation && clickDescriptor && typeof clickDescriptor.value === "function") {
-      const watchScriptedLinkClick = (link) => {
-        const url = linkUrl(link);
-        if (!peekable({ link, url, path: [] }) || replacesPage(link) || !activated()) return null;
+      const watchScriptedLinkClick = guard((link) => {
+        if (linkUrl(link) === null || !activated()) return null;
         let dispatched = null;
         const seen = (e) => {
           if (!dispatched) dispatched = e;
@@ -1658,12 +1657,12 @@
         return () => {
           apply(unlisten, link, ["click", seen, true]);
           if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
-          const opened = linkUrl(link);
-          if (opened && apply(test, /^https?:/i, [opened])) send("newTabLink", { url: opened });
+          const url = linkUrl(link);
+          if (peekable({ link, url, path: [] })) send("newTabLink", { url });
         };
-      };
+      });
       const click = asNative(clickDescriptor.value, (target, self, args) => {
-        const settle = guard(watchScriptedLinkClick)(self);
+        const settle = watchScriptedLinkClick(self);
         try {
           return apply(target, self, args);
         } finally {
