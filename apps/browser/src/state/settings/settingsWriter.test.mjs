@@ -52,9 +52,9 @@ test("a mixed write keeps the valid keys, reports the rejected ones and counts e
 
 test("a size with a missing side and a record that isn't a plain object are turned down", () => {
   fresh();
-  S().updateSettings({ littleArdiaSize: [, 500], developerModeSites: new Date(0), shortcuts: new Map() });
+  S().updateSettings({ littleArdiaSize: [, 500], neverTranslateSites: new Date(0), shortcuts: new Map() });
   assert.deepEqual(S().settings.littleArdiaSize, DEFAULT_SETTINGS.littleArdiaSize);
-  assert.deepEqual(S().settings.developerModeSites, {});
+  assert.deepEqual(S().settings.neverTranslateSites, {});
   assert.deepEqual(S().settings.shortcuts, {});
 });
 
