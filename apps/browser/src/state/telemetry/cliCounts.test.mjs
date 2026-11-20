@@ -52,6 +52,17 @@ test("plugin tab holds and busy wheels from the engine turn into counts since th
   assert.deepEqual([counts.cli_plugin_tab_holds, counts.cli_plugin_wheels_busy], [4, 1]);
 });
 
+test("act leases the engine granted and the acts it refused turn into counts since the last take", () => {
+  takeCliCounts();
+  noteCliEngineTotals({ actLeases: { granted: 0, commandsRefused: 0, deliveriesRefused: 0 } }, "leases");
+  noteCliEngineTotals({ actLeases: { granted: 4, commandsRefused: 1, deliveriesRefused: 0, live: 1 } }, "leases");
+  noteCliEngineTotals({ actLeases: { granted: 6, commandsRefused: 1, deliveriesRefused: 2, live: 0 } }, "leases");
+  const counts = takeCliCounts();
+  assert.deepEqual([counts.cli_act_leases_granted, counts.cli_act_commands_refused, counts.cli_act_deliveries_refused], [6, 1, 2]);
+  noteCliEngineTotals({ actLeases: { granted: 6, commandsRefused: 1, deliveriesRefused: 2 } }, "leases");
+  assert.equal(takeCliCounts().cli_act_leases_granted, 0);
+});
+
 test("file picker answers the engine counts turn into counts since the last take", () => {
   takeCliCounts();
   noteCliEngineTotals({ filePickerAnswers: { armed: 0, used: 0 } }, "pickers");

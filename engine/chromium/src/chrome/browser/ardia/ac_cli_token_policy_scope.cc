@@ -15,6 +15,7 @@
 #include "base/strings/strcat.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
+#include "chrome/browser/ardia/ac_cli_act_leases.h"
 #include "chrome/browser/ardia/ac_cli_plugin_credentials.h"
 #include "chrome/browser/ardia/ac_cli_test_signals.h"
 #include "chrome/browser/ardia/ac_cli_token_policy_internal.h"
@@ -63,21 +64,28 @@ bool TokenClient::MayInputTo(content::RenderFrameHost* frame) {
       !PluginMayAttachToFrame(*scope_, frame)) {
     return false;
   }
-  return true;
+  return ActLeaseCoversFrame(scope_->credential_id, frame);
 }
 
-bool TokenClient::MaySessionInput(const std::string& session) {
+ArdiaSessionInput TokenClient::MaySessionInput(const std::string& session,
+                                               int64_t grant,
+                                               bool delivering) {
   if (revoked_ || wedged_ || draining_ || !RootInScope()) {
-    return false;
+    return ArdiaSessionInput::kRefused;
   }
   if (session.empty()) {
-    return !IsBrowserHost(root_host_.get());
-  }
-  if (detaching_.contains(session)) {
+    if (IsBrowserHost(root_host_.get())) {
+      return ArdiaSessionInput::kRefused;
+    }
+  } else if (detaching_.contains(session)) {
     CountPluginDeliveryRefusedDeparted();
-    return false;
+    return ArdiaSessionInput::kRefused;
+  } else if (!targets_.contains(session) || !SessionInScope(session)) {
+    return ArdiaSessionInput::kRefused;
   }
-  return targets_.contains(session) && SessionInScope(session);
+  return DeliveryGrantLive(session, grant, delivering)
+             ? ArdiaSessionInput::kAllowed
+                                           : ArdiaSessionInput::kLeaseEnded;
 }
 
 bool TokenClient::RootInScope() {
@@ -123,6 +131,7 @@ void TokenClient::DepartTabOf(const std::string& session) {
   content::WebContents* contents = host ? host->GetWebContents() : nullptr;
   if (contents && !PluginTabInScope(scope_->credential_id, contents)) {
     PluginTabDeparted(scope_->credential_id, contents);
+    ActLeaseTabDeparted(scope_->credential_id, contents);
   }
 }
 
@@ -130,6 +139,8 @@ void TokenClient::TabLeftWindow(const std::string& session) {
   content::DevToolsAgentHost* host = HostOf(session);
   PluginTabDeparted(scope_->credential_id,
                     host ? host->GetWebContents() : nullptr);
+  ActLeaseTabDeparted(scope_->credential_id,
+                      host ? host->GetWebContents() : nullptr);
   if (session.empty()) {
     root_left_ = true;
   } else {
@@ -176,7 +187,8 @@ bool TokenClient::PluginCommandAllowed(int id,
                                        const std::string& session,
                                        const std::string& method,
                                        base::DictValue& params,
-                                       std::string* reply) {
+                                       std::string* reply,
+                                       int64_t* grant) {
   if (!session.empty() && !SessionInScope(session)) {
     *reply = OutOfScopeReply(id, session);
     DetachOutOfScope(session);
@@ -196,7 +208,7 @@ bool TokenClient::PluginCommandAllowed(int id,
       base::Unretained(this));
   const std::string refusal = PluginRefusal(*scope_, method, params, context);
   if (refusal.empty()) {
-    return true;
+    return ActLeaseAdmits(id, session, method, reply, grant);
   }
   ++PluginTotalsSoFar().refused;
   *reply = ErrorReply(id, session, kMethodNotAllowed,
@@ -285,6 +297,7 @@ void TokenClient::CloseOutOfScope() {
     }
   }
   outstanding_.clear();
+  SettleCommandState();
   draining_ = true;
   if (closer_) {
     closer_.Run(false);

@@ -122,6 +122,7 @@ bool TokenClient::FilterEvent(std::string& message) {
   }
   const std::string method = std::move(it->second);
   outstanding_.erase(it);
+  SettleCommandState();
   if (method == kInternalCommand) {
     return false;
   }
@@ -139,6 +140,7 @@ void TokenClient::ForgetSession(const std::string& session) {
   std::erase_if(outstanding_, [&](const auto& entry) {
     return entry.first.first == session;
   });
+  SettleCommandState();
 }
 
 void TokenClient::ForgetSessionOf(const std::string& message) {
@@ -172,6 +174,7 @@ void TokenClient::DropSubtree(const std::string& session) {
     parents_.erase(gone);
     ForgetSession(gone);
   }
+  NoteSessionsLeft();
 }
 
 bool TokenClient::FilterTargetEvent(std::string_view method,

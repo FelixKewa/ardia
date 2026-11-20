@@ -3,6 +3,7 @@
 #ifndef CHROME_BROWSER_ARDIA_AC_CLI_TOKEN_POLICY_H_
 #define CHROME_BROWSER_ARDIA_AC_CLI_TOKEN_POLICY_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -46,8 +47,14 @@ bool TokenClientMayAttach(content::DevToolsAgentHostClient* root_client,
 bool TokenClientMayInput(content::DevToolsAgentHostClient* root_client,
                          content::RenderFrameHost* frame);
 
-bool TokenClientSessionMayInput(content::DevToolsAgentHostClient* root_client,
-                                const std::string& session);
+ArdiaSessionInput TokenClientSessionMayInput(
+    content::DevToolsAgentHostClient* root_client,
+    const std::string& session,
+    int64_t grant,
+    bool delivering);
+
+int64_t TokenClientInputGrant(content::DevToolsAgentHostClient* root_client,
+                              const std::string& session);
 
 void InstallTokenClientInputHooks();
 

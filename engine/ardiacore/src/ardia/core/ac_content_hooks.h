@@ -59,9 +59,15 @@ struct ArdiaPointer {
   double delta_y = 0;
   uint64_t epoch = 0;
   scoped_refptr<ArdiaWheelTicket> wheel_ticket;
+  int64_t grant = 0;
+  bool plugin = false;
 };
 
 uint64_t ArdiaPageEpoch(DevToolsAgentHost* host);
+
+size_t ArdiaParkedPointerCount();
+
+size_t ArdiaReleaseParkedPointers();
 
 void ArdiaDispatchPointer(DevToolsAgentHost* host,
                           DevToolsAgentHostClient* root_client,
@@ -209,9 +215,21 @@ extern bool (*g_ardia_devtools_may_input)(
     content::DevToolsAgentHostClient* root_client,
     content::RenderFrameHost* frame);
 
-extern bool (*g_ardia_devtools_session_may_input)(
+enum class ArdiaSessionInput : uint8_t { kAllowed, kRefused, kLeaseEnded };
+
+extern ArdiaSessionInput (*g_ardia_devtools_session_may_input)(
+    content::DevToolsAgentHostClient* root_client,
+    const std::string& session_id,
+    int64_t grant,
+    bool delivering);
+
+extern int64_t (*g_ardia_devtools_input_grant)(
     content::DevToolsAgentHostClient* root_client,
     const std::string& session_id);
+
+extern bool g_ardia_test_pointer_park;
+extern bool g_ardia_test_pointer_withhold_acks;
+extern int g_ardia_test_pointer_recoveries;
 
 extern void (*g_ardia_devtools_session_attached)(
     content::DevToolsAgentHostClient* root_client,

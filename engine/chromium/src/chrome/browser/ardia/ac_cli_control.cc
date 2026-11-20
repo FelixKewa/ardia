@@ -41,6 +41,7 @@
 #include "ardia/core/ac_windowless_page.h"
 #include "chrome/browser/ardia/ac_cli_file_picker.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
+#include "chrome/browser/ardia/ac_cli_act_leases.h"
 #include "chrome/browser/ardia/ac_cli_plugin_credentials.h"
 #include "chrome/browser/ardia/ac_cli_test_signals.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
@@ -264,6 +265,7 @@ class ControlServer {
                                       .Set("missed", windowless.missed));
     status.Set("commandsByDomain", TokenCommandsByDomain());
     status.Set("filePickerAnswers", FilePickerAnswerTotals());
+    status.Set("actLeases", ActLeaseTotals());
     AddCliTestSignals(status);
     const PluginTotals& plugins = PluginTotalsSoFar();
     status.Set("pluginCredentials", base::DictValue()

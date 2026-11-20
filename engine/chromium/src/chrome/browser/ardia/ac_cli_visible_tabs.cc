@@ -295,6 +295,13 @@ void ReleasePluginTabVisibleHolds(const std::string& credential_id) {
   }
 }
 
+bool PluginTabVisibleHoldHeld(const std::string& credential_id,
+                              content::WebContents* contents) {
+  auto held = PluginHolds().find(PluginHoldKey{credential_id, contents});
+  return held != PluginHolds().end() && held->second.contents &&
+         held->second.capture;
+}
+
 int PluginTabVisibleHoldCount() {
   return HeldPluginCaptures();
 }

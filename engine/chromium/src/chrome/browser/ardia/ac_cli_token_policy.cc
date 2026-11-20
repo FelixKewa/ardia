@@ -28,6 +28,7 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chrome/browser/ardia/ac_cli_act_leases.h"
 #include "chrome/browser/ardia/ac_cli_file_picker.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_test_signals.h"
@@ -237,6 +238,7 @@ TokenClient::TokenClient(content::DevToolsAgentHostClient* client,
 }
 
 void TokenClient::Revoke() {
+  ReturnAllActions();
   revoked_ = true;
   wedged_ = true;
   if (scope_) {
@@ -281,7 +283,11 @@ TokenClient::~TokenClient() {
       ticket->Abandon();
     }
   }
+  ReturnAllActions();
   Registry().erase(client_);
+  if (kind_ == TokenKind::kPlugin) {
+    ActLeaseSessionsLeft(scope_->credential_id);
+  }
   ForgetFilePickerAnswers(this);
   ReleaseCliOwnedTargets(this);
 }
@@ -338,8 +344,9 @@ bool TokenClient::FilterCommand(std::string& message, std::string* reply) {
     return false;
   }
   base::DictValue& params = *command.EnsureDict("params");
+  int64_t grant = 0;
   if (kind_ == TokenKind::kPlugin &&
-      !PluginCommandAllowed(*id, session, *method, params, reply)) {
+      !PluginCommandAllowed(*id, session, *method, params, reply, &grant)) {
     return false;
   }
   if (*method == kAnswerFilePicker) {
@@ -348,7 +355,8 @@ bool TokenClient::FilterCommand(std::string& message, std::string* reply) {
   if (*method == kDispatchClick ||
       (kind_ == TokenKind::kPlugin && *method == "Input.dispatchMouseEvent")) {
     outstanding_[key] = *method;
-    return DispatchPointerCommand(*id, session, *method, params, reply);
+    return DispatchPointerCommand(*id, session, *method, params, grant,
+                                  reply);
   }
   if (*method == "IO.read") {
     const std::optional<int> size = params.FindInt("size");
@@ -359,6 +367,9 @@ bool TokenClient::FilterCommand(std::string& message, std::string* reply) {
   NoteCommand(*method, session, &params);
   outstanding_[key] = NeedsResponse(*method) ? *method : std::string();
   message = base::WriteJson(command).value_or(std::string());
+  if (kind_ == TokenKind::kPlugin) {
+    NoteDispatchingGrant(session, grant);
+  }
   return !message.empty();
 }
 
@@ -395,6 +406,7 @@ bool TokenClient::DispatchPointerCommand(int id,
                                          const std::string& session,
                                          const std::string& method,
                                          const base::DictValue& params,
+                                         int64_t grant,
                                          std::string* reply) {
   CountCommand(CommandDomain::kInput);
   content::DevToolsAgentHost* host = HostOf(session);
@@ -423,6 +435,7 @@ bool TokenClient::DispatchPointerCommand(int id,
   }
   if (!host || !refusal.empty()) {
     outstanding_.erase({session, id});
+    SettleCommandState();
     *reply = ErrorReply(
         id, session, kInvalidRequest,
         base::StrCat({refusal::kPrefix, method, " ",
@@ -432,6 +445,9 @@ bool TokenClient::DispatchPointerCommand(int id,
     return false;
   }
   pointer.epoch = content::ArdiaPageEpoch(host);
+  pointer.grant = grant;
+  pointer.plugin = kind_ == TokenKind::kPlugin;
+  const uint64_t run = ++next_pointer_run_;
   scoped_refptr<PluginWheelTicket> ticket;
   if (kind_ == TokenKind::kPlugin &&
       pointer.kind == content::ArdiaPointer::Kind::kWheel) {
@@ -439,6 +455,7 @@ bool TokenClient::DispatchPointerCommand(int id,
     WheelSlot slot{scope_->credential_id, contents};
     if (!PluginWheelSlots().Take(slot)) {
       outstanding_.erase({session, id});
+      SettleCommandState();
       ++PluginTotalsSoFar().busy;
       *reply = ErrorReply(id, session, kRefused, refusal::kBusy);
       return false;
@@ -451,19 +468,20 @@ bool TokenClient::DispatchPointerCommand(int id,
         base::BindOnce(
             [](base::WeakPtr<TokenClient> self,
                scoped_refptr<PluginWheelTicket> ticket, std::string session,
-               int id) {
+               int id, uint64_t run) {
               if (ticket->Expire() && self) {
                 self->ForgetWheel(session, ticket.get());
-                self->FinishPointer(id, session, refusal::kNotDelivered);
+                self->FinishPointer(id, session, run, refusal::kNotDelivered);
               }
             },
-            weak_factory_.GetWeakPtr(), ticket, session, id),
+            weak_factory_.GetWeakPtr(), ticket, session, id, run),
         kPluginWheelDeadline);
   }
+  pointer_runs_[{session, id}] = run;
   auto dispatch = base::BindOnce(
       [](base::WeakPtr<TokenClient> self,
          scoped_refptr<content::DevToolsAgentHost> host, std::string session,
-         int id, content::ArdiaPointer pointer,
+         int id, uint64_t run, content::ArdiaPointer pointer,
          scoped_refptr<PluginWheelTicket> ticket) {
         if (!self || self->revoked_) {
           if (ticket) {
@@ -476,7 +494,7 @@ bool TokenClient::DispatchPointerCommand(int id,
             base::BindOnce(
                 [](base::WeakPtr<TokenClient> self,
                    scoped_refptr<PluginWheelTicket> ticket, std::string session,
-                   int id, std::string error) {
+                   int id, uint64_t run, std::string error) {
                   if (ticket) {
                     ticket->Abandon();
                   }
@@ -486,11 +504,11 @@ bool TokenClient::DispatchPointerCommand(int id,
                   if (ticket) {
                     self->ForgetWheel(session, ticket.get());
                   }
-                  self->FinishPointer(id, session, std::move(error));
+                  self->FinishPointer(id, session, run, std::move(error));
                 },
-                self, ticket, session, id));
+                self, ticket, session, id, run));
       },
-      weak_factory_.GetWeakPtr(), base::WrapRefCounted(host), session, id,
+      weak_factory_.GetWeakPtr(), base::WrapRefCounted(host), session, id, run,
       pointer, ticket);
   if (kind_ == TokenKind::kPlugin && CliPluginInputHold()) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
@@ -503,8 +521,16 @@ bool TokenClient::DispatchPointerCommand(int id,
 
 void TokenClient::FinishPointer(int id,
                                       const std::string& session,
+                                      uint64_t run,
                                       std::string error) {
-  if (!outstanding_.erase({session, id}) || !to_client_) {
+  auto owner = pointer_runs_.find({session, id});
+  if (owner == pointer_runs_.end() || owner->second != run) {
+    return;
+  }
+  pointer_runs_.erase(owner);
+  const bool waiting = outstanding_.erase({session, id}) > 0;
+  SettleCommandState();
+  if (!waiting || !to_client_) {
     return;
   }
   if (!error.empty()) {
@@ -651,19 +677,33 @@ bool TokenClientMayInput(content::DevToolsAgentHostClient* root_client,
   return it->second->MayInputTo(frame);
 }
 
-bool TokenClientSessionMayInput(content::DevToolsAgentHostClient* root_client,
-                                const std::string& session) {
+ArdiaSessionInput TokenClientSessionMayInput(
+    content::DevToolsAgentHostClient* root_client,
+    const std::string& session,
+    int64_t grant,
+    bool delivering) {
   auto it = cli_token_policy_internal::Registry().find(root_client);
   if (it == cli_token_policy_internal::Registry().end() ||
       it->second->kind() == TokenKind::kCli) {
-    return true;
+    return ArdiaSessionInput::kAllowed;
   }
-  return it->second->MaySessionInput(session);
+  return it->second->MaySessionInput(session, grant, delivering);
+}
+
+int64_t TokenClientInputGrant(content::DevToolsAgentHostClient* root_client,
+                              const std::string& session) {
+  auto it = cli_token_policy_internal::Registry().find(root_client);
+  if (it == cli_token_policy_internal::Registry().end() ||
+      it->second->kind() == TokenKind::kCli) {
+    return 0;
+  }
+  return it->second->InputGrant(session);
 }
 
 void InstallTokenClientInputHooks() {
   g_ardia_devtools_may_input = &TokenClientMayInput;
   g_ardia_devtools_session_may_input = &TokenClientSessionMayInput;
+  g_ardia_devtools_input_grant = &TokenClientInputGrant;
 }
 
 bool TokenClientRendererUntrusted(content::DevToolsAgentHostClient* root_client) {
@@ -671,6 +711,7 @@ bool TokenClientRendererUntrusted(content::DevToolsAgentHostClient* root_client)
 }
 
 void CloseTokenClientsOf(const std::string& credential_id) {
+  ReleaseActLeasesOf(credential_id);
   for (cli_token_policy_internal::TokenClient* client :
        cli_token_policy_internal::ClientsOf(credential_id)) {
     client->Revoke();

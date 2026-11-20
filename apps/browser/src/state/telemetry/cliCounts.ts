@@ -37,6 +37,9 @@ const NONE = {
   cli_plugin_commands_refused: 0,
   cli_plugin_tab_holds: 0,
   cli_plugin_wheels_busy: 0,
+  cli_act_leases_granted: 0,
+  cli_act_commands_refused: 0,
+  cli_act_deliveries_refused: 0,
   cli_file_picker_answers_armed: 0,
   cli_file_picker_answers_used: 0,
 };
@@ -55,6 +58,9 @@ let counts = { ...NONE };
 let windowlessSeen = { given: 0, missed: 0 };
 const PLUGIN_TOTALS = { minted: "cli_plugin_credentials_minted", revoked: "cli_plugin_credentials_revoked", refused: "cli_plugin_commands_refused", holds: "cli_plugin_tab_holds", busy: "cli_plugin_wheels_busy" } as const;
 let pluginSeen = { minted: 0, revoked: 0, refused: 0, holds: 0, busy: 0 };
+const ACT_TOTALS = { granted: "cli_act_leases_granted", commandsRefused: "cli_act_commands_refused", deliveriesRefused: "cli_act_deliveries_refused" } as const;
+type ActLeaseTotals = Partial<Record<keyof typeof ACT_TOTALS, number>>;
+let actSeen = { granted: 0, commandsRefused: 0, deliveriesRefused: 0 };
 let pickerSeen = { armed: 0, used: 0 };
 let cdpCommandsSeen: Record<CdpCommandDomain, number> = Object.fromEntries(CDP_COMMAND_DOMAINS.map((domain) => [domain, 0])) as Record<CdpCommandDomain, number>;
 
@@ -107,6 +113,15 @@ export function notePluginTotals(totals: Partial<Record<keyof typeof PLUGIN_TOTA
   }
 }
 
+export function noteActLeaseTotals(totals: ActLeaseTotals | undefined) {
+  if (!totals) return;
+  for (const key of Object.keys(ACT_TOTALS) as (keyof typeof ACT_TOTALS)[]) {
+    const total = Number(totals[key]) || 0;
+    counts[ACT_TOTALS[key]] += Math.max(0, total - actSeen[key]);
+    actSeen[key] = Math.max(total, actSeen[key]);
+  }
+}
+
 export function notePickerAnswers(totals: { armed?: number; used?: number } | undefined) {
   if (!totals) return;
   const armed = Number(totals.armed) || 0, used = Number(totals.used) || 0;
@@ -115,7 +130,7 @@ export function notePickerAnswers(totals: { armed?: number; used?: number } | un
   pickerSeen = { armed: Math.max(armed, pickerSeen.armed), used: Math.max(used, pickerSeen.used) };
 }
 
-type EngineTotals = { windowlessPages?: { given: number; missed: number }; commandsByDomain?: CdpCommandsByDomain; pluginCredentials?: Partial<Record<keyof typeof PLUGIN_TOTALS, number>>; filePickerAnswers?: { armed?: number; used?: number } };
+type EngineTotals = { windowlessPages?: { given: number; missed: number }; commandsByDomain?: CdpCommandsByDomain; pluginCredentials?: Partial<Record<keyof typeof PLUGIN_TOTALS, number>>; filePickerAnswers?: { armed?: number; used?: number }; actLeases?: ActLeaseTotals };
 let baselineEpoch: string | null = null;
 
 export function noteCliEngineTotals(status: EngineTotals, epoch: string = consentEpoch()) {
@@ -126,6 +141,7 @@ export function noteCliEngineTotals(status: EngineTotals, epoch: string = consen
     noteCdpCommands(status.commandsByDomain);
     notePluginTotals(status.pluginCredentials);
     notePickerAnswers(status.filePickerAnswers);
+    noteActLeaseTotals(status.actLeases);
     counts = counted;
     return;
   }
@@ -133,6 +149,7 @@ export function noteCliEngineTotals(status: EngineTotals, epoch: string = consen
   noteCdpCommands(status.commandsByDomain);
   notePluginTotals(status.pluginCredentials);
   notePickerAnswers(status.filePickerAnswers);
+  noteActLeaseTotals(status.actLeases);
 }
 
 export function takeCliCounts() {

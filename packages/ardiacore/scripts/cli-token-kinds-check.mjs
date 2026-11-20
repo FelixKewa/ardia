@@ -40,11 +40,33 @@ presses, releases and moves with a button, and Ardia.dispatchClick clicks, doubl
 back), a command in flight answers tab_out_of_scope, a late reply never arrives, the session is detached, mouse and
 wheel input it queued before the move never lands even though the tab is back, and a fresh attach to the returned tab
 takes input again. Backend node ids from another tab in the same renderer and node ids of a node the page adopted
-into a window-2 document are refused for reads, focus and scroll; paste and native key codes, editing commands
-without a key, the middle button (both encodings), window screenshots and clips outside the viewport are refused or
-confined, a target whose opener left the window shows no opener, select all then deleteBackward clears a field, and
+into a window-2 document are refused for reads and scroll; paste and native key codes, editing commands
+without a key and the middle button (both encodings) are refused, a target whose opener left the window shows no opener, select all then deleteBackward clears a field, and
 macOS word deletion still works; a scope close drains its replies even with a backlog and a concurrent command, and a
-revoke during it closes at once. The CLI answers a page's showOpenFilePicker, showSaveFilePicker and
+revoke during it closes at once. Every plugin act needs an act lease (engine.cliActLease {tabId, credential}) on its
+tab's current document: without one, input, Ardia.dispatchClick, Page.navigate, Page.reload and
+Page.handleJavaScriptDialog answer exactly "ardia: no act lease for this page's current document"; a lease holds its background tab visible
+(the engine's SetPluginTabVisibleHold) from before the grant until it ends and its last action returned, so the tab
+reports visibilityState visible during the act and hidden afterwards; a wheel outside an act is refused (the lease
+answers first), a wheel under a lease with the hold on is acknowledged and scrolls, a wheel under a live lease whose
+hold another caller turned off is refused as page hidden, and a plugin wheel admitted and held whose delivery
+follows the person's own scroll (tabs.devScrollZoom) within 500 ms answers ardia: busy; a grant names the document id
+engine.cliActDocument gave when the act was approved, so a tab that loaded a replacement document since is refused
+(document_changed); another credential's lease, an unknown credential and a tab in another window don't count; a
+mouse move and an Ardia.dispatchClick held by pluginInputHold under a lease that ended (waited for through the engine's
+admission count, never a fixed sleep) are refused at delivery with exactly "ardia: act lease ended before this input
+was delivered", as is a command whose 10 s action deadline passed while it still waited to be delivered, even though a new lease was granted meanwhile, and the
+click never lands (actLeases.deliveriesRefused); a new document ends the lease (actLeases.endedByDocument), and so
+do a back-forward cache round trip (the restored document stays unleased), a renderer exit and the credential's last
+session on the tab detaching (a fresh attach is refused until a new grant, then acts); a prerendered page of a leased
+tab never acts under the primary page's lease; a cross-site frame's own session gets the act-lease-missing refusal; a
+wheel parked before forwarding answers "ardia: not delivered" at #2808's 5 s deadline and frees its slot, so a wheel
+under a fresh lease after the 10 s action deadline isn't busy; a Page.navigate to a page that never answers gets the
+"ardia: outcome unknown" at 10 s (Chromium started it), its id stays taken until Chromium's late reply, which is
+dropped, and a click forwarded with its acks withheld gets the same at 10 s, while a click still parked gets the
+act-lease-ended refusal; revoking the
+credential leaves no lease live; and after the
+control server restarts no lease survives, an old id releases nothing and new ids keep counting. The CLI answers a page's showOpenFilePicker, showSaveFilePicker and
 showDirectoryPicker with Ardia.answerFilePicker (no dialog opens), and a plugin is refused that command. The app's
 file eval runs through its perf probe, so a release build works.`;
 const [appArg] = process.argv.slice(2);
@@ -78,6 +100,8 @@ const PICKERS = `<textarea id=area style="position:fixed;left:240px;top:40px;wid
 ${DRAG_LOG}
 window.clicks = 0;
 clicker.onclick = () => window.clicks++;
+document.body.dataset.visibility = document.visibilityState;
+document.addEventListener("visibilitychange", () => { document.body.dataset.visibility = document.visibilityState; });
 window.captureLog = [];
 capture.addEventListener("pointerdown", (e) => { capture.setPointerCapture(e.pointerId); captureLog.push("pointerdown"); });
 for (const type of ["gotpointercapture", "pointerup", "lostpointercapture"]) capture.addEventListener(type, () => captureLog.push(type));
@@ -90,7 +114,11 @@ const VIS = `<!doctype html><title>vis</title><p id=vis>-</p><p id=scrolled>0</p
 <script>const show = () => (vis.textContent = document.visibilityState); show(); document.addEventListener("visibilitychange", show);
 addEventListener("scroll", () => (scrolled.textContent = String(Math.round(scrollY))), { passive: true });</script>`;
 let port = 0;
+const hanging = [];
+const requested = [];
+const answerHanging = () => hanging.splice(0).forEach((answer) => answer());
 const server = createServer((req, res) => {
+  requested.push(req.url);
   res.setHeader("content-type", "text/html");
   if (req.url === "/child") return res.end(`<!doctype html><title>child</title><p id=childp>child</p><h1 style="position:fixed;left:100px;top:0;margin:0;font-size:12px">ardia child heading</h1>
 <div id=drag draggable=true style="position:fixed;left:10px;top:5px;width:80px;height:25px;background:#ccc">drag</div>
@@ -100,6 +128,7 @@ const server = createServer((req, res) => {
   const frames = req.url === "/one" ? `<iframe id=child src="/child" style="position:fixed;left:460px;top:40px;width:160px;height:80px"></iframe><iframe id=xsite src="http://localhost:${port}/xchild" style="position:fixed;left:460px;top:140px;width:160px;height:120px"></iframe>` : "";
   const answer = () => res.end(`<!doctype html><title>${req.url.slice(1)}</title><input type=file id=f>${PICKERS}${frames}`);
   if (req.url.startsWith("/slow")) setTimeout(answer, 3000);
+  else if (req.url.startsWith("/hang")) hanging.push(answer);
   else answer();
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -144,9 +173,11 @@ const appEval = async (body) => {
     const out = JSON.parse(readFileSync(join(data, "dev-eval-result.json"), "utf8"));
     if (out.id !== id) return null;
     writeFileSync(join(data, "dev-eval-result.json"), JSON.stringify({ id }));
-    if (out.error) throw new Error(out.error);
-    return { value: out.result };
-  }).then((r) => r.value);
+    return out.error ? { error: out.error } : { value: out.result };
+  }).then((r) => {
+    if (r.error) throw new Error(r.error);
+    return r.value;
+  });
 };
 
 function connect(url) {
@@ -181,7 +212,7 @@ function connect(url) {
   });
 }
 const refused = (reply) => !!reply.error;
-const text = (reply) => (reply.error ? reply.error.message : JSON.stringify(reply.result).slice(0, 120));
+const text = (reply) => (!reply ? "no reply" : reply.error ? reply.error.message : JSON.stringify(reply.result).slice(0, 120));
 
 const testEnv = Object.entries(launchVariables({ instance: { chromiumSwitches: `--ignore-certificate-errors-spki-list=${spki}` }, test: { privatePasteboard: true, pluginInputHold: true } })).flatMap(([k, v]) => ["--env", `${k}=${v}`]);
 execFileSync("open", ["-g", "-n", "--env", "ARDIA_BACKGROUND=1", "--env", `ARDIA_DATA_DIR=${data}`, ...testEnv, app]);
@@ -223,6 +254,44 @@ try {
   check("the plugin credential can't read /ardia/active", active !== 200, String(active));
 
   const plugin = await connect(`${base}?token=${encodeURIComponent(minted.credential)}`);
+  const documentOf = (tabId, credential = minted.id) =>
+    appEval(`return ac.engine.call("engine.cliActDocument", { tabId: ${JSON.stringify(tabId)}, credential: ${JSON.stringify(credential)} })`).catch((e) => ({ error: String(e?.message ?? e) }));
+  const leaseFor = (tabId, document, credential = minted.id) =>
+    appEval(`return ac.engine.call("engine.cliActLease", { tabId: ${JSON.stringify(tabId)}, credential: ${JSON.stringify(credential)}, document: ${Number(document)} })`).catch((e) => ({ error: String(e?.message ?? e) }));
+  const leaseOf = async (tabId, credential = minted.id) => {
+    const approved = await documentOf(tabId, credential);
+    return approved?.error ? approved : leaseFor(tabId, approved?.document, credential);
+  };
+  const releaseLease = (lease) => appEval(`return ac.engine.call("engine.cliActRelease", { lease: ${Number(lease)} })`).catch(() => null);
+  const heldLeases = new Map();
+  const holdTab = async (tabId) => {
+    if (heldLeases.has(tabId)) await releaseLease(heldLeases.get(tabId));
+    const granted = await leaseOf(tabId);
+    heldLeases.set(tabId, granted?.lease);
+    return granted?.lease;
+  };
+  const leaseTotals = async () => (await appEval(`return ac.engine.call("engine.cliControlStatus")`))?.actLeases ?? {};
+  const inputAdmitted = async () => (await appEval(`return ac.engine.call("engine.cliControlStatus")`))?.commandsByDomain?.input ?? -1;
+  const afterAdmission = async (send) => {
+    const before = await inputAdmitted();
+    send();
+    return until("the engine to admit the input command", async () => ((await inputAdmitted()) > before) || null, 5000).then(() => true, () => false);
+  };
+  const LEASE_MISSING = "ardia: no act lease for this page's current document";
+  const LEASE_ENDED = "ardia: act lease ended before this input was delivered";
+  const OUTCOME_UNKNOWN = "ardia: outcome unknown";
+  const noLease = (reply) => refused(reply) && reply.error?.message === LEASE_MISSING;
+  const leaseEnded = (reply) => !!reply && refused(reply) && reply.error?.message === LEASE_ENDED;
+  const leasedSend = async (tabId, method, params, session) => {
+    let reply = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await holdTab(tabId);
+      reply = await plugin.send(method, params, session);
+      if (!noLease(reply)) return reply;
+      await sleep(300);
+    }
+    return reply;
+  };
   const seen = (await urlsOf(plugin)).map((t) => t.url);
   check("plugin: Target.getTargets is filtered to window 1's web pages", seen.includes(`${origin}/one`) && !seen.includes(`${origin}/two`) && seen.every((u) => u.startsWith(origin)), seen.join(" "));
   const own = await plugin.send("Target.attachToTarget", { targetId: pages.one.targetId, flatten: true });
@@ -273,6 +342,63 @@ try {
   const scrolled = await plugin.send("DOM.scrollIntoViewIfNeeded", { nodeId: openNode }, ps);
   const emulatedFocus = await plugin.send("Emulation.setFocusEmulationEnabled", { enabled: true }, ps);
   check("plugin: DOM.focus, DOM.scrollIntoViewIfNeeded, Page.captureScreenshot and Emulation.setFocusEmulationEnabled are refused", [focused, scrolled, shot, emulatedFocus].every((r) => refused(r) && /plugin/.test(r.error?.message ?? "")), [focused, scrolled, shot, emulatedFocus].map(text).join(" | "));
+  const unleased = [
+    await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5 }, ps),
+    await plugin.send("Input.dispatchKeyEvent", { type: "keyDown", key: "a", text: "a", windowsVirtualKeyCode: 65 }, ps),
+    await plugin.send("Input.insertText", { text: "x" }, ps),
+    await plugin.send("Ardia.dispatchClick", { x: 100, y: 60 }, ps),
+    await plugin.send("Page.reload", {}, ps),
+    await plugin.send("Page.navigate", { url: `${origin}/one` }, ps),
+    await plugin.send("Page.handleJavaScriptDialog", { accept: true }, ps),
+  ];
+  check("lease: without an act lease, a plugin's input, clicks, navigation, reload and dialog answers answer exactly the act-lease-missing refusal", unleased.every(noLease), unleased.map(text).join(" | "));
+  const unleasedRead = await plugin.send("DOM.getBoxModel", { nodeId: openNode }, ps);
+  check("lease: a read needs no lease", !refused(unleasedRead), text(unleasedRead));
+  const otherMinted = await appEval(`return ac.engine.call("engine.cliPluginCredential", { tabId: "t1" })`);
+  const otherPlugin = await connect(`${base}?token=${encodeURIComponent(otherMinted.credential)}`);
+  await otherPlugin.send("Target.attachToTarget", { targetId: pages.one.targetId, flatten: true });
+  const foreignLease = await leaseOf("t1", otherMinted?.id);
+  const foreignMove = await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5 }, ps);
+  check("lease: another credential's lease on the same page doesn't let this plugin act", typeof foreignLease?.lease === "number" && noLease(foreignMove), `${JSON.stringify(foreignLease)} ${text(foreignMove)}`);
+  await releaseLease(foreignLease?.lease);
+  otherPlugin.ws.close();
+  await appEval(`return ac.engine.call("engine.cliPluginCredential", { revoke: ${JSON.stringify(otherMinted?.id)} })`);
+  const elsewhere = await leaseOf("t2");
+  check("lease: a tab in another window can't be leased", typeof elsewhere?.lease !== "number" && /out of scope/.test(elsewhere?.error ?? ""), JSON.stringify(elsewhere));
+  const unknownCredential = await leaseOf("t1", "plugin-0000000000000000");
+  check("lease: an unknown credential can't be leased", typeof unknownCredential?.lease !== "number" && /unknown credential/.test(unknownCredential?.error ?? ""), JSON.stringify(unknownCredential));
+  const firstLease = await holdTab("t1");
+  check("lease: a lease is granted on its own window's tab", typeof firstLease === "number", String(firstLease));
+  const releasedTwice = [await releaseLease(firstLease), await releaseLease(firstLease)];
+  const afterRelease = await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 6, y: 6 }, ps);
+  check("lease: a released lease admits nothing, and releasing it again answers false", releasedTwice[0]?.released === true && releasedTwice[1]?.released === false && noLease(afterRelease), `${JSON.stringify(releasedTwice)} ${text(afterRelease)}`);
+  heldLeases.delete("t1");
+  await holdTab("t1");
+  const cliEarly = (await cli.send("Target.attachToTarget", { targetId: pages.one.targetId, flatten: true })).result?.sessionId;
+  const earlyValue = async (expression) => (await cli.send("Runtime.evaluate", { expression, returnByValue: true }, cliEarly)).result?.result?.value;
+  const clickerQuad = (await plugin.send("DOM.getContentQuads", { nodeId: await nodeIn("#clicker") }, ps)).result?.quads?.[0] ?? [0, 0, 0, 0, 0, 0, 0, 0];
+  const clickerX = (clickerQuad[0] + clickerQuad[4]) / 2, clickerY = (clickerQuad[1] + clickerQuad[5]) / 2;
+  const capturedBefore = await leaseTotals();
+  const clicksBeforeHeld = await earlyValue("window.clicks");
+  const capturedMark = plugin.replies.length;
+  const moveAdmitted = await afterAdmission(() => plugin.raw(650001, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 8, y: 8 }, ps));
+  const clickAdmitted = await afterAdmission(() => plugin.raw(650011, "Ardia.dispatchClick", { x: clickerX, y: clickerY }, ps));
+  await holdTab("t1");
+  const laterAdmitted = await afterAdmission(() => plugin.raw(650002, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 9, y: 9 }, ps));
+  const heldMove = await until("the held move's answer", async () => plugin.replies.slice(capturedMark).find((m) => m.id === 650001) ?? null, 8000).catch(() => null);
+  const heldClick = await until("the held click's answer", async () => plugin.replies.slice(capturedMark).find((m) => m.id === 650011) ?? null, 8000).catch(() => null);
+  const laterMove = await until("the later move's answer", async () => plugin.replies.slice(capturedMark).find((m) => m.id === 650002) ?? null, 8000).catch(() => null);
+  const clicksAfterHeld = await earlyValue("window.clicks");
+  const capturedAfter = await leaseTotals();
+  check("lease: a mouse move and an Ardia.dispatchClick held under a lease that ended are refused at delivery with exactly the act-lease-ended refusal, though a newer lease covers the page; the click never lands, and input under the newer lease lands",
+    moveAdmitted && clickAdmitted && laterAdmitted && leaseEnded(heldMove) && leaseEnded(heldClick) && clicksAfterHeld === clicksBeforeHeld && laterMove && !refused(laterMove) && capturedAfter.deliveriesRefused - capturedBefore.deliveriesRefused === 2,
+    `${text(heldMove ?? {})} | ${text(heldClick ?? {})} | ${text(laterMove ?? {})} clicks ${clicksBeforeHeld} -> ${clicksAfterHeld} ${JSON.stringify(capturedAfter)}`);
+  const withheld = [
+    await plugin.send("DOM.focus", { nodeId: areaNode }, ps),
+    await plugin.send("Page.captureScreenshot", {}, ps),
+    await plugin.send("Page.captureScreenshot", { clip: { x: 0, y: 0, width: 10, height: 10, scale: 1 } }, ps),
+  ];
+  check("lease: DOM.focus and Page.captureScreenshot are refused for a plugin even under a live lease", withheld.every((r) => refused(r) && /isn't allowed for a plugin/.test(r.error?.message ?? "")), withheld.map(text).join(" | "));
   const wheel = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 60, deltaX: 0, deltaY: 50 }, ps);
   check("plugin: a mouseWheel event answers", !refused(wheel), text(wheel));
 
@@ -288,7 +414,7 @@ try {
   const visBefore = await visState(p4);
   check("plugin: a background tab it attached to without a hold reports visibilityState hidden", !!p4 && visBefore === "hidden", `${text(visAttach)} ${visBefore}`);
   const wheelHidden = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 100, deltaX: 0, deltaY: 300 }, p4);
-  check("plugin: a wheel to that tab without a hold is refused (page hidden)", refused(wheelHidden) && /page hidden/.test(wheelHidden.error?.message ?? ""), text(wheelHidden));
+  check("lease: a wheel to that tab outside an act (no lease, no hold) is refused, the lease first (the act-lease-missing refusal)", noLease(wheelHidden), text(wheelHidden));
   const holdOutOfScope = await hold("t2", true);
   check("plugin: a hold on another window's tab is refused (tab out of scope)", /tab out of scope/.test(holdOutOfScope?.error ?? ""), JSON.stringify(holdOutOfScope));
   const holdNoSession = await hold("t3", true);
@@ -302,9 +428,11 @@ try {
   check("plugin: a hold on its background tab answers visible, and a second one adds nothing", visOn?.visible === true && visOnAgain?.visible === true && holdsOn === holdsBefore + 1, `${JSON.stringify(visOn)} ${JSON.stringify(visOnAgain)} holds ${holdsBefore} -> ${holdsOn}`);
   const visHeld = await until("visibilityState visible", async () => ((await textOf(p4, "vis")) === "visible" ? "visible" : null), 10000).catch(() => null);
   check("plugin: with the hold, the background tab reports visibilityState visible and stays in the background", visHeld === "visible", String(visHeld));
+  const t4Lease = await leaseOf("t4");
+  check("lease: a lease on the held background tab is granted (its hold is already on, so turning it on again changes nothing)", typeof t4Lease?.lease === "number" && (await tabHolds()) === holdsBefore + 1, JSON.stringify(t4Lease));
   const wheelHeld = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 100, deltaX: 0, deltaY: 300 }, p4);
   const scrolledHeld = await until("the held tab to scroll", async () => (Number(await textOf(p4, "scrolled")) > 0 ? Number(await textOf(p4, "scrolled")) : null), 8000).catch(() => 0);
-  check("plugin: with the hold, a wheel to the background tab scrolls it", !refused(wheelHeld) && scrolledHeld > 0, `${text(wheelHeld)} scrollY ${scrolledHeld}`);
+  check("plugin: under a lease, with the hold on, a wheel to the background tab is acknowledged and scrolls it", !refused(wheelHeld) && scrolledHeld > 0, `${text(wheelHeld)} scrollY ${scrolledHeld}`);
   const pairMark = plugin.replies.length;
   plugin.raw(664001, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 100, deltaX: 0, deltaY: 100 }, p4);
   plugin.raw(664002, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 100, deltaX: 0, deltaY: 100 }, p4);
@@ -315,11 +443,109 @@ try {
   const visOffAgain = await hold("t4", false);
   const visReleased = await until("visibilityState hidden", async () => ((await textOf(p4, "vis")) === "hidden" ? "hidden" : null), 10000).catch(() => null);
   const wheelReleased = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 100, deltaX: 0, deltaY: 300 }, p4);
-  check("plugin: turning the hold off (twice) hides the tab again and its wheels are refused", visOff?.visible === false && visOffAgain?.visible === false && visReleased === "hidden" && refused(wheelReleased) && /page hidden/.test(wheelReleased.error?.message ?? "") && (await tabHolds()) === holdsBefore, `${JSON.stringify(visOff)} ${visReleased} ${text(wheelReleased)}`);
+  check("plugin: turning the hold off (twice) while the lease is still live hides the tab again and its wheels are refused (page hidden)", visOff?.visible === false && visOffAgain?.visible === false && visReleased === "hidden" && refused(wheelReleased) && /page hidden/.test(wheelReleased.error?.message ?? "") && (await tabHolds()) === holdsBefore, `${JSON.stringify(visOff)} ${visReleased} ${text(wheelReleased)}`);
+  await releaseLease(t4Lease?.lease);
+  await holdTab("t1");
+  const calmWheel = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 300, deltaX: 0, deltaY: 40 }, ps);
+  const pointerTest = (args) => appEval(`return ac.engine.call("engine.cliTestPointer", ${JSON.stringify(args)})`).catch((e) => ({ error: String(e?.message ?? e) }));
+  const parkedNow = (count) => until(`${count} parked pointer runs`, async () => ((await pointerTest({}))?.parked === count) || null, 8000).then(() => true, () => false);
+  const replyTo = (client, mark, id, ms = 8000) => until(`the reply to ${id}`, async () => client.replies.slice(mark).find((m) => m.id === id) ?? null, ms).catch(() => null);
+  const busyMark = plugin.replies.length;
+  await pointerTest({ park: true });
+  const wheelAdmitted = await afterAdmission(() => plugin.raw(650021, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 300, deltaX: 0, deltaY: 40 }, ps));
+  const wheelParked = await parkedNow(1);
+  const personScrolled = await appEval(`return ac.engine.call("tabs.devScrollZoom", { steps: [{ phase: "wheel", dy: 1 }], tabId: "t1" })`).catch((e) => ({ error: String(e?.message ?? e) }));
+  const busyReleased = await pointerTest({ release: true });
+  const busyWheel = await replyTo(plugin, busyMark, 650021);
+  await sleep(700);
+  const afterBusy = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 300, deltaX: 0, deltaY: 40 }, ps);
+  check("lease: a plugin wheel under a lease works; one admitted and parked at hit-test completion, released right after the person's own scroll, answers ardia: busy; and wheels work again after",
+    !refused(calmWheel) && wheelAdmitted && wheelParked && !personScrolled?.error && busyReleased?.released === 1 && busyWheel && /ardia: busy/.test(busyWheel.error?.message ?? "") && !refused(afterBusy),
+    `${text(calmWheel)} | admitted ${wheelAdmitted} parked ${wheelParked} | person ${JSON.stringify(personScrolled)} | ${JSON.stringify(busyReleased)} | ${text(busyWheel ?? {})} | ${text(afterBusy)}`);
+  const [deadlineX, deadlineY] = [clickerX, clickerY];
+  const expiredLease = await holdTab("t1");
+  const expiredBefore = await pointerTest({});
+  const expiredClicks = await earlyValue("window.clicks");
+  const expiredMark = plugin.replies.length;
+  await pointerTest({ park: true });
+  const expiredAdmitted = await afterAdmission(() => plugin.raw(650031, "Ardia.dispatchClick", { x: deadlineX, y: deadlineY }, ps));
+  const expiredParked = await parkedNow(1);
+  await releaseLease(expiredLease);
+  heldLeases.delete("t1");
+  const expiredReply = await replyTo(plugin, expiredMark, 650031, 14000);
+  const holdsAfterExpiry = await until("the hold to end with the expired action", async () => (await pointerTest({}))?.holds === 0 || null, 4000).then(() => 0, () => -1);
+  await pointerTest({ release: true });
+  await sleep(1000);
+  const expiredAfter = await pointerTest({});
+  const expiredReplies = plugin.replies.slice(expiredMark).filter((m) => m.id === 650031);
+  check("lease: a click parked past its 10 s deadline gets exactly the act-lease-ended refusal, the hold ends, and once released nothing is forwarded, no recovery release goes out and no second reply arrives",
+    expiredAdmitted && expiredParked && leaseEnded(expiredReply) && holdsAfterExpiry === 0 && (await earlyValue("window.clicks")) === expiredClicks && expiredAfter.recoveries === expiredBefore.recoveries && expiredReplies.length === 1,
+    `${text(expiredReply ?? {})} holds ${holdsAfterExpiry} replies ${expiredReplies.length} ${JSON.stringify(expiredAfter)}`);
+  const spanLease = await holdTab("t1");
+  const spanBefore = await pointerTest({});
+  const spanMark = plugin.replies.length;
+  await pointerTest({ park: true, withholdAcks: true });
+  const spanStart = Date.now();
+  const spanAdmitted = await afterAdmission(() => plugin.raw(650041, "Ardia.dispatchClick", { x: deadlineX, y: deadlineY }, ps));
+  const spanParked = await parkedNow(1);
+  await sleep(Math.max(0, 6000 - (Date.now() - spanStart)));
+  await pointerTest({ release: true });
+  await releaseLease(spanLease);
+  heldLeases.delete("t1");
+  const spanReply = await replyTo(plugin, spanMark, 650041, 10000);
+  const spanReplyAt = Date.now() - spanStart;
+  const holdsAfterSpan = await until("the hold to end after the span", async () => (await pointerTest({}))?.holds === 0 || null, 4000).then(() => 0, () => -1);
+  await sleep(Math.max(0, 12500 - (Date.now() - spanStart)));
+  const spanAfter = await pointerTest({ withholdAcks: false });
+  const spanReplies = plugin.replies.slice(spanMark).filter((m) => m.id === 650041);
+  check("lease: a click forwarded at 6 s with its acks withheld spans the 5 s ack deadline and the 10 s action deadline: delivery had started, so the client gets one ardia: outcome unknown at the action deadline, the hold ends, and no recovery release goes out after the ticket expired",
+    spanAdmitted && spanParked && spanReply?.error?.message === OUTCOME_UNKNOWN && spanReplyAt < 11500 && holdsAfterSpan === 0 && spanAfter.recoveries === spanBefore.recoveries && spanReplies.length === 1,
+    `${text(spanReply ?? {})} at ${spanReplyAt} ms holds ${holdsAfterSpan} replies ${spanReplies.length} ${JSON.stringify(spanAfter)}`);
+  await holdTab("t1");
+  const slotMark = plugin.replies.length;
+  await pointerTest({ park: true });
+  const slotStart = Date.now();
+  const slotAdmitted = await afterAdmission(() => plugin.raw(650051, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 300, deltaX: 0, deltaY: 40 }, ps));
+  const slotParked = await parkedNow(1);
+  const slotReply = await replyTo(plugin, slotMark, 650051, 14000);
+  const slotReplyAt = Date.now() - slotStart;
+  await sleep(Math.max(0, 10500 - (Date.now() - slotStart)));
+  await pointerTest({ release: true });
+  await holdTab("t1");
+  const slotFresh = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 100, y: 300, deltaX: 0, deltaY: 40 }, ps);
+  const slotReplies = plugin.replies.slice(slotMark).filter((m) => m.id === 650051);
+  check("lease: a wheel parked before forwarding answers ardia: not delivered at #2808's 5 s pre-forward deadline, frees its slot, and after the 10 s action deadline a wheel under a fresh lease isn't busy",
+    slotAdmitted && slotParked && slotReply?.error?.message === "ardia: not delivered" && slotReplyAt < 9000 && slotReplies.length === 1 && !refused(slotFresh),
+    `${text(slotReply ?? {})} at ${slotReplyAt} ms replies ${slotReplies.length} | ${text(slotFresh)}`);
+  const navLease = await holdTab("t1");
+  const navMark = plugin.replies.length;
+  const navStart = Date.now();
+  plugin.raw(650061, "Page.navigate", { url: `${origin}/hang` }, ps);
+  const navReply = await replyTo(plugin, navMark, 650061, 14000);
+  const navReplyAt = Date.now() - navStart;
+  await releaseLease(navLease);
+  heldLeases.delete("t1");
+  const holdsAfterNav = await until("the hold to end with the expired navigation", async () => (await pointerTest({}))?.holds === 0 || null, 4000).then(() => 0, () => -1);
+  const navDuplicateMark = plugin.replies.length;
+  plugin.raw(650061, "DOM.getDocument", {}, ps);
+  const navDuplicate = await replyTo(plugin, navDuplicateMark, 650061, 4000);
+  answerHanging();
+  const navCommitted = await until("the slow navigation to commit", async () => (await earlyValue("location.pathname")) === "/hang" || null, 10000).then(() => true, () => false);
+  await sleep(1000);
+  const navReplies = plugin.replies.slice(navMark).filter((m) => m.id === 650061);
+  const navReuseMark = plugin.replies.length;
+  plugin.raw(650061, "DOM.getDocument", {}, ps);
+  const navReuse = await replyTo(plugin, navReuseMark, 650061, 4000);
+  check("lease: a Page.navigate Chromium started but doesn't answer within 10 s gets ardia: outcome unknown at the action deadline (delivery can't be ruled out) and the hold ends; its id stays taken as a tombstone until Chromium's late reply, which is dropped, then the id is free again",
+    navReply?.error?.message === OUTCOME_UNKNOWN && navReplyAt >= 9500 && navReplyAt < 11500 && holdsAfterNav === 0 && navDuplicate?.error?.message === "ardia: a command with that id is still waiting for its reply" && navCommitted && navReplies.length === 2 && !refused(navReuse),
+    `${text(navReply ?? {})} at ${navReplyAt} ms holds ${holdsAfterNav} | ${text(navDuplicate ?? {})} | committed ${navCommitted} | ${navReplies.map(text).join(" | ")} | ${text(navReuse ?? {})}`);
+  await cli.send("Page.navigate", { url: `${origin}/one` }, cliEarly);
+  await until("t1 to load /one again", async () => (await earlyValue("location.pathname === '/one' && document.readyState === 'complete' && !!document.getElementById('xsite')")) || null, 15000).catch(() => null);
+  await holdTab("t1");
   await hold("t4", true);
   const holdsBeforeDetach = await tabHolds();
   await plugin.send("Target.detachFromTarget", { sessionId: p4 });
-  const holdsAfterDetach = await until("the hold to drop on detach", async () => ((await tabHolds()) === holdsBeforeDetach - 1 ? holdsBeforeDetach - 1 : null), 5000).catch(() => null);
+  const holdsAfterDetach = await until("the hold to drop on detach", async () => (await tabHolds()) === holdsBeforeDetach - 1 || null, 5000).then(() => holdsBeforeDetach - 1, () => null);
   check("plugin: detaching its last session from the tab drops the hold", holdsAfterDetach === holdsBeforeDetach - 1, `${holdsBeforeDetach} -> ${holdsAfterDetach}`);
   const p4b = (await plugin.send("Target.attachToTarget", { targetId: visTarget.targetId, flatten: true })).result?.sessionId;
   const reheld = await hold("t4", true);
@@ -437,7 +663,7 @@ try {
   const frameClick = xsiteSession && (await plugin.send("Ardia.dispatchClick", { x: 20, y: 20 }, xsiteSession));
   const frameMove = xsiteSession && (await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 20, y: 20 }, xsiteSession));
   const frameWheel = xsiteSession && (await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 20, y: 20, deltaX: 0, deltaY: 10 }, xsiteSession));
-  check("plugin: Ardia.dispatchClick, moves and wheels on a cross-site frame's own session are refused (page target only)", !!xsiteSession && [frameClick, frameMove, frameWheel].every((r) => refused(r) && /page target's own session/.test(r.error?.message ?? "")), [frameClick, frameMove, frameWheel].map((r) => (r ? text(r) : "none")).join(" | "));
+  check("plugin: Ardia.dispatchClick, moves and wheels on a cross-site frame's own session are refused at admission with exactly the act-lease-missing refusal (the lease names the page target only)", !!xsiteSession && [frameClick, frameMove, frameWheel].every((r) => r && noLease(r)), [frameClick, frameMove, frameWheel].map((r) => (r ? text(r) : "none")).join(" | "));
   const xsiteTargetId = xsite?.params?.targetInfo?.targetId;
   const cliFrame = xsiteTargetId && (await cli.send("Target.attachToTarget", { targetId: xsiteTargetId, flatten: true })).result?.sessionId;
   const cliFrameClick = cliFrame && (await cli.send("Ardia.dispatchClick", { x: 20, y: 20 }, cliFrame));
@@ -489,7 +715,7 @@ try {
   await csValue(csOne, "document.activeElement?.blur(), true");
   const [areaX, areaY] = await centerOf(csOne, "area");
   const areaClick = await plugin.send("Ardia.dispatchClick", { x: areaX, y: areaY }, ps);
-  check("plugin: Ardia.dispatchClick on a field focuses it", !refused(areaClick) && await activeIs("area"), text(areaClick));
+  check("plugin: Ardia.dispatchClick on a field focuses it (plugins focus by clicking, never DOM.focus)", !refused(areaClick) && await activeIs("area"), text(areaClick));
 
   const key = (extra) => plugin.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 4, ...extra }, ps);
   const selectAll = await key({ commands: ["selectAll"] });
@@ -524,7 +750,6 @@ try {
   };
   for (const entry of clipboardKeys) {
     await fillArea("plugin-selected-text", true);
-    await pluginFocus();
     const reply = await pluginKey({ modifiers: entry.modifiers, ...(entry.domKey ? { key: entry.domKey } : { windowsVirtualKeyCode: entry.keyCode }) });
     await sleep(250);
     const after = await areaValue();
@@ -632,7 +857,7 @@ try {
   for (const [method, params] of [["DOM.getAttributes", { nodeId: tplNode }], ["DOM.getOuterHTML", { nodeId: tplNode }], ["DOM.getBoxModel", { nodeId: tplNode }], ["DOM.describeNode", { nodeId: tplNode }], ["Accessibility.getPartialAXTree", { nodeId: tplNode }], ["Accessibility.queryAXTree", { nodeId: tplNode }]]) {
     adoptedReads.push([method, await plugin.send(method, params, ps)]);
   }
-  check("plugin: a template node it mapped stays mapped when the page adopts the template into a window-2 document, and every read, focus and scroll by that nodeId is refused as not in this page", !!tplNode && /tplp/.test(beforeAdoption.result?.outerHTML ?? "") && adopted === true && adoptedReads.every(([, r]) => /that nodeId isn't in this page/.test(r.error?.message ?? "")), `before: ${text(beforeAdoption)}; ` + adoptedReads.map(([m, r]) => `${m}: ${text(r)}`).join(" | "));
+  check("plugin: a template node it mapped stays mapped when the page adopts the template into a window-2 document, and every read and scroll by that nodeId is refused as not in this page", !!tplNode && /tplp/.test(beforeAdoption.result?.outerHTML ?? "") && adopted === true && adoptedReads.every(([, r]) => /that nodeId isn't in this page/.test(r.error?.message ?? "")), `before: ${text(beforeAdoption)}; ` + adoptedReads.map(([m, r]) => `${m}: ${text(r)}`).join(" | "));
   await cli.send("Runtime.evaluate", { expression: "(() => { const s = document.createElement('section'); s.id = 'axroot'; s.innerHTML = '<button>ax</button>'; document.body.append(s); return true })()" }, csOne);
   const axRoot = (await plugin.send("DOM.querySelector", { nodeId: await pluginRoot(), selector: "#axroot" }, ps)).result?.nodeId;
   await cli.send("Debugger.enable", {}, csOne);
@@ -682,6 +907,9 @@ try {
   await cli.send("Page.reload", {}, cs);
   await until("page one reloaded", async () => (await cli.send("Runtime.evaluate", { expression: "document.readyState === 'complete' && !!document.getElementById('open')", returnByValue: true }, cs)).result?.result?.value);
   const afterNavigation = await click("open").then((v) => v, () => null);
+  const reloadedTotals = await leaseTotals();
+  const afterReload = await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 7, y: 7 }, ps);
+  check("lease: a new document ends the lease, so the plugin's next input is refused", noLease(afterReload) && reloadedTotals.endedByDocument > 0, `${text(afterReload)} ${JSON.stringify(reloadedTotals)}`);
   check("cli: an answer armed before a navigation isn't used by the new document", afterNavigation !== "open:a.txt:from the ardia command", String(afterNavigation));
   const duplicateMark = cli.replies.length;
   cli.raw(424242, "Runtime.evaluate", { expression: "new Promise((r) => setTimeout(() => r(1), 1500))", awaitPromise: true }, cs);
@@ -695,7 +923,7 @@ try {
   const s3 = (await plugin.send("Target.attachToTarget", { targetId: threeTarget?.targetId, flatten: true })).result?.sessionId;
   const schemes = [[`${origin}/three`, true], ["about:blank", true], [`${secureOrigin}/secure`, true], ["javascript:void 0", false], ["data:text/html,x", false], [`blob:${origin}/x`, false], ["file:///etc/hosts", false], ["chrome://version", false], [`view-source:${origin}/three`, false], [`filesystem:${origin}/temporary/x`, false], ["ftp://127.0.0.1/x", false], ["ardia://settings", false]];
   for (const [url, allowedScheme] of schemes) {
-    const reply = await plugin.send("Page.navigate", { url }, s3);
+    const reply = await leasedSend("t3", "Page.navigate", { url }, s3);
     const refusedByPolicy = refused(reply) && /isn't allowed for a plugin/.test(reply.error?.message ?? "");
     check(`plugin: Page.navigate to ${url.split(":")[0]}: is ${allowedScheme ? "allowed and loads" : "refused"}`, allowedScheme ? !refused(reply) && !reply.result?.errorText && !!reply.result?.frameId : refusedByPolicy, text(reply));
     if (url.startsWith(secureOrigin)) {
@@ -710,8 +938,30 @@ try {
       check("plugin: the HTTPS navigation committed exactly the fixture's URL and shows its content", loaded, `${committed} ${content}`);
     }
   }
-  const navigatedPlain = await plugin.send("Page.navigate", { url: `${origin}/three` }, s3);
+  const navigatedPlain = await leasedSend("t3", "Page.navigate", { url: `${origin}/three` }, s3);
   check("plugin: Page.navigate with only a web url answers", !refused(navigatedPlain), text(navigatedPlain));
+  const pageVisibility = async (session) => {
+    const root = (await plugin.send("DOM.getDocument", {}, session)).result?.root?.nodeId;
+    const body = root && (await plugin.send("DOM.querySelector", { nodeId: root, selector: "body" }, session)).result?.nodeId;
+    const attributes = body ? (await plugin.send("DOM.getAttributes", { nodeId: body }, session)).result?.attributes ?? [] : [];
+    const at = attributes.indexOf("data-visibility");
+    return at >= 0 ? attributes[at + 1] : null;
+  };
+  const visibilityIs = (session, state) => until(`the page to report ${state}`, async () => (await pageVisibility(session)) === state || null, 8000).then(() => true, () => false);
+  if (heldLeases.has("t3")) {
+    await releaseLease(heldLeases.get("t3"));
+    heldLeases.delete("t3");
+  }
+  const hiddenBefore = await visibilityIs(s3, "hidden");
+  const outsideWheel = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 50, y: 50, deltaX: 0, deltaY: 20 }, s3);
+  const actLease = await leaseOf("t3");
+  const visibleDuring = await visibilityIs(s3, "visible");
+  const actWheel = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 50, y: 50, deltaX: 0, deltaY: 20 }, s3);
+  const released = await releaseLease(actLease?.lease);
+  const hiddenAfter = await visibilityIs(s3, "hidden");
+  check("lease: a background tab reports visible only while the AI acts on it (the lease turns the engine's visible hold on before it grants and off once it ends and its last action returned), and a wheel outside an act is refused",
+    hiddenBefore && refused(outsideWheel) && (outsideWheel.error?.message === LEASE_MISSING || outsideWheel.error?.message === "ardia: page hidden") && typeof actLease?.lease === "number" && visibleDuring && !refused(actWheel) && released?.released === true && hiddenAfter,
+    `before ${hiddenBefore} | ${text(outsideWheel)} | lease ${JSON.stringify(actLease)} during ${visibleDuring} | ${text(actWheel)} | ${JSON.stringify(released)} after ${hiddenAfter}`);
   const cs3 = (await cli.send("Target.attachToTarget", { targetId: threeTarget?.targetId, flatten: true })).result?.sessionId;
   await until("page three loaded", async () => (await cli.send("Runtime.evaluate", { expression: "document.readyState === 'complete'", returnByValue: true }, cs3)).result?.result?.value);
   await cli.send("Runtime.evaluate", { expression: "window.moves = 0; window.wheels = 0; addEventListener('mousemove', () => window.moves++); addEventListener('wheel', () => window.wheels++, { passive: true }); true" }, cs3);
@@ -719,6 +969,7 @@ try {
   const wheels = async () => (await cli.send("Runtime.evaluate", { expression: "window.wheels", returnByValue: true }, cs3)).result?.result?.value;
   const inWindow = (tab, win) => until(`${tab} in ${win}`, async () =>
     ((await appEval(`return ac.engine.call("tabs.strips")`))?.strips ?? []).some((s) => s.appWindow === win && s.tabs.some((t) => t.key === tab)) || null, 8000).then(() => true, () => false);
+  await holdTab("t3");
   const departedRefusals = async () => (await appEval(`return ac.engine.call("engine.cliControlStatus")`))?.pluginDeliveriesRefusedDeparted ?? -1;
   const refusalsBefore = await departedRefusals();
   for (let i = 0; i < 20; i++) plugin.raw(660000 + i, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 10 + i * 5, y: 10 + i * 3 }, s3);
@@ -727,6 +978,8 @@ try {
   const [threeClickX, threeClickY] = await centerOf(cs3, "clicker");
   plugin.raw(662000, "Ardia.dispatchClick", { x: threeClickX, y: threeClickY }, s3);
   const sentAt = Date.now();
+  const leaseBeforeMove = heldLeases.get("t3");
+  const detachBeforeMove = (await leaseTotals()).endedByDetach ?? 0;
   await appEval(`ac.actions.moveTabToWindow("t3", "w2"); return true`);
   const reachedOther = await inWindow("t3", "w2");
   const movesAtDeparture = await moves();
@@ -740,9 +993,18 @@ try {
   const outAndBack = await plugin.send("DOM.getDocument", {}, s3);
   const detachedS3 = await until("the detach of the moved session", async () => plugin.events.some((e) => e.method === "Target.detachedFromTarget" && e.params?.sessionId === s3) || null, 10000).catch(() => false);
   check("plugin: a tab moved to the other window (confirmed natively) and back stays detached", reachedOther && cameBack && !!s3 && refused(outAndBack) && detachedS3, `reached w2 ${reachedOther}, back in w1 ${cameBack}, ${text(outAndBack)}`);
-  check("plugin: mouse, wheel and an Ardia.dispatchClick its departed session queued reached the gate after hit testing, after the tab came back, and the gate refused all 26 for the old session (the click never landed)", backBeforeDelivery && refusalsBefore >= 0 && refusalsAfter - refusalsBefore === 26 && (await csValue(cs3, "window.clicks")) === threeClicksBefore && movesAtDeparture === 0 && movesAfterReturn === 0 && wheelsAfterReturn === 0, `back before delivery ${backBeforeDelivery}, gate refusals ${refusalsBefore} -> ${refusalsAfter}, moves ${movesAtDeparture}/${movesAfterReturn}, wheels ${wheelsAfterReturn}`);
+  const departedBusy = plugin.replies.filter((m) => m.id > 661000 && m.id < 661005 && m.error?.message === "ardia: busy").length;
+  check("plugin: of five back-to-back wheels from the departing session, the four behind the first answer ardia: busy at once (one outstanding wheel per credential and tab)", departedBusy === 4, `busy ${departedBusy}`);
+  check("plugin: mouse, wheel and an Ardia.dispatchClick its departed session queued reached the gate after hit testing, after the tab came back, and the gate refused them for the old session, at most 22 (20 moves, one wheel, one click; the click never landed)", backBeforeDelivery && refusalsBefore >= 0 && refusalsAfter - refusalsBefore > 0 && refusalsAfter - refusalsBefore <= 22 && (await csValue(cs3, "window.clicks")) === threeClicksBefore && movesAtDeparture === 0 && movesAfterReturn === 0 && wheelsAfterReturn === 0, `back before delivery ${backBeforeDelivery}, gate refusals ${refusalsBefore} -> ${refusalsAfter}, moves ${movesAtDeparture}/${movesAfterReturn}, wheels ${wheelsAfterReturn}`);
+  const departedTotals = await leaseTotals();
+  const departedRelease = await releaseLease(leaseBeforeMove);
+  heldLeases.delete("t3");
+  check("lease: a tab leaving its window ends the credential's lease on it at once, so a tab that comes back needs a new grant",
+    typeof leaseBeforeMove === "number" && departedTotals.endedByDetach > detachBeforeMove && departedRelease?.released === false,
+    `${leaseBeforeMove} ${JSON.stringify(departedTotals)} ${JSON.stringify(departedRelease)}`);
   const old = await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 20, y: 20 }, s3);
   const fresh = (await plugin.send("Target.attachToTarget", { targetId: threeTarget?.targetId, flatten: true })).result?.sessionId;
+  await holdTab("t3");
   const freshMove = await plugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 30, y: 30 }, fresh);
   const freshWheel = await plugin.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 30, y: 30, deltaX: 0, deltaY: 20 }, fresh);
   const hasFocus = () => csValue(cs3, "document.hasFocus()");
@@ -776,9 +1038,11 @@ try {
     direct.ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.id === 888001) directOrder.push(`reply:${m.error?.message ?? "result"}`); });
     direct.closed.then(() => directOrder.push("close"));
     direct.ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.id === 888002) directOrder.push(`concurrent:${m.error?.message ?? "result"}`); });
+    await holdTab("t3");
     for (let i = 0; i < 20; i++) direct.raw(889000 + i, "Page.getLayoutMetrics", {});
+    const requestedBefore = requested.length;
     direct.raw(888001, "Page.navigate", { url: `${origin}/slow-three` });
-    await sleep(200);
+    await until("the fixture server to receive /slow-three", async () => requested.slice(requestedBefore).includes("/slow-three") || null, 5000).catch(() => null);
     await appEval(`ac.actions.moveTabToWindow("t3", "w2"); return true`);
     direct.raw(888002, "Page.getLayoutMetrics", {});
     await until("the direct socket to close", async () => directOrder.includes("close") || null, 8000).catch(() => null);
@@ -788,6 +1052,7 @@ try {
   await appEval(`ac.actions.moveTabToWindow("t3", "w1"); return true`);
   await inWindow("t3", "w1");
 
+  await holdTab("t1");
   const lateMark = plugin.replies.length;
   plugin.raw(777001, "Page.navigate", { url: `${origin}/slow-one` }, ps);
   await appEval(`ac.actions.moveTabToWindow("t1", "w2"); return true`);
@@ -828,14 +1093,128 @@ try {
   const cliVis = (await cli.send("Target.attachToTarget", { targetId: visTarget.targetId, flatten: true })).result?.sessionId;
   const cliVisState = cliVis && (await until("the owner's hold", async () => ((await cli.send("Runtime.evaluate", { expression: "document.visibilityState", returnByValue: true }, cliVis)).result?.result?.value === "visible" ? "visible" : null), 5000).catch(() => null));
   check("cli: the owner token still makes a background tab visible when it attaches", cliVisState === "visible", String(cliVisState));
+  const revokedTotals = await leaseTotals();
+  check("lease: revoking the credential leaves none of its leases live", revokedTotals.live === 0, JSON.stringify(revokedTotals));
   await until("the draining socket to close", async () => drainedClosedAt || null, 4000).catch(() => null);
   check("plugin: a revoke during a scope close closes the draining socket at once", !!drained && drainedClosedAt > 0 && drainedClosedAt - revokeStarted < 2000 && drainedReplies <= 20, drained ? `closed after ${drainedClosedAt ? drainedClosedAt - revokeStarted : "never"} ms, ${drainedReplies} replies` : "no socket");
   const again = await connect(`${base}?token=${encodeURIComponent(minted.credential)}`).then(() => "accepted", () => "refused");
   check("a revoked credential can't connect again", again === "refused", again);
   const cliAlive = await cli.send("Browser.getVersion");
   check("cli: its connection is untouched by the revoke", !refused(cliAlive), text(cliAlive));
+
+  const tabTarget = async (tabId) => (await appEval(`return ac.engine.call("engine.cliTabTargets", { tabIds: [${JSON.stringify(tabId)}] })`))?.[tabId]?.targetId ?? null;
+  const loaded = (session, what) => until(what, async () => (await cli.send("Runtime.evaluate", { expression: "document.readyState === 'complete'", returnByValue: true }, session)).result?.result?.value || null, 15000).then(() => true, () => false);
+  const later = await appEval(`return ac.engine.call("engine.cliPluginCredential", { tabId: "t3" })`);
+  const laterPlugin = await connect(`${base}?token=${encodeURIComponent(later.credential)}`);
+  const threeId = await tabTarget("t3");
+  let lp3 = (await laterPlugin.send("Target.attachToTarget", { targetId: threeId, flatten: true })).result?.sessionId;
+  const lc3 = (await cli.send("Target.attachToTarget", { targetId: threeId, flatten: true })).result?.sessionId;
+  await cli.send("Page.enable", {}, lc3);
+  await cli.send("Page.navigate", { url: `${origin}/bf-one` }, lc3);
+  await loaded(lc3, "bf-one");
+  const bfLease = await leaseOf("t3", later.id);
+  await cli.send("Runtime.evaluate", { expression: "window.bfMarker = 1" }, lc3);
+  await cli.send("Page.navigate", { url: `${origin}/bf-two` }, lc3);
+  await loaded(lc3, "bf-two");
+  const history = (await cli.send("Page.getNavigationHistory", {}, lc3)).result;
+  const back = history?.entries?.[history.currentIndex - 1];
+  if (back) await cli.send("Page.navigateToHistoryEntry", { entryId: back.id }, lc3);
+  await until("bf-one back", async () => (await cli.send("Runtime.evaluate", { expression: "location.pathname", returnByValue: true }, lc3)).result?.result?.value === "/bf-one" || null, 15000).catch(() => null);
+  const restored = (await cli.send("Runtime.evaluate", { expression: "window.bfMarker === 1", returnByValue: true }, lc3)).result?.result?.value === true;
+  const afterBack = await laterPlugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 4, y: 4 }, lp3);
+  const bfRelease = await releaseLease(bfLease?.lease);
+  check("lease: a lease ends when its tab navigates away and stays ended when the page comes back from the back-forward cache", restored && typeof bfLease?.lease === "number" && noLease(afterBack) && bfRelease?.released === false, `restored from the back-forward cache: ${restored}; ${text(afterBack)} ${JSON.stringify(bfRelease)}`);
+
+  const approvedDocument = await documentOf("t3", later.id);
+  await cli.send("Page.navigate", { url: `${origin}/replaced` }, lc3);
+  await loaded(lc3, "replaced");
+  const replacedLease = await leaseFor("t3", approvedDocument?.document, later.id);
+  const currentDocument = await documentOf("t3", later.id);
+  const currentLease = await leaseFor("t3", currentDocument?.document, later.id);
+  await releaseLease(currentLease?.lease);
+  check("lease: a grant names the document approved on the card, so a tab that loaded a replacement document since is refused (document_changed) before its hold is taken, and the current document leases",
+    typeof approvedDocument?.document === "number" && typeof replacedLease?.lease !== "number" && (replacedLease?.error ?? "").includes("ardia: document_changed: the tab loaded a new document since the act was approved") && currentDocument?.document !== approvedDocument?.document && typeof currentLease?.lease === "number",
+    `${JSON.stringify(approvedDocument)} ${JSON.stringify(replacedLease)} ${JSON.stringify(currentDocument)} ${JSON.stringify(currentLease)}`);
+  const detachLease = await leaseOf("t3", later.id);
+  const beforeDetach = await leaseTotals();
+  const detachReply = await laterPlugin.send("Target.detachFromTarget", { sessionId: lp3 });
+  const endedByDetach = await until("the detach to end the lease", async () => ((await leaseTotals()).endedByDetach > (beforeDetach.endedByDetach ?? 0)) || null, 8000).then(() => true, () => false);
+  lp3 = (await laterPlugin.send("Target.attachToTarget", { targetId: threeId, flatten: true })).result?.sessionId;
+  const afterReattach = await laterPlugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 6, y: 6 }, lp3);
+  const oldDetachRelease = await releaseLease(detachLease?.lease);
+  const regrant = await leaseOf("t3", later.id);
+  const afterRegrant = await laterPlugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 7, y: 7 }, lp3);
+  await releaseLease(regrant?.lease);
+  check("lease: when a credential's last session on a tab detaches, its lease there ends; a fresh attach is refused until a new grant, then acts",
+    typeof detachLease?.lease === "number" && !refused(detachReply) && endedByDetach && !!lp3 && noLease(afterReattach) && oldDetachRelease?.released === false && typeof regrant?.lease === "number" && !refused(afterRegrant),
+    `${text(detachReply)} ended ${endedByDetach} | ${text(afterReattach)} | old ${JSON.stringify(oldDetachRelease)} | new ${JSON.stringify(regrant)} ${text(afterRegrant)}`);
+
+  await cli.send("Runtime.evaluate", { expression: `(() => { const s = document.createElement("script"); s.type = "speculationrules"; s.textContent = JSON.stringify({ prerender: [{ source: "list", urls: ["/prerendered"] }] }); document.head.append(s); return true })()` }, lc3);
+  const prerendered = await until("a prerender target", async () => (await cli.send("Target.getTargets")).result?.targetInfos?.find((t) => t.url === `${origin}/prerendered`) ?? null, 15000).catch(() => null);
+  const primaryLease = await leaseOf("t3", later.id);
+  const prerenderAttach = prerendered && (await laterPlugin.send("Target.attachToTarget", { targetId: prerendered.targetId, flatten: true }));
+  const prerenderSession = prerenderAttach?.result?.sessionId;
+  const prerenderActs = prerenderSession ? [
+    await laterPlugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 4, y: 4 }, prerenderSession),
+    await laterPlugin.send("Ardia.dispatchClick", { x: 4, y: 4 }, prerenderSession),
+    await laterPlugin.send("Page.reload", {}, prerenderSession),
+  ] : [];
+  const primaryAct = await laterPlugin.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5 }, lp3);
+  check("lease: a prerendered page of a leased tab never acts under the primary page's lease (it can't attach, or every act is refused)",
+    !!prerendered && typeof primaryLease?.lease === "number" && !refused(primaryAct) && (!prerenderSession || prerenderActs.every(noLease)),
+    `${prerendered ? prerendered.type + "/" + (prerendered.subtype ?? "") : "no prerender target"} attach ${prerenderAttach ? text(prerenderAttach) : "-"} ${prerenderActs.map(text).join(" | ")} primary ${text(primaryAct)}`);
+  await releaseLease(primaryLease?.lease);
+
+  const crashTarget = await tabTarget("t2");
+  const crashCredential = await appEval(`return ac.engine.call("engine.cliPluginCredential", { tabId: "t2" })`);
+  const crashPlugin = await connect(`${base}?token=${encodeURIComponent(crashCredential.credential)}`);
+  const c2 = (await crashPlugin.send("Target.attachToTarget", { targetId: crashTarget, flatten: true })).result?.sessionId;
+  const crashLease = await leaseOf("t2", crashCredential?.id);
+  const crashBefore = await leaseTotals();
+  await pointerTest({ park: true });
+  crashPlugin.raw(660100, "Ardia.dispatchClick", { x: 20, y: 20 }, c2);
+  const staleParked = await parkedNow(1);
+  await pointerTest({ park: false });
+  const lc2 = crashTarget && (await cli.send("Target.attachToTarget", { targetId: crashTarget, flatten: true })).result?.sessionId;
+  if (lc2) cli.raw(990001, "Page.crash", {}, lc2);
+  const crashEnded = await until("the renderer exit to end the lease", async () => ((await leaseTotals()).endedByDocument > crashBefore.endedByDocument) || null, 10000).then(() => true, () => false);
+  const crashRelease = await releaseLease(crashLease?.lease);
+  if (lc2) await cli.send("Page.reload", {}, lc2);
+  await until("the crashed tab to load again", async () => (await cli.send("Runtime.evaluate", { expression: "document.readyState === 'complete'", returnByValue: true }, lc2)).result?.result?.value || null, 15000).catch(() => null);
+  const reuseLease = await leaseOf("t2", crashCredential?.id);
+  const reuseMark = crashPlugin.replies.length;
+  crashPlugin.raw(660100, "Input.dispatchMouseEvent", { type: "mouseMoved", x: 10, y: 10 }, c2);
+  const staleReleased = await pointerTest({ release: true });
+  const reuseReply = await replyTo(crashPlugin, reuseMark, 660100, 8000);
+  await sleep(1000);
+  const reuseReplies = crashPlugin.replies.slice(reuseMark).filter((m) => m.id === 660100);
+  await releaseLease(reuseLease?.lease);
+  check("plugin: after a renderer crash cleared its pending click, a new command reusing that id gets exactly its own reply, and the stale click's late completion settles nothing",
+    !!c2 && staleParked && typeof reuseLease?.lease === "number" && staleReleased?.released === 1 && reuseReply && !refused(reuseReply) && reuseReplies.length === 1,
+    `${JSON.stringify(reuseLease)} ${JSON.stringify(staleReleased)} ${reuseReplies.map(text).join(" | ")}`);
+  check("lease: a renderer exit ends the tab's lease", typeof crashLease?.lease === "number" && crashEnded && crashRelease?.released === false, `${JSON.stringify(crashLease)} ${JSON.stringify(crashRelease)}`);
+  crashPlugin.ws.close();
+  await appEval(`return ac.engine.call("engine.cliPluginCredential", { revoke: ${JSON.stringify(crashCredential?.id)} })`);
+
+  const restartLease = await leaseOf("t3", later.id);
+  await appEval(`return ac.engine.call("engine.setCliControl", { on: false })`);
+  await appEval(`return ac.engine.call("engine.setCliControl", { on: true })`);
+  const restarted = await until("the control server to come back", async () => (await appEval(`return ac.engine.call("engine.cliControlStatus")`))?.state === "on" || null, 15000).then(() => true, () => false);
+  const restartTotals = await leaseTotals();
+  const oldRelease = await releaseLease(restartLease?.lease);
+  const remint = await appEval(`return ac.engine.call("engine.cliPluginCredential", { tabId: "t3" })`);
+  const remintPlugin = remint?.endpoint ? await connect(`${remint.endpoint}?token=${encodeURIComponent(remint.credential)}`).catch(() => null) : null;
+  if (remintPlugin) await remintPlugin.send("Target.attachToTarget", { targetId: threeId, flatten: true });
+  const afterRestart = await leaseOf("t3", remint?.id);
+  check("lease: after the control server restarts no lease survives, an old id releases nothing, and new ids keep counting",
+    typeof restartLease?.lease === "number" && restarted && restartTotals.live === 0 && oldRelease?.released === false && afterRestart?.lease > restartLease.lease,
+    `${JSON.stringify(restartLease)} ${JSON.stringify(restartTotals)} ${JSON.stringify(oldRelease)} ${JSON.stringify(afterRestart)}`);
+  await releaseLease(afterRestart?.lease);
+  remintPlugin?.ws.close();
+  await appEval(`return ac.engine.call("engine.cliPluginCredential", { revoke: ${JSON.stringify(remint?.id)} })`);
   cli.ws.close();
 } finally {
+  answerHanging();
   server.close();
   secure.close();
   rmSync(certDir, { recursive: true, force: true });

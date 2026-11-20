@@ -118,7 +118,8 @@ export type CliPluginTotals = { minted: number; revoked: number; refused: number
 
 export type CliCommandsByDomain = Partial<Record<"target" | "page" | "runtime" | "dom" | "input" | "network" | "emulation" | "browser" | "storage" | "fetch" | "accessibility" | "other", number>>;
 
-export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; commandsByDomain?: CliCommandsByDomain; pluginCredentials?: CliPluginTotals; pluginTabHolds?: number; filePickerAnswers?: { armed: number; used: number } } & (
+export type CliActLeaseTotals = { granted: number; released: number; endedByDocument: number; endedByDetach: number; commandsRefused: number; deliveriesRefused: number; live: number };
+export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; commandsByDomain?: CliCommandsByDomain; pluginCredentials?: CliPluginTotals; pluginTabHolds?: number; filePickerAnswers?: { armed: number; used: number }; actLeases?: CliActLeaseTotals } & (
   | { state: "external" }
   | ({ state: "off" | "starting" } & CliServer)
   | ({ state: "on"; port: number } & CliServer)

@@ -21,6 +21,7 @@ bool RevokePluginCredential(const std::string& id);
 bool PluginCredentialLive(const std::string& id);
 void ClearPluginCredentials();
 std::optional<PluginScope> PluginScopeForSecret(std::string_view secret);
+std::optional<PluginScope> PluginScopeForId(const std::string& id);
 std::string TokenServerEndpoint();
 
 }

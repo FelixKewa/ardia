@@ -30,6 +30,9 @@ void ReleasePluginTabVisibleHolds(const std::string& credential_id);
 
 int PluginTabVisibleHoldCount();
 
+bool PluginTabVisibleHoldHeld(const std::string& credential_id,
+                              content::WebContents* contents);
+
 void InstallCliVisibleTabs();
 
 }

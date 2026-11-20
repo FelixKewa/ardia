@@ -4,6 +4,7 @@
 #define CHROME_BROWSER_ARDIA_AC_CLI_TOKEN_POLICY_INTERNAL_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
@@ -31,6 +32,7 @@ class GURL;
 namespace content {
 class DevToolsAgentHostClient;
 class RenderFrameHost;
+class WebContents;
 }
 
 namespace ardia {
@@ -95,6 +97,8 @@ std::string ErrorReply(int id,
                        int code,
                        const std::string& message);
 
+void ActLeaseSessionsLeft(const std::string& credential_id);
+
 class TokenClient;
 
 using WheelSlot = std::pair<std::string, const void*>;
@@ -137,7 +141,10 @@ class TokenClient : public ArdiaDevToolsTokenClient {
   content::DevToolsAgentHost* root_host() const { return root_host_.get(); }
   void Revoke();
   bool MayInputTo(content::RenderFrameHost* frame);
-  bool MaySessionInput(const std::string& session);
+  ArdiaSessionInput MaySessionInput(const std::string& session,
+                                    int64_t grant,
+                                    bool delivering);
+  int64_t InputGrant(const std::string& session) const;
 
   bool FilterCommand(std::string& message, std::string* reply) override;
   bool FilterEvent(std::string& message) override;
@@ -160,13 +167,33 @@ class TokenClient : public ArdiaDevToolsTokenClient {
                               const std::string& session,
                               const std::string& method,
                               const base::DictValue& params,
+                              int64_t grant,
                               std::string* reply);
-  void FinishPointer(int id, const std::string& session, std::string error);
+  void FinishPointer(int id,
+                     const std::string& session,
+                     uint64_t run,
+                     std::string error);
   bool PluginCommandAllowed(int id,
                             const std::string& session,
                             const std::string& method,
                             base::DictValue& params,
-                            std::string* reply);
+                            std::string* reply,
+                            int64_t* grant);
+  bool ActLeaseAdmits(int id,
+                      const std::string& session,
+                      const std::string& method,
+                      std::string* reply,
+                      int64_t* grant);
+  bool DeliveryGrantLive(const std::string& session,
+                         int64_t grant,
+                         bool delivering);
+  void NoteDispatchingGrant(const std::string& session, int64_t grant);
+  void SettleCommandState();
+  void ReconcileActions();
+  void ReturnAllActions();
+  void ExpireAction(std::pair<std::string, int> key, int64_t ticket);
+  bool AttachedTo(content::WebContents* contents) const;
+  void NoteSessionsLeft();
   void ForgetSession(const std::string& session);
   void AbandonWheels(const std::string& session);
   void ForgetWheel(const std::string& session, const PluginWheelTicket* ticket);
@@ -220,6 +247,12 @@ class TokenClient : public ArdiaDevToolsTokenClient {
   base::RepeatingCallback<void(std::string)> to_browser_;
   base::RepeatingCallback<void(std::string)> to_client_;
   int next_internal_id_ = 0;
+  std::map<std::pair<std::string, int>, int64_t> admitted_actions_;
+  std::map<std::pair<std::string, int>, uint64_t> pointer_runs_;
+  uint64_t next_pointer_run_ = 0;
+  std::string dispatching_session_;
+  int64_t dispatching_grant_ = 0;
+  bool dispatching_ = false;
   bool wedged_ = false;
   bool draining_ = false;
   bool revoked_ = false;

@@ -46,6 +46,10 @@ export type EngineCalls = {
   "engine.cliMoveOffscreen": [{ tabId: string }, { ok: boolean; reason?: string }];
   "engine.cliCloseOffscreenTabs": [{}, Done];
   "engine.cliPluginCredential": [{ tabId: string } | { revoke: string } | { id: string; tabId: string; visible: boolean }, CliPluginCredential];
+  "engine.cliActDocument": [{ tabId: string; credential: string }, { document: number }];
+  "engine.cliActLease": [{ tabId: string; credential: string; document: number }, { lease: number }];
+  "engine.cliActRelease": [{ lease: number }, { released: boolean }];
+  "engine.cliTestPointer": [{ park?: boolean; withholdAcks?: boolean; release?: boolean }, { parked: number; released: number; recoveries: number; holds: number }];
 
   "tabs.routeLinkTabs": [{ urls: string[] }, LinkRoute];
   "tabs.stripCommand": [{ id: number; command: TabStripCommand }, null];

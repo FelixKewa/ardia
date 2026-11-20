@@ -152,6 +152,13 @@ void ClearPluginCredentials() {
   }
 }
 
+std::optional<PluginScope> PluginScopeForId(const std::string& id) {
+  if (!PluginCredentialLive(id)) {
+    return std::nullopt;
+  }
+  return Credentials().at(id).scope;
+}
+
 std::optional<PluginScope> PluginScopeForSecret(std::string_view secret) {
   SweepDeadCredentials();
   std::optional<PluginScope> found;

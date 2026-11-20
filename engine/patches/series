@@ -34,6 +34,7 @@ chromium chromium-devtools-file-picker-answer.patch
 chromium chromium-devtools-plugin-node-scope.patch
 chromium chromium-mac-private-pasteboard.patch mac
 chromium chromium-drag-always-ends.patch
+chromium chromium-devtools-act-lease.patch
 chromium chromium-capture-wake-lock-awake-only.patch
 chromium chromium-device-emulation-size-reset.patch
 chromium chromium-devtools-find-detach-keeps-selection.patch
