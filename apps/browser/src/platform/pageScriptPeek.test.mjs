@@ -670,7 +670,10 @@ test("a scripted click on a link is noted only with a user activation, a new-tab
   env.link("/file.zip", { target: "_blank", download: "" }).click();
   env.link("mailto:a@b.example", { target: "_blank" }).click();
   env.div().click();
-  const cancelled = env.link("/cancelled", { target: "_blank" });
+  const editable = env.link("/edit", { target: "_blank" });
+  editable.editable = true;
+  editable.click();
+  const cancelled =env.link("/cancelled", { target: "_blank" });
   cancelled.onclick = (e) => e.preventDefault();
   cancelled.click();
   const rewritten = env.link("/tracked", { target: "_blank" });
@@ -678,7 +681,7 @@ test("a scripted click on a link is noted only with a user activation, a new-tab
   rewritten.click();
   env.link("/named", { target: "results" }).click();
   assert.deepEqual(newTabLinks(env), ["https://other.example/landing", "https://page.example/named"]);
-  assert.equal(env.clicked.length, 10, "every call still reaches the browser's own click");
+  assert.equal(env.clicked.length, 11, "every call still reaches the browser's own click");
 });
 
 test("a scripted click is judged by the link its handlers leave: a target they add counts, a download they add doesn't", () => {

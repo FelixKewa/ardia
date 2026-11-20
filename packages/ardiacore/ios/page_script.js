@@ -1654,19 +1654,19 @@
           if (!dispatched) dispatched = e;
         };
         apply(listen, link, ["click", seen, true]);
-        return () => {
+        return guard(() => {
           apply(unlisten, link, ["click", seen, true]);
           if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
           const url = linkUrl(link);
-          if (peekable({ link, url, path: [] })) send("newTabLink", { url });
-        };
+          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+        });
       });
       const click = asNative(clickDescriptor.value, (target, self, args) => {
         const settle = watchScriptedLinkClick(self);
         try {
           return apply(target, self, args);
         } finally {
-          if (settle) guard(settle)();
+          if (settle) settle();
         }
       });
       Object.defineProperty(HTMLElement.prototype, "click", { ...clickDescriptor, value: click });
