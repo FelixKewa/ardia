@@ -204,7 +204,7 @@ final class OfficialPluginsTests: XCTestCase {
     let folder = try XCTUnwrap(PluginFiles.openFolder(made.copy.path))
     defer { folder.close() }
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: folder.id)
-    let linked = try PluginPrograms.install(
+    _ = try PluginPrograms.install(
       plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: [PluginProgram(name: "tool", path: "bin/tool")], places: places, expectedDigest: made.copy.payloadDigest
     ).get()
     XCTAssertEqual(linked.linked, ["tool"])
@@ -433,6 +433,28 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertEqual(lstat(scratch, &info), 0)
     XCTAssertEqual(info.st_mode & 0o777, 0o700, "unpacking happens in a folder only Ardia's user can enter")
     XCTAssertTrue(store.remove("tool"), "removal unseals what it deletes")
+  }
+
+  func testACopyMadeWritableAgainIsNoLongerTrusted() throws {
+    let archive = try pluginArchive(manifest())
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    let made = try publish(archive, entry: entry(sha: sha)).get()
+    let folder = try XCTUnwrap(PluginFiles.openFolder(made.copy.path))
+    defer { folder.close() }
+    let approved = PluginFiles.approvalHash(text: made.manifest, folderId: folder.id)
+    let programs = [PluginProgram(name: "tool", path: "bin/tool")]
+    let linked = try PluginPrograms.install(plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: programs, places: places, expectedDigest: made.copy.payloadDigest).get()
+    XCTAssertTrue(PluginPrograms.currentHolds(plugin: "tool", places: places, digest: made.copy.payloadDigest))
+    let staged = "\(places.store)/tool/\(try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current")))"
+    XCTAssertTrue(PluginPrograms.holdsApproved(staged, folderId: folder.id, approved: approved, programs: programs, expectedDigest: made.copy.payloadDigest))
+    XCTAssertEqual(chmod("\(staged)/bin", 0o755), 0)
+    XCTAssertEqual(chmod("\(staged)/bin/tool", 0o755), 0)
+    XCTAssertFalse(PluginPrograms.holdsApproved(staged, folderId: folder.id, approved: approved, programs: programs, expectedDigest: made.copy.payloadDigest), "a program copy that can be written is not reused, even with the same bytes")
+    XCTAssertFalse(PluginPrograms.currentHolds(plugin: "tool", places: places, digest: made.copy.payloadDigest))
+    XCTAssertTrue(PluginPrograms.currentIsDamaged(plugin: "tool", places: places, version: "1.2.0", approved: approved, digest: made.copy.payloadDigest))
+    XCTAssertEqual(chmod("\(made.copy.path)/bin", 0o755), 0)
+    OfficialVerification.shared.forget()
+    XCTAssertNil(store.copy("tool", sha: sha), "a published copy that can be written is not official")
   }
 
   func testAQuarantineFlagStaysOnADownloadThatDoesntMatch() throws {

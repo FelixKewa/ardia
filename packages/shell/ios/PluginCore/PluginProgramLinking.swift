@@ -102,6 +102,6 @@ extension PluginPrograms {
     let pluginStore = places.pluginStore(plugin)
     guard let version = linkTarget((pluginStore as NSString).appendingPathComponent(currentName)), !version.contains("/") else { return false }
     let folder = (pluginStore as NSString).appendingPathComponent(version)
-    return isRealFolder(folder) && payloadDigest(folder, keepingCaches: true) == digest
+    return isRealFolder(folder) && isSealed(folder, keepingRootWritable: true) && payloadDigest(folder, keepingCaches: true) == digest
   }
 }
