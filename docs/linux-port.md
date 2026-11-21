@@ -883,7 +883,21 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     With the address bar in a left sidebar and both groups, the right group sits at the sidebar's right end of the row
     atop it (`windowControlsInset`). A change wakes every window-settings hook (`onWindowChromeChange`). Traffic
     lights and Hidden ignore the layout. The daily settings snapshot carries `window_buttons_side` (right, left, both,
-    none), `window_buttons_count` and `window_buttons_from_desktop`.
+    none), `window_buttons_count`, `window_buttons_from_desktop` and `window_buttons_tiling_desktop`.
+  - **Tiling desktops.** On a tiling compositor or window manager the native buttons are not drawn and the `…` sits
+    alone at the right, where the layout rule puts it when no buttons are left: those desktops draw no titlebars and
+    close, move and float windows from the keyboard, and Omarchy leaves GTK's layout at GNOME's default. The engine's
+    `desktop` (the browser's `XDG_CURRENT_DESKTOP`) decides, a colon list read without case: Hyprland, sway, niri, i3,
+    river, dwl, bspwm, awesome, qtile, xmonad, dwm, herbstluftwm and Regolith (`Regolith:GNOME`, i3 or sway inside) (`apps/linux/src/tilingDesktop.ts`). There the
+    effective layout is empty (`desktopButtonLayout` in `state/windows/windowButtons.ts`, from the `tiling` flag
+    `desktopButtonLayout.ts` sets and remembers), whatever GTK reports, and floating windows follow it too, as Hyprland
+    draws no titlebar on them either. The window's `tiled` state can't decide it: Hyprland 0.56 reports every window,
+    half-width and floating ones included, as maximized and tiled on all four edges, and mutter tiles a maximized window
+    on all four. GNOME, KDE, Cinnamon, XFCE and the rest keep the desktop's layout, maximized or not. Traffic lights and
+    Hidden apply as chosen. An unset or unlisted `XDG_CURRENT_DESKTOP` (sway, dwm or xmonad started from a TTY or
+    `startx`, SwayFX) keeps the desktop's layout; Window buttons › Hidden is the way out there. The snapshot then sends `window_buttons_side: none`, `window_buttons_count: 0` and
+    `window_buttons_tiling_desktop: true`; watch the share of Linux snapshots with it against those whose
+    `setting_windowButtons` is `hidden`, which should fall as tiling users stop needing the setting.
   - **Traffic lights.** Settings › Appearance › Window buttons (`windowButtons`: `native` by default, `trafficLights`
     or `hidden`; kept on this device, in the config file and in the daily settings snapshot) brings back the
     Mac's lights at the top left instead, with the Mac's layouts: no `…` (the hamburger stays in the header), the
@@ -951,13 +965,16 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
       reported, not the ones the window last applied, so a configure the window never applied can't hide the next
       change. Bounds, show-state and edge changes in the same task coalesce, so one configure usually gives one event;
       a maximize can still give an intermediate one when its state and edges land in different tasks.
-  - Restore: the shell doesn't read `windowState` yet, so each window reads `ArdiaShell.windowFrame` at start and once
-    per animation frame of resizing, and marks itself maximized when the frame fills the work area, feeding the shared
-    `useMaximizedWindows` through `captionRegions.ts`'s `noteMaximized` (`windowMaximized.ts`). Settings and Import
-    too. Known limits: a window that fills the work area without being maximized, such as a lone tiled window on a
-    tiling window manager (X11 or Wayland), shows restore. On Wayland `windowFrame` is null and the work area is the
-    whole output, so the shell compares its outer size with that, and with a panel, a bar or gaps a maximized window
-    keeps the maximize glyph. Clicking still toggles correctly; the glyph waits for the shell to read `windowState`.
+  - Restore: with an engine that answers `ArdiaShell.windowState` (feature-detected from the bootstrap's
+    capabilities), each window listens for its `windowState` event and then reads it, the latest report winning, and
+    its `maximized` flag feeds the shared `useMaximizedWindows` through `captionRegions.ts`'s `noteMaximized`
+    (`windowMaximized.ts`), Settings and Import too; an event heard before the first read answers wins, and page full
+    screen leaves it as it was. A half tile or a window that merely fills the work area keeps the maximize glyph.
+    Older engines keep the frame guess: the window reads `ArdiaShell.windowFrame` at start and once per animation
+    frame of resizing, and marks itself maximized when the frame fills the work area. Its known limits stay with those
+    engines: a window that fills the work area without being maximized shows restore, and on Wayland, where
+    `windowFrame` is null and the work area is the whole output, a maximized window beside a panel, a bar or gaps
+    keeps the maximize glyph. Clicking toggles correctly either way.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
 - **Outer frame.** The host overlays Chromium's client view and doesn't replace its frame. Without the Wayland

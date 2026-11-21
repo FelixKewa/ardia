@@ -6,20 +6,22 @@ import { useBrowser, type BrowserState } from "../browser/store";
 
 type StyleStore = { getState(): Pick<BrowserState, "settings">; subscribe(listener: (s: Pick<BrowserState, "settings">) => void): () => void };
 type StyleTarget = { styles: readonly WindowButtonStyle[]; apply(style: WindowButtonStyle, layout: WindowButtonLayout): boolean };
-export type DesktopButtons = { raw: string | null; reported: boolean };
+export type DesktopButtons = { raw: string | null; reported: boolean; tiling?: boolean };
 type DesktopStore = { getState(): DesktopButtons; subscribe(listener: (d: DesktopButtons) => void): () => void };
 
 const PLATFORM: StyleTarget = { styles: WINDOW_BUTTON_STYLES, apply: applyWindowButtonStyle };
 
-export const useDesktopButtons = create<DesktopButtons>()(() => ({ raw: null, reported: false }));
+const NO_WINDOW_BUTTONS = "";
 
-export const setDesktopButtonLayout = (raw: string | null) => {
+export const useDesktopButtons = create<DesktopButtons>()(() => ({ raw: null, reported: false, tiling: false }));
+
+export const setDesktopButtonLayout = (raw: string | null, tiling = false) => {
   const current = useDesktopButtons.getState();
-  if (current.reported && current.raw === raw) return;
-  useDesktopButtons.setState({ raw, reported: true });
+  if (current.reported && current.raw === raw && !!current.tiling === tiling) return;
+  useDesktopButtons.setState({ raw, reported: true, tiling });
 };
 
-export const desktopButtonLayout = (desktop: DesktopButtons = useDesktopButtons.getState()): WindowButtonLayout => parseButtonLayout(desktop.raw);
+export const desktopButtonLayout = (desktop: DesktopButtons = useDesktopButtons.getState()): WindowButtonLayout => parseButtonLayout(desktop.tiling ? NO_WINDOW_BUTTONS : desktop.raw);
 
 export const windowButtonStyleIn = (s: Pick<BrowserState, "settings">, styles: readonly WindowButtonStyle[] = WINDOW_BUTTON_STYLES): WindowButtonStyle =>
   styles.includes(s.settings.windowButtons) ? s.settings.windowButtons : windowControlsDrawn() ? "native" : "trafficLights";

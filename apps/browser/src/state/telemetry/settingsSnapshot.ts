@@ -67,7 +67,7 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
 export function windowButtonLayoutSnapshot(desktop: DesktopButtons = useDesktopButtons.getState(), choosable = windowButtonsChoosable): Record<string, string> {
   if (!choosable) return {};
   const layout = desktopButtonLayout(desktop);
-  return { window_buttons_side: buttonLayoutSide(layout), window_buttons_count: String(buttonLayoutCount(layout)), window_buttons_from_desktop: typeof desktop.raw === "string" ? "true" : "false" };
+  return { window_buttons_side: buttonLayoutSide(layout), window_buttons_count: String(buttonLayoutCount(layout)), window_buttons_from_desktop: typeof desktop.raw === "string" ? "true" : "false", window_buttons_tiling_desktop: desktop.tiling ? "true" : "false" };
 }
 
 export const appIconSetting = (icon: string | null): Record<string, string> =>

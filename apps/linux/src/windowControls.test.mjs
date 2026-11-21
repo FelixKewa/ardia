@@ -455,6 +455,51 @@ test("without a frame, as on Wayland, the shell's outer size is compared with th
   assert.deepEqual(h.noted, [["w", false], ["w", true]]);
 });
 
+test("an engine that reports window state drives restore from its maximized flag, read at start and followed by its event, in browser windows and Settings alike; the frame isn't read", async () => {
+  const { followWindowMaximized, WINDOW_STATE_METHOD } = await import("./windowMaximized.ts");
+  for (const windowId of ["w", "settings"]) {
+    const listeners = new Set();
+    const invoked = [];
+    let answer;
+    const host = {
+      bootstrap: { windowId, profileId: "default", capabilities: [WINDOW_STATE_METHOD] },
+      invoke: (method, args) => (invoked.push([method, args]), new Promise((resolve) => (answer = resolve))),
+      onEvent: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+    };
+    const emit = (module, event, payload) => listeners.forEach((listener) => listener(module, event, payload));
+    const noted = [];
+    let resized = false;
+    const shell = { screen: { availWidth: 1440, availHeight: 870 }, outerWidth: 1440, outerHeight: 870, addEventListener: () => (resized = true), requestAnimationFrame: () => 0 };
+    followWindowMaximized(host, windowId, shell, (id, on) => noted.push([id, on]));
+    await settle();
+    answer({ maximized: false, tiled: true, fullScreen: false });
+    await settle();
+    emit("ArdiaShell", "windowState", { windowId, maximized: true, tiled: true, fullScreen: false });
+    emit("ArdiaShell", "windowState", { windowId: "other", maximized: false, tiled: false, fullScreen: false });
+    emit("ArdiaTabs", "windowState", { windowId, maximized: false });
+    emit("ArdiaShell", "windowState", { windowId, maximized: "yes" });
+    emit("ArdiaShell", "windowState", { windowId, maximized: false, tiled: false, fullScreen: true });
+    assert.deepEqual(invoked, [[WINDOW_STATE_METHOD, { args: [windowId] }]], "a half tile that fills the screen is no longer guessed from its frame");
+    assert.equal(resized, false);
+    assert.deepEqual(noted, [[windowId, false], [windowId, true], [windowId, false]]);
+  }
+});
+
+test("a window-state event heard before the first read answers isn't undone by that read", async () => {
+  const { followWindowMaximized, WINDOW_STATE_METHOD, reportedMaximized } = await import("./windowMaximized.ts");
+  const listeners = new Set();
+  let answer;
+  const host = { bootstrap: { windowId: "w", profileId: "default", capabilities: [WINDOW_STATE_METHOD] }, invoke: () => new Promise((resolve) => (answer = resolve)), onEvent: (listener) => (listeners.add(listener), () => {}) };
+  const noted = [];
+  followWindowMaximized(host, "w", null, (id, on) => noted.push([id, on]));
+  listeners.forEach((listener) => listener("ArdiaShell", "windowState", { windowId: "w", maximized: true, tiled: false, fullScreen: false }));
+  await settle();
+  answer({ maximized: false, tiled: false, fullScreen: false });
+  await settle();
+  assert.deepEqual(noted, [["w", true]]);
+  for (const payload of [undefined, null, {}, { maximized: 1 }, "maximized"]) assert.equal(reportedMaximized(payload), undefined);
+});
+
 test("the Linux wrapper hides the buttons over a full-screen page, makes the hidden copy inert, and offers the window menu only in browser windows", async () => {
   const { linuxControlsBehaviour } = await import("./windowControlsRules.ts");
   const base = { pageFullScreen: false, hidden: false, utility: false, windowMenu: true, shown: true };

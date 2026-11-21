@@ -120,6 +120,17 @@ test("on Linux the native buttons follow the desktop's layout live, and a layout
   assert.deepEqual(linux.WINDOW_CHROME, linux.nativeButtonsChrome(parseButtonLayout("appmenu:close")));
   report(null);
   assert.deepEqual(linux.WINDOW_CHROME, linux.NATIVE_BUTTONS_CHROME, "a desktop that stops reporting a layout gets today's buttons back");
+  desktop = { raw: "appmenu:close", reported: true, tiling: true };
+  for (const listener of [...desktopListeners]) listener(desktop);
+  assert.deepEqual(linux.WINDOW_CHROME.leadingButtons, [], "a tiling desktop draws no window buttons");
+  assert.deepEqual(linux.WINDOW_CHROME.trailingButtons, ["menu"], "and keeps the … alone at the right");
+  assert.ok(linux.WINDOW_CHROME.trailingWidth > 0 && linux.WINDOW_CHROME.titleBarHeight > 0, "with room kept for it");
+  choose("trafficLights");
+  assert.deepEqual(linux.WINDOW_CHROME, linux.TRAFFIC_LIGHTS_CHROME, "traffic lights still show on a tiling desktop");
+  choose("hidden");
+  assert.deepEqual(linux.WINDOW_CHROME, linux.HIDDEN_BUTTONS_CHROME);
+  choose("native");
+  report(null);
   stop();
   stopWatching();
   report("close:maximize");
@@ -128,8 +139,9 @@ test("on Linux the native buttons follow the desktop's layout live, and a layout
 
 test("the daily settings snapshot says on Linux which side the desktop's buttons are on and how many, and nothing on the Mac or Windows", async () => {
   const { windowButtonLayoutSnapshot } = await import("../telemetry/settingsSnapshot.ts");
-  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "close:maximize", reported: true }, true), { window_buttons_side: "both", window_buttons_count: "2", window_buttons_from_desktop: "true" });
-  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "appmenu:close", reported: true }, true), { window_buttons_side: "right", window_buttons_count: "1", window_buttons_from_desktop: "true" });
-  assert.deepEqual(windowButtonLayoutSnapshot({ raw: null, reported: false }, true), { window_buttons_side: "right", window_buttons_count: "3", window_buttons_from_desktop: "false" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "close:maximize", reported: true }, true), { window_buttons_side: "both", window_buttons_count: "2", window_buttons_from_desktop: "true", window_buttons_tiling_desktop: "false" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "appmenu:close", reported: true }, true), { window_buttons_side: "right", window_buttons_count: "1", window_buttons_from_desktop: "true", window_buttons_tiling_desktop: "false" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: null, reported: false }, true), { window_buttons_side: "right", window_buttons_count: "3", window_buttons_from_desktop: "false", window_buttons_tiling_desktop: "false" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "menu:close", reported: true, tiling: true }, true), { window_buttons_side: "none", window_buttons_count: "0", window_buttons_from_desktop: "true", window_buttons_tiling_desktop: "true" });
   assert.deepEqual(windowButtonLayoutSnapshot({ raw: "close:maximize", reported: true }, false), {});
 });

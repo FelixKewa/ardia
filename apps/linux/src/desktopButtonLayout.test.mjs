@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { followDesktopButtonLayout, reportedButtonLayout, WINDOW_BUTTON_LAYOUT_METHOD } from "./desktopButtonLayout.ts";
+import { followDesktopButtonLayout, reportedButtonLayout, reportedDesktop, WINDOW_BUTTON_LAYOUT_METHOD } from "./desktopButtonLayout.ts";
+import { isTilingDesktop } from "./tilingDesktop.ts";
 
 function fakeHost(capabilities, reply) {
   const listeners = new Set();
@@ -46,7 +47,7 @@ test("the desktop's layout is read at start, follows its change event live, and 
   emit("ArdiaTabs", "windowButtonLayout", { layout: "ignored" });
   emit("ArdiaShell", "windowButtonLayout", { layout: null, desktop: "" });
   assert.deepEqual(seen, ["appmenu:close", "close,minimize,maximize:", null]);
-  assert.equal(remembered.items.get("ardia.desktopButtonLayout"), JSON.stringify({ layout: null }));
+  assert.equal(remembered.items.get("ardia.desktopButtonLayout"), JSON.stringify({ layout: null, desktop: "" }));
   stop();
   emit("ArdiaShell", "windowButtonLayout", { layout: "close:" });
   assert.equal(seen.length, 3);
@@ -111,4 +112,43 @@ test("a follower stopped before the first read answers neither applies nor remem
   await settle();
   assert.deepEqual(seen, []);
   assert.equal(remembered.items.has("ardia.desktopButtonLayout"), false);
+});
+
+test("a tiling compositor or window manager is named by XDG_CURRENT_DESKTOP, in any case and anywhere in its colon list", () => {
+  for (const desktop of ["Hyprland", "hyprland", "sway", "SWAY", "niri", "i3", "river", "dwl", "bspwm", "awesome", "qtile", "xmonad", "dwm", "herbstluftwm", "Regolith:GNOME", "regolith", "Hyprland:Omarchy", "wlroots:sway", " niri "]) assert.equal(isTilingDesktop(desktop), true, desktop);
+  for (const desktop of ["GNOME", "ubuntu:GNOME", "KDE", "X-Cinnamon", "XFCE", "MATE", "LXQt", "Budgie:GNOME", "Pantheon", "COSMIC", "Unity", "", null, undefined, "i3wm", "swayfx-like", "hyprlandish"]) assert.equal(isTilingDesktop(desktop), false, String(desktop));
+});
+
+test("on a tiling desktop the layout is followed as reported and marked tiling, live and in memory, so a new window hides its buttons at once", async () => {
+  const seen = [];
+  const { host, emit } = fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => Promise.resolve({ layout: "menu:close", desktop: "Hyprland" }));
+  const remembered = memory();
+  followDesktopButtonLayout(host, remembered, (layout, tiling) => seen.push([layout, tiling]));
+  await settle();
+  emit("ArdiaShell", "windowButtonLayout", { layout: "appmenu:close", desktop: "ubuntu:GNOME" });
+  emit("ArdiaShell", "windowButtonLayout", { layout: null, desktop: "sway" });
+  assert.deepEqual(seen, [["menu:close", true], ["appmenu:close", false], [null, true]]);
+  const next = [];
+  followDesktopButtonLayout(fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => new Promise(() => {})).host, remembered, (layout, tiling) => next.push([layout, tiling]));
+  assert.deepEqual(next, [[null, true]]);
+  const older = [];
+  followDesktopButtonLayout(fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => new Promise(() => {})).host, memory({ "ardia.desktopButtonLayout": JSON.stringify({ layout: "close:" }) }), (layout, tiling) => older.push([layout, tiling]));
+  assert.deepEqual(older, [["close:", false]], "a layout remembered before the desktop was kept reads as a floating desktop");
+  const moved = [];
+  const switching = memory({ "ardia.desktopButtonLayout": JSON.stringify({ layout: "appmenu:close", desktop: "Hyprland" }) });
+  followDesktopButtonLayout(fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => Promise.resolve({ layout: "appmenu:close", desktop: "ubuntu:GNOME" })).host, switching, (layout, tiling) => moved.push([layout, tiling]));
+  await settle();
+  assert.deepEqual(moved, [["appmenu:close", true], ["appmenu:close", false]], "a floating desktop's reply clears a remembered tiling one");
+  assert.equal(switching.items.get("ardia.desktopButtonLayout"), JSON.stringify({ layout: "appmenu:close", desktop: "ubuntu:GNOME" }));
+  for (const payload of [undefined, null, {}, { desktop: 3 }, { desktop: ["sway"] }]) assert.equal(reportedDesktop(payload), "");
+  let tilingAnswer;
+  const stoppedMemory = memory();
+  const stoppedSeen = [];
+  const stopTiling = followDesktopButtonLayout(fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => new Promise((resolve) => (tilingAnswer = resolve))).host, stoppedMemory, (layout, tiling) => stoppedSeen.push([layout, tiling]));
+  await settle();
+  stopTiling();
+  tilingAnswer({ layout: "menu:close", desktop: "Hyprland" });
+  await settle();
+  assert.deepEqual(stoppedSeen, [], "a stopped follower neither marks a tiling desktop nor remembers it");
+  assert.equal(stoppedMemory.items.has("ardia.desktopButtonLayout"), false);
 });

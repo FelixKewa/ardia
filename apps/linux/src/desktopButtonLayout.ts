@@ -1,5 +1,6 @@
 import { hostSupports, invokeHost, reportHostError, type ArdiaHost } from "./host.ts";
 import { setDesktopButtonLayout } from "../../browser/src/state/windows/windowButtons.ts";
+import { isTilingDesktop } from "./tilingDesktop.ts";
 
 export const WINDOW_BUTTON_LAYOUT_METHOD = "ArdiaShell.windowButtonLayout";
 const LAYOUT_EVENT = "windowButtonLayout";
@@ -13,18 +14,23 @@ export function reportedButtonLayout(payload: unknown): string | null | undefine
   return typeof layout === "string" || layout === null ? layout : undefined;
 }
 
-function rememberedLayout(memory: LayoutMemory | undefined): string | null | undefined {
+export const reportedDesktop = (payload: unknown): string => {
+  const desktop = payload && typeof payload === "object" && "desktop" in payload ? (payload as { desktop: unknown }).desktop : undefined;
+  return typeof desktop === "string" ? desktop : "";
+};
+
+function rememberedPayload(memory: LayoutMemory | undefined): unknown {
   try {
     const saved = memory?.getItem(REMEMBERED_LAYOUT);
-    return saved == null ? undefined : reportedButtonLayout(JSON.parse(saved));
+    return saved == null ? undefined : JSON.parse(saved);
   } catch {
     return undefined;
   }
 }
 
-function remember(memory: LayoutMemory | undefined, layout: string | null) {
+function remember(memory: LayoutMemory | undefined, layout: string | null, desktop: string) {
   try {
-    memory?.setItem(REMEMBERED_LAYOUT, JSON.stringify({ layout }));
+    memory?.setItem(REMEMBERED_LAYOUT, JSON.stringify({ layout, desktop }));
   } catch {}
 }
 
@@ -36,17 +42,19 @@ const localMemory = (): LayoutMemory | undefined => {
   }
 };
 
-export function followDesktopButtonLayout(host: ArdiaHost, memory: LayoutMemory | undefined = localMemory(), set: (layout: string | null) => void = setDesktopButtonLayout): () => void {
+export function followDesktopButtonLayout(host: ArdiaHost, memory: LayoutMemory | undefined = localMemory(), set: (layout: string | null, tiling: boolean) => void = setDesktopButtonLayout): () => void {
   if (!hostSupports(WINDOW_BUTTON_LAYOUT_METHOD, host)) return () => {};
-  const remembered = rememberedLayout(memory);
-  if (remembered !== undefined) set(remembered);
+  const remembered = rememberedPayload(memory);
+  const rememberedLayout = reportedButtonLayout(remembered);
+  if (rememberedLayout !== undefined) set(rememberedLayout, isTilingDesktop(reportedDesktop(remembered)));
   let heard = false;
   let stopped = false;
   const accept = (payload: unknown): boolean => {
     const layout = reportedButtonLayout(payload);
     if (layout === undefined) return false;
-    set(layout);
-    remember(memory, layout);
+    const desktop = reportedDesktop(payload);
+    set(layout, isTilingDesktop(desktop));
+    remember(memory, layout, desktop);
     return true;
   };
   const stop = host.onEvent((module, event, payload) => {
