@@ -223,7 +223,24 @@ const FIRST_RETRY_MS = 10 * 60 * 1000;
 const LAST_RETRY_MS = 6 * 60 * 60 * 1000;
 const waitingNoted = new Set<string>();
 
+const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function retryLater(key: string, wait: number, consent: ConsentToken | null) {
+  const earlier = retryTimers.get(key);
+  if (earlier) clearTimeout(earlier);
+  const timer = setTimeout(() => {
+    retryTimers.delete(key);
+    reconcileOfficial(consent);
+  }, wait + 1000);
+  (timer as { unref?: () => void }).unref?.();
+  retryTimers.set(key, timer);
+}
+
+export const pendingOfficialRetries = () => [...retryTimers.keys()];
+
 export function resetOfficialUpdatesForTests() {
+  for (const timer of retryTimers.values()) clearTimeout(timer);
+  retryTimers.clear();
   retryAt.clear();
   waitingNoted.clear();
   inFlight.clear();
@@ -252,7 +269,7 @@ export function reconcileOfficial(consent: ConsentToken | null, now = Date.now()
         void promoteCandidate(name, candidate, consent).then((ok) => {
           if (ok) return void retryAt.delete(`promote:${name}`);
           retryAt.set(`promote:${name}`, { at: Date.now() + FIRST_RETRY_MS, wait: FIRST_RETRY_MS });
-          setTimeout(() => reconcileOfficial(consent), FIRST_RETRY_MS + 1000);
+          retryLater(`promote:${name}`, FIRST_RETRY_MS, consent);
         });
       } else if (!waitingNoted.has(candidate.hash)) {
         waitingNoted.add(candidate.hash);
@@ -268,6 +285,7 @@ export function reconcileOfficial(consent: ConsentToken | null, now = Date.now()
       else {
         const wait = Math.min((backoff?.wait ?? FIRST_RETRY_MS / 2) * 2, LAST_RETRY_MS);
         retryAt.set(name, { at: Date.now() + wait, wait });
+        retryLater(name, wait, consent);
       }
     });
   }

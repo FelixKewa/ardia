@@ -7,7 +7,7 @@ const { startPlugins } = await import("./start.ts");
 const { usePlugins, activeManifest } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { manifestHash } = await import("./appChecks.ts");
-const { officialPlugins, installOfficialPlugin, resetOfficialUpdatesForTests, FETCH_REASONS } = await import("./official.ts");
+const { officialPlugins, installOfficialPlugin, pendingOfficialRetries, resetOfficialUpdatesForTests, FETCH_REASONS } = await import("./official.ts");
 const { programsKeptAtLaunch } = await import("./programs.ts");
 const { takePluginCounts } = await import("../telemetry/pluginCounts.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
@@ -68,6 +68,7 @@ test("a failed background fetch waits before trying again; the old copy keeps wo
   await lifecycle.rescanPlugins(consentToken());
   await settle();
   assert.deepEqual(host.officialFetchLog, ["cli"], "no retry inside the back-off");
+  assert.deepEqual(pendingOfficialRetries(), ["cli"], "a retry is scheduled for when the back-off ends, so it doesn't wait for a folder change");
   assert.ok(activeManifest(P(), "cli"));
 });
 

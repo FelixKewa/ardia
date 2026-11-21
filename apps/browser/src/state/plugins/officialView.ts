@@ -35,7 +35,10 @@ function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefin
   if (downloading) return { ...base, status: downloading, busy: true };
   if (attempt?.state === "installing" || programs?.state === "linking") return { ...base, status: "Installing…", busy: true };
   if (programs?.state === "failed") return { ...base, status: `Not on your PATH: ${programs.reason}`, failed: true, action: "again" };
-  if (plugin.update && attempt?.state !== "failed") return { ...base, status: `Version ${plugin.update} is ready. Review what it gets to update.`, action: "update" };
+  if (plugin.update) {
+    if (attempt?.state === "failed") return { ...base, status: attempt.reason, failed: true, action: "update" };
+    return { ...base, status: `Version ${plugin.update} is ready. Review what it gets to update.`, action: "update" };
+  }
   if (programs?.state === "linked") {
     const refused = Object.values(programs.refused);
     if (refused.length) return { ...base, status: `Not on your PATH: ${refused.join("; ")}`, failed: true, action: "again" };

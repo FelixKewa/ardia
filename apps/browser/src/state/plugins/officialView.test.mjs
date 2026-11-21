@@ -51,6 +51,13 @@ test("an installed row says so beside its title, with the version when the seam 
   assert.equal(installedLabel({ ...plugin("installed"), version: null }), "Installed");
 });
 
+test("a failed update stays on the row with Update to try again, while the old command keeps working", () => {
+  const ready = officialView({ ...plugin("installed"), update: "0.6.0" }, LINKED, null);
+  assert.deepEqual([ready.action, ready.failed], ["update", false]);
+  const failed = officialView({ ...plugin("installed"), update: "0.6.0" }, LINKED, { state: "failed", reason: "The download didn't match." });
+  assert.deepEqual([failed.action, failed.failed, failed.status], ["update", true, "The download didn't match."]);
+});
+
 test("an installed plugin whose command isn't on PATH says why and offers Retry", () => {
   const linking = officialView(plugin("installed"), { state: "linking", hash: "h", request: 1 }, null);
   assert.deepEqual([linking.busy, linking.action, linking.firstCommand], [true, null, null]);
