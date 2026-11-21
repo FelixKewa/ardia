@@ -84,7 +84,14 @@ enum PluginProgramLinks {
     let legacy = folderId == PluginFolders.legacyId
     let copy = legacy ? nil : folders.officialCopy(name, folderId: folderId, pin: pin)
     if legacy && folders.legacyFolder(name, pin: pin) == nil { return ["ok": false, "reason": "its earlier copy is gone"] }
-    if OfficialPin.sha(ofFolderId: folderId) != nil && copy == nil { return ["ok": false, "reason": "its downloaded copy is gone"] }
+    if OfficialPin.sha(ofFolderId: folderId) != nil && copy == nil {
+      if case .success(let places) = folders.programPlaces(),
+        PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: []) == .stuck
+      {
+        return ["ok": false, "reason": "its downloaded copy is gone, and the programs it left on PATH couldn't be taken off"]
+      }
+      return ["ok": false, "reason": "its downloaded copy is gone"]
+    }
     let builtIn = legacy || copy != nil
     let registry = folders.programRegistry(pin: pin)
     if let refusal = programs.lazy.compactMap({ registry.refusal(program: $0.name, plugin: name, builtIn: builtIn) }).first {
@@ -131,7 +138,7 @@ enum PluginProgramLinks {
     case .success(let linked):
       if !linked.linked.isEmpty { addToLoginPath(places) }
       if !afterUpdate.isEmpty, PluginPrograms.shouldRunAfterUpdate(linked, plugin: name, places: places) {
-        runAfterUpdate(name, version: linked.version, commands: afterUpdate, places: places, generation: generation, digest: copy?.payloadDigest)
+        runAfterUpdate(name, version: linked.version, commands: afterUpdate, programs: programs, places: places, generation: generation, digest: copy?.payloadDigest)
       }
       var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
       if let kept = linked.kept, check == .trusted { reply["kept"] = kept }
@@ -192,18 +199,23 @@ enum PluginProgramLinks {
     _ = written.wait(timeout: .now() + quitStopsWriteLimit)
   }
 
-  private static func runAfterUpdate(_ name: String, version: String, commands: [(String, [[String]])], places: ProgramPlaces, generation: Int, digest: String?) {
+  private static func runAfterUpdate(
+    _ name: String, version: String, commands: [(String, [[String]])], programs: [PluginProgram], places: ProgramPlaces, generation: Int, digest: String?
+  ) {
     let steps = commands.flatMap { program, runList in runList.map { (program, $0) } }
     watchQuit()
-    runAfterUpdateSteps(name, version: version, steps: steps, from: 0, succeeded: true, places: places, generation: generation, digest: digest)
+    runAfterUpdateSteps(name, version: version, steps: steps, from: 0, succeeded: true, programs: programs, places: places, generation: generation, digest: digest)
   }
 
   private static func runAfterUpdateSteps(
-    _ name: String, version: String, steps: [(String, [String])], from first: Int, succeeded earlier: Bool, places: ProgramPlaces, generation: Int, digest: String?
+    _ name: String, version: String, steps: [(String, [String])], from first: Int, succeeded earlier: Bool, programs: [PluginProgram], places: ProgramPlaces,
+    generation: Int, digest: String?
   ) {
     afterUpdateQueue.async {
       let retry = { (step: Int, succeeded: Bool) in
-        runs.whenOpen { runAfterUpdateSteps(name, version: version, steps: steps, from: step, succeeded: succeeded, places: places, generation: generation, digest: digest) }
+        runs.whenOpen {
+          runAfterUpdateSteps(name, version: version, steps: steps, from: step, succeeded: succeeded, programs: programs, places: places, generation: generation, digest: digest)
+        }
       }
       guard !runs.isQuitting else { return retry(first, earlier) }
       guard PluginPrograms.claimAfterUpdate(plugin: name, version: version, places: places) else { return }
@@ -216,9 +228,17 @@ enum PluginProgramLinks {
       for step in steps.indices where step >= first {
         let (program, arguments) = steps[step]
         guard isCurrent(name, generation) else { return }
+        var damaged = false
         let started = PluginPrograms.whileCurrent(plugin: name, version: version, places: places) { () -> AfterUpdateSpawn in
-          if let digest, !PluginPrograms.isSealed(folder, keepingRootWritable: true) || PluginPrograms.payloadDigest(folder, keepingCaches: true) != digest { return .failed }
+          if let digest, !PluginPrograms.isSealed(folder, keepingRootWritable: true) || PluginPrograms.payloadDigest(folder, keepingCaches: true) != digest {
+            damaged = true
+            return .failed
+          }
           return runs.spawn((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
+        }
+        if damaged {
+          _ = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [])
+          return
         }
         switch started {
         case nil: return

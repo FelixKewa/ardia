@@ -9,7 +9,7 @@ import { usePages } from "../tabs/pageState";
 import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
 import { notePasswordManagerChosen, notePasswordPanel, noteProfilesMovedBack } from "../telemetry/passwordManagerCounts";
-import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/lifecycle";
+import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/retiredOfficial";
 import {
   choiceKind,
   fieldProviderSet,

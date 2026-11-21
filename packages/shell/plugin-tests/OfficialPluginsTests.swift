@@ -570,6 +570,30 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertNotNil(exposed.makeScratch("tool", prefix: ".stage-"))
   }
 
+  func testAStoreReachedThroughASymlinkIsntUnpackedInto() throws {
+    let real = "\(root)/elsewhere"
+    XCTAssertEqual(mkdir(real, 0o700), 0)
+    XCTAssertEqual(symlink(real, "\(root)/Linked"), 0)
+    let linked = OfficialStore(root: "\(root)/Linked")
+    XCTAssertNil(linked.makeScratch("tool", prefix: ".stage-"), "the folder checked and the folder unpacked into could differ")
+  }
+
+  func testProgramsUnderAFolderOtherUsersCanChangeArentInstalled() throws {
+    let shared = "\(root)/shared-programs"
+    XCTAssertEqual(mkdir(shared, 0o755), 0)
+    XCTAssertEqual(chmod(shared, 0o777), 0)
+    let exposed = ProgramPlaces(store: "\(shared)/Programs", binDir: "\(root)/bin")
+    let folder = try makeFolder("1.0.0", say: "hi")
+    defer { folder.close() }
+    guard case .text(let text) = PluginFiles.readManifest(in: folder) else { return XCTFail("no manifest") }
+    guard case .failure(let refusal) = PluginPrograms.install(
+      plugin: "tool", from: folder, approved: PluginFiles.approvalHash(text: text, folderId: folder.id), version: "1.0.0", programs: toolPrograms, places: exposed)
+    else { return XCTFail("installed where another user could swap the copy") }
+    XCTAssertTrue(refusal.reason.contains("other users"))
+    XCTAssertNil(PluginPrograms.linkTarget("\(root)/bin/tool"))
+    XCTAssertEqual(chmod(shared, 0o755), 0)
+  }
+
   func testAQuarantineFlagStaysOnADownloadThatDoesntMatch() throws {
     let archive = try pluginArchive(manifest())
     XCTAssertEqual(setxattr(archive, OfficialStore.quarantineName, "0081;0;Test;", 12, 0, XATTR_NOFOLLOW), 0)
