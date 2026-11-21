@@ -913,13 +913,14 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     lights where shared code places them (`setTrafficLightsCenter` in `shims/web/windowChrome.tsx`) and presses them
     through the same `captionControls.ts` as the native buttons; right-clicking them opens the window menu. The Mac
     and Windows offer no choice and hide the row.
-  - **Hidden.** `hidden` draws neither the native buttons nor the traffic lights, for tiling window managers (i3, sway,
-    Hyprland) that close, minimize and tile windows from the keyboard (#2157). Its chrome reserves nothing
-    (`HIDDEN_BUTTONS_CHROME`: leading and trailing widths 0, no title bar band), so the sidebar header's tools, the top
-    strip and Little Ardia's back button start at the leading edge and nothing is kept clear at the top right. The
-    menu is the header's hamburger, the same one full screen uses, and the sidebar header never collapses while it is
-    the menu's only home. Dragging empty chrome and double-clicking it work as with the other styles, through the
-    shell's drag regions.
+  - **Hidden.** `hidden` draws neither the native buttons nor the traffic lights, on any desktop (#2157). Native
+    already draws no window buttons on the tiling desktops it recognises (Tiling desktops above); Hidden is for the
+    rest, such as a tiler Ardia doesn't recognise or anyone who closes, minimizes and tiles windows from the keyboard,
+    and it also drops the `…`. Its chrome reserves nothing (`HIDDEN_BUTTONS_CHROME`: leading and trailing widths 0, no
+    title bar band), so the sidebar header's tools, the top strip and Little Ardia's back button start at the leading
+    edge and nothing is kept clear at the top right. The menu is the header's hamburger, the same one full screen
+    uses, and the sidebar header never collapses while it is the menu's only home. Dragging empty chrome and
+    double-clicking it work as with the other styles, through the shell's drag regions.
   - `lib/platformChrome.linux.ts` starts from the Windows `WINDOW_CHROME`. `platform/windowControls.ts` is swapped for
     `hostWindowControls.ts`: minimize and maximize call `ArdiaShell.minimizeWindow` and `toggleMaximizeWindow`, and
     caption regions are a no-op because the shell's own drag regions move the window. Close goes straight to the
