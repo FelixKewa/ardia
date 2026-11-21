@@ -25,10 +25,10 @@ function useFoldedAway(mode: ToolbarMode) {
   const [fold, setFold] = useState({ mode, done: mode === "collapsed" });
   const current = fold.mode === mode ? fold : { mode, done: false };
   if (current !== fold) setFold(current);
-  const left = useRef({ mode, at: -Infinity });
+  const entered = useRef({ mode, at: -Infinity });
   useLayoutEffect(() => {
-    const from = left.current;
-    if (from.mode !== mode) left.current = { mode, at: performance.now() };
+    const from = entered.current;
+    if (from.mode !== mode) entered.current = { mode, at: performance.now() };
     if (mode !== "collapsed" || current.done) return;
     const settledOpen = from.mode === "shown" && performance.now() - from.at >= TOOLBAR_MOTION.show;
     if (settledOpen) return void setFold({ mode, done: true });
