@@ -10,7 +10,6 @@ export const trafficLightsShown = ({ style, pageFullScreen, windowFullScreen }: 
 
 export type LeadingPlace = { center: readonly [number, number]; trailing: boolean };
 
-
 export const leadingButtonsShown = ({ count, pageFullScreen, windowFullScreen, place }: { count: number; pageFullScreen: boolean; windowFullScreen: boolean; place: LeadingPlace }): boolean =>
   count > 0 && !pageFullScreen && !windowFullScreen && !lightsPlaceOffWindow(place);
 

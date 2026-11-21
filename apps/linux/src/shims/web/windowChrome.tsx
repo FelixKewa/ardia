@@ -37,7 +37,6 @@ export function setTrafficLightsCenter(windowId: string, next: readonly [number,
   return Promise.resolve();
 }
 
-
 export function trafficLightPosition({ center, trailing }: TrafficLightsPlace, index: number) {
   const top = center[1] - DIAMETER / 2;
   return trailing ? { right: center[0] - index * SPACING - DIAMETER / 2, top } : { left: center[0] + index * SPACING - DIAMETER / 2, top };

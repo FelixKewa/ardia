@@ -611,8 +611,7 @@ test("the header's tools sit as far past the left group as they sit past the Mac
 test("in a narrow right sidebar the header's toggle never lands on the right group, wherever the left buttons push it", async () => {
   const { linuxSidebarCaptionRoom } = await import("./sidebarHeaderLayout.ts");
   const { sidebarHeaderSplit } = await import("./profileIndicatorLayout.ts");
-  const { headerToggleRightEdge: toggleRightEdge } = await import("../../browser/src/components/window/dockMotion.ts");
-  const { headerToggleXFor, HEADER_TOOLS } = await import("../../browser/src/components/window/dockMotion.ts");
+  const { headerToggleRightEdge: toggleRightEdge, headerToggleXFor, HEADER_TOOLS } = await import("../../browser/src/components/window/dockMotion.ts");
   const { nativeButtonsChrome } = await import("../../browser/src/lib/platformChrome.linux.ts");
   const { parseButtonLayout, WINDOW_CONTROLS, windowControlsWidth } = await import("../../browser/src/lib/windowButtonLayout.ts");
   const slot = { edge: HEADER_TOOLS.edge, button: 30, pitch: HEADER_TOOLS.pitch };
@@ -693,5 +692,16 @@ test("the header's toggle takes the edge slot when the left buttons aren't in it
     for (const state of [normal, { ...normal, pageFullScreen: true }, { ...normal, controlsRow: true }]) {
       assert.equal(headerToggleXIn(state, chrome), chrome.leadingWidth ? 97.75 : HEADER_TOOLS.fullScreenToggleX, "chromes without left buttons keep today's toggle");
     }
+  }
+});
+
+test("the drawn header toggle and Linux's header threshold both read the one toggle rule", async () => {
+  const { readFileSync } = await import("node:fs");
+  const shared = readFileSync(new URL("../../browser/src/components/sidebar/AddressBar.tsx", import.meta.url), "utf8");
+  const linux = readFileSync(new URL("./SidebarAddressBar.tsx", import.meta.url), "utf8");
+  assert.match(shared, /const toggleX = useHeaderToggleX\(windowId\);/);
+  assert.match(linux, /const toggleOnly = headerToggleRightEdge\(useHeaderToggleX\(windowId\)\);/);
+  for (const [name, source] of [["AddressBar.tsx", shared], ["SidebarAddressBar.tsx", linux]]) {
+    assert.doesNotMatch(source, /headerToggleXFor|HEADER_TOOLS\.toggleX/, `${name} doesn't bypass useHeaderToggleX`);
   }
 });

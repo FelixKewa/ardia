@@ -47,7 +47,6 @@ export function useHeaderToggleX(windowId: string): number {
 }
 
 export function SidebarHeaderTools({ width }: { width: number }) {
-  useWindowChrome();
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const palette = toolbarPalette(useTheme(), null);
