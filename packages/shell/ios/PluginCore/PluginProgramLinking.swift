@@ -28,6 +28,7 @@ extension PluginPrograms {
   static func link(_ program: PluginProgram, plugin: String, places: ProgramPlaces, adoptTarget: String? = nil) -> String? {
     guard isName(program.name) else { return "\(program.name) isn't a program name" }
     guard realFolder(places.binDir, creating: true) != nil else { return "\(places.binDir) isn't a folder you own" }
+    guard hasPrivateAncestry(places.binDir, followingLinks: true) else { return "\(places.binDir) is inside a folder other users can change" }
     if let problem = linkProblem(program, plugin: plugin, places: places, adoptTarget: adoptTarget) { return problem }
     let path = (places.binDir as NSString).appendingPathComponent(program.name)
     let target = linkTargetPath(program, plugin: plugin, places: places)
@@ -52,6 +53,10 @@ extension PluginPrograms {
     guard isRealFolder(pluginStore), let version = linkTarget((pluginStore as NSString).appendingPathComponent(currentName)), !version.contains("/"),
       let folder = PluginFiles.openFolder((pluginStore as NSString).appendingPathComponent(version))
     else { return .failure(FolderRefusal(reason: "its earlier copy is gone")) }
+    guard hasPrivateAncestry(pluginStore) else {
+      folder.close()
+      return .failure(FolderRefusal(reason: "its program folder (\(pluginStore)) is inside a folder other users can change"))
+    }
     defer { folder.close() }
     guard checkTree(folder.fd) == nil else { return .failure(FolderRefusal(reason: "its earlier copy isn't as Ardia made it")) }
     for program in programs where PluginFiles.localProgram(program.path, in: folder) == nil {
@@ -83,11 +88,14 @@ extension PluginPrograms {
     return version == base || version.hasPrefix(base + "-r") ? folder : nil
   }
 
-  static func dropCurrentUnlessTrusted(plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> CurrentCheck {
+  static func dropCurrentUnlessTrusted(
+    plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy], onlyVersion: String? = nil
+  ) -> CurrentCheck {
     guard let lock = lock(plugin, places) else { return .stuck }
     defer { close(lock) }
     let pluginStore = places.pluginStore(plugin)
     let currentPath = (pluginStore as NSString).appendingPathComponent(currentName)
+    if let onlyVersion, linkTarget(currentPath) != onlyVersion { return .trusted }
     var info = stat()
     if lstat(currentPath, &info) != 0 && errno == ENOENT { return .trusted }
     if let version = linkTarget(currentPath), currentIsTrusted(version, plugin: plugin, programs: programs, places: places, trusted: trusted) { return .trusted }
@@ -117,7 +125,7 @@ extension PluginPrograms {
   static func currentIsTrusted(_ version: String, plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> Bool {
     guard !version.contains("/") else { return false }
     let folder = (places.pluginStore(plugin) as NSString).appendingPathComponent(version)
-    if legacyCopy(plugin: plugin, places: places) == folder { return legacyHolds(folder, programs: programs) }
+    if legacyCopy(plugin: plugin, places: places) == folder { return hasPrivateAncestry(places.pluginStore(plugin)) && legacyHolds(folder, programs: programs) }
     let sources = trusted.filter { source in
       let base = versionFolderName(version: source.version, approved: source.approved)
       return version == base || version.hasPrefix(base + "-r")

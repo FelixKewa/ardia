@@ -594,6 +594,47 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertEqual(chmod(shared, 0o755), 0)
   }
 
+  func testPATHFoldersOtherUsersCanSwapGetNoLinksButASymlinkedParentIsFine() throws {
+    let shared = "\(root)/shared-home"
+    XCTAssertEqual(mkdir(shared, 0o755), 0)
+    XCTAssertEqual(chmod(shared, 0o777), 0)
+    let exposed = ProgramPlaces(store: "\(root)/Programs", binDir: "\(shared)/bin")
+    let folder = try makeFolder("1.0.0", say: "hi")
+    defer { folder.close() }
+    guard case .text(let text) = PluginFiles.readManifest(in: folder) else { return XCTFail("no manifest") }
+    let approved = PluginFiles.approvalHash(text: text, folderId: folder.id)
+    let held = try PluginPrograms.install(plugin: "tool", from: folder, approved: approved, version: "1.0.0", programs: toolPrograms, places: exposed).get()
+    XCTAssertEqual(held.linked, [])
+    XCTAssertTrue(held.refused["tool"]?.contains("other users") == true)
+    XCTAssertEqual(chmod(shared, 0o755), 0)
+
+    let dotfiles = "\(root)/dotfiles-local"
+    XCTAssertEqual(mkdir(dotfiles, 0o755), 0)
+    XCTAssertEqual(symlink(dotfiles, "\(root)/linked-local"), 0)
+    let linked = ProgramPlaces(store: "\(root)/Programs", binDir: "\(root)/linked-local/bin")
+    XCTAssertEqual(try PluginPrograms.install(plugin: "tool", from: folder, approved: approved, version: "1.0.0", programs: toolPrograms, places: linked).get().linked, ["tool"], "a bin folder reached through a symlinked parent, like a dotfiles ~/.local, still works")
+  }
+
+  func testThe0247CopyIsntKeptInAProgramsFolderOtherUsersCanChange() throws {
+    let old = try makeFolder("0.4.0", say: "old")
+    defer { old.close() }
+    _ = try install(old, version: "0.4.0", identity: OfficialPin.legacyFolderId)
+    XCTAssertEqual(chmod(root, 0o777), 0)
+    defer { chmod(root, 0o700) }
+    guard case .failure(let refusal) = PluginPrograms.keepLegacy(plugin: "tool", programs: toolPrograms, places: places) else { return XCTFail("kept a copy another user could swap") }
+    XCTAssertTrue(refusal.reason.contains("other users"))
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", programs: toolPrograms, places: places, trusted: []), .dropped)
+  }
+
+  func testCleanupForAnOlderVersionLeavesANewerLinkAlone() throws {
+    let linked = try linkedOfficialCopy()
+    let version = try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current"))
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", programs: toolPrograms, places: places, trusted: [], onlyVersion: "0.0.1-aaaaaaaaaaaa"), .trusted)
+    XCTAssertEqual(PluginPrograms.linkTarget("\(places.store)/tool/current"), version, "a check that failed on another version doesn't drop this one")
+    XCTAssertNotNil(PluginPrograms.linkTarget("\(places.binDir)/tool"))
+    _ = linked
+  }
+
   func testAQuarantineFlagStaysOnADownloadThatDoesntMatch() throws {
     let archive = try pluginArchive(manifest())
     XCTAssertEqual(setxattr(archive, OfficialStore.quarantineName, "0081;0;Test;", 12, 0, XATTR_NOFOLLOW), 0)

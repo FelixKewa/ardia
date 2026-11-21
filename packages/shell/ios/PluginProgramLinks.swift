@@ -84,14 +84,15 @@ enum PluginProgramLinks {
     let legacy = folderId == PluginFolders.legacyId
     let copy = legacy ? nil : folders.officialCopy(name, folderId: folderId, pin: pin)
     if legacy && folders.legacyFolder(name, pin: pin) == nil { return ["ok": false, "reason": "its earlier copy is gone"] }
-    if OfficialPin.sha(ofFolderId: folderId) != nil && copy == nil {
+    let unverified = { (reason: String) -> [String: Any] in
       if case .success(let places) = folders.programPlaces(),
         PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: []) == .stuck
       {
-        return ["ok": false, "reason": "its downloaded copy is gone, and the programs it left on PATH couldn't be taken off"]
+        return ["ok": false, "reason": "\(reason), and the programs it left on PATH couldn't be taken off"]
       }
-      return ["ok": false, "reason": "its downloaded copy is gone"]
+      return ["ok": false, "reason": reason]
     }
+    if OfficialPin.sha(ofFolderId: folderId) != nil && copy == nil { return unverified("its downloaded copy is gone") }
     let builtIn = legacy || copy != nil
     let registry = folders.programRegistry(pin: pin)
     if let refusal = programs.lazy.compactMap({ registry.refusal(program: $0.name, plugin: name, builtIn: builtIn) }).first {
@@ -108,7 +109,7 @@ enum PluginProgramLinks {
     }
     let folder: OpenedFolder
     switch folders.approvedFolder(name, folderId: folderId, approved: approved) {
-    case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
+    case .failure(let refusal): return copy != nil ? unverified(refusal.reason) : ["ok": false, "reason": refusal.reason]
     case .success(let opened): folder = opened
     }
     defer { folder.close() }
@@ -237,7 +238,7 @@ enum PluginProgramLinks {
           return runs.spawn((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
         }
         if damaged {
-          _ = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [])
+          _ = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [], onlyVersion: version)
           return
         }
         switch started {
