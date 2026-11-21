@@ -244,12 +244,16 @@ void WatchZoom() { InstallZoomMonitor(); }
 
 NSWindow *GrabbedWindow() { return gDragged.window; }
 
-void TabRequestedActivation(ArdiaWebView *view) {
+BOOL TabRequestedActivation(ArdiaWebView *view, BOOL *fromOtherApp) {
+  *fromOtherApp = NO;
   for (NSWindow *window in NSApp.windows)
     if ([ArdiaPiPController forWindow:window].view == view && window.visible) {
       MarkBackToTabActivation();
-      if (!window.hasShadow) return ActivateApp(@"Back to Tab (Chrome's button)");
+      if (window.hasShadow) continue;
+      *fromOtherApp = ActivateApp(@"Back to Tab (Chrome's button)");
+      return YES;
     }
+  return NO;
 }
 
 void VideoEntered(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
@@ -386,6 +390,10 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
 
 + (BOOL)consumePictureInPictureActivation {
   return ConsumeBackToTabActivation();
+}
+
++ (BOOL)activateForPictureInPictureReturn {
+  return ActivateApp(@"Back to Tab (WebKit Picture in Picture)");
 }
 
 @end

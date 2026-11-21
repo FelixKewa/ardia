@@ -110,11 +110,19 @@ BOOL PreventsActivation(NSWindow *window) {
 
 NSInteger gActivations = 0;
 
-void ActivateApp(NSString *why) {
+BOOL ActivateApp(NSString *why) {
   gActivations++;
-  if (ardia_host::Background()) return ardia_host::LogActivation([@"activate (skipped in a test instance): " stringByAppendingString:why]);
+  const BOOL fromOtherApp = !NSApp.isActive;
+  if (ardia_host::Background()) {
+    ardia_host::LogActivation([@"activateIgnoringOtherApps (skipped in a test instance): " stringByAppendingString:why]);
+    return fromOtherApp;
+  }
   MarkBackToTabActivation();
-  [NSApp activate];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  [NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+  return fromOtherApp;
 }
 
 BOOL ThrowEnabled() {
@@ -292,8 +300,8 @@ NSString *CornerName(int corner) {
 - (void)backToTab {
   ArdiaWebView *view = self.view;
   if (!view) return;
-  ActivateApp(@"Back to Tab (menu)");
-  [view emit:@"activateRequest" payload:@{@"reason" : @"pictureInPicture"}];
+  const BOOL fromOtherApp = ActivateApp(@"Back to Tab (menu)");
+  [view emit:@"activateRequest" payload:@{@"reason" : @"pictureInPicture", @"fromOtherApp" : @(fromOtherApp)}];
   [view exitPictureInPicture];
 }
 
