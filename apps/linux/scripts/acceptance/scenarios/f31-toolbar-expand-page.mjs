@@ -6,7 +6,7 @@ import { js, pause } from "../lib/util.mjs";
 const TAB = "main-tab-0";
 const PAGE_SHOWN = "((status) => !!status && status.acked === status.sequence && (status.sent?.pages.length ?? 0) > 0)(ardiaLinux.inputRegions()?.status())";
 const REGION = '[data-testid="ardia-auto-hide-toolbar"]';
-const TRIGGERS = { hover: "peek", scroll: "shown", click: "shown" };
+const TRIGGERS = { hover: ["peek"], scroll: ["shown"], click: ["shown"], "a peek scrolled open and cut short": ["peek", "shown"] };
 
 export default {
   id: "F31",
@@ -19,8 +19,10 @@ export default {
     await shell.state(`s.activate(${js(TAB)}); s.setFocusedWindow(windowId); s.updateSettings({ hideToolbarWhileScrolling: true }); return true;`);
     await app.pageLoaded(url);
     await shell.waitState(`return s.settings.hideToolbarWhileScrolling === true;`, { label: "Hide toolbar while scrolling on" });
+    const reveal = () => shell.eval(`(() => { const t = ardiaLinux.toolbar; const { [${js(TAB)}]: _, ...rest } = t.getState().scrolledDown; t.setState({ scrolledDown: rest }); return true; })()`);
+    const scrollDown = () => shell.eval(`(() => { const t = ardiaLinux.toolbar; t.setState({ scrolledDown: { ...t.getState().scrolledDown, ${js(TAB)}: true }, peek: {} }); return true; })()`);
     const collapse = async () => {
-      await shell.eval(`(() => { const t = ardiaLinux.toolbar; t.setState({ scrolledDown: { ...t.getState().scrolledDown, ${js(TAB)}: true }, peek: {} }); return true; })()`);
+      await scrollDown();
       await pause(900);
       await shell.waitFor(PAGE_SHOWN, { label: "the page shown under the collapsed toolbar" });
     };
@@ -40,7 +42,16 @@ export default {
         await pause(900);
       },
       async scroll() {
-        await shell.eval(`(() => { const t = ardiaLinux.toolbar; const { [${js(TAB)}]: _, ...rest } = t.getState().scrolledDown; t.setState({ scrolledDown: rest }); return true; })()`);
+        await reveal();
+        await pause(900);
+      },
+      async "a peek scrolled open and cut short"() {
+        await move(await strip());
+        await pause(900);
+        await reveal();
+        await pause(0);
+        await scrollDown();
+        await move(await middle());
         await pause(900);
       },
       async click() {
@@ -64,14 +75,13 @@ export default {
             if (call?.method === "shell.inputRegions" && Array.isArray(call.args?.overlays)) record.regionRequests++;
             return send(name, params);
           };
-          const sample = () => {
-            if (record.stopped) return void (chrome.send = send);
-            const t = ardiaLinux.toolbar.getState();
-            const mode = !t.scrolledDown[${js(TAB)}] ? "shown" : t.peek[${js(TAB)}] ? "peek" : "collapsed";
+          const modeOf = (t) => (!t.scrolledDown[${js(TAB)}] ? "shown" : t.peek[${js(TAB)}] ? "peek" : "collapsed");
+          const unsubscribe = ardiaLinux.toolbar.subscribe((t) => {
+            if (record.stopped) return void (unsubscribe(), (chrome.send = send));
+            const mode = modeOf(t);
             if (record.modes.at(-1) !== mode) record.modes.push(mode);
-            requestAnimationFrame(sample);
-          };
-          requestAnimationFrame(sample);
+          });
+          record.modes.push(modeOf(ardiaLinux.toolbar.getState()));
           return true;
         })()`);
         for (let round = 0; round < 2; round++) {
@@ -79,11 +89,11 @@ export default {
           await move(await middle());
           await collapse();
         }
-        const record = await shell.eval("(() => { const { stopped, ...r } = globalThis.toolbarExpandRecord; globalThis.toolbarExpandRecord.stopped = true; return r; })()");
+        const record = await shell.eval("(() => { const { stopped, ...r } = globalThis.toolbarExpandRecord; globalThis.toolbarExpandRecord.stopped = true; ardiaLinux.toolbar.setState({}); return r; })()");
         await t.evidence(`viewports-${trigger}`, record);
         await t.screenshot(shell, `expanded-${trigger}`);
-        assert.deepEqual(record.modes.filter((mode) => mode !== "collapsed"), [opened, opened], `the toolbar must open as ${opened} twice: ${js(record.modes)}`);
-        if (opened === "shown") assert.ok(record.sent.length > 0, "the page moving down must reach the recorder as viewport requests");
+        assert.deepEqual(record.modes.filter((mode) => mode !== "collapsed"), [...opened, ...opened], `the toolbar must open as ${opened.join(" then ")} twice: ${js(record.modes)}`);
+        if (opened.join() === "shown") assert.ok(record.sent.length > 0, "the page moving down must reach the recorder as viewport requests");
         assert.ok(record.regionRequests > 0, "the shell's host requests must be read by the recorder");
         assert.ok(!record.sent.includes(false), `the page was hidden while the toolbar opened or folded: ${js(record.sent)}`);
         await shell.waitFor(PAGE_SHOWN, { timeout: 5000, label: "the page still shown after the expansions" });

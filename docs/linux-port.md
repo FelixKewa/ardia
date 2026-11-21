@@ -896,7 +896,8 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   count in the telemetry leader window only, like `toolbar_scroll_hides`, so their ratio holds. When a peek folds
   away, the region stays for the fold's duration (`TOOLBAR_MOTION.hide`): the toolbar is still drawn at its peek
   position on the collapse's first frame, and dropping the region then hid the page for a frame (#3285). A collapse
-  from the shown toolbar drops it at once, so the fading buttons never take clicks over the page. The window
+  that cuts an opening short keeps it for the fold too; only a collapse from a toolbar that has finished opening
+  (`TOOLBAR_MOTION.show`) drops it at once, so the fading buttons don't take clicks over the page. The window
   buttons (`WindowControls.tsx`) are an input region while they take input: when the toolbar opens they appear at full
   size before the page has moved down, and their bottom edge reached a top sample. `toolbar_motion_page_hides` counts a
   page that stopped drawing within two motion lengths of the toolbar opening or folding, outside a peek (a hide during
