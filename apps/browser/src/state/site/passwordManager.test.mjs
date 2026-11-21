@@ -207,7 +207,7 @@ test("turning a plugin off withdraws its profiles natively before the host repor
   assert.equal(pm.currentPasswordManager("default"), "ardia");
   assert.equal(S().profiles.default.passwordManager, "plugin:system-passwords", "the stored choice stays for when it comes back");
   assert.deepEqual(calls("offerToSave"), [["", true]]);
-  assert.doesNotMatch(stub.docs.get("password-manager.json") ?? "", /""/, "the record is cleared before the pref flips back");
+  assert.match(stub.docs.get("password-manager.json") ?? "", /"offerToSaveRestored":\[""\]/, "the give-back is marked for a later launch to read back and confirm");
   native.calls.length = 0;
   turnOn("system-passwords");
   await settle();

@@ -292,8 +292,8 @@ document (`docs/conventions.md`):
   A manifest that already has `contributes`, `main` or `sidecar` is taken as v2 whatever its number says.
 - Problems in a migrated manifest are reported in its own words (`v1Problem`): a v1 plugin hears about `page` and
   `process`, not `contributes.panels[0]` and `sidecar`.
-- The approval is the hash of the file's text, so a migration never asks for a new approval. The bundled `cli` and
-  `apple-passwords` plugins ship v1 manifests today and load through this path unchanged; `keywords`, `telemetry`,
+- The approval is the hash of the file's text, so a migration never asks for a new approval. The bundled `cli` plugin
+  ships a v1 manifest today and loads through this path unchanged; `keywords`, `telemetry`,
   `programs[].example` and `programs[].claim` need manifest 2.
 
 ### activationEvents
@@ -641,18 +641,40 @@ its manifest is the approved one; otherwise the profile reads as Ardia, and the 
 
 **Default.** A profile that never chose reads as Ardia, unless a built-in password-manager plugin is on, in which case
 it reads as that plugin. Turning on a built-in one also stores it on every profile that never chose (the consent sheet
-says how many, naming the plugin: "Moves 3 profiles that never picked a password manager to Apple Passwords"). An installed plugin moves nobody: each
-profile picks it. Turning a plugin on never changes a profile that chose.
+says how many, naming the plugin: "Moves 3 profiles that never picked a password manager to <title>"). No built-in
+password-manager plugin ships today: Apple Passwords was one in 0.2.47 and was retired once Apple approved Ardia for
+Apple Passwords itself (#3357). An installed plugin moves nobody: each profile picks it. Turning a plugin on never
+changes a profile that chose.
 
 **Offer to save.** While a profile's manager is a plugin or None, Ardia's offer to save is off for it; it comes back
 when the profile returns to Ardia, unless you had turned it off yourself. `password-manager.json` in the data folder
 records which profiles Ardia turned off, so the give-back survives a relaunch. Both directions are crash-safe: turning
-off writes the record, then the pref; giving back clears the record, then turns the pref on, so a crash in between
-leaves offer to save off and never overrides your own Off. A record write that fails while Ardia is taking a profile back is owed: it rides along with the next record
-write that succeeds (so a relaunch keeps it) and is retried every 30 s, doubling to 5 minutes. If no write to
-`password-manager.json` ever succeeds, the debt is lost at quit and offer to save stays off for that profile until you
-turn it on yourself; each failure counts in `password_manager_record_failed`. A record from a newer Ardia (a higher
+off writes the record, then the pref. Giving back is a journal over two launches, because Chrome writes the pref to
+disk later: Ardia turns the pref on, then marks the profile in `offerToSaveRestored`; a later launch reads the pref
+back and clears the profile from the record only once it reads on, and sets it again if Chrome lost it. A launch never
+confirms what it wrote itself. Your own switch wins: turning offer to save on or off yourself clears the profile from
+the record before the pref changes, so no later launch undoes it. Profiles that no longer exist are dropped from the
+record when the subsystem starts, and profiles that share browser data are given back once, through their shared
+engine profile. A record write that fails keeps the request and retries
+it every 30 s, doubling to 5 minutes: turning off waits until its own record write lands (a read can't
+tell a durable record from a save still staged natively, so an entry that's already there doesn't count), and a failed save native still holds for a retry is always replaced by the next write, even one that looks like no
+change, so a stale save can't land later and undo your switch. Each failure counts in `password_manager_record_failed`.
+Confirming a give-back writes the pref on once more before clearing the record: the read sees the effective value, so
+when an extension forces the setting on, a write Chrome lost is still written again before the record goes. Ardia
+can't tell a lost write from an Off made in Chrome's own password settings during the launch that gave it back, so
+that Off comes back on at the next launch; an Off made in Ardia's Settings always wins. A record from a newer Ardia (a higher
 `version`) is never overwritten: offer to save is left as it is for that run.
+
+**Retired plugins.** `RETIRED_OFFICIAL_PLUGINS` in `state/plugins/lifecycle.ts` maps each official plugin Ardia no
+longer ships (`apple-passwords`) to the approvals its bundled copies were given (the hash of the bundled manifest with
+folder `bundled`). Once a scan lists no plugin by that name, a record carrying one of those approvals is dropped from
+plugins.json. A record you approved for a plugin of that name you installed yourself never matches, so it stays even
+when a folder read error lists nothing, and a scan that fails drops nothing. Approving or removing a leftover folder of
+that name while the bundled record is still there counts as dropping it. In the launch that drops it, a profile
+whose stored choice is `plugin:<retired>` is saved as `ardia`,
+and when the dropped record was on, so are profiles that never chose, so a rollback to a build that still bundles the
+plugin can't hand them back to it with offer to save off. With no retired record and no such choice nothing is
+written. Offer to save then comes back through the journal above.
 
 **Withdrawn at once.** Ardia pushes the whole set of profiles with a key (`passwords.setFieldProviders {session, generation,
 profiles: [{profile, fields, codeSetup}]}`) at launch and whenever it changes. Turning the plugin off, removing it or
@@ -913,7 +935,10 @@ and each refusal's reason
 `password_manager_panel_refusal_<hidden|not_focused|unavailable|not_key|not_editing|throttled|refused|no_panel>`
 (`no_panel`: macOS took the request but no panel window was on screen 0.6 s later),
 `password_manager_panel_hints_<shown|dismissed>`, `verification_code_setups_<offered|accepted|failed>`,
-`password_manager_chose_<ardia|none|plugin>`, `password_manager_record_failed`, and the daily
+`password_manager_chose_<ardia|none|plugin>`, `password_manager_record_failed`, `password_manager_profiles_moved_back`
+(profiles, counted once per shared engine profile, saved as Ardia because their plugin was retired),
+`password_manager_offer_to_save_restored` (a give-back a later launch read back on),
+`password_manager_offer_to_save_restore_failures` (the pref couldn't be turned on), and the daily
 `password_manager_profiles_<ardia|none|plugin>`.
 
 Dashboard: watch `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against

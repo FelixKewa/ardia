@@ -73,7 +73,6 @@ test("a profile that never installed the command line has it offered and nothing
   assert.equal(S().settings.cliControl, false);
   assert.deepEqual(officialPlugins(P(), true, hidden), [
     { name: "cli", title: "Command Line", blurb: "Drive Ardia from your terminal or an agent.", icon: "terminal.fill", version: "0.3.0", example: "ardia tabs", state: "available" },
-    { name: "apple-passwords", title: "Apple Passwords", blurb: "Fill logins and verification codes from the Passwords app on every site.", icon: "key.fill", version: null, example: null, state: "unsupported" },
   ]);
   assert.deepEqual(pluginSocketMethod("plugins.official", {}), { result: officialPlugins(P()) });
 });
@@ -81,7 +80,7 @@ test("a profile that never installed the command line has it offered and nothing
 test("the seam: unsupported where plugins aren't, coming soon only behind its flag, and only built-ins can claim official", async () => {
   assert.deepEqual(
     officialPlugins(P(), false, hidden).map((p) => p.state),
-    ["unsupported", "unsupported"],
+    ["unsupported"],
   );
   const shown = officialPlugins(P(), true, (flag) => flag === "officialPluginsAi");
   assert.deepEqual(shown.at(-1), { name: "ai", title: "AI", blurb: shown.at(-1).blurb, icon: "sparkles", version: null, example: null, state: "comingSoon" });
@@ -95,7 +94,7 @@ test("the seam: unsupported where plugins aren't, coming soon only behind its fl
     "plugin.json: official is only for plugins built into Ardia",
     "plugin.json: autoInstall is only for plugins built into Ardia",
   ]);
-  assert.deepEqual(officialPlugins(P(), true, hidden).map((p) => p.name), ["cli", "apple-passwords"]);
+  assert.deepEqual(officialPlugins(P(), true, hidden).map((p) => p.name), ["cli"]);
   await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
 });
 

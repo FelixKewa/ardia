@@ -139,9 +139,9 @@ test("the Settings row and the consent sheet say Install for every official plug
 });
 
 
-test("every pinned or coming-soon plugin is counted by name, a dash becoming an underscore, and cli and ai keep their field names", () => {
-  assert.deepEqual([...OFFICIAL_COUNTED_NAMES].sort(), ["ai", "apple-passwords", "cli"]);
-  assert.equal(officialPluginField("settings", "installed", "apple-passwords"), "official_plugin_settings_installed_apple_passwords");
+test("every pinned or coming-soon plugin is counted by name, a retired one as other, and cli and ai keep their field names", () => {
+  assert.deepEqual([...OFFICIAL_COUNTED_NAMES].sort(), ["ai", "cli"]);
+  assert.equal(officialPluginField("settings", "installed", "apple-passwords"), "official_plugin_settings_installed_other");
   assert.equal(officialPluginField("settings", "shown", "cli"), "official_plugin_settings_shown_cli");
   assert.equal(officialPluginField("onboarding", "installed", "ai"), "official_plugin_onboarding_installed_ai");
   assert.equal(officialPluginField("settings", "shown", "not-pinned"), "official_plugin_settings_shown_other");
