@@ -144,11 +144,11 @@ AC_PROFILE_CALL(ac_extension_alarms_create, ardia::OffTheRecord::kAllow) {
           extensions::Manifest::IsUnpackedLocation(
               found->extension->location()),
           found->extension->manifest_version());
-  AlarmManager* manager = found->manager;
+  extensions::AlarmManager* manager = found->manager;
   manager->GetAlarm(
       id, *info->name,
       base::BindOnce(
-          [](AlarmManager* manager, std::string id,
+          [](extensions::AlarmManager* manager, std::string id,
              ardia::alarms::AlarmCreateInfo info, base::TimeDelta granularity,
              ardia::Reply reply, extensions::Alarm* existing) {
             if (ardia::SamePeriod(existing, info)) {
@@ -156,10 +156,10 @@ AC_PROFILE_CALL(ac_extension_alarms_create, ardia::OffTheRecord::kAllow) {
               return;
             }
             if (manager->GetCountForExtension(id) >=
-                AlarmManager::kMaxAlarmsPerExtension) {
+                extensions::AlarmManager::kMaxAlarmsPerExtension) {
               reply.Error(base::StringPrintf(
                   "An extension cannot have more than %d active alarms.",
-                  AlarmManager::kMaxAlarmsPerExtension));
+                  extensions::AlarmManager::kMaxAlarmsPerExtension));
               return;
             }
             extensions::Alarm alarm(info, granularity, base::Time::Now());

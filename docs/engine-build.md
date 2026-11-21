@@ -342,7 +342,7 @@ framework.
 
   | Call | Reads or writes |
   |---|---|
-  | `ac_extension_storage_{get,get_keys,set,remove,clear,get_bytes_in_use,set_access_level}` | `StorageFrontend` for `local`, `sync`, `session` (and `managed`, read-only), with `storage_api.cc`'s rules: a defaults object for `get`, the 25 MB `get` cap, the session access level for content scripts (`content: true`) |
+  | `ac_extension_storage_{get,get_keys,set,remove,clear,get_bytes_in_use,set_access_level}` | `StorageFrontend` for `local`, `sync`, `session` (and `managed`, read-only), with `storage_api.cc`'s rules: a defaults object for `get`, the 25 MB `get` cap, each area's access level for content scripts (`content: true`), which `set_access_level` sets for any area, as Chrome 158's `setAccessLevel` does |
   | `ac_extension_storage_watch` | which extensions' changes go out as `extensions.storageChanged` `{id, area, contentMayRead, changes}` |
   | `ac_extension_alarms_{create,get,get_all,clear,clear_all}` | `AlarmManager`, with `alarms_api.cc`'s validation, 500-alarm cap and minimum delay; `create` answers `{kept: true}` and leaves the alarm alone when one with that name and the same `periodInMinutes` already runs |
   | `ac_extension_alarms_watch` | which extensions' alarm firings go out as `extensions.alarm` `{id, alarm}` (`AlarmManager::OnAlarm` hook), for the original profile only |

@@ -46,7 +46,6 @@ using extensions::APIPermissionSet;
 using extensions::Extension;
 using extensions::ManifestPermissionSet;
 using extensions::PermissionSet;
-using extensions::URLPattern;
 using extensions::URLPatternSet;
 
 std::set<std::string> Strings(const base::ListValue* list) {

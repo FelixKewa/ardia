@@ -157,7 +157,7 @@ void UpdateRules(Call& call, bool dynamic) {
   if (!extension) {
     return;
   }
-  std::optional<Params> params = Params::Create(OptionsArgs(call));
+  auto params = Params::Create(OptionsArgs(call));
   if (!params) {
     reply.Error("the rule update isn't valid");
     return;
@@ -347,7 +347,7 @@ AC_PROFILE_CALL(ac_extension_dnr_update_enabled_rulesets,
   if (!extension) {
     return;
   }
-  std::optional<ardia::dnr_api::UpdateEnabledRulesets::Params> params =
+  auto params =
       ardia::dnr_api::UpdateEnabledRulesets::Params::Create(
           ardia::OptionsArgs(call));
   if (!params) {
@@ -399,7 +399,7 @@ AC_PROFILE_CALL(ac_extension_dnr_update_static_rules,
   if (!extension) {
     return;
   }
-  std::optional<ardia::dnr_api::UpdateStaticRules::Params> params =
+  auto params =
       ardia::dnr_api::UpdateStaticRules::Params::Create(
           ardia::OptionsArgs(call));
   if (!params) {

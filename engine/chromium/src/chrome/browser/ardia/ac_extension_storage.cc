@@ -289,10 +289,6 @@ AC_PROFILE_CALL(ac_extension_storage_set_access_level,
   if (!area) {
     return;
   }
-  if (area->area != extensions::StorageAreaNamespace::kSession) {
-    reply.Error("This StorageArea is not available for setting access level");
-    return;
-  }
   const extensions::api::storage::AccessLevel level =
       extensions::api::storage::ParseAccessLevel(call.String("accessLevel"));
   if (level == extensions::api::storage::AccessLevel::kNone) {
