@@ -145,8 +145,9 @@ AC_PROFILE_CALL(ac_extension_alarms_create, ardia::OffTheRecord::kAllow) {
               found->extension->location()),
           found->extension->manifest_version());
   extensions::AlarmManager* manager = found->manager;
+  const std::string alarm_name = *info->name;
   manager->GetAlarm(
-      id, *info->name,
+      id, alarm_name,
       base::BindOnce(
           [](extensions::AlarmManager* manager, std::string id,
              ardia::alarms::AlarmCreateInfo info, base::TimeDelta granularity,
