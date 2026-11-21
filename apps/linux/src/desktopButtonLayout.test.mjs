@@ -85,3 +85,16 @@ test("only a string or null is a layout; anything else from the host or a corrup
   }
   assert.deepEqual(seen, []);
 });
+
+test("a malformed event heard before the first read answers doesn't drop that read", async () => {
+  const seen = [];
+  let answer;
+  const { host, emit } = fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => new Promise((resolve) => (answer = resolve)));
+  followDesktopButtonLayout(host, memory(), (layout) => seen.push(layout));
+  await settle();
+  emit("ArdiaShell", "windowButtonLayout", { layout: 3 });
+  emit("ArdiaShell", "windowButtonLayout", null);
+  answer({ layout: "close:maximize" });
+  await settle();
+  assert.deepEqual(seen, ["close:maximize"]);
+});

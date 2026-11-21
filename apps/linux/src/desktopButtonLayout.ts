@@ -41,16 +41,15 @@ export function followDesktopButtonLayout(host: ArdiaHost, memory: LayoutMemory 
   const remembered = rememberedLayout(memory);
   if (remembered !== undefined) set(remembered);
   let heard = false;
-  const accept = (payload: unknown) => {
+  const accept = (payload: unknown): boolean => {
     const layout = reportedButtonLayout(payload);
-    if (layout === undefined) return;
+    if (layout === undefined) return false;
     set(layout);
     remember(memory, layout);
+    return true;
   };
   const stop = host.onEvent((module, event, payload) => {
-    if (module !== "ArdiaShell" || event !== LAYOUT_EVENT) return;
-    heard = true;
-    accept(payload);
+    if (module === "ArdiaShell" && event === LAYOUT_EVENT && accept(payload)) heard = true;
   });
   void invokeHost(WINDOW_BUTTON_LAYOUT_METHOD, { args: [] }, host).then((payload) => {
     if (!heard) accept(payload);
