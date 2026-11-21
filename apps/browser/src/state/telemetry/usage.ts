@@ -200,8 +200,7 @@ export function noteReopenedPage(canGoBack: boolean) {
   if (canGoBack) counts.reopenedPagesWithBack++;
 }
 
-export const noteToolbarPeekPageHidden = () => void counts.toolbarPeekPageHides++;
-export const noteToolbarMotionPageHidden = () => void counts.toolbarMotionPageHides++;
+export const noteToolbarPageHidden = (during: "peek" | "motion" | null) => void (during && counts[during === "peek" ? "toolbarPeekPageHides" : "toolbarMotionPageHides"]++);
 export const noteSidebarPeekPageHidden = () => void counts.sidebarPeekPageHides++;
 export const noteSidebarEmptyWindowPeek = () => void counts.sidebarEmptyWindowPeeks++;
 export const notePinch = (on: "peek" | "littleArdia", outcome: "open" | "close") => void counts[on === "peek" ? (outcome === "open" ? "peekPinchOpens" : "peekPinchCloses") : outcome === "open" ? "littleArdiaPinchOpens" : "littleArdiaPinchCloses"]++;

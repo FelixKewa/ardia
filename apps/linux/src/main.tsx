@@ -11,7 +11,7 @@ import { startTabPages } from "../../browser/src/state/tabs/tabPages";
 import { startTabLifecycle, useLifecycle } from "../../browser/src/state/tabs/tabLifecycle";
 import { useMedia } from "../../browser/src/state/media/media";
 import { useToolbarAutoHide } from "../../browser/src/state/windows/toolbarAutoHide";
-import { noteSidebarPeekPageHidden, noteToolbarMotionPageHidden, noteToolbarPeekPageHidden } from "../../browser/src/state/telemetry/usage";
+import { noteSidebarPeekPageHidden, noteToolbarPageHidden } from "../../browser/src/state/telemetry/usage";
 import { peekShown } from "../../browser/src/state/windows/dockMotion";
 import { onPageCovered } from "./shims/web/HostWebView";
 import { toolbarMoving } from "./AutoHideToolbarRegion";
@@ -134,8 +134,7 @@ async function start() {
     startHostData();
     startHostTabLifecycle(ardiaHost, useBrowser);
     startShellAbove(ardiaHost);
-    onPageCovered((tabId) => linuxTelemetryHooks.leading() && useToolbarAutoHide.getState().peek[tabId] && noteToolbarPeekPageHidden());
-    onPageCovered((tabId) => linuxTelemetryHooks.leading() && !useToolbarAutoHide.getState().peek[tabId] && toolbarMoving(tabId) && noteToolbarMotionPageHidden());
+    onPageCovered((tabId) => linuxTelemetryHooks.leading() && noteToolbarPageHidden(useToolbarAutoHide.getState().peek[tabId] ? "peek" : toolbarMoving(tabId) ? "motion" : null));
     onPageCovered(() => peekShown(windowId) && noteSidebarPeekPageHidden());
     startPipPlayer(ardiaHost);
     watchTabSwitches(useBrowser);
