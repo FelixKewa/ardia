@@ -891,8 +891,12 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     `ControlButton`), and the `…` counts as a menu surface, so tabbing to it keeps the field Edit › Copy and Paste act
     on. There are never two menu buttons: the `…` while the window buttons are drawn, the header's hamburger
     otherwise (window or page full screen, traffic lights or hidden). Linux keeps the sidebar header the Windows rule
-    would collapse whenever the hamburger has no other home (`sidebarHeaderLayout.ts`). Some full-screen layouts still
-    have none, as before this change: top tabs with minimalism, or a sidebar whose profile part is hidden.
+    would collapse whenever the hamburger has no other home (`sidebarHeaderLayout.ts`). The hamburger lives in the
+    header's profile controls (`ProfileIndicator.tsx`), which the sidebar and the top strip mount even when minimalism
+    or the theme hides the profile, so it stays there too. Little Ardia's bar gets the same hamburger at its trailing
+    end (`HeaderAppMenu`, after the profile button) whenever its `…` isn't drawn. Clicking a traffic light leaves
+    keyboard focus where it was, as the native buttons do, and lights slid off the window with a hidden sidebar are
+    inert, so Tab never lands on them.
   - Desktop layout and window state: the engine answers two calls, each advertised in the bootstrap's capabilities
     (`ac_linux_window_state.h`), and sends an `ArdiaShell` event of the same name when a value changes:
     - `ArdiaShell.windowButtonLayout` → `{ layout, desktop }`: `layout` is GTK's raw `gtk-decoration-layout` string
