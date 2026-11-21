@@ -719,7 +719,8 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
 - **polkit action `dev.ardia.linux.update`.** `allow_active` is `yes`, so the active local session installs with
   no password. `allow_any` and `allow_inactive` are `auth_self`: polkit counts a remote desktop (xrdp, VNC) as a
   remote session, so there the session's polkit agent asks for the user's password, and where such a session runs
-  no agent (SSH) pkexec fails and Ardia offers the release page. `org.freedesktop.policykit.exec.path` limits it to the helper,
+  no agent (SSH) Ardia's own pkexec fails and it offers the release page. A user there can still run the helper by
+  hand with pkexec's text agent; an admin who wants less can override the action with a `polkit` rule. `org.freedesktop.policykit.exec.path` limits it to the helper,
   which only installs a release signed with Ardia's key that is newer than the installed one.
 - **Signed manifest.** Each release carries `Ardia-<V>-linux-update.txt` (`ardia-linux-update 1`, `version <V>`, then
   `deb`, `tarball` and `appimage` lines with file name, sha256 and size, for the formats on the release) and
