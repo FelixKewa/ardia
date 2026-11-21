@@ -40,8 +40,12 @@ enum PluginPrograms {
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
   private static let versionCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
 
+  static func folded(_ name: String) -> String {
+    name.decomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil)
+  }
+
   static func isReserved(_ name: String) -> Bool {
-    reserved.contains(name.lowercased())
+    reserved.contains(folded(name))
   }
 
   static func isName(_ name: String) -> Bool {
@@ -588,9 +592,26 @@ enum PluginPrograms {
       var info = stat()
       guard lstat(current, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR, info.st_uid == owner || info.st_uid == 0 else { return false }
       if info.st_mode & 0o022 != 0 && info.st_mode & S_ISVTX == 0 { return false }
+      if aclGrantsChanges(current) { return false }
       if current == "/" { return true }
       current = (current as NSString).deletingLastPathComponent
     }
+  }
+
+  private static func aclGrantsChanges(_ path: String) -> Bool {
+    guard let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED) else { return errno != ENOENT }
+    defer { acl_free(UnsafeMutableRawPointer(acl)) }
+    let changes: [acl_perm_t] = [ACL_ADD_FILE, ACL_ADD_SUBDIRECTORY, ACL_DELETE_CHILD, ACL_DELETE, ACL_WRITE_SECURITY, ACL_CHANGE_OWNER]
+    var entry: acl_entry_t?
+    var which = ACL_FIRST_ENTRY.rawValue
+    while acl_get_entry(acl, which, &entry) == 0, let found = entry {
+      which = ACL_NEXT_ENTRY.rawValue
+      var tag = ACL_UNDEFINED_TAG
+      var permissions: acl_permset_t?
+      guard acl_get_tag_type(found, &tag) == 0, tag == ACL_EXTENDED_ALLOW, acl_get_permset(found, &permissions) == 0, let permissions else { continue }
+      if changes.contains(where: { acl_get_perm_np(permissions, $0) == 1 }) { return true }
+    }
+    return false
   }
 
   static func isSealed(_ root: String, keepingRootWritable: Bool) -> Bool {

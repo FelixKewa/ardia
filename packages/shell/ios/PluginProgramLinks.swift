@@ -119,8 +119,11 @@ enum PluginProgramLinks {
     case .failure: clean = false
     case .success(let linked): clean = linked.refused.isEmpty
     }
-    if !clean, copy != nil, PluginPrograms.dropCurrentUnlessTrusted(plugin: name, places: places, trusted: folders.trustedProgramCopies(name)) == .stuck {
-      return ["ok": false, "reason": "its programs on PATH don't match a copy Ardia checked, and couldn't be taken off PATH"]
+    var check = CurrentCheck.trusted
+    if !clean, let copy {
+      let source = TrustedProgramCopy(version: spec["version"] as? String, approved: approved, digest: copy.payloadDigest)
+      check = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [source])
+      if check == .stuck { return ["ok": false, "reason": "its programs on PATH don't match the copy Ardia checked, and couldn't be taken off PATH"] }
     }
     switch result {
     case .failure(let refusal):
@@ -131,7 +134,7 @@ enum PluginProgramLinks {
         runAfterUpdate(name, version: linked.version, commands: afterUpdate, places: places, generation: generation, digest: copy?.payloadDigest)
       }
       var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
-      if let kept = linked.kept { reply["kept"] = kept }
+      if let kept = linked.kept, check == .trusted { reply["kept"] = kept }
       return reply
     }
   }

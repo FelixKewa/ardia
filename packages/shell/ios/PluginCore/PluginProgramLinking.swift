@@ -83,33 +83,53 @@ extension PluginPrograms {
     return version == base || version.hasPrefix(base + "-r") ? folder : nil
   }
 
-  static func dropCurrentUnlessTrusted(plugin: String, places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> CurrentCheck {
+  static func dropCurrentUnlessTrusted(plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> CurrentCheck {
     guard let lock = lock(plugin, places) else { return .stuck }
     defer { close(lock) }
     let pluginStore = places.pluginStore(plugin)
     let currentPath = (pluginStore as NSString).appendingPathComponent(currentName)
-    guard let version = linkTarget(currentPath) else { return .trusted }
-    if currentIsTrusted(version, plugin: plugin, places: places, trusted: trusted) { return .trusted }
+    var info = stat()
+    if lstat(currentPath, &info) != 0 && errno == ENOENT { return .trusted }
+    if let version = linkTarget(currentPath), currentIsTrusted(version, plugin: plugin, programs: programs, places: places, trusted: trusted) { return .trusted }
     var offPath = false
     if let bin = binLock(places) {
       unlinkOthers(plugin: plugin, keeping: [], places: places)
-      offPath = !linksIntoStore(places).contains { isInside($0.1, pluginStore) }
+      for program in programs where linksIntoPlugin(program.name, pluginStore: pluginStore, places: places) {
+        unlink((places.binDir as NSString).appendingPathComponent(program.name))
+      }
+      let listed = (try? FileManager.default.contentsOfDirectory(atPath: places.binDir)) != nil
+      offPath = listed && !linksIntoStore(places).contains { isInside($0.1, pluginStore) }
+        && !programs.contains { linksIntoPlugin($0.name, pluginStore: pluginStore, places: places) }
       close(bin)
     }
-    let severed = unlink(currentPath) == 0 || errno == ENOENT
+    if linkTarget(currentPath) != nil { unlink(currentPath) } else { discard(currentPath) }
+    let severed = lstat(currentPath, &info) != 0 && errno == ENOENT
     return offPath || severed ? .dropped : .stuck
   }
 
-  static func currentIsTrusted(_ version: String, plugin: String, places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> Bool {
+  private static func linksIntoPlugin(_ name: String, pluginStore: String, places: ProgramPlaces) -> Bool {
+    let path = (places.binDir as NSString).appendingPathComponent(name)
+    var info = stat()
+    if lstat(path, &info) != 0 { return errno != ENOENT }
+    return linkTarget(path).map { isInside($0, pluginStore) } ?? false
+  }
+
+  static func currentIsTrusted(_ version: String, plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> Bool {
     guard !version.contains("/") else { return false }
     let folder = (places.pluginStore(plugin) as NSString).appendingPathComponent(version)
-    if legacyCopy(plugin: plugin, places: places) == folder { return true }
+    if legacyCopy(plugin: plugin, places: places) == folder { return legacyHolds(folder, programs: programs) }
     let sources = trusted.filter { source in
       let base = versionFolderName(version: source.version, approved: source.approved)
       return version == base || version.hasPrefix(base + "-r")
     }
     guard !sources.isEmpty, isRealFolder(folder), isSealed(folder, keepingRootWritable: true), let digest = payloadDigest(folder, keepingCaches: true) else { return false }
     return sources.contains { $0.digest == digest }
+  }
+
+  private static func legacyHolds(_ folder: String, programs: [PluginProgram]) -> Bool {
+    guard isRealFolder(folder), let opened = PluginFiles.openFolder(folder) else { return false }
+    defer { opened.close() }
+    return checkTree(opened.fd) == nil && programs.allSatisfy { PluginFiles.localProgram($0.path, in: opened) != nil }
   }
 }
 

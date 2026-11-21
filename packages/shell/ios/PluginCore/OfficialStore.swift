@@ -50,15 +50,11 @@ struct OfficialStore {
   func copy(_ name: String, sha: String, fresh: Bool = false) -> OfficialCopy? {
     guard PluginPrograms.isName(name), OfficialPin.isSha(sha) else { return nil }
     let path = copyPath(name, sha)
-    guard PluginPrograms.isRealFolder(path), isArchive(archivePath(name, sha)), PluginPrograms.isSealed(path, keepingRootWritable: false),
+    guard PluginPrograms.isRealFolder(path), PluginPrograms.hasPrivateAncestry(pluginFolder(name)), isArchive(archivePath(name, sha)),
+      PluginPrograms.isSealed(path, keepingRootWritable: false),
       let digest = OfficialVerification.shared.digest(archive: archivePath(name, sha), sha: sha, copy: path, top: name, scratch: pluginFolder(name), fresh: fresh)
     else { return nil }
     return OfficialCopy(name: name, sha: sha, path: path, payloadDigest: digest)
-  }
-
-  func copies(_ name: String) -> [OfficialCopy] {
-    guard PluginPrograms.isName(name), let entries = try? FileManager.default.contentsOfDirectory(atPath: pluginFolder(name)) else { return [] }
-    return entries.filter(OfficialPin.isSha).sorted().compactMap { copy(name, sha: $0) }
   }
 
   func active(_ name: String) -> OfficialCopy? {

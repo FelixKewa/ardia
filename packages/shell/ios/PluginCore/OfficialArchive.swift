@@ -363,7 +363,7 @@ enum OfficialArchive {
       let path = nextPath.flatMap { $0.isEmpty ? nil : $0 } ?? entry.path
       nextPath = nil
       guard let relative = parts(path, top: top) else { return "\(path) isn't inside \(top)/" }
-      if relative.contains(where: { $0.lowercased() == PluginPrograms.caches }) || relative.first.map(PluginPrograms.isReserved) == true {
+      if relative.contains(where: { PluginPrograms.folded($0) == PluginPrograms.caches }) || relative.first.map(PluginPrograms.isReserved) == true {
         return "\(path) is a name Ardia keeps for itself"
       }
       let joined = relative.joined(separator: "/")
