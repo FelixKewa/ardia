@@ -1,7 +1,11 @@
+import { TRAFFIC_LIGHTS_WIDTH, type WindowButton, type WindowButtonLayout } from "./windowButtonLayout";
+
 export type WindowChrome = {
   leadingWidth: number;
   trailingWidth: number;
   titleBarHeight: number;
+  leadingButtons: readonly WindowButton[];
+  trailingButtons: readonly WindowButton[];
 };
 
 export type WindowButtonStyle = "native" | "trafficLights" | "hidden";
@@ -11,11 +15,11 @@ export type PopUpChrome = {
   growsToItsTitle: boolean;
 };
 
-export const WINDOW_CHROME: WindowChrome = { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0 };
+export const WINDOW_CHROME: WindowChrome = { leadingWidth: TRAFFIC_LIGHTS_WIDTH, trailingWidth: 0, titleBarHeight: 0, leadingButtons: [], trailingButtons: [] };
 
 export const WINDOW_BUTTON_STYLES: readonly WindowButtonStyle[] = [];
 
-export const applyWindowButtonStyle = (_style: WindowButtonStyle): boolean => false;
+export const applyWindowButtonStyle = (_style: WindowButtonStyle, _layout?: WindowButtonLayout): boolean => false;
 
 export const POP_UP_CHROME: PopUpChrome = { indicator: "accentUpDown", growsToItsTitle: false };
 

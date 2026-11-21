@@ -4,13 +4,13 @@ const { WINDOW_CHROME, captionRoom, captionClearTop } = await import("./windowCh
 const windows = (await import("./platformChrome.windows.ts")).WINDOW_CHROME;
 
 test("the Mac reserves the traffic lights' 78 points at the leading top and nothing at the trailing top", () => {
-  assert.deepEqual(WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0 });
+  assert.deepEqual(WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0, leadingButtons: [], trailingButtons: [] });
   for (const [fromRight, fromTop] of [[0, 0], [9, 9], [0, 40], [200, 0]]) assert.equal(captionRoom(fromRight, fromTop), 0);
   for (const row of [0, 28, 41]) assert.equal(captionClearTop(9, row, 9), 9);
 });
 
 test("Windows reserves the caption buttons' 171 by 32 at the trailing top and nothing at the leading top", () => {
-  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32, leadingButtons: [], trailingButtons: ["menu", "minimize", "maximize", "close"] });
   assert.equal(captionRoom(0, 0, windows), 171);
   assert.equal(captionRoom(9, 9, windows), 162);
   assert.equal(captionRoom(9, 31, windows), 162);
@@ -40,7 +40,7 @@ test("Linux starts with the Windows build's buttons at the trailing top and swit
   assert.equal(linux.applyWindowButtonStyle("trafficLights"), false);
   assert.equal(linux.applyWindowButtonStyle("native"), true);
   assert.deepEqual(linux.WINDOW_CHROME, windows);
-  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32, leadingButtons: [], trailingButtons: ["menu", "minimize", "maximize", "close"] });
 });
 
 test("Linux with the window buttons hidden draws no caption buttons and keeps no room for them at either top corner", async () => {
@@ -49,7 +49,7 @@ test("Linux with the window buttons hidden draws no caption buttons and keeps no
   for (const from of ["native", "trafficLights"]) {
     linux.applyWindowButtonStyle(from);
     assert.equal(linux.applyWindowButtonStyle("hidden"), true, from);
-    assert.deepEqual(linux.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 0, titleBarHeight: 0 }, from);
+    assert.deepEqual(linux.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 0, titleBarHeight: 0, leadingButtons: [], trailingButtons: [] }, from);
     assert.equal(windowControlsDrawn(linux.WINDOW_CHROME), false, from);
     assert.equal(captionRoom(0, 0, linux.WINDOW_CHROME), 0, from);
     assert.equal(captionClearTop(9, 0, 9, linux.WINDOW_CHROME), 9, from);
@@ -68,7 +68,30 @@ test("the Mac, Windows and the web demo offer no choice of window buttons", asyn
     assert.equal(platform.applyWindowButtonStyle("trafficLights"), false);
     assert.equal(platform.applyWindowButtonStyle("native"), false);
   }
-  assert.deepEqual(mac.WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0 });
-  assert.deepEqual(win.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+  assert.deepEqual(mac.WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0, leadingButtons: [], trailingButtons: [] });
+  assert.deepEqual(win.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32, leadingButtons: [], trailingButtons: ["menu", "minimize", "maximize", "close"] });
   assert.deepEqual(web.WINDOW_CHROME, mac.WINDOW_CHROME);
+});
+
+test("Linux's native buttons take the desktop's layout: room at each top corner for the buttons drawn there, the default matching Windows", async () => {
+  const linux = await import("./platformChrome.linux.ts");
+  const { parseButtonLayout } = await import("./windowButtonLayout.ts");
+  const { windowControlsDrawn } = await import("./windowChrome.ts");
+  const chrome = (raw) => linux.nativeButtonsChrome(parseButtonLayout(raw));
+  assert.deepEqual(chrome(":minimize,maximize,close"), windows);
+  assert.deepEqual(chrome(null), windows, "an engine that can't tell keeps today's buttons");
+  assert.deepEqual(chrome("appmenu:close"), { leadingWidth: 42, trailingWidth: 72, titleBarHeight: 32, leadingButtons: ["menu"], trailingButtons: ["close"] });
+  assert.deepEqual(chrome("close,minimize,maximize:"), { leadingWidth: 141, trailingWidth: 0, titleBarHeight: 0, leadingButtons: ["close", "minimize", "maximize", "menu"], trailingButtons: [] });
+  assert.deepEqual(chrome("close:maximize"), { leadingWidth: 42, trailingWidth: 105, titleBarHeight: 32, leadingButtons: ["close"], trailingButtons: ["menu", "maximize"] });
+  assert.equal(windowControlsDrawn(chrome("close,minimize,maximize:")), true, "buttons only at the left are still drawn");
+  assert.equal(captionRoom(0, 0, chrome("close,minimize,maximize:")), 0, "nothing at the right is kept clear when the buttons are all at the left");
+  assert.equal(linux.applyWindowButtonStyle("native", parseButtonLayout("appmenu:close")), true);
+  assert.deepEqual(linux.WINDOW_CHROME, chrome("appmenu:close"));
+  assert.equal(linux.applyWindowButtonStyle("native", parseButtonLayout("appmenu:close")), false, "the same layout again changes nothing");
+  assert.equal(linux.applyWindowButtonStyle("trafficLights", parseButtonLayout("appmenu:close")), true);
+  assert.deepEqual(linux.WINDOW_CHROME, linux.TRAFFIC_LIGHTS_CHROME, "the traffic lights ignore the desktop's layout");
+  assert.equal(linux.applyWindowButtonStyle("hidden", parseButtonLayout("close:maximize")), true);
+  assert.deepEqual(linux.WINDOW_CHROME, linux.HIDDEN_BUTTONS_CHROME, "so does Hidden");
+  assert.equal(linux.applyWindowButtonStyle("native"), true);
+  assert.deepEqual(linux.WINDOW_CHROME, windows);
 });

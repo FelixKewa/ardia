@@ -34,7 +34,8 @@ import { markCaptionRegions } from "../../state/windows/controls";
 import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { WindowControls } from "../window/WindowControls";
-import { useWindowButtonStyle } from "../../state/windows/windowButtons";
+import { LeadingWindowControls } from "../window/LeadingWindowControls";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { noteSettingsScroll } from "../../state/settings/growingRows";
 
 const SIDEBAR = settingsLayout.sidebarWidth;
@@ -77,7 +78,7 @@ function usePrefetchAllPanes(enabled: boolean) {
 
 export function SettingsWindow() {
   const look = useSettingsColors();
-  useWindowButtonStyle();
+  useWindowChrome();
   const nav = useSettingsNav();
   const shown = useShownPane();
   usePrefetchAllPanes(!!shown);
@@ -175,6 +176,7 @@ export function SettingsWindow() {
       {sheet}
       <SettingsConsentSheet />
       <WindowControls windowId={SETTINGS_WINDOW_ID} centerY={TOOLBAR / 2} size={WINDOW_CONTROLS.regular} />
+      <LeadingWindowControls windowId={SETTINGS_WINDOW_ID} size={WINDOW_CONTROLS.regular} />
     </View>
   );
 }

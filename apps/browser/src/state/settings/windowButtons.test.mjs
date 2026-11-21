@@ -86,3 +86,50 @@ test("on the Mac starting the sync changes nothing", () => {
   startWindowButtonStyle(store);
   assert.equal(subscribed, false);
 });
+
+test("on Linux the native buttons follow the desktop's layout live, and a layout change while another style is chosen waits for native", async () => {
+  const { onWindowChromeChange } = await import("../../lib/windowChrome.ts");
+  const { parseButtonLayout } = await import("../../lib/windowButtonLayout.ts");
+  let state = { settings: { ...DEFAULT_SETTINGS } };
+  let desktop = { raw: null, reported: false };
+  const listeners = [];
+  const desktopListeners = [];
+  const store = { getState: () => state, subscribe: (listener) => (listeners.push(listener), () => listeners.splice(listeners.indexOf(listener), 1)) };
+  const desktopStore = { getState: () => desktop, subscribe: (listener) => (desktopListeners.push(listener), () => desktopListeners.splice(desktopListeners.indexOf(listener), 1)) };
+  let changes = 0;
+  const stopWatching = onWindowChromeChange(() => changes++);
+  const stop = startWindowButtonStyle(store, { styles: linux.WINDOW_BUTTON_STYLES, apply: linux.applyWindowButtonStyle }, desktopStore);
+  const report = (raw) => {
+    desktop = { raw, reported: true };
+    for (const listener of [...desktopListeners]) listener(desktop);
+  };
+  const choose = (windowButtons) => {
+    state = { settings: { ...state.settings, windowButtons } };
+    for (const listener of [...listeners]) listener(state);
+  };
+  assert.deepEqual(linux.WINDOW_CHROME, linux.NATIVE_BUTTONS_CHROME);
+  report("close,minimize,maximize:");
+  assert.deepEqual(linux.WINDOW_CHROME, linux.nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:")));
+  assert.equal(changes, 1, "every window's layout hooks hear the change");
+  report("close,minimize,maximize:");
+  assert.equal(changes, 1, "the same layout again wakes nothing");
+  choose("trafficLights");
+  report("appmenu:close");
+  assert.deepEqual(linux.WINDOW_CHROME, linux.TRAFFIC_LIGHTS_CHROME);
+  choose("native");
+  assert.deepEqual(linux.WINDOW_CHROME, linux.nativeButtonsChrome(parseButtonLayout("appmenu:close")));
+  report(null);
+  assert.deepEqual(linux.WINDOW_CHROME, linux.NATIVE_BUTTONS_CHROME, "a desktop that stops reporting a layout gets today's buttons back");
+  stop();
+  stopWatching();
+  report("close:maximize");
+  assert.deepEqual(linux.WINDOW_CHROME, linux.NATIVE_BUTTONS_CHROME, "a stopped sync leaves the chrome alone");
+});
+
+test("the daily settings snapshot says on Linux which side the desktop's buttons are on and how many, and nothing on the Mac or Windows", async () => {
+  const { windowButtonLayoutSnapshot } = await import("../telemetry/settingsSnapshot.ts");
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "close:maximize", reported: true }, true), { window_buttons_side: "both", window_buttons_count: "2", window_buttons_from_desktop: "true" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "appmenu:close", reported: true }, true), { window_buttons_side: "right", window_buttons_count: "1", window_buttons_from_desktop: "true" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: null, reported: false }, true), { window_buttons_side: "right", window_buttons_count: "3", window_buttons_from_desktop: "false" });
+  assert.deepEqual(windowButtonLayoutSnapshot({ raw: "close:maximize", reported: true }, false), {});
+});

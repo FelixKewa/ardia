@@ -70,6 +70,7 @@ import { startLinuxShortcuts } from "./shortcutsRuntime";
 import { linuxWindowMenu } from "./linuxWindowMenu";
 import { TrafficLights } from "./TrafficLights";
 import { startWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
+import { followDesktopButtonLayout } from "./desktopButtonLayout";
 import { followWindowMaximized } from "./windowMaximized";
 import { createUtilitySessionSnapshot, initialLinuxSession, isLinuxUtility, setSessionDeparture, setSessionFlush } from "./session";
 import { startUtility } from "./utility";
@@ -114,6 +115,7 @@ async function start() {
   const restoreSession = launch ? configRestoreSession() : undefined;
   setStoreBatching(unstable_batchedUpdates);
   hydrateLaunchSession(saved, initialLinuxSession(ardiaHost, saved?.settings && restoreSession !== undefined ? { ...saved, settings: { ...saved.settings, restoreSession } } : saved));
+  followDesktopButtonLayout(ardiaHost);
   startWindowButtonStyle();
   followWindowMaximized(ardiaHost, windowId);
   startConfigFiles(colorRoles, launch);

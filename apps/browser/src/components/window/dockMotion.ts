@@ -1,7 +1,7 @@
 import { layout } from "../ui/theme";
 import { DOCK_SLIDE, DOCK_SLIDE_CURVE } from "./tokens";
 import type { SpringSpec } from "../ui/motion";
-import { WINDOW_CHROME } from "../../lib/windowChrome";
+import { TRAFFIC_LIGHTS_WIDTH, WINDOW_CHROME, type WindowChrome } from "../../lib/windowChrome";
 
 export const easeOutCubic = (u: number) => 1 - (1 - u) ** 3;
 export const easeInOutCubic = (u: number) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2);
@@ -40,9 +40,11 @@ export const dockedCardInset = (sidebarWidth: number, inset: number) => sidebarW
 export const cardInsetAt = (dock: number, sidebarWidth: number, inset: number) => inset + (dockedCardInset(sidebarWidth, inset) - inset) * dock;
 
 const FULL_SCREEN_TOGGLE_X = 29;
+
+export const headerToggleXFor = (chrome: WindowChrome): number => (chrome.leadingWidth ? 70.75 + 27 + chrome.leadingWidth - TRAFFIC_LIGHTS_WIDTH : FULL_SCREEN_TOGGLE_X);
 export const HEADER_TOOLS = {
   get toggleX() {
-    return WINDOW_CHROME.leadingWidth ? 70.75 + 27 : FULL_SCREEN_TOGGLE_X;
+    return headerToggleXFor(WINDOW_CHROME);
   },
   fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, edge: layout.sidebarInset + 1 } as const;
 

@@ -4,7 +4,7 @@ import { topStripPeekHeld, watchHolds } from "../../state/app/transientUi";
 import { useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { beginExternalDrag, endExternalDrag, moveExternalDrag } from "../../state/drag/tabDrag";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
-import { useWindowButtonStyle } from "../../state/windows/windowButtons";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { useMinimalism } from "../../state/windows/layout";
@@ -47,7 +47,7 @@ import { stripCaptionRoom } from "./stripGroups";
 export { TOP_STRIP_HEIGHT } from "./tokens";
 
 export function TopTabStrip({ width, floating = false, hidden = false, swipe = true }: { width: number; floating?: boolean; hidden?: boolean; swipe?: boolean }) {
-  useWindowButtonStyle();
+  useWindowChrome();
   const windowId = useWindowId();
   const current = useWindowProfileId();
   const { pages } = usePagerPages(windowId);
@@ -120,7 +120,7 @@ function StripDropHighlight({ left, right }: { left: number; right: number }) {
 }
 
 export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
-  useWindowButtonStyle();
+  useWindowChrome();
   const theme = useTheme();
   const windowId = useWindowId();
   const { slide, live, show, hide, recheck, cancelPending } = usePeek(enabled, false, () => topStripPeekHeld(windowId), undefined, noteTabStripPeek);

@@ -1,9 +1,20 @@
+import { LIGHTS_CENTER } from "../../browser/src/state/windows/dockMotion";
+import { WINDOW_CONTROLS, windowControlsWidth } from "../../browser/src/lib/windowChrome";
+
 export type LinuxControlsState = { pageFullScreen: boolean; hidden: boolean; utility: boolean; windowMenu: boolean; shown?: boolean };
 
 export const windowButtonsRendered = ({ placed, pageFullScreen }: { placed: boolean; pageFullScreen: boolean }): boolean => placed && !pageFullScreen;
 
 export const trafficLightsShown = ({ style, pageFullScreen, windowFullScreen }: { style: string; pageFullScreen: boolean; windowFullScreen: boolean }): boolean =>
   style === "trafficLights" && !pageFullScreen && !windowFullScreen;
+
+export const leadingButtonsShown = ({ count, pageFullScreen, windowFullScreen }: { count: number; pageFullScreen: boolean; windowFullScreen: boolean }): boolean =>
+  count > 0 && !pageFullScreen && !windowFullScreen;
+
+const LIGHTS_PAST_START = LIGHTS_CENTER[0] - WINDOW_CONTROLS.edge;
+
+export const leadingControlsInset = ({ center, trailing }: { center: readonly [number, number]; trailing: boolean }, count: number): number =>
+  trailing ? center[0] + LIGHTS_PAST_START - windowControlsWidth(count) : center[0] - LIGHTS_PAST_START;
 
 export const linuxControlsBehaviour = ({ pageFullScreen, hidden, utility, windowMenu, shown = true }: LinuxControlsState) => {
   const rendered = windowButtonsRendered({ placed: true, pageFullScreen });

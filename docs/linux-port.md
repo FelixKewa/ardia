@@ -853,11 +853,30 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
 
 ### Windows, focus and input
 
-- **Window controls.** Linux uses the Windows build's caption buttons on the right: `…`, minimize, maximize (restore
-  while maximized) and close, drawn by the shared `WindowControls.tsx` in the places Windows puts them (the toolbar
+- **Window controls.** Linux uses the Windows build's caption buttons, by default on the right: `…`, minimize, maximize
+  (restore while maximized) and close, drawn by the shared `WindowControls.tsx` in the places Windows puts them (the toolbar
   row, the end of the top strip, a right sidebar's header, atop a left sidebar with the address bar in it, Little
   Ardia's bar, Settings and Import). They work on decorationless desktops such as Hyprland; Chrome's own caption
   buttons are hidden: opacity 0, no input, ignored by accessibility.
+  - **The desktop's layout.** The native buttons follow the desktop's GTK button layout (`gtk-decoration-layout`,
+    read by the engine as `ArdiaShell.windowButtonLayout` and sent again as its `windowButtonLayout` event when it
+    changes): which of minimize, maximize and close show, in what order, on which side, live.
+    `lib/windowButtonLayout.ts` parses it as GTK does (start`:`end, comma-separated, only the first colon splits, no
+    colon puts everything at the start; `icon`, `spacer`, unknown and repeated tokens are dropped). The `…` goes where
+    `appmenu` or `menu` is, otherwise at the inner end of the right group, or of the left group when only it has buttons,
+    or alone at the right when neither does. An engine without the call, or a desktop that reports none, keeps
+    `:minimize,maximize,close`, today's buttons. `desktopButtonLayout.ts` feature-detects the call, follows the event
+    and remembers the last layout in `localStorage`, so a new window draws it at once. The layout is part of the
+    native chrome (`nativeButtonsChrome`: `leadingButtons`, `trailingButtons` and widths from their counts, a title bar
+    band only while the right has buttons), so the right group sits where the Windows build puts its buttons, with
+    room for its own count, and the left group (`LeadingWindowControls.tsx`, swapped in for the shared no-op) sits
+    where the traffic lights would, 13 px before their first light's center (12 px from the edge at the default
+    place), mirrored in a right sidebar, with the Mac's room after it (the sidebar header's tools, the top strip, Little
+    Ardia's bar, Settings' sidebar). Like the lights it slides away with a hidden sidebar and hides in full screen.
+    With the address bar in a left sidebar and both groups, the right group sits at the sidebar's right end of the row
+    atop it (`windowControlsInset`). A change wakes every window-settings hook (`onWindowChromeChange`). Traffic
+    lights and Hidden ignore the layout. The daily settings snapshot carries `window_buttons_side` (right, left, both,
+    none), `window_buttons_count` and `window_buttons_from_desktop`.
   - **Traffic lights.** Settings › Appearance › Window buttons (`windowButtons`: `native` by default, `trafficLights`
     or `hidden`; kept on this device, in the config file and in the daily settings snapshot) brings back the
     Mac's lights at the top left instead, with the Mac's layouts: no `…` (the hamburger stays in the header), the
@@ -889,7 +908,7 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     one, and an activation with neither (assistive technology) to the visible one. Pressing it, or Enter on it, while
     a menu is open closes the menu. The buttons take keyboard focus like any button (`focusable` on the shared
     `ControlButton`), and the `…` counts as a menu surface, so tabbing to it keeps the field Edit › Copy and Paste act
-    on. There are never two menu buttons: the `…` while the window buttons are drawn, the header's hamburger
+    on. There are never two menu buttons: the `…` while the window buttons that hold it are drawn, the header's hamburger
     otherwise (window or page full screen, traffic lights or hidden). Linux keeps the sidebar header the Windows rule
     would collapse whenever the hamburger has no other home (`sidebarHeaderLayout.ts`). The hamburger lives in the
     header's profile controls (`ProfileIndicator.tsx`), which the sidebar and the top strip mount even when minimalism

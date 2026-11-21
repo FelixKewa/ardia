@@ -10,7 +10,7 @@ import { collapsedSidebarHeader, useAddressBarInSidebar, useDownloadsInSidebarFo
 import { closeAnchoredWhenControlsRowChanges } from "../../state/sidebar/controlsRowChange";
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { profileIndicatorX, ProfileIndicator } from "../profiles/ProfileIndicator";
-import { useWindowButtonStyle } from "../../state/windows/windowButtons";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
 import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
@@ -52,7 +52,7 @@ export function Sidebar({ width }: { width: number }) {
   const lightsY = useToolbarLightsCenter()[1];
   const field = useSidebarField();
   const captionRoom = useSidebarCaptionRoom();
-  useWindowButtonStyle();
+  useWindowChrome();
   const indicatorX = profileIndicatorX();
   const collapsed = useSidebarHeaderCollapsed();
   const frame = usePageFrameInset();

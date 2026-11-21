@@ -27,7 +27,7 @@ import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks
 import { PageLabel, SMALL_BAR_BUTTON, SmallBar } from "./SmallChrome";
 import { SMALL_LIGHTS_CENTER } from "../../state/windows/small";
 import { littleArdiaBarLayout, type LittleArdiaBarLayout } from "./barLayout";
-import { useWindowButtonStyle } from "../../state/windows/windowButtons";
+import { useWindowChromeVersion } from "../../state/windows/windowButtons";
 import { HistoryButton } from "../toolbar/NavButtons";
 import { NAV_HINTS, useShortcutHints } from "../../state/commands/commandShortcuts";
 import { toolbarPalette } from "../ui/toolbarColors";
@@ -40,8 +40,8 @@ const NAV_HIT = perLook(() => ({ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTT
 const navPlace = (bar: LittleArdiaBarLayout, slot: number, hit: ReturnType<typeof NAV_HIT>) => ({ style: { position: "absolute" as const, top: bar.buttonTop, left: bar.navLeft + slot * bar.navPitch }, hit });
 
 function useBarLayout(): LittleArdiaBarLayout {
-  const style = useWindowButtonStyle();
-  return useMemo(() => littleArdiaBarLayout(), [style]);
+  const chrome = useWindowChromeVersion();
+  return useMemo(() => littleArdiaBarLayout(), [chrome]);
 }
 const alreadyFocused = () => {};
 const SPREAD_STARTS = 0.0001;

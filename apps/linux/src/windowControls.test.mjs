@@ -554,3 +554,55 @@ test("in a narrow right sidebar the Downloads button leaves the header for the f
   assert.equal(headerFitsDownloads(right(160, { fullScreen: true }), "w", false, windowsChrome), true);
   assert.equal(headerFitsDownloads(state({ sidebarWidth: 160 }), "w", false, windowsChrome), true, "a left sidebar's header has no buttons in it");
 });
+
+test("with the desktop's … at the left the header drops its hamburger while the left group is drawn, and the right keeps room only for its own buttons", async () => {
+  const { menuBesideWindowButtons, linuxSidebarCaptionRoom, linuxSidebarHeaderCollapsed, headerFitsDownloads } = await import("./sidebarHeaderLayout.ts");
+  const { nativeButtonsChrome } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const { parseButtonLayout } = await import("../../browser/src/lib/windowButtonLayout.ts");
+  const gnome = nativeButtonsChrome(parseButtonLayout("appmenu:close"));
+  const left = nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:"));
+  const elementary = nativeButtonsChrome(parseButtonLayout("close:maximize"));
+  const layouts = [{}, { compactToolbar: true }, { addressBar: "sidebar" }, { sidebarSide: "right" }, { tabLayout: "top" }, { minimalismMode: true }];
+  for (const settings of layouts) {
+    const label = JSON.stringify(settings);
+    for (const chrome of [gnome, left]) {
+      assert.equal(menuBesideWindowButtons(state(settings), "w", false, chrome), true, label);
+      assert.equal(menuBesideWindowButtons(state(settings), "w", true, chrome), false, `${label}: a full-screen page hides the left group too`);
+      assert.equal(menuBesideWindowButtons(state(settings, { fullScreen: true }), "w", false, chrome), false, `${label}: so does full screen`);
+      assert.equal(linuxSidebarHeaderCollapsed(state(settings), "w", false, chrome), false, `${label}: the header holds the left group`);
+    }
+    assert.equal(menuBesideWindowButtons(state(settings), "w", false, elementary), menuBesideWindowButtons(state(settings), "w", false, windowsChrome), `${label}: elementary's … sits in the right group`);
+    assert.equal(linuxSidebarCaptionRoom(state(settings), "w", false, left), 0, label);
+  }
+  const right = state({ sidebarSide: "right" });
+  assert.equal(linuxSidebarCaptionRoom(right, "w", false, gnome), gnome.trailingWidth, "the right sidebar keeps room for close alone");
+  assert.ok(gnome.trailingWidth < windowsChrome.trailingWidth);
+  assert.equal(headerFitsDownloads(state({ sidebarSide: "right", sidebarWidth: 160 }), "w", false, gnome), true, "one button at the right leaves Downloads room a narrow header lacks with four");
+  assert.equal(headerFitsDownloads(state({ sidebarSide: "right", sidebarWidth: 160 }), "w", false, windowsChrome), false);
+});
+
+test("the left group shows wherever it has buttons, hides in full screen, and starts where the Mac's lights start, mirrored in a right sidebar", async () => {
+  const { leadingButtonsShown, leadingControlsInset } = await import("./windowControlsRules.ts");
+  const { WINDOW_CONTROLS, windowControlsWidth } = await import("../../browser/src/lib/windowChrome.ts");
+  assert.equal(leadingButtonsShown({ count: 1, pageFullScreen: false, windowFullScreen: false }), true);
+  assert.equal(leadingButtonsShown({ count: 0, pageFullScreen: false, windowFullScreen: false }), false);
+  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: true, windowFullScreen: false }), false);
+  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: false, windowFullScreen: true }), false);
+  assert.equal(leadingControlsInset({ center: [25, 27], trailing: false }, 3), WINDOW_CONTROLS.edge, "at the lights' default place the group starts at the Windows build's edge");
+  assert.equal(leadingControlsInset({ center: [25 - 190, 27], trailing: false }, 3), WINDOW_CONTROLS.edge - 190, "it slides off with the sidebar, as the lights do");
+  const inRightSidebar = leadingControlsInset({ center: [190 - 25, 27], trailing: true }, 2);
+  assert.equal(inRightSidebar + windowControlsWidth(2), 190 - WINDOW_CONTROLS.edge, "in a right sidebar it starts 12 px inside the sidebar's left edge");
+});
+
+test("the header's tools sit as far past the left group as they sit past the Mac's lights", async () => {
+  const { HEADER_TOOLS, headerToggleXFor } = await import("../../browser/src/components/window/dockMotion.ts");
+  const { nativeButtonsChrome, TRAFFIC_LIGHTS_CHROME, NATIVE_BUTTONS_CHROME } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const { parseButtonLayout } = await import("../../browser/src/lib/windowButtonLayout.ts");
+  assert.equal(headerToggleXFor(TRAFFIC_LIGHTS_CHROME), 97.75, "the Mac's toggle stays where it was");
+  const afterLights = headerToggleXFor(TRAFFIC_LIGHTS_CHROME) - TRAFFIC_LIGHTS_CHROME.leadingWidth;
+  for (const raw of ["appmenu:close", "close,minimize,maximize:", "close:maximize"]) {
+    const chrome = nativeButtonsChrome(parseButtonLayout(raw));
+    assert.equal(headerToggleXFor(chrome) - chrome.leadingWidth, afterLights, raw);
+  }
+  assert.equal(headerToggleXFor(NATIVE_BUTTONS_CHROME), HEADER_TOOLS.fullScreenToggleX, "with nothing at the left the toggle takes the edge slot");
+});
