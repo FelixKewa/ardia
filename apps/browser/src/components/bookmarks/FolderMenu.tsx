@@ -14,7 +14,7 @@ import { currentBookmarks } from "../../state/browser/current";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { modifiersOf } from "../../lib/keys";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
+import { ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosingInert, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -59,6 +59,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   const [contentHeight, setContentHeight] = useState<number | null>(null);
   const place = placeMenu(panel, layer, size.menuWidth, height, size);
   const appear = usePopoverMotion(closing, onClosed, height !== null && contentHeight !== null);
+  const inert = useClosingInert(closing);
   const motion = usePopoverMotionStyle(appear, "top left");
   const views = useRef(new Map<string, View>());
   const scrollY = useRef(0);
@@ -97,6 +98,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
 
   return (
     <Animated.View
+      {...inert}
       pointerEvents={closing || panel.retained ? "none" : "auto"}
       onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
       style={{ position: "absolute", left: place.x - layer.x, top: place.y - layer.y, width: place.width, ...motion, ...(panel.retained ? HIDDEN : null) }}

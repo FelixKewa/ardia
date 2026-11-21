@@ -52,10 +52,10 @@ export function ListRow({
               flexDirection: "row",
               alignItems: "center",
               gap: space.m,
-              backgroundColor: selected ? (selectedTone === "accent" ? theme.formAccent : theme.rowSelected) : undefined,
+              backgroundColor: !selected ? undefined : selectedTone !== "accent" ? theme.rowSelected : pressed && onPress ? theme.formAccentPressed : theme.formAccent,
             }}
           >
-            <HoverFill shown={hovered || (pressed && !!onPress)} instant={pressed && !!onPress} color={pressed && onPress ? theme.popoverRowPressed : theme.rowHover} radius={radius.tile} />
+            {selected && selectedTone === "accent" ? null : <HoverFill shown={hovered || (pressed && !!onPress)} instant={pressed && !!onPress} color={pressed && onPress ? theme.popoverRowPressed : theme.rowHover} radius={radius.tile} />}
             {typeof children === "function" ? children({ hovered, pressed, selected }) : children}
           </View>
         )}

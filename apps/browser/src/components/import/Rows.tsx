@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { Image, Pressable, Text as NativeText, View } from "react-native";
+import { Image, Text as NativeText, View } from "react-native";
 import { plural } from "../../state/browser/model";
 import { arcSpaceEmoji } from "../../state/import/arcExtras";
-import { capsule, Checkbox, Dot, ink, PROFILE_COLORS, Radio, Row, space, Symbol, Text, useTheme } from "../ui";
+import { capsule, Dot, ink, PROFILE_COLORS, Radio, Row, space, Symbol, Text, useTheme } from "../ui";
+import { CheckMark, CheckTarget } from "../ui";
 import { SelectableCard } from "../settings/SelectableCard";
 import type { BrowserSource, SpaceSummary } from "./model";
 import { importLayout, importType } from "./tokens";
@@ -48,18 +49,18 @@ const BROWSER_ROW = { height: importLayout.browserRow, flexDirection: "row", ali
 
 export function SelectRow({ selected, onToggle, icon, title, subtitle }: { selected: boolean; onToggle: (v: boolean) => void; icon: ReactNode; title: string; subtitle?: string }) {
   return (
-    <Pressable onPress={() => onToggle(!selected)}>
+    <CheckTarget value={selected} onChange={onToggle} label={title} hint={subtitle}>
       <Row
         title={title}
         description={subtitle}
         icon={
           <>
-            <Checkbox value={selected} onChange={onToggle} />
+            <CheckMark value={selected} />
             {icon}
           </>
         }
       />
-    </Pressable>
+    </CheckTarget>
   );
 }
 

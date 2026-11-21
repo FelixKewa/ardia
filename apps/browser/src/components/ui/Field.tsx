@@ -284,19 +284,11 @@ const PLAIN_POPUP_GLYPH = { width: 10, height: 14 } as const;
 const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
 const CHECK_RING_BORDER = 1.5;
 
-export function Checkbox({
-  value,
-  onChange,
-  label,
-  disabled,
-  mixed,
-  look = "form",
-  size = "m",
-  labelSize = "body",
-}: {
+export function Checkbox({ value, onChange, label, accessibilityLabel, disabled, mixed, look = "form", size = "m", labelSize = "body" }: {
   value: boolean;
   onChange?: (value: boolean, modifiers?: ClickModifiers) => void;
   label?: string;
+  accessibilityLabel?: string;
   disabled?: boolean;
   mixed?: boolean;
   look?: "form" | "ring";
@@ -307,7 +299,7 @@ export function Checkbox({
   const on = value || mixed;
   const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
-  const a11y = { accessibilityRole: "checkbox", accessibilityLabel: label, accessibilityState: { checked: mixed && !value ? "mixed" : value, disabled: !!disabled } } as const;
+  const a11y = { accessibilityRole: "checkbox", accessibilityLabel: accessibilityLabel ?? label, accessibilityState: { checked: mixed && !value ? "mixed" : value, disabled: !!disabled } } as const;
   if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
   if (look === "ring")
     return (

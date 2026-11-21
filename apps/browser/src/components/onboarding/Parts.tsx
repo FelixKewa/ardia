@@ -254,7 +254,7 @@ export function SelectTile({
             </Text>
             {selected ? (
               <View pointerEvents="none" style={{ position: "absolute", top: TILE_CHECK_INSET, right: TILE_CHECK_INSET }}>
-                <Checkbox look="ring" size="s" value onChange={onPress} />
+                <Checkbox look="ring" size="s" value />
               </View>
             ) : null}
           </ChoiceCard>

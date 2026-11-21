@@ -56,7 +56,7 @@ export const HistoryRow = memo(function HistoryRow({
   menuTargets: (entry: HistoryEntry) => HistoryEntry[];
 }) {
   const theme = useTheme();
-  const { hovered, controlsShown: showControls, rowProps } = useRowControls(entry.url);
+  const { hovered, controlsShown: showControls, rowProps } = useRowControls(entry.url, highlighted);
   const menu = () => openHistoryRowMenu(menuTargets(entry), windowId, onMoreFromSite, onRemove);
   const r = radius.panel;
   return (
@@ -76,7 +76,7 @@ export const HistoryRow = memo(function HistoryRow({
             borderBottomRightRadius: last ? r : 0,
           }}
         >
-          <HoverSlot hovered={showControls || selecting} width={historyRow.checkbox} hover={<Checkbox value={selected} onChange={(_, modifiers) => onToggle(entry.url, !!modifiers?.shiftKey)} />} />
+          <HoverSlot hovered={showControls || selecting} width={historyRow.checkbox} hover={<Checkbox value={selected} accessibilityLabel={entry.title || entry.url} onChange={(_, modifiers) => onToggle(entry.url, !!modifiers?.shiftKey)} />} />
           <Text size="small" tone="textSecondary" style={TIME}>
             {timeLabel(entry.lastVisit)}
           </Text>

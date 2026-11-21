@@ -10,11 +10,11 @@ import { clickSelection, NO_SELECTION, rowWindow, selectAll, selectedInOrder, ty
 import { FolderTree } from "../bookmarks/FolderTree";
 import { bookmarkDrag } from "../bookmarks/tokens";
 import { Box, Button, Divider, EmptyState, radius, space, Text, Toast, useTheme } from "../ui";
-import { openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
+import { openBookmarkRowMenu, openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
 import { BookmarkRow } from "./BookmarkRow";
 import { listedBookmarks } from "./bookmarkResults";
 import { DropTargets } from "./dropTargets";
-import { notePageScroll, PageHeader } from "./PageLayout";
+import { isRowMenuKey, notePageScroll, PageHeader, ROW_MENU_KEYS } from "./PageLayout";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
@@ -59,6 +59,17 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     setUndo({ removed, count: removed.places.length });
     setUndoClosing(false);
   };
+  const openFolderAt = (folder: string) => {
+    setQuery("");
+    setFolderId(folder);
+  };
+  const openRowMenu = (id: string) => {
+    const node = currentBookmarks().nodes[id];
+    if (!node) return;
+    const picked = selection.selected.has(id) ? selected : [id];
+    void openBookmarkRowMenu(node, { windowId, profileId, showPath: searching, selection: picked, onOpenFolder: (folder = id) => openFolderAt(folder), onDelete: () => remove(picked) });
+  };
+  const keyboardRow = selection.anchor && selection.selected.has(selection.anchor) ? selection.anchor : null;
   const undoRemove = () => {
     if (!undo) return;
     restoreBookmarks(undo.removed);
@@ -167,7 +178,10 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
               keyDownEvents={LIST_KEYS}
               onKeyDown={(e) => {
                 const { key } = e.nativeEvent;
-                if (key === "Backspace" || key === "Delete") remove(selected);
+                if (isRowMenuKey(e.nativeEvent)) {
+                  e.preventDefault();
+                  if (keyboardRow) openRowMenu(keyboardRow);
+                } else if (key === "Backspace" || key === "Delete") remove(selected);
                 else if (key === "a" && commandHeld(e.nativeEvent)) setSelection(selectAll(ids));
               }}
               style={LIST_KEYS_VIEW}
@@ -186,14 +200,11 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
                         showPath={searching}
                         selected={selection.selected.has(id)}
                         highlighted={!!drop && "into" in drop && drop.into === id}
+                        keyboardRow={keyboardRow === id}
                         targetRef={targets.ref(`row:${id}`, { kind: "row", id, index, folder: currentBookmarks().nodes[id]?.kind === "folder" })}
                         onSelect={(e) => select(id, e)}
-                        onOpenFolder={(folder = id) => {
-                          setQuery("");
-                          setFolderId(folder);
-                        }}
-                        onDelete={() => remove(selection.selected.has(id) ? selected : [id])}
-                        menuSelection={() => selected}
+                        onOpenFolder={() => openFolderAt(id)}
+                        onMenu={() => openRowMenu(id)}
                         onDragStart={() => onDragStart(id)}
                         onDragMove={onDragMove}
                         onDragEnd={onDragEnd}
@@ -224,7 +235,7 @@ function DropLine({ top, color }: { top: number; color: string }) {
   return <View style={[DROP_LINE, { top: top - bookmarkDrag.line / 2, backgroundColor: color }]} />;
 }
 
-const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
+const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }, ...ROW_MENU_KEYS];
 
 const BODY = { flex: 1, flexDirection: "row", paddingHorizontal: space.xl, paddingBottom: space.xl, gap: space.xl } as const;
 const TREE = { width: bookmarkList.treeWidth, flexGrow: 0 } as const;

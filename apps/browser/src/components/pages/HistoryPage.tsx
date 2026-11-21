@@ -10,12 +10,12 @@ import { claimFocusTag, historySearchFocus } from "../../state/focus/focusClaims
 import { Button, EmptyState, Text } from "../ui";
 import { ClearDataDialog } from "./ClearDataDialog";
 import { layoutHistory } from "./historyLayout";
-import { confirmRemoveSelected } from "../../state/history/historyMenus";
+import { confirmRemoveSelected, openHistoryRowMenu } from "../../state/history/historyMenus";
 import { allRows, movedCursor, NO_ROWS_SELECTED, shownRows, toggledCursor, toggledRow, withoutRows, type RowSelection } from "../../state/history/historySelection";
 import { noteHistoryRowsRemoved } from "../../state/telemetry/historyRemovalCounts";
 import { consentToken } from "../../state/telemetry/client";
 import { HistoryList } from "./HistoryList";
-import { hostLabel, PageHeader } from "./PageLayout";
+import { hostLabel, isRowMenuKey, PageHeader, ROW_MENU_KEYS } from "./PageLayout";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
 
@@ -82,8 +82,17 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
     list.current?.focus();
     setSelection((prev) => movedCursor(urls, { ...prev, cursor: null }, 1, false));
   };
-  const onListKey: ViewProps["onKeyDown"] = ({ nativeEvent }) => {
+  const openCursorMenu = () => {
+    const entry = layout.rows.find((r) => r.entry.url === selection.cursor)?.entry;
+    if (entry) void openHistoryRowMenu(menuTargets(entry), windowId, moreFromSite, remove);
+  };
+  const onListKey: ViewProps["onKeyDown"] = (e) => {
+    const { nativeEvent } = e;
     const { key, shiftKey } = nativeEvent;
+    if (isRowMenuKey(nativeEvent)) {
+      e.preventDefault();
+      return openCursorMenu();
+    }
     if (key === "ArrowDown" || key === "ArrowUp") setSelection((prev) => movedCursor(urls, prev, key === "ArrowDown" ? 1 : -1, !!shiftKey));
     else if (key === " ") setSelection((prev) => toggledCursor(urls, prev));
     else if (key === "a" && commandHeld(nativeEvent)) setSelection((prev) => allRows(urls, prev));
@@ -139,6 +148,7 @@ const LIST_KEYS = [
   { key: "a", [COMMAND_KEY]: true },
   { key: "Backspace" },
   { key: "Delete" },
+  ...ROW_MENU_KEYS,
 ];
 const LIST_KEYS_WITH_ESCAPE = [...LIST_KEYS, { key: "Escape" }];
 const LIST_KEYS_VIEW = { flex: 1 } as const;

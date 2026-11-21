@@ -1,7 +1,7 @@
 import { Children, forwardRef, type ReactNode } from "react";
 import { Animated, Image, Pressable, View, type AccessibilityActionEvent, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { capsule, ContextMenuArea, Dot, GlassFill, hairline, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useGlass, useHover } from "../ui";
+import { capsule, ContextMenuArea, Dot, GlassFill, hairline, HoverFill, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useGlass, useHover } from "../ui";
 import { useSiteTokens } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
@@ -45,16 +45,21 @@ export function Tile({
   const site = useSiteTokens();
   const glass = useGlass();
   const lit = pressed || open;
-  const fill = shape === "row" || quiet ? (lit || hovered ? menuRowFill(theme, lit) : undefined) : lit ? theme.promptFillPressed : hovered ? theme.promptFillHover : theme.promptFill;
+  const plain = shape === "row" || quiet;
+  const fill = lit ? theme.promptFillPressed : hovered ? theme.promptFillHover : theme.promptFill;
   const corner = shape === "tile" ? radius.tile : shape === "row" ? PANEL.rowRadius : capsule(height);
   return (
     <Animated.View
       style={[
-        { height, borderRadius: corner, backgroundColor: glass ? undefined : fill, borderWidth: stroke && !glass ? hairline.ring : 0, borderColor: stroke ? site.tileStroke : undefined },
+        { height, borderRadius: corner, backgroundColor: glass || plain ? undefined : fill, borderWidth: stroke && !glass ? hairline.ring : 0, borderColor: stroke ? site.tileStroke : undefined },
         style,
       ]}
     >
-      {glass && fill ? <GlassFill radius={corner} state={lit ? "pressed" : hovered ? "lit" : "rest"} /> : null}
+      {plain ? (
+        <HoverFill shown={lit || hovered} instant={lit} color={menuRowFill(theme, lit)} radius={corner} glass={glass ? (lit ? "pressed" : "lit") : undefined} />
+      ) : glass ? (
+        <GlassFill radius={corner} state={lit ? "pressed" : hovered ? "lit" : "rest"} />
+      ) : null}
       {children}
     </Animated.View>
   );

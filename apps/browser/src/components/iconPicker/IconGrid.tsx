@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, Pressable, View } from "react-native";
+import { Animated, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Button, HoverFill, iconButton, radius, space, Symbol, Text } from "../ui";
 import { useTheme } from "../ui/theme";
 import { iconSymbol } from "../../lib/customIcon";
@@ -139,6 +139,7 @@ const Cell = memo(function Cell({ icon, label, selected, onPress }: { icon: stri
         style={[CELL(), selected ? { backgroundColor: theme.rowSelected } : null]}
       >
         <HoverFill shown={hovered && !selected} instant={selected} color={theme.rowHover} radius={radius.tile} />
+        {selected ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius.tile, borderWidth: ICON_PICKER.selectedRing, borderColor: theme.accent }]} /> : null}
         {symbol ? (
           <Animated.View style={[SYMBOL, scaleStyle]}>
             <Symbol name={symbol} size={ICON_PICKER.symbol} color={theme.icon} style={SYMBOL} />

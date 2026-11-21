@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { cancelChooser, chooseDevice, openChooserBluetoothSettings, rescanDevices, useDeviceChooser } from "../../state/site/deviceChoosers";
-import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text, usePopoverPresenceOf } from "../ui";
+import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text, usePopoverPresenceOf, whileOpen } from "../ui";
 import { usePromptInputGuard } from "./PromptParts";
 import { PromptBody } from "./Prompts";
 import { noticeType } from "./tokens";
@@ -52,11 +52,14 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
   const scanning = chooser.bothButtonsEnabled;
   const blocked = chooser.adapterOff || chooser.unauthorized;
   const valid = scanning || (selected !== null && selected < chooser.options.length);
-  const choose = guard((index: number | null = selected) => {
-    if (scanning) return chooseDevice(chooser.id, -1);
-    if (index !== null) chooseDevice(chooser.id, index);
-  });
-  const cancel = () => cancelChooser(chooser.id);
+  const act = whileOpen(closing);
+  const choose = act(
+    guard((index: number | null = selected) => {
+      if (scanning) return chooseDevice(chooser.id, -1);
+      if (index !== null) chooseDevice(chooser.id, index);
+    }),
+  );
+  const cancel = act(() => cancelChooser(chooser.id));
   const signals = chooser.showSignal && chooser.options.some((o) => o.signal >= 0);
 
   let body;
@@ -66,7 +69,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
         icon="lock"
         text="Ardia needs access to Bluetooth to find devices."
         link="Open Bluetooth Settings"
-        onLink={() => openChooserBluetoothSettings(chooser.id)}
+        onLink={act(() => openChooserBluetoothSettings(chooser.id))}
       />
     );
   } else if (chooser.adapterOff) {
@@ -85,7 +88,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
                 detail={o.connected ? "Connected" : o.paired ? "Paired" : null}
                 signal={signals ? o.signal : null}
                 selected={selected === i}
-                onSelect={() => setSelected(i)}
+                onSelect={act(() => setSelected(i))}
                 onChoose={() => choose(i)}
               />
             ))}
@@ -106,7 +109,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
                   {chooser.noOptionsText}
                 </Text>
               ) : null}
-              {chooser.canRefresh ? <Button variant="text" look="link" title="Scan Again" onPress={() => rescanDevices(chooser.id)} /> : null}
+              {chooser.canRefresh ? <Button variant="text" look="link" title="Scan Again" onPress={act(() => rescanDevices(chooser.id))} /> : null}
             </>
           )}
         </Box>
@@ -143,7 +146,7 @@ function Notice({ icon, text, link, onLink }: { icon: string; text: string; link
         <Text tone="textSecondary" style={noticeType()}>
           {text}
         </Text>
-        {link && onLink ? <Button variant="text" look="link" title={link} onPress={onLink} /> : null}
+        {link && onLink ? <Button variant="text" look="link" tone="textPrimary" title={link} onPress={onLink} /> : null}
       </Box>
     </Box>
   );

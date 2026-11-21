@@ -87,6 +87,37 @@ export function usePanelsPresence<K extends string>(open: string | null, kinds: 
 
 const NONE_SHOWN: readonly never[] = [];
 
+const IGNORED = () => {};
+
+export const whileOpen =
+  (closing: boolean) =>
+  <A extends unknown[]>(action: (...args: A) => unknown): ((...args: A) => void) =>
+    closing ? IGNORED : action;
+
+type FocusedHost = { blur?: () => void } | null;
+type FocusChange = { target: unknown };
+
+export function useClosingInert(closing: boolean) {
+  const focused = useRef<FocusedHost>(null);
+  useEffect(() => {
+    if (!closing) return;
+    focused.current?.blur?.();
+    focused.current = null;
+  }, [closing]);
+  return {
+    pointerEvents: closing ? ("none" as const) : ("auto" as const),
+    accessibilityElementsHidden: closing,
+    importantForAccessibility: closing ? ("no-hide-descendants" as const) : ("auto" as const),
+    inert: closing || undefined,
+    onFocus: (e: FocusChange) => {
+      focused.current = e.target as FocusedHost;
+    },
+    onBlur: (e: FocusChange) => {
+      if (focused.current === e.target) focused.current = null;
+    },
+  };
+}
+
 export function usePopoverMotion(closing: boolean, onClosed?: () => void, ready = true) {
   const appear = useRef(new Animated.Value(0)).current;
   const closed = useRef(onClosed);
@@ -137,11 +168,12 @@ export function Popover({
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, right !== undefined ? "top right" : "top left");
   const [room, setRoom] = useState<number | null>(null);
+  const inert = useClosingInert(closing);
   return (
     <>
       {fitHeight && <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setRoom(e.nativeEvent.layout.height)} />}
       {modal && onDismiss && !closing && <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />}
-      <Animated.View pointerEvents={closing ? "none" : "auto"} style={{ position: "absolute", top, right, left, width: typeof width === "number" ? width : POPOVER_WIDTH[width], ...motion }}>
+      <Animated.View {...inert} style={{ position: "absolute", top, right, left, width: typeof width === "number" ? width : POPOVER_WIDTH[width], ...motion }}>
         <OutsidePressArea onOutsidePress={onDismiss && !closing ? onDismiss : undefined}>
           <PopoverSurface glass={glass}>
             {fitHeight ? <ScrollView showsVerticalScrollIndicator={false} style={room === null ? undefined : { maxHeight: Math.max(0, room - top - POPOVER_MARGIN) }}>{children}</ScrollView> : children}

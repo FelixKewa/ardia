@@ -2,7 +2,8 @@ import { Pressable, View } from "react-native";
 import { setAttach, setAttachedOpen, setPreview } from "../../state/report/actions";
 import type { AttachmentKey } from "../../state/report/form";
 import { useReport, useReportShallow } from "../../state/report/hooks";
-import { Box, Button, Checkbox, Divider, space, Symbol, Text, useHover, useTheme } from "../ui";
+import { Box, Button, Divider, space, Symbol, Text, useHover, useTheme } from "../ui";
+import { CheckMark, CheckTarget } from "../ui";
 
 const shortAddress = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, "").replace(/[?#].*$/, "");
 
@@ -60,15 +61,15 @@ function AttachedList({ rows }: { rows: ReturnType<typeof useAttachedRows>["rows
           Sent with this report
         </Text>
         {rows.map((row) => (
-          <Pressable key={row.key} disabled={row.disabled} onPress={() => setAttach(row.key, !row.on)}>
+          <CheckTarget key={row.key} value={row.on} disabled={row.disabled} onChange={(on) => setAttach(row.key, on)} label={row.title} hint={row.detail}>
             <Box row gap="m" style={ITEM}>
-              <Checkbox value={row.on} disabled={row.disabled} onChange={(on) => setAttach(row.key, on)} />
+              <CheckMark value={row.on} disabled={row.disabled} />
               <Text tone={row.disabled ? "textTertiary" : "textPrimary"}>{row.title}</Text>
               <Text size="small" tone="textTertiary" numberOfLines={1} style={DETAIL}>
                 {row.detail}
               </Text>
             </Box>
-          </Pressable>
+          </CheckTarget>
         ))}
         <View style={{ marginTop: space.s, alignSelf: "flex-start" }}>
           <Button variant="text" look="link" pad="none" title="Preview everything that's sent" onPress={() => setPreview(true)} />

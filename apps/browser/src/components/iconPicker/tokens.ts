@@ -12,6 +12,7 @@ export const ICON_PICKER = {
   anchorGap: 6,
   windowMargin: 8,
   sidebarGap: 6,
+  selectedRing: 1.5,
 } as const;
 
 export const ICON_PICKER_WIDTH = ICON_PICKER.columns * ICON_PICKER.cell + ICON_PICKER.pad * 2 + hairline.panel * 2;

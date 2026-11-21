@@ -160,7 +160,7 @@ function IconButtonView(props: IconProps) {
         justifyContent: "center",
       }}
     >
-      {lit ? <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} /> : null}
+      {lit ? <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active || pressed} color={pressed || active ? pressedFill : hover} radius={plateRadius} /> : null}
       {face}
       {badge}
     </View>
@@ -240,7 +240,7 @@ function TextButtonView(props: TextProps) {
       <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
         {({ pressed }) => (
           <Plate style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
-            {lit ? <HoverFill shown={shows(pressed)} color={pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}
+            {lit ? <HoverFill shown={shows(pressed)} instant={pressed} color={pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}
             <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
           </Plate>
         )}

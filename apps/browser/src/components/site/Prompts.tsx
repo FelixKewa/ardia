@@ -16,7 +16,7 @@ import { View } from "react-native";
 import { space } from "../ui/tokens";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { currentEngineProfile, currentTab } from "../../state/browser/current";
-import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseButton, Popover, POPOVER_WIDTH, Text, tracking, usePopoverPresenceOf } from "../ui";
+import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseButton, Popover, POPOVER_WIDTH, Text, tracking, usePopoverPresenceOf, whileOpen } from "../ui";
 import { answerPermission, describePermission } from "../../state/site/permissions";
 import { hostOrOrigin } from "../../lib/url";
 import { CheckRow, PromptHeader, usePromptInputGuard, Well } from "./PromptParts";
@@ -53,8 +53,9 @@ export const EXTERNAL_APP_WIDTH = POPOVER_WIDTH.m;
 export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: number; top: number }) {
   const live = usePage(tabId, (p) => p.permission);
   const { shown: request, closing, onClosed } = usePopoverPresenceOf(live);
-  const guard = usePromptInputGuard(live?.id);
+  const inputGuard = usePromptInputGuard(live?.id);
   if (!request) return null;
+  const guard = <A extends unknown[]>(action: (...args: A) => void) => whileOpen(closing)(inputGuard(action));
   const { icons, question } = describePermission(request);
   return (
     <Popover key={request.id} width={PERMISSION_PROMPT_WIDTH} top={top} left={left} modal={false} closing={closing} onClosed={onClosed}>
@@ -80,6 +81,8 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
   const site = hostOrOrigin(origin);
   const web = () => webviews.get(tabId);
   const close = () => setPopover(tabId, null);
+  const act = whileOpen(closing);
+  const blocked = () => pageOf(tabId).popups;
   const done = () => {
     patchPage(tabId, { popups: [] });
     close();
@@ -95,25 +98,25 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
         >
           <Button variant="pill"
             title="Always Deny"
-            onPress={() => {
+            onPress={act(() => {
               void setSiteSetting(profile(), origin, "popups", "block");
               done();
-            }}
+            })}
           />
           <Button variant="pill"
             title="Only Once"
-            onPress={() => {
-              for (const p of popups) void web()?.openBlockedPopup(p.id, false);
+            onPress={act(() => {
+              for (const p of blocked()) void web()?.openBlockedPopup(p.id, false);
               done();
-            }}
+            })}
           />
           <Button variant="pill"
             title="Always Allow"
             primary
-            onPress={() => {
-              for (const p of popups) void web()?.openBlockedPopup(p.id, true);
+            onPress={act(() => {
+              for (const p of blocked()) void web()?.openBlockedPopup(p.id, true);
               done();
-            }}
+            })}
           />
         </PromptBody>
         <MenuSeparator />
@@ -122,12 +125,13 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
             key={p.id}
             icon="arrow.up.forward.app"
             title={p.url.replace(/^https?:\/\//, "") || "about:blank"}
-            onPress={() => {
+            onPress={act(() => {
+              if (!blocked().some((x) => x.id === p.id)) return;
               void web()?.openBlockedPopup(p.id, false);
-              const rest = pageOf(tabId).popups.filter((x) => x.id !== p.id);
+              const rest = blocked().filter((x) => x.id !== p.id);
               patchPage(tabId, { popups: rest });
               if (!rest.length) close();
-            }}
+            })}
           />
         ))}
         {popups.length > 5 ? (

@@ -88,7 +88,11 @@ export function useFocusWithin(key: string) {
   return { focused: focusedKey === key, focusProps };
 }
 
-export function useRowControls(key: string) {
+export const ROW_MENU_KEYS = [{ key: "ContextMenu" }, { key: "F10", shiftKey: true }];
+
+export const isRowMenuKey = ({ key, shiftKey }: { key: string; shiftKey?: boolean }) => key === "ContextMenu" || (key === "F10" && !!shiftKey);
+
+export function useRowControls(key: string, keyboardRow = false) {
   const offstage = useOffstage();
   const latest = useRef({ key, offstage });
   latest.current = { key, offstage };
@@ -119,7 +123,7 @@ export function useRowControls(key: string) {
   useEffect(() => () => clearTimeout(settle.current), []);
   const hovered = !offstage && hoveredKey === key;
   const rowProps = useMemo(() => ({ ...hoverProps, ...focusProps }), [hoverProps, focusProps]);
-  return { hovered, controlsShown: (hovered && restingKey === key) || focused, rowProps };
+  return { hovered, controlsShown: (hovered && restingKey === key) || focused || keyboardRow, rowProps };
 }
 
 export const dayStart =(ms: number) => {

@@ -6,7 +6,6 @@ import { openUrl } from "../../state/bookmarks/actions";
 import { plural } from "../../state/browser/model";
 import { Favicon } from "../favicon/Favicon";
 import { ContextMenuArea, MouseArea, radius, space, Symbol, Text, useTheme } from "../ui";
-import { openBookmarkRowMenu } from "../../state/bookmarks/bookmarkMenus";
 import { bookmarkDrag } from "../bookmarks/tokens";
 import { hostLabel, RowMenuSlot, useRowControls } from "./PageLayout";
 import { bookmarkList, pagesColors } from "./tokens";
@@ -25,11 +24,11 @@ export function BookmarkRow({
   showPath,
   selected,
   highlighted,
+  keyboardRow,
   targetRef,
   onSelect,
   onOpenFolder,
-  onDelete,
-  menuSelection,
+  onMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -41,11 +40,11 @@ export function BookmarkRow({
   showPath: boolean;
   selected: boolean;
   highlighted: boolean;
+  keyboardRow: boolean;
   targetRef: (v: View | null) => void;
   onSelect: (e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => void;
-  onOpenFolder: (folder?: string) => void;
-  onDelete: () => void;
-  menuSelection: () => string[];
+  onOpenFolder: () => void;
+  onMenu: () => void;
   onDragStart: () => void;
   onDragMove: (x: number, y: number) => void;
   onDragEnd: (x: number, y: number) => void;
@@ -54,7 +53,7 @@ export function BookmarkRow({
   const colors = pagesColors(theme);
   const node = useBookmarks((b) => b.nodes[id]);
   const path = useBookmarks((b) => (showPath ? bookmarkAncestors(b, id).map((a) => a.title).reverse().join(" › ") : ""));
-  const { hovered, controlsShown, rowProps } = useRowControls(id);
+  const { hovered, controlsShown, rowProps } = useRowControls(id, keyboardRow);
   const dy = useRef(new Animated.Value(0)).current;
   const [dragging, setDragging] = useState(false);
   const handlers = useRef({ onDragStart, onDragMove, onDragEnd });
@@ -89,7 +88,7 @@ export function BookmarkRow({
   const open = (mode: Parameters<typeof openUrl>[2]) => node.kind === "url" && openUrl(node.url, windowId, mode);
   const menu = () => {
     if (!selected) onSelect({});
-    return openBookmarkRowMenu(node, { windowId, profileId, showPath, selection: selected ? menuSelection() : [id], onOpenFolder, onDelete });
+    onMenu();
   };
 
   return (
@@ -99,7 +98,7 @@ export function BookmarkRow({
       {...rowProps}
       style={{ position: "absolute", top, left: 0, right: 0, zIndex: dragging ? 10 : 0, opacity: dragging ? bookmarkList.dragOpacity : 1, transform: [{ translateY: dy }] }}
     >
-      <ContextMenuArea onContextMenu={() => void menu()}>
+      <ContextMenuArea onContextMenu={menu}>
         <MouseArea onMiddleClick={() => open("background")}>
           <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
             <View
@@ -117,7 +116,7 @@ export function BookmarkRow({
               <Text lines={1} size="small" tone="textTertiary" style={DETAIL}>
                 {showPath ? path : node.kind === "url" ? hostLabel(node.url) : plural(node.children.length, "item")}
               </Text>
-              <RowMenuSlot shown={controlsShown} onPress={() => void menu()} />
+              <RowMenuSlot shown={controlsShown} onPress={menu} />
             </View>
           </Pressable>
         </MouseArea>

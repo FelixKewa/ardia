@@ -10,7 +10,7 @@ import {
   shareTab,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, Text, useHover, usePopoverPresenceOf } from "../ui";
+import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, Text, useHover, usePopoverPresenceOf, whileOpen } from "../ui";
 import { PromptHeader } from "../site/PromptParts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
@@ -86,13 +86,15 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const valid = !!kindOf(selected);
   const selectedKind = kindOf(selected);
   const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
-  const share = (id: string | null = selected) => {
+  const act = whileOpen(closing);
+  const share = act((id: string | null = selected) => {
     const kind = kindOf(id);
     if (!id || !kind) return;
     if (kind === "tab") return void shareTab(tabId, id.slice(TAB.length), audioFor(kind));
     answerDisplayMedia(tabId, id, audioFor(kind));
-  };
-  const cancel = () => answerDisplayMedia(tabId, null);
+  });
+  const cancel = act(() => answerDisplayMedia(tabId, null));
+  const select = act(setSelected);
   const frameHost = request.frameOrigin ? originForSecurityDisplay(request.frameOrigin) : "";
   const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : "The site";
   const width = Math.min(WIDTH, paneWidth - 24);
@@ -132,7 +134,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
                   title={t.title || t.url}
                   detail={t.id === tabId ? "This Tab" : null}
                   selected={TAB + t.id === selected}
-                  onSelect={() => setSelected(TAB + t.id)}
+                  onSelect={() => select(TAB + t.id)}
                   onShare={() => share(TAB + t.id)}
                 />
               ))}
@@ -143,7 +145,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
               <SectionTitle title={screens.length === 1 ? "Screen" : "Screens"} />
               <View style={SCREEN_GRID}>
                 {screens.map((s) => (
-                  <ScreenTile key={s.id} source={s} width={(width - 2 * PANEL.rowInset - space.m) / 2} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
+                  <ScreenTile key={s.id} source={s} width={(width - 2 * PANEL.rowInset - space.m) / 2} selected={s.id === selected} onSelect={() => select(s.id)} onShare={() => share(s.id)} />
                 ))}
               </View>
             </>
@@ -152,14 +154,14 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
             <>
               <SectionTitle title="Windows" />
               {windows.map((s) => (
-                <WindowRow key={s.id} source={s} icon={s.pid !== undefined ? icons[s.pid] : null} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
+                <WindowRow key={s.id} source={s} icon={s.pid !== undefined ? icons[s.pid] : null} selected={s.id === selected} onSelect={() => select(s.id)} onShare={() => share(s.id)} />
               ))}
             </>
           ) : null}
           {screenAccess === false ? (
             <>
               <SectionTitle title="Screens and Windows" />
-              <ScreenRecordingNeeded />
+              <ScreenRecordingNeeded onOpen={act(() => void askForScreenRecording())} />
             </>
           ) : null}
           {screenAccess !== false && !screens.length && !windows.length && !tabs.length ? <Text size="small" tone="textSecondary" style={EMPTY}>Nothing can be shared right now.</Text> : null}
@@ -169,7 +171,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           {selectedKind && request.audio && audioOffered(selectedKind, request.audio) ? (
             <Checkbox
               value={shareAudio[selectedKind]}
-              onChange={(on) => setShareAudio((current) => ({ ...current, [selectedKind]: on }))}
+              onChange={act((on: boolean) => setShareAudio((current) => ({ ...current, [selectedKind]: on })))}
               label={audioLabel(selectedKind, request.audio)}
             />
           ) : null}
@@ -187,13 +189,13 @@ const SCREEN_GRID = { flexDirection: "row", flexWrap: "wrap", gap: space.m, padd
 const HEADER = { paddingHorizontal: PANEL.inset, paddingTop: PANEL.inset } as const;
 const NOTICE = { paddingHorizontal: PANEL.inset, paddingBottom: space.s, gap: space.xs, alignItems: "flex-start" } as const;
 
-function ScreenRecordingNeeded() {
+function ScreenRecordingNeeded({ onOpen }: { onOpen: () => void }) {
   return (
     <View style={NOTICE}>
       <Text size="small" tone="textSecondary">
         To share a window or your entire screen, turn on Ardia in System Settings › Privacy & Security › Screen Recording, then quit and reopen Ardia.
       </Text>
-      <Button variant="text" look="link" title="Open System Settings" onPress={() => void askForScreenRecording()} />
+      <Button variant="text" look="link" tone="textPrimary" title="Open System Settings" onPress={onOpen} />
     </View>
   );
 }
@@ -217,7 +219,7 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
   const previewWidth = width - 2 * space.m;
   return (
     <View {...hoverProps} onDoubleClick={onShare}>
-      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="radio" accessibilityLabel={source.name} accessibilityState={{ checked: selected }}>
         <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? theme.rowSelected : hovered ? theme.rowHover : undefined }}>
           <View
             style={{

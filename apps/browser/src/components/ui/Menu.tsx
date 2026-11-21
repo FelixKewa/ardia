@@ -2,7 +2,7 @@ import { Symbol } from "./Symbol";
 import type { ReactNode } from "react";
 import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { Divider } from "./Divider";
-import { GlassFill, useGlass } from "./Glass";
+import { useGlass } from "./Glass";
 import { HoverFill } from "./HoverFill";
 import { PANEL } from "./Popover";
 import { useTheme, type Theme } from "./theme";
@@ -71,11 +71,7 @@ export function MenuRow({
           borderColor: ring ? theme.accent : undefined,
         }}
       >
-        {glass ? (
-          lit ? <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} /> : null
-        ) : interactive ? (
-          <HoverFill shown={lit} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} />
-        ) : null}
+        {interactive ? <HoverFill shown={lit} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} glass={glass ? (pressed ? "pressed" : "lit") : undefined} /> : null}
         {leading ? (
           <View style={{ width: PANEL.iconSlot, height: PANEL.iconSlot, alignItems: "center", justifyContent: "center" }}>{leading}</View>
         ) : icon ? (
@@ -109,7 +105,7 @@ export function MenuRow({
         onPress={onPress}
         disabled={disabled}
         accessibilityRole={choosable ? "radio" : "button"}
-        accessibilityState={{ selected: choosable || selected !== undefined ? marked : undefined, disabled: !!disabled }}
+        accessibilityState={choosable ? { checked: !!checked, disabled: !!disabled } : { selected: selected === undefined ? undefined : !!selected, disabled: !!disabled }}
       >
         {({ pressed }) => content(pressed)}
       </Pressable>

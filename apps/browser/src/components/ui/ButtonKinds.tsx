@@ -43,7 +43,7 @@ export function StepperButtonView({ icon, onPress, width = stepperSize.width, he
               borderColor: theme.controlBorder,
             }}
           >
-            <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />
+            <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} instant={pressed} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />
             <ScaledGlyph scale={pressMotion.scale} size={12}><Symbol name={icon} size={10} weight="semibold" color={theme.icon} style={{ width: 12, height: 12 }} /></ScaledGlyph>
           </View>
         )}
@@ -83,7 +83,7 @@ export function PillButtonView(props: PillProps) {
                   opacity: look.dim ? CHIP_DIM : 1,
                 }, scaleStyle]}
               >
-                <HoverSwap shown={pressed || hovered} rest={rest.fill} color={look.fill} radius={capsule(chipHeight)} />
+                <HoverSwap shown={pressed || hovered} rest={rest.fill} color={look.fill} instant={pressed} radius={capsule(chipHeight)} />
                 {icon ? <Symbol name={icon} size={10.5} weight="semibold" color={ink} style={{ width: 14, height: 14 }} /> : null}
                 <Text style={{ ...typeScale.small, fontWeight: weights.medium, color: ink }}>{title}</Text>
               </Animated.View>
@@ -109,7 +109,7 @@ export function PillButtonView(props: PillProps) {
           const look = pillLook(theme, "prompt", primary, !disabled && pressed, !disabled && hovered);
           return (
             <Animated.View style={[{ height, paddingHorizontal: space.l, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
-              <HoverSwap shown={!disabled && (pressed || hovered)} rest={pillLook(theme, "prompt", primary, false, false).fill} color={look.fill} radius={size ? capsule(height) : radii.tile} />
+              <HoverSwap shown={!disabled && (pressed || hovered)} rest={pillLook(theme, "prompt", primary, false, false).fill} color={look.fill} instant={pressed} radius={size ? capsule(height) : radii.tile} />
               <Text numberOfLines={1} style={{ ...typeScale.body, fontWeight: weights.medium, color: look.text }}>
                 {title}
               </Text>
@@ -145,7 +145,7 @@ export function CloseButtonView(props: CloseProps) {
         <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label ?? tooltip}>
           {({ pressed }) => (
             <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-              <HoverSwap shown={pressed || hovered} rest={closeOnArt.rest} color={pressed ? closeOnArt.pressed : closeOnArt.hover} radius={corner} />
+              <HoverSwap shown={pressed || hovered} rest={closeOnArt.rest} color={pressed ? closeOnArt.pressed : closeOnArt.hover} instant={pressed} radius={corner} />
               <ScaledGlyph scale={pressMotion.scale} size={size}><Symbol name="xmark" size={11} weight="medium" color={closeOnArt.glyph} style={{ width: size, height: size }} /></ScaledGlyph>
             </View>
           )}
@@ -210,7 +210,7 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
               borderColor: theme.controlBorder,
             }, scaleStyle]}
           >
-            {plain || primary ? null : <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />}
+            {plain || primary ? null : <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} instant={pressed} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />}
             {icon ? <Symbol name={icon} size={11} color={textColor} style={{ width: 13, height: 13 }} /> : null}
             <Text ardiaCentersCapitals={!plain} style={{ ...typeScale.body, color: textColor, textDecorationLine: plain && hovered ? "underline" : "none" }}>{title}</Text>
           </Animated.View>

@@ -79,7 +79,7 @@ export function OptionCard({
                 ) : null}
               </View>
               <View pointerEvents="none">
-                <Checkbox look="ring" size="m" value={selected} onChange={onPress} />
+                <Checkbox look="ring" size="m" value={selected} />
               </View>
             </ChoiceCard>
           </Animated.View>

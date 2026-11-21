@@ -35,9 +35,16 @@ export async function setSiteBlocking(tab: Pick<Tab, "id" | "windowId">, host: s
 
 export type SiteDataCleared = ClearSiteDataResult | "failed" | null;
 
-const clearedSiteDataLabel = (cookies: number | false) => (cookies ? `Cleared ${cookies} cookie${cookies === 1 ? "" : "s"} and site data` : "Cleared site data");
+const cookieCount = (cookies: number) => `${cookies} cookie${cookies === 1 ? "" : "s"}`;
 
-export const siteDataOutcome = (cleared: ClearSiteDataResult | "failed") => (cleared === "failed" ? "Couldn't clear this site's data. Try again" : clearedSiteDataLabel(cleared.cookies));
+export const siteDataFailed = (cleared: ClearSiteDataResult | "failed") => cleared === "failed" || (cleared.cookies === false && !cleared.storage);
+
+export function siteDataOutcome(cleared: ClearSiteDataResult | "failed"): string {
+  if (cleared === "failed" || siteDataFailed(cleared)) return "Couldn't clear this site's data. Try again";
+  if (cleared.cookies === false) return "Cleared site data, but not its cookies. Try again";
+  if (!cleared.storage) return cleared.cookies ? `Cleared ${cookieCount(cleared.cookies)}, but not all site data. Try again` : "Couldn't clear all of this site's data. Try again";
+  return cleared.cookies ? `Cleared ${cookieCount(cleared.cookies)} and site data` : "Cleared site data";
+}
 
 export async function confirmAndClearSiteData(profileId: string, origin: string, windowId?: string, tabId?: string): Promise<SiteDataCleared> {
   const host = new URL(origin).hostname;
@@ -56,13 +63,15 @@ export async function confirmAndClearSiteData(profileId: string, origin: string,
     () => "failed" as const,
   );
   const now = tabId ? currentTab(tabId) : undefined;
-  if (tabId && now && now.profileId === profileId && siteOrigin(now.url) === origin) void webviews.get(tabId)?.reload();
+  if (tabId && now && now.profileId === profileId && siteOrigin(now.url) === origin && !siteDataFailed(result)) void webviews.get(tabId)?.reload();
   return result;
 }
 
 export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId" | "profileId">, origin: string): Promise<number | null> {
   const cleared = await confirmAndClearSiteData(tab.profileId, origin, tab.windowId, tab.id);
   if (cleared === null) return null;
+  const whole = cleared !== "failed" && cleared.cookies !== false && cleared.storage;
+  showToast(tab.windowId, siteDataOutcome(cleared), undefined, { icon: whole ? "trash" : "exclamationmark.triangle" });
   return cleared !== "failed" && typeof cleared.cookies === "number" ? cleared.cookies : 0;
 }
 

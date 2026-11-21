@@ -1,6 +1,6 @@
 import { CastMode, preferredCastMode, startCasting, stopCasting, type CastSink, closeCastPicker, useCast } from "../../state/media/cast";
 import { openExternalURL, showMenu } from "../../state/app/system";
-import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, usePopoverPresenceOf } from "../ui";
+import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, usePopoverPresenceOf, whileOpen } from "../ui";
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -17,14 +17,16 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
   const [screen, setScreen] = useState(false);
   useEffect(() => setScreen(false), [dialog?.id]);
   if (!dialog) return null;
-  const close = () => closeCastPicker(tabId);
+  const act = whileOpen(closing);
+  const close = act(() => closeCastPicker(tabId));
   const available = dialog.sinks.filter((s) => s.state !== "unavailable");
   const canScreen = dialog.sinks.some((s) => s.modes & CastMode.screen);
   const width = Math.min(POPOVER_WIDTH.m, paneWidth - 24);
-  const cast = (sink: CastSink) => {
+  const cast = act((sink: CastSink) => {
     const mode = screen && sink.modes & CastMode.screen ? CastMode.screen : preferredCastMode(sink.modes & ~CastMode.screen) || preferredCastMode(sink.modes);
     if (mode) void startCasting(dialog.id, sink.id, mode);
-  };
+  });
+  const stop = act((sink: CastSink) => void stopCasting(dialog.id, sink.routeId));
 
   return (
     <Popover key={dialog.id} width={width} top={POPOVER_MARGIN} right={POPOVER_MARGIN} onDismiss={close} closing={closing} onClosed={onClosed}>
@@ -32,19 +34,19 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
         <PanelHeader
           icon={<Symbol name="tv.and.mediabox" size={14} color={theme.icon} style={{ width: PANEL.iconSlot, height: PANEL.iconSlot }} />}
           title={screen ? "Cast screen" : dialog.header || "Cast tab"}
-          accessory={canScreen ? <SourceButton screen={screen} onChange={setScreen} /> : null}
+          accessory={canScreen ? <SourceButton screen={screen} onChange={act(setScreen)} /> : null}
         />
 
         {dialog.permissionRejected ? (
           <Message
             text={PLATFORM_TERMS.localNetworkSettingsUrl ? "Ardia needs Local Network access to find Cast devices." : "Ardia can't reach the local network to find Cast devices."}
             link={PLATFORM_TERMS.localNetworkSettingsUrl ? "Open Local Network Settings" : null}
-            onLink={() => void openExternalURL(PLATFORM_TERMS.localNetworkSettingsUrl)}
+            onLink={act(() => void openExternalURL(PLATFORM_TERMS.localNetworkSettingsUrl))}
           />
         ) : available.length ? (
           <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ gap: space.xxs }}>
             {available.map((sink) => (
-              <SinkRow key={sink.id} sink={sink} onCast={() => cast(sink)} onStop={() => void stopCasting(dialog.id, sink.routeId)} />
+              <SinkRow key={sink.id} sink={sink} onCast={() => cast(sink)} onStop={() => stop(sink)} />
             ))}
           </ScrollView>
         ) : (
@@ -98,7 +100,7 @@ function Message({ text, link, onLink }: { text: string; link: string | null; on
   return (
     <View style={{ paddingHorizontal: PANEL.inset, paddingTop: space.xs, gap: space.xs, alignItems: "flex-start" }}>
       <Text size="small" tone="textSecondary">{text}</Text>
-      {link ? <Button variant="text" look="link" title={link} onPress={onLink} /> : null}
+      {link ? <Button variant="text" look="link" tone="textPrimary" title={link} onPress={onLink} /> : null}
     </View>
   );
 }

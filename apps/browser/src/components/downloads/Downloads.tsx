@@ -6,7 +6,7 @@ import {
   PopoverBubble,
   Symbol,
   Button,
-  GlassFill,
+  HoverFill,
   hex,
   HoverSlot,
   layout,
@@ -18,12 +18,12 @@ import {
   Text,
   useGlass,
   useGlassLook,
+  useClosingInert,
   useHover,
   usePopoverMotion,
   usePopoverMotionStyle,
   usePopoverPresence,
   useTheme,
-  type Theme,
 } from "../ui";
 import { fileIcon, revealFile } from "../../state/app/system";
 import { openDownload } from "../../state/downloads/openDownload";
@@ -51,8 +51,6 @@ import { useDownloadsPlacement } from "./useDownloadsPlacement";
 import { sameSize, useSettled, type Size } from "../ui/useSettled";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
-
-const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
 const iconCache = new Map<string, string | null>();
 export const FileIcon = memo(function FileIcon({ path, size = L.fileIcon }: { path: string; size?: number }) {
@@ -96,6 +94,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const { root, placement: p, onLayout } = useDownloadsPlacement(windowId, closing, { topStrip, footer: addressBar, footerBottom: PROFILE_DOTS_HEIGHT + 2, sidebarRight });
   const placed = p !== null;
   const appear = usePopoverMotion(closing, onClosed, placed);
+  const inert = useClosingInert(closing);
 
   const upward = p?.bottom !== undefined;
   const arrowX = p?.arrowX;
@@ -105,7 +104,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const listMax = p ? Math.max(L.row, Math.min(L.visibleRows * L.row, p.room - L.chrome)) : L.visibleRows * L.row;
 
   return (
-    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
+    <View ref={root} collapsable={false} onLayout={onLayout} {...inert} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
       {p ? (
         <Animated.View
           style={{
@@ -209,7 +208,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
     <View {...hoverProps} {...focusProps}>
       <MouseArea path={done ? d.path : null}>
         <ContextMenuArea onContextMenu={() => void downloadMenu(d, windowId)}>
-          <Pressable onPress={() => done && void openDownload(d.path)}>
+          <Pressable focusable={done} onPress={() => done && void openDownload(d.path)}>
             {({ pressed }) => (
               <View
                 style={{
@@ -219,10 +218,9 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                   paddingHorizontal: PANEL.rowPadding,
                   height: L.row,
                   borderRadius: PANEL.rowRadius,
-                  backgroundColor: glass ? undefined : rowFill(theme, hovered, pressed && done),
                 }}
               >
-                <DownloadsRowGlass fill={rowFill(theme, hovered, pressed && done)} pressed={pressed && done} />
+                <HoverFill shown={hovered || (pressed && done)} instant={pressed && done} color={menuRowFill(theme, pressed && done)} radius={PANEL.rowRadius} glass={glass ? (pressed && done ? "pressed" : "lit") : undefined} />
                 <View style={{ opacity: exists ? 1 : opacity.disabled }}>
                   <FileIcon path={d.path || d.filename} size={L.fileIcon} />
                 </View>
@@ -331,11 +329,6 @@ export function DownloadMagnet() {
       )}
     </View>
   );
-}
-
-function DownloadsRowGlass({ fill, pressed }: { fill: string | undefined; pressed: boolean }) {
-  if (!useGlass() || !fill) return null;
-  return <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} />;
 }
 
 const PROGRESS_GAP = { marginTop: L.progressAbove, marginBottom: L.progressBelow } as const;

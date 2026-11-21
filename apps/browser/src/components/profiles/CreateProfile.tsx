@@ -76,7 +76,7 @@ function CreateProfileSheet({ windowId, preset, onDone }: { windowId: string | n
                 {groups.map((g, i) => {
                   const names = profileNames(g.profileIds.map((id) => profiles[id]!.name));
                   return (
-                    <Pressable key={g.dataId} onPress={() => setShareWith(g.profileIds[0]!)} accessibilityRole="radio" accessibilityState={{ selected: g === selectedGroup }} accessibilityLabel={names}>
+                    <Pressable key={g.dataId} onPress={() => setShareWith(g.profileIds[0]!)} accessibilityRole="radio" accessibilityState={{ checked: g === selectedGroup }} accessibilityLabel={names}>
                       {i ? <Divider thick /> : null}
                       <Box row gap="ml" padX="ml" style={SHARE_ROW}>
                         <Radio on={g === selectedGroup} look="compact" />

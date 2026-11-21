@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { reloadMenuItems, siteOrigin, clearSiteDataAfterConfirm } = await import("./reloadMenu.ts");
+const { reloadMenuItems, siteOrigin, clearSiteDataAfterConfirm, siteDataOutcome, siteDataFailed } = await import("./reloadMenu.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 const { shellNativeModules } = await import("../../test-native/shell.ts");
@@ -93,4 +93,16 @@ test("a WebKit tab clears the origin its confirmation named in its profile's sto
   assert.deepEqual(moved.engineCalls.map((c) => [c.origin, c.engine]), [["https://a.com", "webkit"]]);
   assert.equal(moved.view.cleared, 0);
   assert.equal(moved.view.reloaded, 0);
+});
+
+test("the outcome says what was cleared, what wasn't, and never claims a clear that failed", () => {
+  assert.equal(siteDataOutcome({ cookies: 3, storage: true }), "Cleared 3 cookies and site data");
+  assert.equal(siteDataOutcome({ cookies: 1, storage: true }), "Cleared 1 cookie and site data");
+  assert.equal(siteDataOutcome({ cookies: 0, storage: true }), "Cleared site data");
+  assert.equal(siteDataOutcome({ cookies: 3, storage: false }), "Cleared 3 cookies, but not all site data. Try again");
+  assert.equal(siteDataOutcome({ cookies: 0, storage: false }), "Couldn't clear all of this site's data. Try again");
+  assert.equal(siteDataOutcome({ cookies: false, storage: true }), "Cleared site data, but not its cookies. Try again");
+  assert.equal(siteDataOutcome({ cookies: false, storage: false }), "Couldn't clear this site's data. Try again");
+  assert.equal(siteDataOutcome("failed"), "Couldn't clear this site's data. Try again");
+  assert.deepEqual([siteDataFailed("failed"), siteDataFailed({ cookies: false, storage: false }), siteDataFailed({ cookies: 0, storage: false }), siteDataFailed({ cookies: 2, storage: true })], [true, true, false, false]);
 });

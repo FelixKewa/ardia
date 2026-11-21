@@ -1,5 +1,5 @@
 import { Animated, Pressable, View } from "react-native";
-import { GlassFill, menuRowFill, PANEL, Symbol, Text, useGlass, useHover, useTheme } from "../ui";
+import { HoverFill, menuRowFill, PANEL, Symbol, Text, useGlass, useHover, useTheme } from "../ui";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { DOWNLOADS_LIST } from "./tokens";
 
@@ -20,10 +20,9 @@ export function FooterButton({ title, onPress }: { title: string; onPress: () =>
               borderRadius: PANEL.rowRadius,
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: glass || !(hovered || pressed) ? undefined : menuRowFill(theme, pressed),
             }, scaleStyle]}
           >
-            {glass && (hovered || pressed) ? <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} /> : null}
+            <HoverFill shown={hovered || pressed} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} glass={glass ? (pressed ? "pressed" : "lit") : undefined} />
             <Text tone={hovered ? "textPrimary" : "textSecondary"} style={{ flex: 1 }}>
               {title}
             </Text>
