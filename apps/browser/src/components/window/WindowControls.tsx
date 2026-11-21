@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { Symbol, useHover } from "../ui";
 import { useTheme } from "../ui/theme";
-import { WINDOW_CONTROLS, windowControlsDrawn, windowControlsWidth } from "../../lib/windowChrome";
+import { WINDOW_CONTROLS, windowButtonsChoosable, windowControlsDrawn, windowControlsWidth } from "../../lib/windowChrome";
 import { useWindowButtonStyle } from "../../state/windows/windowButtons";
 import { useWindowMaximized } from "../../state/windows/captionRegions";
 import { WINDOW_BUTTONS } from "./tokens";
@@ -69,7 +69,7 @@ export type WindowControlsProps = {
   leading?: boolean;
 };
 
-export const controlsShown = windowControlsDrawn();
+export const controlsShown = windowControlsDrawn() || windowButtonsChoosable;
 
 export const useControlsShown = (): boolean => {
   useWindowButtonStyle();

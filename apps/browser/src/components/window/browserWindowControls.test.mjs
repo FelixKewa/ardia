@@ -9,3 +9,9 @@ test("the window's own buttons mount nothing where the system draws them, and th
   assert.match(app, /\{browserWindowControls\(\)\}/);
   assert.doesNotMatch(app, /<BrowserWindowControls/);
 });
+
+test("where the window buttons can be chosen the placed controls mount whatever style the window started with, and the buttons themselves follow the live style", () => {
+  const controls = readFileSync(new URL("./WindowControls.tsx", import.meta.url), "utf8");
+  assert.match(controls, /export const controlsShown = windowControlsDrawn\(\) \|\| windowButtonsChoosable;/);
+  assert.match(controls, /const shown = useControlsShown\(\);\n  if \(!shown\) return null;/);
+});

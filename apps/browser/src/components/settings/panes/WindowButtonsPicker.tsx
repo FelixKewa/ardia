@@ -6,8 +6,8 @@ import { windowButtonsChoosable } from "../../../lib/windowChrome";
 import { Group, Row, SectionHeader } from "../Form";
 
 const WINDOW_BUTTON_CHOICES: Option<Settings["windowButtons"]>[] = [
-  { value: "native", title: "Native, top right" },
-  { value: "trafficLights", title: "Traffic lights, top left" },
+  { value: "native", title: "Native" },
+  { value: "trafficLights", title: "Traffic lights" },
   { value: "hidden", title: "Hidden, for tiling window managers" },
 ];
 
