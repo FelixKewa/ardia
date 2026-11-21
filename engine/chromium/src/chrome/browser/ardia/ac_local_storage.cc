@@ -18,6 +18,7 @@
 #include "components/services/storage/public/mojom/local_storage_control.mojom.h"
 #include "content/public/browser/storage_partition.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/dom_storage/storage_area.mojom.h"
 #include "url/gurl.h"
@@ -212,4 +213,24 @@ AC_PROFILE_CALL(ac_local_storage_write, ardia::Sensitive{ardia::kMaxStorageArgsB
                          base::BindOnce(deleted, written, done));
     }
   }
+}
+
+AC_ARGS_CALL(ac_registrable_domains) {
+  constexpr size_t kMaxHosts = 256;
+  const base::ListValue* hosts = call.args().FindList("hosts");
+  if (!hosts || hosts->size() > kMaxHosts) {
+    return call.TakeReply().Error("hosts must be a list of at most 256 names");
+  }
+  base::ListValue domains;
+  for (const base::Value& host : *hosts) {
+    const std::string name = host.is_string() ? host.GetString() : std::string();
+    const GURL url("https://" + name + "/");
+    const std::string domain =
+        url.is_valid() && url.host() == name
+            ? net::registry_controlled_domains::GetDomainAndRegistry(
+                  url, net::registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES)
+            : std::string();
+    domains.Append(domain.empty() ? name : domain);
+  }
+  call.TakeReply().Send(base::DictValue().Set("domains", std::move(domains)));
 }
