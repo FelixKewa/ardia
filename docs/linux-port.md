@@ -888,16 +888,19 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     alone at the right, where the layout rule puts it when no buttons are left: those desktops draw no titlebars and
     close, move and float windows from the keyboard, and Omarchy leaves GTK's layout at GNOME's default. The engine's
     `desktop` (the browser's `XDG_CURRENT_DESKTOP`) decides, a colon list read without case: Hyprland, sway, niri, i3,
-    river, dwl, bspwm, awesome, qtile, xmonad, dwm, herbstluftwm and Regolith (`Regolith:GNOME`, i3 or sway inside) (`apps/linux/src/tilingDesktop.ts`). There the
-    effective layout is empty (`desktopButtonLayout` in `state/windows/windowButtons.ts`, from the `tiling` flag
-    `desktopButtonLayout.ts` sets and remembers), whatever GTK reports, and floating windows follow it too, as Hyprland
-    draws no titlebar on them either. The window's `tiled` state can't decide it: Hyprland 0.56 reports every window,
-    half-width and floating ones included, as maximized and tiled on all four edges, and mutter tiles a maximized window
-    on all four. GNOME, KDE, Cinnamon, XFCE and the rest keep the desktop's layout, maximized or not. Traffic lights and
-    Hidden apply as chosen. An unset or unlisted `XDG_CURRENT_DESKTOP` (sway, dwm or xmonad started from a TTY or
-    `startx`, SwayFX) keeps the desktop's layout; Window buttons › Hidden is the way out there. The snapshot then sends `window_buttons_side: none`, `window_buttons_count: 0` and
-    `window_buttons_tiling_desktop: true`; watch the share of Linux snapshots with it against those whose
-    `setting_windowButtons` is `hidden`, which should fall as tiling users stop needing the setting.
+    river, dwl, bspwm, awesome, qtile, xmonad, dwm, herbstluftwm and Regolith (`Regolith:GNOME`, i3 or sway inside)
+    (`apps/linux/src/tilingDesktop.ts`). There the effective layout is empty (`desktopButtonLayout` in
+    `state/windows/windowButtons.ts`, from the `tiling` flag `desktopButtonLayout.ts` sets and remembers), whatever
+    GTK reports, and floating windows follow it too, as Hyprland draws no titlebar on them either. The window's
+    `tiled` state can't decide it: Hyprland 0.56 reports every window, half-width and floating ones included, as
+    maximized and tiled on all four edges, and mutter tiles a maximized window on all four. GNOME, KDE, Cinnamon, XFCE
+    and the rest keep the desktop's layout, maximized or not. Traffic lights and Hidden apply as chosen. An unset or
+    unlisted `XDG_CURRENT_DESKTOP` (sway, dwm or xmonad started from a TTY or `startx`, SwayFX) keeps the desktop's
+    layout; Window buttons › Hidden is the way out there, and the snapshot sends the desktop's own side and count with
+    `window_buttons_tiling_desktop: false`. On a listed tiling desktop it sends `window_buttons_side: none`,
+    `window_buttons_count: 0` and `window_buttons_tiling_desktop: true`; watch the share of Linux snapshots with it
+    against those whose `setting_windowButtons` is `hidden`, which should fall as tiling users stop needing the
+    setting.
   - **Traffic lights.** Settings › Appearance › Window buttons (`windowButtons`: `native` by default, `trafficLights`
     or `hidden`; kept on this device, in the config file and in the daily settings snapshot) brings back the
     Mac's lights at the top left instead, with the Mac's layouts: no `…` (the hamburger stays in the header), the
