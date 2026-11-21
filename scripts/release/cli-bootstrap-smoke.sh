@@ -32,6 +32,7 @@ stop() {
 }
 cleanup() {
   stop
+  chmod -R u+w "$work" 2>/dev/null || true
   rm -rf "$work"
 }
 trap cleanup EXIT
