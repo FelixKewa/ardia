@@ -46,13 +46,18 @@ export const HEADER_TOOLS = {
   get toggleX() {
     return headerToggleXFor(WINDOW_CHROME);
   },
-  fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, edge: layout.sidebarInset + 1 } as const;
+  fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, plate: 32, edge: layout.sidebarInset + 1 } as const;
+
+export type HeaderToggleState = { windowFullScreen: boolean; pageFullScreen: boolean; controlsRow: boolean };
+
+export function headerToggleXIn({ windowFullScreen, pageFullScreen, controlsRow }: HeaderToggleState, chrome: WindowChrome = WINDOW_CHROME): number {
+  if (windowFullScreen || (chrome.leadingButtons.length && (controlsRow || pageFullScreen))) return FULL_SCREEN_TOGGLE_X;
+  return headerToggleXFor(chrome);
+}
+
+export const headerToggleRightEdge = (toggleX: number) => toggleX + HEADER_TOOLS.plate / 2;
 
 export type HeaderButton = "back" | "forward" | "reload";
-
-export function headerToggleX(windowFullScreen: boolean): number {
-  return windowFullScreen ? HEADER_TOOLS.fullScreenToggleX : HEADER_TOOLS.toggleX;
-}
 
 export function navButtonsFitting(width: number, button = 30, toggle = true, toggleX: number = HEADER_TOOLS.toggleX): { buttons: HeaderButton[]; step: number } {
   const { pitch, edge } = HEADER_TOOLS;

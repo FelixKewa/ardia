@@ -610,7 +610,8 @@ test("the header's tools sit as far past the left group as they sit past the Mac
 
 test("in a narrow right sidebar the header's toggle never lands on the right group, wherever the left buttons push it", async () => {
   const { linuxSidebarCaptionRoom } = await import("./sidebarHeaderLayout.ts");
-  const { sidebarHeaderSplit, toggleRightEdge } = await import("./profileIndicatorLayout.ts");
+  const { sidebarHeaderSplit } = await import("./profileIndicatorLayout.ts");
+  const { headerToggleRightEdge: toggleRightEdge } = await import("../../browser/src/components/window/dockMotion.ts");
   const { headerToggleXFor, HEADER_TOOLS } = await import("../../browser/src/components/window/dockMotion.ts");
   const { nativeButtonsChrome } = await import("../../browser/src/lib/platformChrome.linux.ts");
   const { parseButtonLayout, WINDOW_CONTROLS, windowControlsWidth } = await import("../../browser/src/lib/windowButtonLayout.ts");
@@ -654,4 +655,43 @@ test("sliding away with the sidebar the left group is never left as a live slive
   const lastMoved = { center: [-80, 24], trailing: false };
   assert.ok(leadingControlsInset(lastMoved, 3) + windowControlsWidth(3) > 0, "three buttons at the place where the lights stop would still reach onto the window");
   assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: false, windowFullScreen: false, place: lastMoved }), false, "so they aren't drawn there");
+});
+
+test("the header's toggle takes the edge slot when the left buttons aren't in its row: above an address bar sidebar, or hidden by a full-screen page", async () => {
+  const { sidebarControlsRow, linuxSidebarCaptionRoom, menuBesideWindowButtons } = await import("./sidebarHeaderLayout.ts");
+  const { sidebarHeaderSplit, HEADER_MENU } = await import("./profileIndicatorLayout.ts");
+  const { headerToggleXIn, headerToggleRightEdge: toggleRightEdge, HEADER_TOOLS, navButtonsFitting } = await import("../../browser/src/components/window/dockMotion.ts");
+  const { nativeButtonsChrome, TRAFFIC_LIGHTS_CHROME } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const { parseButtonLayout, WINDOW_CONTROLS, windowControlsWidth } = await import("../../browser/src/lib/windowButtonLayout.ts");
+  const left = nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:"));
+  const slot = { edge: HEADER_TOOLS.edge, button: 30, pitch: HEADER_TOOLS.pitch };
+
+  const leads = state({ addressBar: "sidebar", sidebarWidth: 190 });
+  const controlsRow = sidebarControlsRow(leads, "w", left) > 0;
+  assert.equal(controlsRow, true, "both groups sit in the row above the address bar");
+  const toggleX = headerToggleXIn({ windowFullScreen: false, pageFullScreen: false, controlsRow }, left);
+  assert.equal(toggleX, HEADER_TOOLS.fullScreenToggleX);
+  assert.equal(navButtonsFitting(190 - linuxSidebarCaptionRoom(leads, "w", false, left), 30, true, toggleX).buttons.length, 3, "a 190 px sidebar keeps back, forward and reload");
+
+  for (const sidebarSide of ["left", "right"]) {
+    for (const width of [160, 170]) {
+      const s = state({ addressBar: "sidebar", sidebarSide, sidebarWidth: width });
+      const label = `${sidebarSide} ${width}`;
+      assert.equal(menuBesideWindowButtons(s, "w", true, left), false, `${label}: the full-screen page hides the …, so the header holds the hamburger`);
+      const pageToggle = headerToggleXIn({ windowFullScreen: false, pageFullScreen: true, controlsRow: sidebarControlsRow(s, "w", left) > 0 }, left);
+      assert.equal(pageToggle, HEADER_TOOLS.fullScreenToggleX, label);
+      const split = sidebarHeaderSplit({ width, captionRoom: linuxSidebarCaptionRoom(s, "w", true, left), controls: WINDOW_CONTROLS.edge + windowControlsWidth(left.trailingButtons.length), toggleOnly: toggleRightEdge(pageToggle), menuInHeader: true, slot });
+      assert.ok(split.menuLeft + HEADER_MENU.width <= width, `${label}: the hamburger ends at ${split.menuLeft + HEADER_MENU.width}`);
+      assert.ok(split.menuLeft >= toggleRightEdge(pageToggle), `${label}: and starts after the toggle`);
+    }
+  }
+
+  const normal = { windowFullScreen: false, pageFullScreen: false, controlsRow: false };
+  assert.equal(headerToggleXIn(normal, left), 70.75 + 27 + left.leadingWidth - 78, "with the left buttons in the header row the toggle sits after them");
+  assert.equal(headerToggleXIn({ ...normal, windowFullScreen: true }, left), HEADER_TOOLS.fullScreenToggleX);
+  for (const chrome of [TRAFFIC_LIGHTS_CHROME, nativeButtonsChrome(parseButtonLayout(":minimize,maximize,close"))]) {
+    for (const state of [normal, { ...normal, pageFullScreen: true }, { ...normal, controlsRow: true }]) {
+      assert.equal(headerToggleXIn(state, chrome), chrome.leadingWidth ? 97.75 : HEADER_TOOLS.fullScreenToggleX, "chromes without left buttons keep today's toggle");
+    }
+  }
 });

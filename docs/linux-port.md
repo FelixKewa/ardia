@@ -876,7 +876,10 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     Ardia's bar, Settings' sidebar). It holds only window buttons. Like the lights it slides away with a hidden sidebar
     and hides in full screen. Known limit: with the sidebar hidden, a desktop whose buttons are all at the left shows
     none until the sidebar peeks (the `…` stays at the right); giving the toolbar room at its left for them is a
-    follow-up.
+    follow-up. The same holds for top tabs with auto-hide: the hidden strip parks the lights' place off the window
+    and its peek is a floating strip that places none, so the left buttons don't come back while it peeks. The header's
+    toggle takes the edge slot whenever the left buttons aren't in its row (`headerToggleXIn`): above an address bar
+    sidebar, where both groups sit in the controls row, and while a full-screen page hides them.
     With the address bar in a left sidebar and both groups, the right group sits at the sidebar's right end of the row
     atop it (`windowControlsInset`). A change wakes every window-settings hook (`onWindowChromeChange`). Traffic
     lights and Hidden ignore the layout. The daily settings snapshot carries `window_buttons_side` (right, left, both,
