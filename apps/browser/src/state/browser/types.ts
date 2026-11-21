@@ -18,6 +18,7 @@ export type Profile = {
   dataId?: string;
   theme?: ProfileTheme | null;
   presetThemes?: PresetThemes;
+  seenTheme?: ProfileTheme | null;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
   syncTabs?: true;

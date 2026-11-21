@@ -70,13 +70,26 @@ export function editedPresetCount(profile: PresetLookFields): number {
   return Object.keys(ownLooksOf(profile)).length;
 }
 
-export function withOwnLooksSeeded<T extends PresetLookFields>(profile: T): T {
-  if (profile.presetThemes !== undefined) return profile;
-  return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {} };
+export function withOwnLooksSeeded<T extends PresetLookFields & { seenTheme?: ProfileTheme | null }>(profile: T): T {
+  if (profile.presetThemes === undefined) return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {} };
+  const changedElsewhere = profile.theme && profile.seenTheme !== undefined && JSON.stringify(profile.theme) !== JSON.stringify(profile.seenTheme);
+  return changedElsewhere ? { ...profile, presetThemes: { ...profile.presetThemes, [profile.color]: profile.theme! }, seenTheme: profile.theme } : profile;
 }
 
 export const profilesWithOwnLooks = <T extends PresetLookFields>(profiles: Record<string, T>): Record<string, T> =>
   Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, withOwnLooksSeeded(profile)]));
+
+export function trackPress() {
+  let armed = false;
+  return {
+    grant(trackPixels: number) {
+      armed = trackPixels > 0;
+    },
+    at(pageX: number, trackX: number, trackPixels: number, snapTo: number | undefined): number | null {
+      return armed ? trackValueAt(pageX, trackX, trackPixels, snapTo) : null;
+    },
+  };
+}
 
 export function trackValueAt(pageX: number, trackX: number, trackPixels: number, snapTo: number | undefined): number | null {
   if (!(trackPixels > 0)) return null;

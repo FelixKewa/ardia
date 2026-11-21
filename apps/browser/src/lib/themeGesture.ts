@@ -5,6 +5,7 @@ export type ThemeEdit = { theme: ProfileTheme | null; target: string };
 type Deps = {
   apply: (theme: ProfileTheme | null) => void;
   showing: () => string;
+  current: () => unknown;
   draft: (edit: ThemeEdit | null) => void;
   requestFrame: (run: () => void) => number;
   cancelFrame: (handle: number) => void;
@@ -15,6 +16,7 @@ export function themeGesture(deps: Deps) {
   let frame: number | null = null;
   let gesture: string | null = null;
   let cancelled = false;
+  let expected: unknown;
   const stopFrame = () => {
     if (frame !== null) deps.cancelFrame(frame);
     frame = null;
@@ -23,7 +25,14 @@ export function themeGesture(deps: Deps) {
     frame = null;
     const edit = pending;
     pending = undefined;
-    if (edit && edit.target === deps.showing()) deps.apply(edit.theme);
+    if (!edit) return;
+    if (edit.target !== deps.showing() || deps.current() !== expected) {
+      cancelled = true;
+      deps.draft(null);
+      return;
+    }
+    deps.apply(edit.theme);
+    expected = deps.current();
   };
   const drop = () => {
     stopFrame();
@@ -32,9 +41,11 @@ export function themeGesture(deps: Deps) {
   };
   return {
     begin(target: string) {
+      if (gesture === null) expected = deps.current();
       gesture ??= target;
     },
     change(theme: ProfileTheme | null, target: string, settle = false) {
+      if (gesture === null) expected = deps.current();
       gesture ??= target;
       if (cancelled || gesture !== target || deps.showing() !== target) {
         drop();

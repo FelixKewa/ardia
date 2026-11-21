@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { colorHex, flatColors, lookAngle, PAD_LIGHTNESS, padColor, stopLightness, themeGrainAlpha, themeLayerAlpha, themeUnderColor, withStopAt, withStopLightness, type ShownLook, type ThemeStop } from "../../lib/profileLook";
-import { snapPointToStart, trackValueAt } from "../../lib/presetLook";
+import { snapPointToStart, trackPress } from "../../lib/presetLook";
 import type { ProfileTheme } from "../../state/browser/types";
 import { Box, capsule, Dot, ink, ProgressTrack, radius, tabularNums, Text, ThemeSwatch, useTheme } from "../ui";
 import { MiniWindow } from "./MiniWindow";
@@ -277,8 +277,9 @@ function Track({
   const ref = useRef<View>(null);
   const frame = useRef({ x: 0, width: 0 });
   const measure = () => ref.current?.measureInWindow((x, _y, width) => (frame.current = { x, width }));
+  const press = useRef(trackPress()).current;
   const report = (e: GestureResponderEvent, settle: boolean) => {
-    const value = trackValueAt(e.nativeEvent.pageX, frame.current.x, frame.current.width, snapTo);
+    const value = press.at(e.nativeEvent.pageX, frame.current.x, frame.current.width, snapTo);
     if (value !== null) onChange(value, settle);
   };
   return (
@@ -289,6 +290,7 @@ function Track({
       style={{ paddingHorizontal: THUMB / 2 }}
       onStartShouldSetResponder={() => true}
       onResponderGrant={(e) => {
+        press.grant(frame.current.width);
         measure();
         report(e, false);
       }}

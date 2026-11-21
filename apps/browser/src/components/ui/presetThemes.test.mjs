@@ -162,3 +162,22 @@ test("a control lands on the preset's start only within half a pixel of it, and 
     assert.ok(isUntouched(look_.withStopAt(s0, 0, snapped.x, snapped.y), s0), `${color}: dragged back onto its start`);
   }
 });
+
+test("a theme changed by 0.2.47 after this version saved is taken as this Mac's own look of that preset on the way back", () => {
+  const { withOwnLooksSeeded } = look_;
+  const saved = { color: "plum", theme: EDIT_B, presetThemes: { plum: EDIT_A }, seenTheme: EDIT_A };
+  assert.deepEqual(withOwnLooksSeeded(saved).presetThemes, { plum: EDIT_B }, "0.2.47 changed the theme, so its look is the newest own look of plum");
+  const untouched = { color: "plum", theme: EDIT_A, presetThemes: { plum: EDIT_A, blue: EDIT_B }, seenTheme: EDIT_A };
+  assert.equal(withOwnLooksSeeded(untouched), untouched, "a theme this version last saw is left alone");
+  const synced = { color: "plum", theme: EDIT_B, presetThemes: { plum: EDIT_A }, seenTheme: EDIT_B };
+  assert.equal(withOwnLooksSeeded(synced), synced, "a synced look this version saw shown stays out of the own looks");
+});
+
+test("a press that starts before its track is measured is ignored to its release", () => {
+  const { trackPress } = look_;
+  const press = trackPress();
+  press.grant(0);
+  assert.equal(press.at(220, 100, 120, 0.6), null, "the track measured later doesn't revive the press");
+  press.grant(120);
+  assert.equal(press.at(220, 100, 120, 0.6), 1, "the next press works");
+});

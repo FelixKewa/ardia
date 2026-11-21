@@ -9,10 +9,11 @@ function rig(showing = "p:plum") {
   const applied = [];
   const frames = new Map();
   let next = 1;
-  const state = { showing, draft: null };
+  const state = { showing, draft: null, current: {} };
   const g = themeGesture({
-    apply: (theme) => applied.push([state.showing, theme?.intensity ?? null]),
+    apply: (theme) => (applied.push([state.showing, theme?.intensity ?? null]), (state.current = {})),
     showing: () => state.showing,
+    current: () => state.current,
     draft: (edit) => void (state.draft = edit),
     requestFrame: (run) => (frames.set(next, run), next++),
     cancelFrame: (handle) => void frames.delete(handle),
@@ -124,4 +125,15 @@ test("a selection change with no drag going leaves the next gesture alone", () =
   g.selectionChanged();
   g.change(look(0.3), "p:plum", true);
   assert.deepEqual(applied, [["p:plum", 0.3]]);
+});
+
+test("a look changed from outside during a drag, as a command-line reset, cancels the drag's waiting frame and the rest of it", () => {
+  const { g, applied, state, tick } = rig();
+  g.change(look(0.1), "p:plum");
+  state.current = {};
+  tick();
+  g.change(look(0.2), "p:plum", true);
+  assert.deepEqual(applied, []);
+  g.change(look(0.3), "p:plum", true);
+  assert.deepEqual(applied, [["p:plum", 0.3]], "the next gesture works");
 });

@@ -78,7 +78,8 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     setProfileLook(id, look) {
-      set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: { ...s.profiles[id]!, ...look } } } : {}));
+      const seen = "theme" in look ? { seenTheme: look.theme } : {};
+      set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: { ...s.profiles[id]!, ...look, ...seen } } } : {}));
     },
 
     deleteProfile(id) {

@@ -13,6 +13,8 @@ export function setProfileTheme(profileId: string, theme: ProfileTheme | null, a
   useBrowser.getState().setProfileLook(profileId, withOwnLook(profile, theme));
 }
 
+export const showingTheme = (profileId: string): ProfileTheme | null | undefined => useBrowser.getState().profiles[profileId]?.theme;
+
 export const showingPreset = (profileId: string): ProfileColor => useBrowser.getState().profiles[profileId]?.color ?? "plum";
 
 export function choosePresetColor(profileId: string, color: ProfileColor, adopt = adoptProfileTheme) {

@@ -1,4 +1,4 @@
-import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPresetTheme, setProfileTheme, showingPreset } from "../../state/profiles/themeActions";
+import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPresetTheme, setProfileTheme, showingPreset, showingTheme } from "../../state/profiles/themeActions";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { flatColors, lookAngle, MAX_THEME_STOPS, requestedDarkFor, resolveTheme, shownLook, themeAccent, withAddedStop, withAngle, withoutStop, spaceLookSource, stopLightness, type PresetLookFields, type ShownLook } from "../../lib/profileLook";
@@ -35,6 +35,7 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
   gesture.current ??= themeGesture({
     apply: (next) => applyLatest.current(next),
     showing: () => showingLatest.current(),
+    current: () => showingTheme(profileId),
     draft: setDraft,
     requestFrame: requestAnimationFrame,
     cancelFrame: cancelAnimationFrame,
