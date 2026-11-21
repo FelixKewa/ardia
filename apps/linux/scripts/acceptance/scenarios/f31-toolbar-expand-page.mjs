@@ -6,7 +6,9 @@ import { js, pause } from "../lib/util.mjs";
 const TAB = "main-tab-0";
 const PAGE_SHOWN = "((status) => !!status && status.acked === status.sequence && (status.sent?.pages.length ?? 0) > 0)(ardiaLinux.inputRegions()?.status())";
 const REGION = '[data-testid="ardia-auto-hide-toolbar"]';
-const TRIGGERS = { hover: ["peek"], scroll: ["shown"], click: ["shown"], "a peek scrolled open and cut short": ["peek", "shown"] };
+const SETTLED_OPEN_MS = 150;
+const CUT_SHORT = "a peek scrolled open and cut short";
+const TRIGGERS = { hover: ["peek"], scroll: ["shown"], click: ["shown"], [CUT_SHORT]: ["peek", "shown"] };
 
 export default {
   id: "F31",
@@ -45,7 +47,7 @@ export default {
         await reveal();
         await pause(900);
       },
-      async "a peek scrolled open and cut short"() {
+      async [CUT_SHORT]() {
         await move(await strip());
         await pause(900);
         await reveal();
@@ -66,7 +68,7 @@ export default {
         await move(await middle());
         await collapse();
         await shell.eval(`(() => {
-          const record = globalThis.toolbarExpandRecord = { sent: [], regionRequests: 0, modes: [], stopped: false };
+          const record = globalThis.toolbarExpandRecord = { sent: [], regionRequests: 0, modes: [], shownFor: [], stopped: false };
           const send = chrome.send.bind(chrome);
           chrome.send = (name, params) => {
             const call = name === "ardiaRequest" ? params?.[2] : undefined;
@@ -78,7 +80,10 @@ export default {
           const unsubscribe = ardiaLinux.toolbar.subscribe((t) => {
             if (record.stopped) return void (unsubscribe(), (chrome.send = send));
             const mode = modeOf(t);
-            if (record.modes.at(-1) !== mode) record.modes.push(mode);
+            if (record.modes.at(-1) === mode) return;
+            if (record.modes.at(-1) === "shown") record.shownFor.push(performance.now() - record.shownAt);
+            if (mode === "shown") record.shownAt = performance.now();
+            record.modes.push(mode);
           });
           record.modes.push(modeOf(ardiaLinux.toolbar.getState()));
           return true;
@@ -92,6 +97,7 @@ export default {
         await t.evidence(`viewports-${trigger}`, record);
         await t.screenshot(shell, `expanded-${trigger}`);
         assert.deepEqual(record.modes.filter((mode) => mode !== "collapsed"), [...opened, ...opened], `the toolbar must open as ${opened.join(" then ")} twice: ${js(record.modes)}`);
+        if (trigger === CUT_SHORT) assert.ok(record.shownFor.every((ms) => ms < SETTLED_OPEN_MS), `the opening must be cut short before it settles: ${js(record.shownFor)}`);
         if (opened.join() === "shown") assert.ok(record.sent.length > 0, "the page moving down must reach the recorder as viewport requests");
         assert.ok(record.regionRequests > 0, "the shell's host requests must be read by the recorder");
         assert.ok(!record.sent.includes(false), `the page was hidden while the toolbar opened or folded: ${js(record.sent)}`);
