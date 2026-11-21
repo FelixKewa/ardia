@@ -296,7 +296,7 @@ function Track({
       }}
       onResponderMove={(e) => report(e, false)}
       onResponderRelease={(e) => report(e, true)}
-      onResponderTerminate={() => onChange(value, true)}
+      onResponderTerminate={() => press.armed() && onChange(value, true)}
     >
       <View ref={ref} style={{ height: 20, justifyContent: "center" }}>
         {bar}

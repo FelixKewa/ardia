@@ -11,7 +11,10 @@ export function adoptSetupChoices(choices: SetupChoices, lines: string[]) {
       delete draft[key as keyof Settings];
       delete baseline[key as keyof Settings];
     }
-    if (choices.color) delete baseline.color;
+    if (choices.color) {
+      delete baseline.color;
+      delete baseline.looks;
+    }
     return {
       preset: choices.preset ?? o.preset,
       source: null,

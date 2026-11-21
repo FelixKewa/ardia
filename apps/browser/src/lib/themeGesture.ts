@@ -62,6 +62,7 @@ export function themeGesture(deps: Deps) {
         stopFrame();
         flush();
         gesture = null;
+        cancelled = false;
       } else if (frame === null) frame = deps.requestFrame(flush);
     },
     selectionChanged() {

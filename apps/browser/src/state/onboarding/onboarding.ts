@@ -69,7 +69,8 @@ export type Extras = {
   login: boolean;
 };
 
-type LiveBaseline = Partial<Settings> & { color?: ProfileColor; theme?: ProfileTheme | null; presetThemes?: PresetThemes; lookProfileId?: string };
+type ProfileLookBaseline = { color: ProfileColor; theme: ProfileTheme | null; presetThemes: PresetThemes | undefined };
+type LiveBaseline = Partial<Settings> & { color?: ProfileColor; looks?: Record<string, ProfileLookBaseline> };
 
 type Prefill = "preset" | "current";
 
@@ -199,9 +200,10 @@ export function previewTheme(theme: ProfileTheme | null) {
 
 function recordLookBaseline(profileId: string) {
   const { baseline } = useOnboarding.getState();
-  if ("color" in baseline) return;
   const profile = useBrowser.getState().profiles[profileId];
-  useOnboarding.setState({ baseline: { ...baseline, color: profile?.color, theme: profile?.theme ?? null, presetThemes: profile?.presetThemes, lookProfileId: profileId } });
+  if (!profile || baseline.looks?.[profileId]) return;
+  const look = { color: profile.color, theme: profile.theme ?? null, presetThemes: profile.presetThemes };
+  useOnboarding.setState({ baseline: { ...baseline, ...("color" in baseline ? {} : { color: profile.color }), looks: { ...baseline.looks, [profileId]: look } } });
 }
 
 export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, picked: string[]) {
@@ -212,9 +214,7 @@ export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, pi
   for (const key of Object.keys(patch)) delete kept[key as keyof LiveBaseline];
   if (question === "color") {
     delete kept.color;
-    delete kept.theme;
-    delete kept.presetThemes;
-    delete kept.lookProfileId;
+    delete kept.looks;
   }
   const all = { ...useOnboarding.getState().picked, [question]: picked };
   useOnboarding.setState({ baseline: kept, picked: all });
@@ -233,7 +233,7 @@ export function skipStep() {
   const rest = questionsFor(step).slice(sub);
   const keys = rest.flatMap((q) => q.keys);
   noteOnboarding("stepSkipped");
-  revertLive([...keys, ...(rest.some((q) => q.id === "color") ? (["color", "theme", "presetThemes", "lookProfileId"] as const) : [])]);
+  revertLive([...keys, ...(rest.some((q) => q.id === "color") ? (["color", "looks"] as const) : [])]);
   useOnboarding.setState((s) => {
     const draft = { ...s.draft };
     for (const key of keys) delete draft[key];
@@ -248,13 +248,11 @@ function revertLive(keys: readonly (keyof LiveBaseline)[]) {
   const { windowId, baseline } = useOnboarding.getState();
   const restore = Object.fromEntries(keys.filter((k) => k in baseline).map((k) => [k, baseline[k]])) as LiveBaseline;
   if (!Object.keys(restore).length) return;
-  const { color, theme, presetThemes, lookProfileId, tabLayout, ...rest } = restore;
+  const { color: _color, looks, tabLayout, ...rest } = restore;
   const b = useBrowser.getState();
-  const window = windowId ? b.windows[windowId] : undefined;
   if (tabLayout && windowId) setWindowLayout(windowId, tabLayout);
   if (Object.keys(rest).length) b.updateSettings(rest, { fromSync: true });
-  const owner = lookProfileId ?? window?.profileId;
-  if ((color || "theme" in restore) && owner && b.profiles[owner]) b.setProfileLook(owner, { ...(color ? { color } : {}), ...("theme" in restore ? { theme, presetThemes } : {}) });
+  for (const [id, look] of Object.entries(looks ?? {})) if (b.profiles[id]) b.setProfileLook(id, look);
   const kept = { ...baseline };
   for (const key of keys) delete kept[key];
   useOnboarding.setState({ baseline: kept });

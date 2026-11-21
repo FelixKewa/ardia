@@ -27,3 +27,23 @@ test("skipping the colour step after the window changed profile puts the look ba
   assert.deepEqual(S().profiles[personal].presetThemes, { plum: look(0.1) });
   useOnboarding.setState({ windowId: null, leaving: false, redo: false });
 });
+
+test("previewing in Personal, switching the window to Work and resetting Work's edited preset, then Skip, leaves Work's saved look intact", () => {
+  const windowId = S().createWindow();
+  const personal = S().windows[windowId].profileId;
+  S().setProfileLook(personal, { color: "plum", theme: null, presetThemes: {} });
+  const work = S().createProfile({ name: "Work 2", color: "blue" });
+  S().setProfileLook(work, { theme: look(0.9), presetThemes: { blue: look(0.9) } });
+  startOnboarding(windowId, "source");
+  chooseSource("fresh");
+  goToStep("look");
+  previewTheme(look(0.5));
+  useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: work } } }));
+  previewTheme(null);
+  assert.equal(S().profiles[work].theme, null, "the reset previews on Work");
+  skipStep();
+  assert.deepEqual(S().profiles[work].theme, look(0.9), "Skip puts Work's look back");
+  assert.deepEqual(S().profiles[work].presetThemes, { blue: look(0.9) }, "and its saved looks");
+  assert.equal(S().profiles[personal].theme, null, "Personal's preview is undone too");
+  useOnboarding.setState({ windowId: null, leaving: false, redo: false });
+});

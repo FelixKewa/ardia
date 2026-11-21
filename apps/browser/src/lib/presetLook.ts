@@ -71,9 +71,11 @@ export function editedPresetCount(profile: PresetLookFields): number {
 }
 
 export function withOwnLooksSeeded<T extends PresetLookFields & { seenTheme?: ProfileTheme | null }>(profile: T): T {
-  if (profile.presetThemes === undefined) return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {} };
-  const changedElsewhere = profile.theme && profile.seenTheme !== undefined && JSON.stringify(profile.theme) !== JSON.stringify(profile.seenTheme);
-  return changedElsewhere ? { ...profile, presetThemes: { ...profile.presetThemes, [profile.color]: profile.theme! }, seenTheme: profile.theme } : profile;
+  if (profile.presetThemes === undefined) return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {}, seenTheme: profile.theme ?? null };
+  const shown = profile.theme ?? null;
+  if (profile.seenTheme === undefined || JSON.stringify(shown) === JSON.stringify(profile.seenTheme)) return profile;
+  const { [profile.color]: _replaced, ...others } = profile.presetThemes;
+  return { ...profile, presetThemes: shown ? { ...others, [profile.color]: shown } : others, seenTheme: shown };
 }
 
 export const profilesWithOwnLooks = <T extends PresetLookFields>(profiles: Record<string, T>): Record<string, T> =>
@@ -82,6 +84,7 @@ export const profilesWithOwnLooks = <T extends PresetLookFields>(profiles: Recor
 export function trackPress() {
   let armed = false;
   return {
+    armed: () => armed,
     grant(trackPixels: number) {
       armed = trackPixels > 0;
     },

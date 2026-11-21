@@ -31,11 +31,13 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
   applyLatest.current = apply;
   const showingLatest = useRef(showing);
   showingLatest.current = showing;
+  const profileLatest = useRef(profileId);
+  profileLatest.current = profileId;
   const gesture = useRef<ReturnType<typeof themeGesture> | null>(null);
   gesture.current ??= themeGesture({
     apply: (next) => applyLatest.current(next),
     showing: () => showingLatest.current(),
-    current: () => showingTheme(profileId),
+    current: () => showingTheme(profileLatest.current),
     draft: setDraft,
     requestFrame: requestAnimationFrame,
     cancelFrame: cancelAnimationFrame,

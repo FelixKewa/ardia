@@ -137,3 +137,13 @@ test("a look changed from outside during a drag, as a command-line reset, cancel
   g.change(look(0.3), "p:plum", true);
   assert.deepEqual(applied, [["p:plum", 0.3]], "the next gesture works");
 });
+
+test("a release after an outside change drops the drag and leaves the next gesture working", () => {
+  const { g, applied, state } = rig();
+  g.change(look(0.1), "p:plum");
+  state.current = {};
+  g.change(look(0.2), "p:plum", true);
+  assert.deepEqual(applied, []);
+  g.change(look(0.3), "p:plum", true);
+  assert.deepEqual(applied, [["p:plum", 0.3]], "the next click lands");
+});

@@ -181,3 +181,20 @@ test("a press that starts before its track is measured is ignored to its release
   press.grant(120);
   assert.equal(press.at(220, 100, 120, 0.6), 1, "the next press works");
 });
+
+test("a downgrade round trip after the first migration, and a reset made on 0.2.47, both come back as made", () => {
+  const { withOwnLooksSeeded } = look_;
+  const first = withOwnLooksSeeded({ color: "plum", theme: EDIT_A });
+  assert.deepEqual(first.seenTheme, EDIT_A, "the first migration records what it saw");
+  assert.deepEqual(withOwnLooksSeeded({ ...first, theme: EDIT_B }).presetThemes, { plum: EDIT_B }, "an edit made on 0.2.47 after that is the newest own look");
+  assert.deepEqual(withOwnLooksSeeded({ ...first, theme: null }).presetThemes, {}, "a reset made on 0.2.47 clears the own look");
+});
+
+test("a press that was never armed doesn't commit when it's taken away", () => {
+  const { trackPress } = look_;
+  const press = trackPress();
+  press.grant(0);
+  assert.equal(press.armed(), false);
+  press.grant(120);
+  assert.equal(press.armed(), true);
+});
