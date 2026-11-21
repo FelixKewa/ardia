@@ -12,6 +12,11 @@ export const linuxControlsBehaviour = ({ pageFullScreen, hidden, utility, window
 });
 
 const CAPTION_BUTTON = '[role="button"]';
+const TRAFFIC_LIGHT = ".ardia-window-control";
 
-export const pressKeepsFocusWhereItWas = (event: { button: number; target: unknown }): boolean =>
-  event.button === 0 && !!event.target && typeof event.target === "object" && "closest" in event.target && !!(event.target as Element).closest(CAPTION_BUTTON);
+const primaryPressOn = (selector: string) => (event: { button: number; target: unknown }): boolean =>
+  event.button === 0 && !!event.target && typeof event.target === "object" && "closest" in event.target && !!(event.target as Element).closest(selector);
+
+export const pressKeepsFocusWhereItWas = primaryPressOn(CAPTION_BUTTON);
+
+export const lightPressKeepsFocusWhereItWas = primaryPressOn(TRAFFIC_LIGHT);

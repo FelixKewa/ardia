@@ -1,4 +1,4 @@
-import { TrafficLight, trafficLightPosition, useTrafficLightsPlace } from "./shims/web/windowChrome";
+import { TrafficLight, trafficLightPosition, trafficLightsOffWindow, useTrafficLightsPlace } from "./shims/web/windowChrome";
 import { reportHostError } from "./host";
 import { isLinuxUtility } from "./session";
 import { linuxWindowMenu } from "./linuxWindowMenu";
@@ -7,7 +7,7 @@ import { useBrowser } from "../../browser/src/state/browser/store";
 import { useFullscreenTab } from "../../browser/src/state/tabs/pageState";
 import { useWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
 import { useWindowFullScreen } from "../../browser/src/state/browser/hooks";
-import { trafficLightsShown } from "./windowControlsRules";
+import { lightPressKeepsFocusWhereItWas, trafficLightsShown } from "./windowControlsRules";
 
 const controls = [
   { light: "close", label: "Close window", press: closeFromWindowControls },
@@ -23,7 +23,9 @@ export function TrafficLights({ windowId }: { windowId: string }) {
   const style = useWindowButtonStyle();
   if (!trafficLightsShown({ style, pageFullScreen, windowFullScreen })) return null;
   return (
-    <div className="ardia-traffic-lights" aria-label="Window controls" role="group" onContextMenu={(e) => {
+    <div className="ardia-traffic-lights" aria-label="Window controls" role="group" inert={trafficLightsOffWindow(place) || undefined} onMouseDown={(e) => {
+      if (lightPressKeepsFocusWhereItWas(e)) e.preventDefault();
+    }} onContextMenu={(e) => {
       if (!linuxWindowMenu || isLinuxUtility(windowId)) return;
       e.preventDefault();
       void linuxWindowMenu.open(windowId).catch(reportHostError);

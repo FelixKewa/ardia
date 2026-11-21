@@ -475,6 +475,25 @@ test("a primary-button press on a window button leaves focus where it was; other
   assert.equal(pressKeepsFocusWhereItWas({ button: 0, target: null }), false);
 });
 
+test("a primary press on a traffic light leaves keyboard focus where it was, and lights slid off the window can't be reached with Tab", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { lightPressKeepsFocusWhereItWas } = await import("./windowControlsRules.ts");
+  const { trafficLightsOffWindow } = await import("./shims/web/windowChrome.tsx");
+  const light = { closest: (selector) => (selector === ".ardia-window-control" ? {} : null) };
+  const caption = { closest: (selector) => (selector === '[role="button"]' ? {} : null) };
+  assert.equal(lightPressKeepsFocusWhereItWas({ button: 0, target: light }), true);
+  assert.equal(lightPressKeepsFocusWhereItWas({ button: 2, target: light }), false, "a right press still opens the window menu");
+  assert.equal(lightPressKeepsFocusWhereItWas({ button: 0, target: caption }), false);
+  assert.equal(lightPressKeepsFocusWhereItWas({ button: 0, target: null }), false);
+  assert.equal(trafficLightsOffWindow({ center: [25, 27], trailing: false }), false);
+  assert.equal(trafficLightsOffWindow({ center: [-165, 27], trailing: false }), true, "a hidden left sidebar takes its lights with it");
+  assert.equal(trafficLightsOffWindow({ center: [25, 27], trailing: true }), false);
+  assert.equal(trafficLightsOffWindow({ center: [-40, 27], trailing: true }), true, "and a hidden right sidebar too");
+  const lights = readFileSync(new URL("./TrafficLights.tsx", import.meta.url), "utf8");
+  assert.match(lights, /inert=\{trafficLightsOffWindow\(place\) \|\| undefined\}/);
+  assert.match(lights, /onMouseDown=\{\(e\) => \{\n\s*if \(lightPressKeepsFocusWhereItWas\(e\)\) e\.preventDefault\(\);/);
+});
+
 test("a right or middle press on the … neither anchors nor toggles its menu", async () => {
   const h = clusterHarness();
   await h.load();
