@@ -6,7 +6,7 @@ import { js, pause } from "../lib/util.mjs";
 const TAB = "main-tab-0";
 const PAGE_SHOWN = "((status) => !!status && status.acked === status.sequence && (status.sent?.pages.length ?? 0) > 0)(ardiaLinux.inputRegions()?.status())";
 const REGION = '[data-testid="ardia-auto-hide-toolbar"]';
-const TRIGGERS = ["hover", "scroll", "click"];
+const TRIGGERS = { hover: "peek", scroll: "shown", click: "shown" };
 
 export default {
   id: "F31",
@@ -51,16 +51,17 @@ export default {
         await pause(900);
       },
     };
-    for (const trigger of TRIGGERS) {
+    for (const [trigger, opened] of Object.entries(TRIGGERS)) {
       await t.check(`the page is never hidden while the hidden toolbar opens by ${trigger} and folds away`, async () => {
         await move(await middle());
         await collapse();
         await shell.eval(`(() => {
-          const record = globalThis.toolbarExpandRecord = { sent: [], modes: [], stopped: false };
+          const record = globalThis.toolbarExpandRecord = { sent: [], regionRequests: 0, modes: [], stopped: false };
           const send = chrome.send.bind(chrome);
           chrome.send = (name, params) => {
             const call = name === "ardiaRequest" ? params?.[2] : undefined;
             if (call?.method === "tab.viewport") record.sent.push(call.args.visible);
+            if (call?.method === "shell.inputRegions" && Array.isArray(call.args?.overlays)) record.regionRequests++;
             return send(name, params);
           };
           const sample = () => {
@@ -81,7 +82,8 @@ export default {
         const record = await shell.eval("(() => { const { stopped, ...r } = globalThis.toolbarExpandRecord; globalThis.toolbarExpandRecord.stopped = true; return r; })()");
         await t.evidence(`viewports-${trigger}`, record);
         await t.screenshot(shell, `expanded-${trigger}`);
-        assert.ok(record.modes.filter((mode) => mode !== "collapsed").length >= 2, `the toolbar must expand twice: ${js(record.modes)}`);
+        assert.deepEqual(record.modes.filter((mode) => mode !== "collapsed"), [opened, opened], `the toolbar must open as ${opened} twice: ${js(record.modes)}`);
+        assert.ok(record.regionRequests > 0, "the shell's host requests must be read by the recorder");
         assert.ok(!record.sent.includes(false), `the page was hidden while the toolbar opened or folded: ${js(record.sent)}`);
         await shell.waitFor(PAGE_SHOWN, { timeout: 5000, label: "the page still shown after the expansions" });
         return { viewports: record.sent.length, modes: record.modes };
