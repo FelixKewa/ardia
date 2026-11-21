@@ -262,13 +262,14 @@ AC_PROFILE_CALL(ac_extension_alarms_watch, ardia::OffTheRecord::kAllow) {
     return;
   }
   const bool on = call.Bool("on", true);
-  if (on && ardia::mirror::ForPrivateSession(call)) {
+  if (ardia::mirror::ForPrivateSession(call)) {
     scoped_refptr<const extensions::Extension> extension =
-        ardia::mirror::CallerExtension(call, reply);
-    if (!extension) {
+        on ? ardia::mirror::CallerExtension(call, reply)
+           : ardia::mirror::EnabledExtension(ardia::mirror::PrimaryProfile(call), id);
+    if (on && !extension) {
       return;
     }
-    if (ardia::SplitModePrivate(call, extension.get())) {
+    if (extension && ardia::SplitModePrivate(call, extension.get())) {
       reply.Error(ardia::kSplitModePrivate);
       return;
     }

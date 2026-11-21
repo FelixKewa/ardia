@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/barrier_closure.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
@@ -138,8 +137,6 @@ struct StorageChange {
   std::optional<std::u16string> value;
 };
 
-using AreaRef = base::RefCountedData<mojo::Remote<blink::mojom::StorageArea>>;
-using WriteCount = base::RefCountedData<int>;
 using StoredItem = std::pair<std::vector<uint8_t>, std::vector<uint8_t>>;
 
 std::vector<StorageChange> LastChangePerKey(std::vector<StorageChange> changes) {
@@ -157,64 +154,87 @@ std::vector<StorageChange> LastChangePerKey(std::vector<StorageChange> changes) 
   return kept;
 }
 
-void Written(scoped_refptr<AreaRef> area,
-             scoped_refptr<WriteCount> written,
-             base::RepeatingClosure done,
-             std::optional<StoredItem> legacy,
-             bool success) {
-  if (success) {
-    ++written->data;
-    done.Run();
-    return;
-  }
-  if (!legacy) {
-    done.Run();
-    return;
-  }
-  area->data->Put(std::move(legacy->first), std::move(legacy->second), std::nullopt, nullptr,
-                  base::BindOnce([](base::RepeatingClosure done, bool) { done.Run(); },
-                                 std::move(done)));
-}
+class StorageWrite : public base::RefCounted<StorageWrite> {
+ public:
+  StorageWrite(mojo::Remote<blink::mojom::StorageArea> area,
+               std::vector<StorageChange> changes,
+               Reply reply)
+      : area_(std::move(area)), changes_(std::move(changes)), reply_(std::move(reply)) {}
 
-void ApplyChanges(scoped_refptr<AreaRef> area,
-                  std::vector<StorageChange> changes,
-                  Reply reply,
-                  std::vector<blink::mojom::KeyValuePtr> data) {
-  std::map<std::vector<uint8_t>, std::vector<uint8_t>> stored;
-  for (blink::mojom::KeyValuePtr& entry : data) {
-    stored.emplace(std::move(entry->key), std::move(entry->value));
+  static void Start(scoped_refptr<StorageWrite> write) {
+    blink::mojom::StorageArea* area = write->area_.get();
+    area->GetAll(mojo::NullRemote(), base::BindOnce(&StorageWrite::Read, std::move(write)));
   }
-  auto written = base::MakeRefCounted<WriteCount>(0);
-  base::RepeatingClosure done = base::BarrierClosure(
-      changes.size(),
-      base::BindOnce(
-          [](scoped_refptr<AreaRef>, scoped_refptr<WriteCount> written, Reply reply) {
-            reply.Send(base::DictValue().Set("written", written->data));
-          },
-          area, written, std::move(reply)));
-  for (const StorageChange& change : changes) {
+
+ private:
+  friend class base::RefCounted<StorageWrite>;
+  ~StorageWrite() = default;
+
+  static void Read(scoped_refptr<StorageWrite> write,
+                   std::vector<blink::mojom::KeyValuePtr> data) {
+    for (blink::mojom::KeyValuePtr& entry : data) {
+      write->stored_.emplace(std::move(entry->key), std::move(entry->value));
+    }
+    Step(std::move(write), 0);
+  }
+
+  static void Step(scoped_refptr<StorageWrite> write, size_t index) {
+    if (index >= write->changes_.size()) {
+      write->reply_.Send(base::DictValue().Set("written", write->written_));
+      return;
+    }
+    blink::mojom::StorageArea* area = write->area_.get();
+    const StorageChange& change = write->changes_[index];
+    std::vector<uint8_t> key = Encode(change.key);
     std::optional<StoredItem> legacy;
     if (std::optional<std::vector<uint8_t>> stray = StrayUtf16Form(change.key)) {
-      auto found = stored.find(*stray);
-      if (found != stored.end()) {
+      auto found = write->stored_.find(*stray);
+      if (found != write->stored_.end()) {
         legacy.emplace(found->first, found->second);
-        area->data->Delete(std::move(*stray), std::nullopt, nullptr, base::DoNothing());
+        area->Delete(std::move(*stray), std::nullopt, nullptr, base::DoNothing());
       }
     }
     if (!change.value) {
-      area->data->Delete(Encode(change.key), std::nullopt, nullptr,
-                         base::BindOnce(
-                             [](scoped_refptr<WriteCount> written, base::RepeatingClosure done) {
-                               ++written->data;
-                               done.Run();
-                             },
-                             written, done));
-      continue;
+      area->Delete(std::move(key), std::nullopt, nullptr,
+                   base::BindOnce(&StorageWrite::Removed, std::move(write), index));
+      return;
     }
-    area->data->Put(Encode(change.key), Encode(*change.value), std::nullopt, nullptr,
-                    base::BindOnce(&Written, area, written, done, std::move(legacy)));
+    std::vector<uint8_t> value = Encode(*change.value);
+    area->Put(std::move(key), std::move(value), std::nullopt, nullptr,
+              base::BindOnce(&StorageWrite::Put, std::move(write), index, std::move(legacy)));
   }
-}
+
+  static void Removed(scoped_refptr<StorageWrite> write, size_t index) {
+    ++write->written_;
+    Step(std::move(write), index + 1);
+  }
+
+  static void Put(scoped_refptr<StorageWrite> write,
+                  size_t index,
+                  std::optional<StoredItem> legacy,
+                  bool success) {
+    if (success) {
+      ++write->written_;
+    }
+    if (success || !legacy) {
+      Step(std::move(write), index + 1);
+      return;
+    }
+    blink::mojom::StorageArea* area = write->area_.get();
+    area->Put(std::move(legacy->first), std::move(legacy->second), std::nullopt, nullptr,
+              base::BindOnce(&StorageWrite::Restored, std::move(write), index));
+  }
+
+  static void Restored(scoped_refptr<StorageWrite> write, size_t index, bool) {
+    Step(std::move(write), index + 1);
+  }
+
+  mojo::Remote<blink::mojom::StorageArea> area_;
+  std::vector<StorageChange> changes_;
+  Reply reply_;
+  std::map<std::vector<uint8_t>, std::vector<uint8_t>> stored_;
+  int written_ = 0;
+};
 
 }
 }
@@ -257,11 +277,9 @@ AC_PROFILE_CALL(ac_local_storage_write, ardia::Sensitive{ardia::kMaxStorageArgsB
       }
     }
   }
-  auto area = base::MakeRefCounted<ardia::AreaRef>(ardia::AreaFor(call.profile(), *key));
-  blink::mojom::StorageArea* raw = area->data.get();
-  raw->GetAll(mojo::NullRemote(),
-              base::BindOnce(&ardia::ApplyChanges, area,
-                             ardia::LastChangePerKey(std::move(changes)), call.TakeReply()));
+  ardia::StorageWrite::Start(base::MakeRefCounted<ardia::StorageWrite>(
+      ardia::AreaFor(call.profile(), *key), ardia::LastChangePerKey(std::move(changes)),
+      call.TakeReply()));
 }
 
 AC_ARGS_CALL(ac_registrable_domains) {
