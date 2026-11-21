@@ -240,6 +240,21 @@ BOOL ConsumeBackToTabActivation() {
   return pending;
 }
 
+BOOL ActivateApp(NSString *why) {
+  gActivations++;
+  const BOOL fromOtherApp = !NSApp.isActive;
+  if (ardia_host::Background()) {
+    ardia_host::LogActivation([@"activateIgnoringOtherApps (skipped in a test instance): " stringByAppendingString:why]);
+    return fromOtherApp;
+  }
+  MarkBackToTabActivation();
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  [NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+  return fromOtherApp;
+}
+
 void WatchZoom() { InstallZoomMonitor(); }
 
 NSWindow *GrabbedWindow() { return gDragged.window; }

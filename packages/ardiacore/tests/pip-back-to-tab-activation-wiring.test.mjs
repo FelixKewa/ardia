@@ -18,7 +18,7 @@ const body = (source, header) => {
 };
 
 test("Back to Tab activates the app over the frontmost app, as Chromium does, not with a cooperative request macOS can decline", () => {
-  const activate = body(controller, "BOOL ActivateApp(NSString *why)");
+  const activate = body(pip, "BOOL ActivateApp(NSString *why)");
   assert.match(activate, /\[NSApp activateIgnoringOtherApps:YES\]/);
   assert.doesNotMatch(activate, /\[NSApp activate\]/);
   const mark = activate.indexOf("MarkBackToTabActivation()");
