@@ -11,7 +11,8 @@ ardia tabs answers; the linked ardia is the pinned version, run as published (ad
 same profile with a changed asset, or with none (offline), gets no ardia and no downloaded copy. Command Line coverage
 can't be skipped: no fixture fails. Given an earlier release that bundles Command Line (0.2.47), a profile where it
 installed and linked its own ardia keeps that ardia on <Ardia.app>: the pinned copy is fetched and verified but waits for
-your approval, because its plugin.json isn't the one approved, and plugins.json stays as it was."
+your approval, because its plugin.json isn't the one approved, and plugins.json stays as it was; once the approval the
+Update… sheet records is saved, ardia switches to the pinned version."
 case "${1:-}" in -h | --help | "") echo "$usage"; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
 app="$(cd "$1" && pwd -P)"
 version="${2:?$usage}"
@@ -136,6 +137,17 @@ print(json.loads(text)["version"], hashlib.sha256(text + b"\0bundled").hexdigest
   ran="$(env -i HOME="$HOME" PATH="$upgrade/bin:/usr/bin:/bin" ARDIA_DATA_DIR="$upgrade/d" ARDIA_TELEMETRY=off ardia --version 2>&1 || true)"
   check "ardia still runs, and is still the earlier $old_version" "$([ "$ran" = "ardia $old_version" ] && echo 1 || echo 0)" "$ran"
   check "plugins.json is untouched before you confirm" "$([ "$(shasum -a 256 "$upgrade/d/plugins.json" | cut -d' ' -f1)" = "$saved" ] && echo 1 || echo 0)"
+  stop
+  printf '{"plugins":{"cli":{"enabled":true,"approved":"%s","previous":"%s","values":{},"applied":{},"installed":true}},"version":1}\n' "$approved" "$receipt" >"$upgrade/d/plugins.json"
+  launch "$upgrade/d" "$upgrade/bin" "$fixtures"
+  for _ in $(seq 1 300); do [ -L "$upgrade/d/OfficialPlugins/cli/active" ] && break; sleep 0.2; done
+  ran=""
+  for _ in $(seq 1 100); do
+    ran="$(env -i HOME="$HOME" PATH="$upgrade/bin:/usr/bin:/bin" ARDIA_DATA_DIR="$upgrade/d" ARDIA_TELEMETRY=off ardia --version 2>&1 || true)"
+    [ "$ran" = "ardia $pinned" ] && break
+    sleep 0.2
+  done
+  check "once you confirm (the approval Update… records), ardia is the pinned $pinned" "$([ "$ran" = "ardia $pinned" ] && echo 1 || echo 0)" "$ran"
   stop
 fi
 exit "$status"
