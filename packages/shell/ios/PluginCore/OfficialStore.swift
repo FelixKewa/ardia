@@ -173,7 +173,6 @@ final class OfficialVerification {
 
   private let lock = NSLock()
   private var verified: [String: (stamp: Stamp, digest: String, checked: Date)] = [:]
-  static var recheckAfter: TimeInterval = 0.5
 
   private static func stamp(_ path: String) -> [Int64]? {
     var info = stat()
@@ -196,10 +195,6 @@ final class OfficialVerification {
   func digest(archive: String, sha: String, copy: String, top: String, scratch: String, fresh: Bool = false) -> String? {
     let key = "\(archive)\u{0}\(copy)"
     lock.lock()
-    if !fresh, Self.recheckAfter > 0, let known = verified[key], Date().timeIntervalSince(known.checked) < Self.recheckAfter {
-      lock.unlock()
-      return known.digest
-    }
     lock.unlock()
     guard let archiveStamp = Self.stamp(archive), let copyStamp = Self.treeStamp(copy) else {
       lock.lock()

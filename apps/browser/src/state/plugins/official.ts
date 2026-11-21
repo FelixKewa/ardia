@@ -11,7 +11,7 @@ import { openSettings } from "../settings/settingsWindows";
 import { waitForInstall, type InstallResult } from "./installWaiters";
 import { releaseOrphanedConsent } from "./consentSurface";
 import { afterPluginScan } from "./scanListeners";
-import { ALREADY_ASKING, consentTarget, promoteCandidate, requestPluginConsent, rescanPlugins } from "./lifecycle";
+import { adoptExactApproval, ALREADY_ASKING, consentTarget, promoteCandidate, requestPluginConsent, rescanPlugins } from "./lifecycle";
 import { relinkPrograms } from "./programs";
 import { activeManifest, approvalMatches, currentPlugins, setOfficialFetch, usePlugins, type PluginListing, type PluginsStore } from "./store";
 
@@ -245,7 +245,10 @@ export function reconcileOfficial(consent: ConsentToken | null, now = Date.now()
       if (approvalMatches(candidate, record.approved)) {
         const backoff = retryAt.get(`promote:${name}`);
         if (fetch?.state === "failed" && backoff && now < backoff.at) continue;
-        if (candidate.legacyHash === record.approved) notePlugin("official_migrations_kept", consent);
+        if (candidate.legacyHash === record.approved) {
+          notePlugin("official_migrations_kept", consent);
+          if (!adoptExactApproval(name, candidate, consent)) continue;
+        }
         void promoteCandidate(name, candidate, consent).then((ok) => {
           if (ok) return void retryAt.delete(`promote:${name}`);
           retryAt.set(`promote:${name}`, { at: Date.now() + FIRST_RETRY_MS, wait: FIRST_RETRY_MS });

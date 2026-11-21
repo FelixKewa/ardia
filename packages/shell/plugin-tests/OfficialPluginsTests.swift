@@ -14,7 +14,6 @@ final class OfficialPluginsTests: XCTestCase {
     store = OfficialStore(root: "\(root)/OfficialPlugins")
     places = ProgramPlaces(store: "\(root)/Programs", binDir: "\(root)/bin")
     places.shadowable = []
-    OfficialVerification.recheckAfter = 0
   }
 
   override func tearDownWithError() throws {
@@ -399,8 +398,6 @@ final class OfficialPluginsTests: XCTestCase {
   }
 
   func testAFailedFreshCheckClearsTheRecentCheck() throws {
-    OfficialVerification.recheckAfter = 30
-    defer { OfficialVerification.recheckAfter = 0 }
     let archive = try pluginArchive(manifest())
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let made = try publish(archive, entry: entry(sha: sha)).get()

@@ -113,7 +113,7 @@ test("a legacy copy counts only with its exact old receipt", async () => {
   assert.equal(lifecycle.keptLegacy({ name: "cli", legacy: true, hash: OLD_RECEIPT, folderId: "bundled", manifest: null, problems: [] }, { cli: { enabled: false, approved: OLD_RECEIPT, values: {}, applied: {} } }), true, "turned off, it stays listed so it can be turned back on");
 });
 
-test("a download whose plugin.json is the one already approved switches over by itself, with plugins.json unchanged", async () => {
+test("a download whose plugin.json is the one already approved switches over by itself, recording its exact approval and keeping the old receipt", async () => {
   usePlugins.setState({ records: {}, candidates: {}, fetches: {}, consent: null });
   stub.docs.set("plugins.json", RECORDS(OLD_RECEIPT));
   reload();
@@ -129,7 +129,10 @@ test("a download whose plugin.json is the one already approved switches over by 
   assert.equal(P().listings.cli.folderId, PINNED.folderId);
   assert.ok(activeManifest(P(), "cli"));
   assert.equal(P().consent, null);
-  assert.equal(stub.docs.get("plugins.json"), before);
+  assert.notEqual(stub.docs.get("plugins.json"), before);
+  assert.equal(P().records.cli.approved, P().listings.cli.hash, "a later pin change keeps it approved");
+  assert.equal(P().records.cli.previous, OLD_RECEIPT, "the 0.2.47 receipt stays for a rollback");
+  assert.equal(P().records.cli.installed, true, "0.2.47 sees it installed");
   assert.equal(takePluginCounts().official_migrations_kept, 1);
 });
 
@@ -323,4 +326,22 @@ test("an active copy whose SHA-256 has left the pin is kept only by its own appr
   await settle();
   assert.ok(activeManifest(P(), "cli"), "its own approval keeps it running until the pinned one is approved");
   delete host.officialFetchResults.cli;
+});
+
+test("Remove stops when a different folder of the same kind took the name while the dialog was open", async () => {
+  usePlugins.setState({ records: {}, candidates: {}, fetches: {}, consent: null });
+  stub.docs.set("plugins.json", JSON.stringify({ version: 1, plugins: {} }));
+  reload();
+  const mine = JSON.stringify({ manifest: 1, name: "mine", title: "Mine", version: "1.0.0" });
+  host.folders = [{ name: "mine", status: "ok", text: mine, folderId: "1:1" }];
+  await lifecycle.rescanPlugins(consentToken());
+  await settle();
+  const seen = lifecycle.removalIdentity("mine");
+  host.folders = [{ name: "mine", status: "ok", text: mine, folderId: "2:2" }];
+  await lifecycle.rescanPlugins(consentToken());
+  await settle();
+  host.removed.length = 0;
+  const removed = await lifecycle.removePlugin("mine", undefined, seen);
+  assert.equal(removed.ok, false);
+  assert.deepEqual(host.removed, []);
 });

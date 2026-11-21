@@ -133,8 +133,8 @@ is the only source of which version may be fetched.
 - **What makes a copy official.** A copy counts only while its download still has the pinned SHA-256 and the payload
   digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that download's tar
   (`OfficialArchive.payloadDigest`, `OfficialVerification`).
-  - The check runs once per launch and again whenever either file changes, and promotion always re-checks from
-    scratch.
+  - Each lookup re-checks the stamps of the download and of every file in the copy, the digests are recomputed whenever
+    one changed, and promotion always re-checks from scratch.
   - A replaced or damaged copy isn't listed as official, can't be promoted, and can't be linked. Linking stages the
     program copy and refuses it unless its digest is that same one.
 - **Then consent.** That copy is a *candidate*: the scan lists it apart from the active plugins (`candidates` in the
@@ -172,7 +172,9 @@ is the only source of which version may be fetched.
   - The launch sweep keeps every installed official plugin's link, listing or not (`programsKeptAtLaunch`).
   - The fetched replacement switches over silently when its `plugin.json` is the one already approved (it carries
     `legacyHash`, the old receipt of its own manifest); otherwise it waits for review as above.
-  - `plugins.json` isn't rewritten for any of this, so a rollback to 0.2.47 still finds its own receipt.
+  - The silent switch records the exact approval of the download and keeps the 0.2.47 receipt as `previous`, so a
+    later pin change keeps it approved and 0.2.47, which only checks `installed` for its Command Line, still runs its own
+    copy after a rollback.
 - **Publish before switching.** `PluginPrograms.install` stages, verifies the payload digest and the team signature,
   then checks that every program can go on PATH before it moves `current`. A replacement that can't take over (a name
   someone else holds) leaves the old target in place and reports the refusal (`kept`). A retry finishes the switch.

@@ -160,6 +160,7 @@ public class PluginsModule: Module {
   private static func remove(_ name: String, official: Bool, _ promise: Promise) {
     PluginHost.shared.remove(name, official: official) { problem in
       if let problem { return promise.resolve(["ok": false, "reason": problem]) }
+      if official { return promise.resolve(["ok": true]) }
       PluginPageView.removeData(name) { promise.resolve(["ok": true]) }
     }
   }

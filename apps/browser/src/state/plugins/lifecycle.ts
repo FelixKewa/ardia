@@ -283,6 +283,13 @@ export function enablePlugin(name: string, hash: string): boolean {
 
 export const PROMOTION_RETRY = { delayMs: 60_000 };
 
+export function adoptExactApproval(name: string, candidate: PluginListing, consent: ConsentToken | null): boolean {
+  const before = recordOf(currentPlugins(), name);
+  if (!candidate.hash || !approvalMatches(candidate, before.approved)) return false;
+  if (before.approved === candidate.hash) return true;
+  return saveRecords({ ...currentPlugins().records, [name]: { ...before, approved: candidate.hash, previous: before.approved! } }, consent);
+}
+
 export async function promoteCandidate(name: string, candidate: PluginListing, consent: ConsentToken | null): Promise<boolean> {
   setOfficialFetch(name, { state: "promoting" });
   const saved = await pluginRecordsSaved(consent);
@@ -343,15 +350,19 @@ const removing = new Set<string>();
 const secretsLeftReason = (name: string, secrets: SecretsCleared) =>
   `Its files are removed, but ${secrets.remaining.length === 1 ? "1 secret is" : secrets.remaining.length ? `${secrets.remaining.length} secrets are` : "its secrets may be"} still in your Keychain, under ardia.plugin.${name}. Delete them in Keychain Access.`;
 
-export const removesAsOfficial = (name: string): boolean => {
-  const listed = Object.hasOwn(currentPlugins().listings, name) ? currentPlugins().listings[name] : undefined;
-  return listed ? !!listed.official : !!currentPlugins().pinned?.some((p) => p.name === name) || Object.hasOwn(currentPlugins().candidates, name);
-};
+export type RemovalIdentity = { official: boolean; folderId: string | null };
 
-export async function removePlugin(name: string, mayGoOn: () => boolean = () => true, expectOfficial?: boolean): Promise<{ ok: boolean; removed?: boolean; reason?: string }> {
+export function removalIdentity(name: string): RemovalIdentity {
+  const listed = Object.hasOwn(currentPlugins().listings, name) ? currentPlugins().listings[name] : undefined;
+  const official = listed ? !!listed.official : !!currentPlugins().pinned?.some((p) => p.name === name) || Object.hasOwn(currentPlugins().candidates, name);
+  return { official, folderId: listed?.folderId ?? null };
+}
+
+export async function removePlugin(name: string, mayGoOn: () => boolean = () => true, expected?: RemovalIdentity): Promise<{ ok: boolean; removed?: boolean; reason?: string }> {
   if (removing.has(name)) return { ok: false, reason: "It is already being removed." };
-  const official = removesAsOfficial(name);
-  if (expectOfficial !== undefined && expectOfficial !== official) return { ok: false, reason: "It changed while you were deciding. Try again." };
+  const identity = removalIdentity(name);
+  const official = identity.official;
+  if (expected && (expected.official !== identity.official || expected.folderId !== identity.folderId)) return { ok: false, reason: "It changed while you were deciding. Try again." };
   const consent = consentToken();
   removing.add(name);
   try {
