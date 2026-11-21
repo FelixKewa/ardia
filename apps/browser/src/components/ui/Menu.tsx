@@ -8,6 +8,8 @@ import { PANEL } from "./Popover";
 import { useTheme, type Theme } from "./theme";
 import { opacity, space, typeFace } from "./tokens";
 import { useHover } from "./useHover";
+import { radioA11y, spaceActivates } from "./a11y";
+import { useClosing } from "./Closing";
 
 export const menuRowFill = (theme: Theme, pressed = false) => (pressed ? theme.popoverRowPressed : theme.rowHover);
 
@@ -50,6 +52,7 @@ export function MenuRow({
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
   const tint = destructive ? theme.destructive : theme.textPrimary;
   const interactive = !!onPress && !disabled;
   const marked = !!(selected || checked);
@@ -99,13 +102,15 @@ export function MenuRow({
       </View>
     );
   const choosable = checked !== undefined;
+  const live = !disabled && !closing;
   return (
     <View {...hoverProps} tooltip={tooltip}>
       <Pressable
         onPress={onPress}
-        disabled={disabled}
-        accessibilityRole={choosable ? "radio" : "button"}
-        accessibilityState={choosable ? { checked: !!checked, disabled: !!disabled } : { selected: selected === undefined ? undefined : !!selected, disabled: !!disabled }}
+        disabled={!live}
+        {...(choosable
+          ? { ...radioA11y(!!checked), onKeyDown: live ? spaceActivates((e) => onPress(e as unknown as GestureResponderEvent)) : undefined }
+          : { accessibilityRole: "button" as const, accessibilityState: { disabled: !!disabled }, "aria-selected": selected === undefined ? undefined : !!selected })}
       >
         {({ pressed }) => content(pressed)}
       </Pressable>

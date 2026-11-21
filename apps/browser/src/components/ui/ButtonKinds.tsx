@@ -7,6 +7,7 @@ import { HoverFill, HoverSwap } from "./HoverFill";
 import { hex, useTheme, type Theme } from "./theme";
 import { capsule, closeOnArt, opacity, pillHeight, radius as radii, space, stepperSize, font as typeScale, weight as weights } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
+import { useClosing } from "./Closing";
 import type { CloseProps, PillProps, PushProps, StepperProps } from "./Button";
 
 function ScaledGlyph({ scale, size, children }: { scale: Animated.Value | null; size: number; children: ReactNode }) {
@@ -28,9 +29,10 @@ export function StepperButtonView({ icon, onPress, width = stepperSize.width, he
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion();
+  const closing = useClosing();
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip}>
+      <Pressable disabled={disabled || closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip}>
         {({ pressed }) => (
           <View
             style={{
@@ -57,6 +59,7 @@ const CHIP_DIM = 0.85;
 export function PillButtonView(props: PillProps) {
   const { onPress, title, primary = false, size } = props;
   const theme = useTheme();
+  const closing = useClosing();
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
@@ -65,7 +68,7 @@ export function PillButtonView(props: PillProps) {
     const chipHeight = props.height ?? pillHeight[size ?? "m"];
     return (
       <View {...hoverProps}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+        <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
           {({ pressed }) => {
             const look = pillLook(theme, tone, primary, pressed, hovered);
             const rest = pillLook(theme, tone, primary, false, false);
@@ -98,7 +101,7 @@ export function PillButtonView(props: PillProps) {
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
       <Pressable
-        disabled={disabled}
+        disabled={disabled || closing}
         onPress={onPress}
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
@@ -126,10 +129,11 @@ export function CloseButtonView(props: CloseProps) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion();
+  const closing = useClosing();
   if (look === "panel")
     return (
       <View {...hoverProps} style={style} tooltip={tooltip}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+        <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
           <View style={{ width: PANEL_CLOSE_BOX, height: PANEL_CLOSE_BOX, alignItems: "center", justifyContent: "center" }}>
               <HoverFill shown={hovered} color={theme.toolbarHover} radius={radii.control} />
               <ScaledGlyph scale={pressMotion.scale} size={14}><Symbol name="xmark" size={9} weight="semibold" color={theme.textSecondary} style={{ width: 14, height: 14 }} /></ScaledGlyph>
@@ -142,7 +146,7 @@ export function CloseButtonView(props: CloseProps) {
     const corner = props.radius ?? capsule(size);
     return (
       <View {...hoverProps} style={style} tooltip={tooltip}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label ?? tooltip}>
+        <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label ?? tooltip}>
           {({ pressed }) => (
             <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
               <HoverSwap shown={pressed || hovered} rest={closeOnArt.rest} color={pressed ? closeOnArt.pressed : closeOnArt.hover} instant={pressed} radius={corner} />
@@ -156,7 +160,7 @@ export function CloseButtonView(props: CloseProps) {
   const fill = hovered ? theme.hudCloseHover : theme.hudCloseFill;
   return (
     <View {...hoverProps} style={style} tooltip={tooltip}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label ?? tooltip}>
+      <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label ?? tooltip}>
         <View style={HUD_PLATE}>
           <VisualEffect material="hudWindow" blendingMode="withinWindow" cornerRadius={capsule(HUD_CLOSE_BOX)} style={StyleSheet.absoluteFill} />
           <Surface style={StyleSheet.absoluteFill} fill={hex(fill)} cornerRadius={capsule(HUD_CLOSE_BOX)} borderColor={theme.hudCloseBorder} borderWidth={1} />
@@ -180,15 +184,17 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(!disabled, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
+  const closing = useClosing();
+  const dead = !!disabled || closing;
   const primary = kind === "primary";
   const plain = kind === "plain";
   const textColor = primary ? theme.onAccent : kind === "destructive" ? theme.destructive : plain ? theme.formAccent : theme.textPrimary;
   return (
     <View {...hoverProps} style={[{ opacity: disabled ? opacity.disabled : 1 }, style]}>
       <Pressable
-        disabled={disabled}
+        disabled={dead}
         onPress={onPress}
-        onAccessibilityTap={disabled ? undefined : onPress}
+        onAccessibilityTap={dead ? undefined : onPress}
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityState={{ disabled: !!disabled }}

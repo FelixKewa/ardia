@@ -86,10 +86,6 @@ export function BookmarkRow({
   if (!node) return null;
 
   const open = (mode: Parameters<typeof openUrl>[2]) => node.kind === "url" && openUrl(node.url, windowId, mode);
-  const menu = () => {
-    if (!selected) onSelect({});
-    onMenu();
-  };
 
   return (
     <Animated.View
@@ -98,12 +94,12 @@ export function BookmarkRow({
       {...rowProps}
       style={{ position: "absolute", top, left: 0, right: 0, zIndex: dragging ? 10 : 0, opacity: dragging ? bookmarkList.dragOpacity : 1, transform: [{ translateY: dy }] }}
     >
-      <ContextMenuArea onContextMenu={menu}>
+      <ContextMenuArea onContextMenu={onMenu}>
         <MouseArea onMiddleClick={() => open("background")}>
-          <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
+          <Pressable focusable={false} onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
             <View
               onDoubleClick={() => (node.kind === "folder" ? onOpenFolder() : void open("current"))}
-              style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered ? theme.rowHover : undefined }]}
+              style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered || keyboardRow ? theme.rowHover : undefined }]}
             >
               {node.kind === "url" ? (
                 <Favicon url={node.url} favicon={node.favicon} profileId={profileId} />
@@ -116,7 +112,7 @@ export function BookmarkRow({
               <Text lines={1} size="small" tone="textTertiary" style={DETAIL}>
                 {showPath ? path : node.kind === "url" ? hostLabel(node.url) : plural(node.children.length, "item")}
               </Text>
-              <RowMenuSlot shown={controlsShown} onPress={menu} />
+              <RowMenuSlot shown={controlsShown} onPress={onMenu} />
             </View>
           </Pressable>
         </MouseArea>

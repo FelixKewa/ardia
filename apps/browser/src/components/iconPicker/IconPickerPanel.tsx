@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
-import { Button, PopoverSurface, SearchField, space, useClosingInert, usePopoverMotion, usePopoverMotionStyle } from "../ui";
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { Button, ClosingView, PopoverSurface, SearchField, space, usePopoverMotion, usePopoverMotionStyle } from "../ui";
 import { iconSymbol, symbolIcon } from "../../lib/customIcon";
 import { emojiSections, matchesTerms, searchEmoji, searchTerms } from "../../lib/emoji";
 import { IconGrid, type GridSection } from "./IconGrid";
@@ -65,16 +65,15 @@ function IconPickerPanel({ current, symbols, actions, onChoose, onClose, place, 
   const terms = useMemo(() => searchTerms(query), [query]);
   const sections = useMemo(() => pickerSections(tab, terms, symbols), [tab, terms, symbols]);
   const appear = usePopoverMotion(closing, onClosed, !!place);
-  const inert = useClosingInert(closing);
   const motion = usePopoverMotionStyle(appear, place?.upward ? "bottom" : "top", place?.upward);
   const onLayout = (e: LayoutChangeEvent) => onSize(e.nativeEvent.layout.height);
   const choose = (icon: string) => !closing && onChoose(icon);
   const close = () => !closing && onClose();
 
   return (
-    <Animated.View
-      {...inert}
-      pointerEvents={place && !closing ? "auto" : "none"}
+    <ClosingView
+      closing={closing}
+      pointerEvents={place ? "auto" : "none"}
       style={[{ position: "absolute", top: place?.top ?? 0, left: place?.left ?? 0, width: ICON_PICKER_WIDTH }, place ? motion : HIDDEN]}
       onLayout={onLayout}
     >
@@ -104,13 +103,13 @@ function IconPickerPanel({ current, symbols, actions, onChoose, onClose, place, 
           <View style={TOP_ROW}>
             {actions.map((a) => (
               <View key={a.title} style={FILL}>
-                <Button variant="pill" tone="chip" icon={a.icon} primary={a.primary} title={a.title} onPress={a.onPress} />
+                <Button variant="pill" tone="chip" icon={a.icon} primary={a.primary} title={a.title} onPress={() => !closing && a.onPress()} />
               </View>
             ))}
           </View>
         ) : null}
       </PopoverSurface>
-    </Animated.View>
+    </ClosingView>
   );
 }
 

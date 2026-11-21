@@ -16,7 +16,7 @@ import { View } from "react-native";
 import { space } from "../ui/tokens";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { currentEngineProfile, currentTab } from "../../state/browser/current";
-import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseButton, Popover, POPOVER_WIDTH, Text, tracking, usePopoverPresenceOf, whileOpen } from "../ui";
+import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseButton, Popover, POPOVER_WIDTH, Text, tracking, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { answerPermission, describePermission } from "../../state/site/permissions";
 import { hostOrOrigin } from "../../lib/url";
 import { CheckRow, PromptHeader, usePromptInputGuard, Well } from "./PromptParts";
@@ -55,7 +55,7 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
   const { shown: request, closing, onClosed } = usePopoverPresenceOf(live);
   const inputGuard = usePromptInputGuard(live?.id);
   if (!request) return null;
-  const guard = <A extends unknown[]>(action: (...args: A) => void) => whileOpen(closing)(inputGuard(action));
+  const guard = <A extends unknown[]>(action: (...args: A) => void) => whileOpen(closing, () => pageOf(tabId).permission?.id === request.id)(inputGuard(action));
   const { icons, question } = describePermission(request);
   return (
     <Popover key={request.id} width={PERMISSION_PROMPT_WIDTH} top={top} left={left} modal={false} closing={closing} onClosed={onClosed}>
@@ -76,12 +76,13 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
   const open = usePages((s) => s.popover[tabId] === "popups");
   const live = usePage(tabId, (p) => p.popups);
   const { shown: popups, closing, onClosed } = usePopoverPresenceOf(open && live.length ? live : null);
+  const stillOpen = useStillOpen(open && live.length > 0);
   if (!popups) return null;
   const origin = popups[0]!.origin;
   const site = hostOrOrigin(origin);
   const web = () => webviews.get(tabId);
   const close = () => setPopover(tabId, null);
-  const act = whileOpen(closing);
+  const act = whileOpen(closing, () => stillOpen() && pageOf(tabId).popups.length > 0);
   const blocked = () => pageOf(tabId).popups;
   const done = () => {
     patchPage(tabId, { popups: [] });

@@ -14,7 +14,7 @@ import { currentBookmarks } from "../../state/browser/current";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { modifiersOf } from "../../lib/keys";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosingInert, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
+import { ClosingView, ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosing, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -59,7 +59,6 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   const [contentHeight, setContentHeight] = useState<number | null>(null);
   const place = placeMenu(panel, layer, size.menuWidth, height, size);
   const appear = usePopoverMotion(closing, onClosed, height !== null && contentHeight !== null);
-  const inert = useClosingInert(closing);
   const motion = usePopoverMotionStyle(appear, "top left");
   const views = useRef(new Map<string, View>());
   const scrollY = useRef(0);
@@ -97,9 +96,9 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   );
 
   return (
-    <Animated.View
-      {...inert}
-      pointerEvents={closing || panel.retained ? "none" : "auto"}
+    <ClosingView
+      closing={closing}
+      pointerEvents={panel.retained ? "none" : "auto"}
       onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
       style={{ position: "absolute", left: place.x - layer.x, top: place.y - layer.y, width: place.width, ...motion, ...(panel.retained ? HIDDEN : null) }}
     >
@@ -173,7 +172,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
           </View>
         )}
       </PopoverSurface>
-    </Animated.View>
+    </ClosingView>
   );
 }
 
@@ -256,17 +255,22 @@ function FolderRow({
   const edge = useRef(sidebarEdge);
   edge.current = sidebarEdge;
   const shift = useSlide(offset);
+  const closing = useClosing();
   const responder = useBookmarkDragResponder(view, () => ({ windowId, id, panel: panel.key, sidebarEdge: edge.current }), [windowId, id, panel.key]);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
+  useEffect(() => {
+    if (closing) clearTimeout(hoverTimer.current);
+  }, [closing]);
   if (!node) return null;
   const folder = node.kind === "folder";
   const enter = () => {
     setHovered(true);
     clearTimeout(hoverTimer.current);
-    if (anyDrag) return;
+    if (anyDrag || closing) return;
     hoverTimer.current = setTimeout(() => (folder ? onOpenChild(id) : closeMenusAbove(windowId, panel.level)), folderMenu.hoverOpenMs);
   };
   const press = (e: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean }) => {
+    if (closing) return;
     if (node.kind === "folder") return onOpenChild(id);
     const mode = openModeFor(e);
     if (mode !== "background") closeFolderMenus();
@@ -287,10 +291,10 @@ function FolderRow({
       }}
       style={{ opacity: dragging ? 0 : 1, transform: [{ translateY: shift }] }}
     >
-      <ContextMenuArea onContextMenu={() => void openBarMenu(windowId, profileId, node)}>
+      <ContextMenuArea onContextMenu={closing ? undefined : () => void openBarMenu(windowId, profileId, node)}>
         <MouseArea onMiddleClick={(e) => press({ ...e, middle: true })}>
           <View tooltip={node.kind === "url" ? node.url : undefined}>
-            <Pressable accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={(e) => press(modifiersOf(e))}>
+            <Pressable disabled={closing} accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={(e) => press(modifiersOf(e))}>
               {({ pressed }) => (
                 <RowFrame size={size} plate={(hovered && !anyDrag) || open || dropInto} pressed={pressed} ring={dropInto}>
                   <View style={ICON_SLOT}>

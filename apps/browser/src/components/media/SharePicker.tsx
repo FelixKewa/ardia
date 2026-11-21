@@ -10,7 +10,7 @@ import {
   shareTab,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, Text, useHover, usePopoverPresenceOf, whileOpen } from "../ui";
+import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, radioA11y, spaceActivates, Text, useClosing, useHover, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { PromptHeader } from "../site/PromptParts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
@@ -37,6 +37,7 @@ const audioOffered = (kind: SourceKind | null, audio: DisplayMediaAudio | null) 
 
 export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
   const { shown: request, closing, onClosed } = usePopoverPresenceOf(useMedia((m) => m.displayRequests[tabId]) ?? null);
+  const stillOpen = useStillOpen(!closing);
   const [sources, setSources] = useState<DisplayMediaSource[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [shareAudio, setShareAudio] = useState(AUDIO_SHARED_BY_DEFAULT);
@@ -86,7 +87,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const valid = !!kindOf(selected);
   const selectedKind = kindOf(selected);
   const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
-  const act = whileOpen(closing);
+  const act = whileOpen(closing, stillOpen);
   const share = act((id: string | null = selected) => {
     const kind = kindOf(id);
     if (!id || !kind) return;
@@ -217,9 +218,10 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
   const iconScaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const aspect = source.width && source.height ? source.height / source.width : 10 / 16;
   const previewWidth = width - 2 * space.m;
+  const closing = useClosing();
   return (
-    <View {...hoverProps} onDoubleClick={onShare}>
-      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="radio" accessibilityLabel={source.name} accessibilityState={{ checked: selected }}>
+    <View {...hoverProps} onDoubleClick={closing ? undefined : onShare}>
+      <Pressable disabled={closing} onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={closing ? undefined : spaceActivates(onSelect)} {...radioA11y(selected, source.name)}>
         <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? theme.rowSelected : hovered ? theme.rowHover : undefined }}>
           <View
             style={{

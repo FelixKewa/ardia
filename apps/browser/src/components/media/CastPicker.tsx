@@ -1,6 +1,6 @@
 import { CastMode, preferredCastMode, startCasting, stopCasting, type CastSink, closeCastPicker, useCast } from "../../state/media/cast";
 import { openExternalURL, showMenu } from "../../state/app/system";
-import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, usePopoverPresenceOf, whileOpen } from "../ui";
+import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -16,8 +16,9 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
   const { shown: dialog, closing, onClosed } = usePopoverPresenceOf(useCast((c) => c.dialogs[tabId]) ?? null);
   const [screen, setScreen] = useState(false);
   useEffect(() => setScreen(false), [dialog?.id]);
+  const stillOpen = useStillOpen(!closing);
   if (!dialog) return null;
-  const act = whileOpen(closing);
+  const act = whileOpen(closing, stillOpen);
   const close = act(() => closeCastPicker(tabId));
   const available = dialog.sinks.filter((s) => s.state !== "unavailable");
   const canScreen = dialog.sinks.some((s) => s.modes & CastMode.screen);

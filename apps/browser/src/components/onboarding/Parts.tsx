@@ -3,7 +3,7 @@ import { Animated, Image, Pressable, View, type StyleProp, type ViewStyle } from
 import { useTheme } from "../ui/theme";
 import { IconRing } from "./GlassBacking";
 import type { TileTheme } from "../../state/favicons/tileTheme";
-import { Button, Checkbox, Dot, Text, useHover } from "../ui";
+import { Button, Checkbox, checkboxA11y, Dot, radioA11y, spaceActivates, Text, useHover } from "../ui";
 import { activeSteps, cancelOnboarding, useOnboarding, type OnboardingStep } from "../../state/onboarding/onboarding";
 import { useQuestions } from "../../state/onboarding/questions";
 import { curve } from "../ui/motion";
@@ -169,7 +169,7 @@ function Segment({ title, image, selected, onPress }: { title: string; image?: s
   const { hovered, hoverProps } = useHover();
   return (
     <View {...hoverProps} tooltip={image ? title : undefined}>
-      <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title}>
+      <Pressable onPress={onPress} onKeyDown={spaceActivates(onPress)} {...radioA11y(selected, title)}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
@@ -228,12 +228,12 @@ export function SelectTile({
 }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
-  const state = role === "radio" ? { selected } : { checked: selected };
+  const a11y = role === "radio" ? radioA11y(selected, title) : checkboxA11y(selected, false, title);
   const ringed = selected && !!ring;
   const border = selected ? SELECTED_BORDER : CARD_BORDER;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} accessibilityRole={role} accessibilityState={state} accessibilityLabel={title}>
+      <Pressable onPress={onPress} onKeyDown={spaceActivates(onPress)} {...a11y}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}

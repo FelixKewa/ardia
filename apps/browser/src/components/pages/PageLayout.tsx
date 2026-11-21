@@ -6,6 +6,7 @@ import { StyleSheet, View, type TextInput } from "react-native";
 import { Box, Button, display, HoverSlot, iconButton, SearchField, space, Text, useOffstage, useTheme, WindowDragRegion } from "../ui";
 import { pageHeader, pageToolbar, rowControls } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { keepActivationKeys } from "./listCursor";
 
 export const PAGE_WIDTH = 880;
 
@@ -59,7 +60,7 @@ const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export function RowMenuSlot({ shown, onPress }: { shown: boolean; onPress: () => void }) {
-  return <HoverSlot hovered={shown} width={iconButton.l.box} hover={<Button variant="icon" icon="ellipsis" size="l" onPress={onPress} tooltip="More actions" />} />;
+  return <HoverSlot hovered={shown} width={iconButton.l.box} hover={<View onKeyDown={keepActivationKeys}><Button variant="icon" icon="ellipsis" size="l" focusable onPress={onPress} tooltip="More actions" /></View>} />;
 }
 
 const pageScroll = { lastAt: 0 };
@@ -87,10 +88,6 @@ export function useFocusWithin(key: string) {
   });
   return { focused: focusedKey === key, focusProps };
 }
-
-export const ROW_MENU_KEYS = [{ key: "ContextMenu" }, { key: "F10", shiftKey: true }];
-
-export const isRowMenuKey = ({ key, shiftKey }: { key: string; shiftKey?: boolean }) => key === "ContextMenu" || (key === "F10" && !!shiftKey);
 
 export function useRowControls(key: string, keyboardRow = false) {
   const offstage = useOffstage();

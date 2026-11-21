@@ -76,12 +76,13 @@ export const HistoryRow = memo(function HistoryRow({
             borderBottomRightRadius: last ? r : 0,
           }}
         >
-          <HoverSlot hovered={showControls || selecting} width={historyRow.checkbox} hover={<Checkbox value={selected} accessibilityLabel={entry.title || entry.url} onChange={(_, modifiers) => onToggle(entry.url, !!modifiers?.shiftKey)} />} />
+          <HoverSlot hovered={showControls || selecting} width={historyRow.checkbox} hover={<Checkbox value={selected} focusable accessibilityLabel={entry.title || entry.url} onChange={(_, modifiers) => onToggle(entry.url, !!modifiers?.shiftKey)} />} />
           <Text size="small" tone="textSecondary" style={TIME}>
             {timeLabel(entry.lastVisit)}
           </Text>
           <MouseArea style={{ flex: 1 }} onMiddleClick={() => openUrl(entry.url, windowId, "background")}>
             <Pressable
+              focusable={false}
               onPress={(e) => {
                 const modifiers = modifiersOf(e);
                 if (selecting) return onToggle(entry.url, modifiers.shiftKey);

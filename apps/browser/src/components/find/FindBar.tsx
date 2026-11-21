@@ -1,7 +1,7 @@
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { claimFocusTag, findFocus } from "../../state/focus/focusClaims";
 import { useEffect, useRef, useState } from "react";
-import { Animated, findNodeHandle, TextInput, View } from "react-native";
+import { findNodeHandle, TextInput, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { useFind, useTab } from "../../state/browser/hooks";
@@ -9,7 +9,7 @@ import { currentTab } from "../../state/browser/current";
 import { setFind as setTabFind } from "../../state/windows/actions";
 import { closeFind, findStep, noteFind, submitRepeatsKey, takeFindFocusRequest } from "../../state/find/actions";
 import type { FindState } from "../../state/browser/types";
-import { Button, Divider, font, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useClosingInert, whileOpen } from "../ui";
+import { Button, ClosingView, Divider, font, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { replaceInField } from "../../state/site/selection";
 import { FIND_WIDTH } from "./tokens";
 
@@ -39,8 +39,7 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
   const input = useRef<TextInput>(null);
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, "top right");
-  const inert = useClosingInert(closing);
-  const live = whileOpen(closing);
+  const live = whileOpen(closing, useStillOpen(!closing));
   useEffect(() => {
     if (!find.focusRequest) return;
     takeFindFocusRequest(tabId);
@@ -76,8 +75,8 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
   const none = find.count === 0 && !!find.query;
 
   return (
-    <Animated.View
-      {...inert}
+    <ClosingView
+      closing={closing}
       style={{
         position: "absolute",
         top: space.ml,
@@ -149,7 +148,7 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
               enableFocusRing={false}
               onSubmitEditing={() => void replace(false)}
               keyDownEvents={[{ key: "Escape" }]}
-              onKeyDown={(e) => e.nativeEvent.key === "Escape" && close()}
+              onKeyDown={live((e) => e.nativeEvent.key === "Escape" && close())}
               style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
             />
             {note && (
@@ -162,7 +161,7 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
           </View>
         )}
       </Panel>
-    </Animated.View>
+    </ClosingView>
   );
 }
 

@@ -4,6 +4,7 @@ import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { useTheme } from "./theme";
 import { radius, space } from "./tokens";
 import { HoverFill } from "./HoverFill";
+import { useClosing } from "./Closing";
 
 export type ListRowState = { hovered: boolean; pressed: boolean; selected: boolean };
 
@@ -25,6 +26,7 @@ export function ListRow({
   children: ReactNode | ((state: ListRowState) => ReactNode);
 }) {
   const theme = useTheme();
+  const closing = useClosing();
   const [hovered, setHovered] = useState(false);
   const notify = useRef(onHover);
   notify.current = onHover;
@@ -42,7 +44,7 @@ export function ListRow({
   );
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={onPressIn}>
+      <Pressable disabled={closing} onPress={onPress} onPressIn={onPressIn}>
         {({ pressed }) => (
           <View
             style={{

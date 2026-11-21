@@ -5,6 +5,7 @@ import { useTheme } from "./theme";
 import { concentric, radius, space } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
 import { SlidingThumb, useSlidingThumb } from "./SlidingThumb";
+import { useClosing } from "./Closing";
 
 export type SegmentOption<T extends string> = { value: T; title: string; image?: string };
 
@@ -32,12 +33,14 @@ function Segment<T extends string>({ option, selected, onPress, onLayout }: { op
   const ink = selected ? theme.onAccent : theme.icon;
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
+  const closing = useClosing();
   return (
     <Pressable
+      disabled={closing}
       tooltip={option.image ? option.title : undefined}
       accessibilityRole="button"
       accessibilityLabel={option.title}
-      accessibilityState={{ selected }}
+      aria-selected={selected}
       onPress={onPress}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { Checkbox, IconTile, Radio, Text, useHover } from "../ui";
+import { Checkbox, checkboxA11y, IconTile, Radio, radioA11y, spaceActivates, Text, useHover } from "../ui";
 import { radius, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { useOnboardingColors } from "./Parts";
@@ -55,9 +55,8 @@ export function OptionCard({
           onPress={onPress}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: selected, disabled }}
-          accessibilityLabel={title}
+          onKeyDown={disabled ? undefined : spaceActivates(onPress)}
+          {...checkboxA11y(selected, disabled, title)}
         >
           <Animated.View style={scaleStyle}>
             <ChoiceCard
@@ -90,7 +89,7 @@ export function OptionCard({
   if (preview)
     return (
       <View {...hoverProps} style={{ flex: 1 }}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title}>
+        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={spaceActivates(onPress)} {...radioA11y(selected, title)}>
           <Animated.View style={scaleStyle}>
             <ChoiceCard mouseDownCanMoveWindow={false} radius={radius.panel} selected={selected} hovered={hovered} style={{ padding: space.ml, gap: space.ml }}>
               {preview}
@@ -115,7 +114,7 @@ export function OptionCard({
 
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title}>
+      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={spaceActivates(onPress)} {...radioA11y(selected, title)}>
         <Animated.View style={scaleStyle}>
           <ChoiceCard
             mouseDownCanMoveWindow={false}

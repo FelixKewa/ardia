@@ -7,7 +7,7 @@ import { THEME_TEXTURES } from "@ardia/core";
 import { PROFILE_COLORS } from "../ui/theme";
 import { useAppDark, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../state/browser/types";
-import { Box, Button, curve, duration, Group, PopUp, Segmented, space, Swatch, swatch, Text, ThemeSwatch } from "../ui";
+import { Box, Button, curve, duration, Group, PopUp, radioA11y, Segmented, space, spaceActivates, Swatch, swatch, Text, ThemeSwatch, useClosing } from "../ui";
 import { importArcTheme } from "../../state/profiles/arcThemes";
 import { noteThemePreset } from "../../state/telemetry/themePresetCounts";
 import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
@@ -173,9 +173,10 @@ export function ThemeSwatches({
 }
 
 function ColorButton({ name, ring, size, selected, onPress, children }: { name: string; ring: string; size: number; selected: boolean; onPress: () => void; children?: ReactNode }) {
+  const closing = useClosing();
   return (
     <View tooltip={name}>
-      <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={name}>
+      <Pressable disabled={closing} onPress={onPress} onKeyDown={closing ? undefined : spaceActivates(onPress)} {...radioA11y(selected, name)}>
         {({ pressed }) => (
           <View style={{ transform: [{ scale: pressed ? PRESSED_SCALE : 1 }] }}>
             <Swatch animated size={size} selected={selected} ring={ring} fill={children ? undefined : ring}>

@@ -6,6 +6,7 @@ import {
   PopoverBubble,
   Symbol,
   Button,
+  ClosingView,
   HoverFill,
   hex,
   HoverSlot,
@@ -18,7 +19,7 @@ import {
   Text,
   useGlass,
   useGlassLook,
-  useClosingInert,
+  useClosing,
   useHover,
   usePopoverMotion,
   usePopoverMotionStyle,
@@ -39,6 +40,7 @@ import { useDownloadsInSidebarFooter, useTabLayout, useToolbarLightsCenter } fro
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { PROFILE_DOTS_HEIGHT } from "../profiles/ProfileDots";
 import { useFocusWithin } from "../pages/PageLayout";
+import { keepActivationKeys } from "../pages/listCursor";
 import { openInternalPage } from "../../state/pages/urls";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { hairline, shadow } from "../ui/tokens";
@@ -94,7 +96,6 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const { root, placement: p, onLayout } = useDownloadsPlacement(windowId, closing, { topStrip, footer: addressBar, footerBottom: PROFILE_DOTS_HEIGHT + 2, sidebarRight });
   const placed = p !== null;
   const appear = usePopoverMotion(closing, onClosed, placed);
-  const inert = useClosingInert(closing);
 
   const upward = p?.bottom !== undefined;
   const arrowX = p?.arrowX;
@@ -104,9 +105,10 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const listMax = p ? Math.max(L.row, Math.min(L.visibleRows * L.row, p.room - L.chrome)) : L.visibleRows * L.row;
 
   return (
-    <View ref={root} collapsable={false} onLayout={onLayout} {...inert} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
+    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
       {p ? (
-        <Animated.View
+        <ClosingView
+          closing={closing}
           style={{
             position: "absolute",
             left: p.left,
@@ -155,7 +157,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
               />
             </View>
           </OutsidePressArea>
-        </Animated.View>
+        </ClosingView>
       ) : null}
     </View>
   );
@@ -188,7 +190,11 @@ function PanelBackground({ placement }: { placement: DownloadsPlacement }) {
 }
 
 function RowButton({ icon, onPress, tooltip }: { icon: string; onPress: () => void; tooltip: string }) {
-  return <Button variant="icon" icon={icon} size="s" glyph={PANEL.iconSize} onPress={onPress} tooltip={tooltip} />;
+  return (
+    <View onKeyDown={keepActivationKeys}>
+      <Button variant="icon" icon={icon} size="s" glyph={PANEL.iconSize} focusable onPress={onPress} tooltip={tooltip} />
+    </View>
+  );
 }
 
 const DownloadRowItem = memo(function DownloadRowItem({ id, windowId }: { id: string; windowId: string }) {
@@ -198,7 +204,33 @@ const DownloadRowItem = memo(function DownloadRowItem({ id, windowId }: { id: st
   return last.current ? <DownloadRow d={last.current} windowId={windowId} /> : null;
 });
 
-function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
+export function DownloadRowActions({ d, done, blocked, revealed }: { d: Download; done: boolean; blocked: boolean; revealed: boolean }) {
+  return blocked ? (
+    <View style={{ flexDirection: "row", marginRight: -L.textButtonPad }}>
+      <Button variant="text" look="panel" title="Keep" focusable onPress={() => void keepDownload(d.id)} />
+      <Button variant="text" look="panel" title="Discard" tone="destructive" focusable onPress={() => void cancelDownload(d.id)} />
+    </View>
+  ) : d.state === "downloading" ? (
+    <View style={{ flexDirection: "row", marginRight: -L.rowButtonBearing }}>
+      <RowButton
+        icon={d.paused ? "play.circle.fill" : "pause.circle.fill"}
+        onPress={() => void (d.paused ? resumeDownload(d.id) : pauseDownload(d.id))}
+        tooltip={d.paused ? "Resume" : "Pause"}
+      />
+      <RowButton icon="xmark.circle.fill" onPress={() => void cancelDownload(d.id)} tooltip="Cancel" />
+    </View>
+  ) : done ? (
+    <HoverSlot
+      hovered={revealed}
+      width={L.rowButton}
+      style={{ marginRight: -L.rowButtonBearing }}
+      hover={<RowButton icon="magnifyingglass.circle.fill" onPress={() => void revealFile(d.path)} tooltip={`Show in ${PLATFORM_TERMS.fileManager}`} />}
+    />
+  ) : null;
+}
+
+export function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
+  const closing = useClosing();
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const { focused, focusProps } = useFocusWithin(d.id);
@@ -206,9 +238,9 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
   const glass = useGlass();
   return (
     <View {...hoverProps} {...focusProps}>
-      <MouseArea path={done ? d.path : null}>
-        <ContextMenuArea onContextMenu={() => void downloadMenu(d, windowId)}>
-          <Pressable focusable={done} onPress={() => done && void openDownload(d.path)}>
+      <MouseArea path={done && !closing ? d.path : null}>
+        <ContextMenuArea onContextMenu={closing ? undefined : () => void downloadMenu(d, windowId)}>
+          <Pressable disabled={closing} focusable={done && !closing} onPress={() => done && void openDownload(d.path)}>
             {({ pressed }) => (
               <View
                 style={{
@@ -240,28 +272,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                     {blocked ? dangerWarning(d, true) : downloadStatus(d, exists)}
                   </Text>
                 </View>
-                {blocked ? (
-                  <View style={{ flexDirection: "row", marginRight: -L.textButtonPad }}>
-                    <Button variant="text" look="panel" title="Keep" onPress={() => void keepDownload(d.id)} />
-                    <Button variant="text" look="panel" title="Discard" tone="destructive" onPress={() => void cancelDownload(d.id)} />
-                  </View>
-                ) : d.state === "downloading" ? (
-                  <View style={{ flexDirection: "row", marginRight: -L.rowButtonBearing }}>
-                    <RowButton
-                      icon={d.paused ? "play.circle.fill" : "pause.circle.fill"}
-                      onPress={() => void (d.paused ? resumeDownload(d.id) : pauseDownload(d.id))}
-                      tooltip={d.paused ? "Resume" : "Pause"}
-                    />
-                    <RowButton icon="xmark.circle.fill" onPress={() => void cancelDownload(d.id)} tooltip="Cancel" />
-                  </View>
-                ) : done ? (
-                  <HoverSlot
-                    hovered={hovered || focused}
-                    width={L.rowButton}
-                    style={{ marginRight: -L.rowButtonBearing }}
-                    hover={<RowButton icon="magnifyingglass.circle.fill" onPress={() => void revealFile(d.path)} tooltip={`Show in ${PLATFORM_TERMS.fileManager}`} />}
-                  />
-                ) : null}
+                <DownloadRowActions d={d} done={done} blocked={blocked} revealed={hovered || focused} />
               </View>
             )}
           </Pressable>

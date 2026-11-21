@@ -7,7 +7,7 @@ import { createProfile } from "../../state/profiles/actions";
 import { endCreateProfileRequest, profileNames, takeCreateProfileSheet, useCreateProfileRequest, type CreateProfilePreset } from "../../state/profiles/createProfileRequest";
 import { dataGroups, unusedProfileColor } from "../../state/profiles/profiles";
 import type { ProfileColor } from "../../state/browser/types";
-import { Box, Button, DialogActions, DialogTitle, Divider, Dot, Group, PROFILE_COLORS, radius, Radio, Row, Sheet, Text, TextField, Toggle, useTheme } from "../ui";
+import { Box, Button, DialogActions, DialogTitle, Divider, Dot, Group, PROFILE_COLORS, radioA11y, radius, Radio, Row, Sheet, spaceActivates, Text, TextField, Toggle, useTheme } from "../ui";
 import { profileColors, SHARE_ROW_HEIGHT } from "./tokens";
 import { ThemeSwatches } from "../settings/ThemeEditor";
 import { closeSettingsSheet, showSettingsSheet } from "../../state/settings/sheet";
@@ -76,7 +76,7 @@ function CreateProfileSheet({ windowId, preset, onDone }: { windowId: string | n
                 {groups.map((g, i) => {
                   const names = profileNames(g.profileIds.map((id) => profiles[id]!.name));
                   return (
-                    <Pressable key={g.dataId} onPress={() => setShareWith(g.profileIds[0]!)} accessibilityRole="radio" accessibilityState={{ checked: g === selectedGroup }} accessibilityLabel={names}>
+                    <Pressable key={g.dataId} onPress={() => setShareWith(g.profileIds[0]!)} onKeyDown={spaceActivates(() => setShareWith(g.profileIds[0]!))} {...radioA11y(g === selectedGroup, names)}>
                       {i ? <Divider thick /> : null}
                       <Box row gap="ml" padX="ml" style={SHARE_ROW}>
                         <Radio on={g === selectedGroup} look="compact" />

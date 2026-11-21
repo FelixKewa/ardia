@@ -4,6 +4,8 @@ import { curve, duration } from "./motion";
 import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
 import { useNativeForm } from "./nativeForm";
+import { spaceActivates, switchA11y } from "./a11y";
+import { useClosing } from "./Closing";
 
 export type SwitchLook = {
   width: number;
@@ -39,6 +41,8 @@ function Switch({
   const shown = useRef(value);
   shown.current = value;
   const pressedAt = useRef(0);
+  const closing = useClosing();
+  const live = !disabled && !closing;
 
   const slideTo = (on: boolean) => {
     if (target.current === on) return;
@@ -55,22 +59,23 @@ function Switch({
 
   useEffect(() => (animateExternalChanges || Date.now() - pressedAt.current < USER_CHANGE_WINDOW_MS ? slideTo(value) : jumpTo(value)));
 
+  const flip = () => {
+    const next = !target.current;
+    pressedAt.current = Date.now();
+    if (!asksFirst) slideTo(next);
+    const settled = onChange(next);
+    if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
+  };
+
   const travel = look.width - look.knob - look.inset * 2;
   const radius = look.height / 2;
   return (
     <Pressable
-      disabled={disabled}
+      disabled={!live}
       hitSlop={SWITCH_HIT_SLOP}
-      accessibilityRole="switch"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ checked: value, disabled: !!disabled }}
-      onPress={() => {
-        const next = !target.current;
-        pressedAt.current = Date.now();
-        if (!asksFirst) slideTo(next);
-        const settled = onChange(next);
-        if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
-      }}
+      {...switchA11y(value, disabled, accessibilityLabel)}
+      onKeyDown={live ? spaceActivates(flip) : undefined}
+      onPress={flip}
       style={{ opacity: disabled ? opacity.disabled : 1 }}
     >
       <View pointerEvents="none" style={{ width: look.width, height: look.height, borderRadius: radius, backgroundColor: look.offColor, overflow: "hidden" }}>

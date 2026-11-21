@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { cancelChooser, chooseDevice, openChooserBluetoothSettings, rescanDevices, useDeviceChooser } from "../../state/site/deviceChoosers";
-import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text, usePopoverPresenceOf, whileOpen } from "../ui";
+import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { usePromptInputGuard } from "./PromptParts";
 import { PromptBody } from "./Prompts";
 import { noticeType } from "./tokens";
@@ -48,11 +48,12 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
   const [selected, setSelected] = useState<number | null>(null);
   useEffect(() => setSelected(null), [chooser?.id]);
   const guard = usePromptInputGuard(live?.id);
+  const stillOpen = useStillOpen(!!live && live.id === chooser?.id);
   if (!chooser) return null;
   const scanning = chooser.bothButtonsEnabled;
   const blocked = chooser.adapterOff || chooser.unauthorized;
   const valid = scanning || (selected !== null && selected < chooser.options.length);
-  const act = whileOpen(closing);
+  const act = whileOpen(closing, stillOpen);
   const choose = act(
     guard((index: number | null = selected) => {
       if (scanning) return chooseDevice(chooser.id, -1);
@@ -109,7 +110,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
                   {chooser.noOptionsText}
                 </Text>
               ) : null}
-              {chooser.canRefresh ? <Button variant="text" look="link" title="Scan Again" onPress={act(() => rescanDevices(chooser.id))} /> : null}
+              {chooser.canRefresh ? <Button variant="text" look="link" tone="textPrimary" title="Scan Again" onPress={act(() => rescanDevices(chooser.id))} /> : null}
             </>
           )}
         </Box>

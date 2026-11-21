@@ -1,5 +1,5 @@
 import { Animated, Pressable, View } from "react-native";
-import { HoverFill, menuRowFill, PANEL, Symbol, Text, useGlass, useHover, useTheme } from "../ui";
+import { HoverFill, menuRowFill, PANEL, Symbol, Text, useClosing, useGlass, useHover, useTheme } from "../ui";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { DOWNLOADS_LIST } from "./tokens";
 
@@ -7,11 +7,12 @@ export function FooterButton({ title, onPress }: { title: string; onPress: () =>
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   return (
     <View {...hoverProps} style={{ paddingHorizontal: PANEL.rowInset }}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+      <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
         {({ pressed }) => (
           <Animated.View
             style={[{

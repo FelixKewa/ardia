@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { PERSONALIZE_COPY, TabLayoutPicker } from "../onboarding/Personalize";
 import { ThemePicker } from "../settings/ThemeEditor";
-import { Box, capsule, PopoverSurface, proseLineHeight, space, Symbol, Text, useHover, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence, useTheme, useClosingInert } from "../ui";
+import { Box, capsule, ClosingView, PopoverSurface, proseLineHeight, space, Symbol, Text, useHover, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence, useTheme } from "../ui";
 import { closePersonalizePanelOf, setPersonalizePanel as setOpen, usePersonalizePanel } from "../../state/pages/personalizePanel";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
@@ -59,12 +59,11 @@ const PERSONALIZE_GLYPH = { width: BUTTON, height: BUTTON, alignItems: "center",
 function PersonalizePanel({ windowId, onClose, closing, onClosed }: { windowId: string; onClose: () => void; closing: boolean; onClosed: () => void }) {
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, "bottom right", true);
-  const inert = useClosingInert(closing);
   return (
     <>
       {closing ? null : <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close Personalize" />}
-      <Animated.View
-        {...inert}
+      <ClosingView
+        closing={closing}
         style={{
           position: "absolute",
           right: INSET,
@@ -92,7 +91,7 @@ function PersonalizePanel({ windowId, onClose, closing, onClosed }: { windowId: 
             </Box>
           </Box>
         </PopoverSurface>
-      </Animated.View>
+      </ClosingView>
     </>
   );
 }
