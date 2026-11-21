@@ -65,7 +65,7 @@ export type PluginsNative = {
   reply(name: string, run: number, line: string): void;
   event(name: string, run: number, line: string): void;
   call(name: string, run: number, line: string): void;
-  remove(name: string, official: boolean): Promise<PluginRemoveResult>;
+  remove(name: string, official: boolean, folderId: string | null): Promise<PluginRemoveResult>;
   linkPrograms(spec: PluginProgramsSpec): Promise<PluginProgramsResult>;
   unlinkPrograms(name: string, programs: string[], remove: boolean): Promise<{ ok: boolean }>;
   sweepPrograms(active: string[]): Promise<void>;

@@ -518,6 +518,7 @@ export const pluginHost = {
   replies: [] as { name: string; run: number; line: string }[],
   events: [] as { name: string; run: number; line: string }[],
   removed: [] as string[],
+  removeFolderIds: [] as (string | null)[],
   links: [] as { name: string; folderId: string; approved: string; version: string | null; programs: { name: string; path: string; afterUpdate?: string[][] }[] }[],
   unlinks: [] as { name: string; programs: string[]; remove: boolean }[],
   sweeps: [] as string[][],
@@ -580,7 +581,7 @@ const plugins: Modules["ArdiaPlugins"] = {
   reply: (name, run, line) => void pluginHost.replies.push({ name, run, line }),
   event: (name, run, line) => void pluginHost.events.push({ name, run, line }),
   call: (name, run, line) => void pluginHost.events.push({ name, run, line }),
-  remove: async (name, official) => (await pluginHost.removeGate, pluginHost.removed.push(official ? `official:${name}` : name), (pluginHost.folders = pluginHost.folders.filter((f) => f.name !== name)), { ok: true }),
+  remove: async (name, official, folderId) => (await pluginHost.removeGate, pluginHost.removeFolderIds.push(folderId), pluginHost.removed.push(official ? `official:${name}` : name), (pluginHost.folders = pluginHost.folders.filter((f) => f.name !== name)), { ok: true }),
   linkPrograms: async (spec) => {
     pluginHost.links.push({ ...spec, programs: spec.programs.map((p) => ({ ...p })) });
     if (pluginHost.linkResult) return pluginHost.linkResult;

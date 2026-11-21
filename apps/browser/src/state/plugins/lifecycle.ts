@@ -292,7 +292,8 @@ export function adoptExactApproval(name: string, candidate: PluginListing, conse
 
 export async function promoteCandidate(name: string, candidate: PluginListing, consent: ConsentToken | null): Promise<boolean> {
   setOfficialFetch(name, { state: "promoting" });
-  const saved = await pluginRecordsSaved(consent);
+  const exact = adoptExactApproval(name, candidate, consent);
+  const saved = exact && (await pluginRecordsSaved(consent));
   const record = recordOf(currentPlugins(), name);
   if (!saved || !record.enabled || !approvalMatches(candidate, record.approved)) {
     setOfficialFetch(name, { state: "failed", code: "failed", reason: saved ? "Its approval changed before it could be switched to." : "plugins.json couldn't be saved." });
@@ -372,7 +373,10 @@ export async function removePlugin(name: string, mayGoOn: () => boolean = () => 
     await removePrograms(name, consent);
     if (!mayGoOn()) return { ok: false, reason: "Control was turned off after Ardia unlinked its programs, so its files are still there." };
     await closePluginStorage(name);
-    const removed = await removePluginFiles(name, official).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
+    const now = removalIdentity(name);
+    if (expected && (now.official !== official || (!official && expected.folderId !== null && now.folderId !== null && now.folderId !== expected.folderId)))
+      return { ok: false, reason: "It changed while it was being removed, so its files are still there. Try again." };
+    const removed = await removePluginFiles(name, official, official ? null : (expected?.folderId ?? identity.folderId)).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
     if (!removed.ok) return removed;
     const secrets = official ? { ok: true, remaining: [] } : await clearPluginSecrets(name).catch((error: unknown): SecretsCleared => (warnFor(consent, `[plugins] couldn't remove ${name}'s secrets`, error), { ok: false, remaining: [] }));
     const forgotten = updateRecord(name, () => null, consent) && (await pluginRecordsSaved(consent));

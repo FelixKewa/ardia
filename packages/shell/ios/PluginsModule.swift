@@ -74,7 +74,7 @@ public class PluginsModule: Module {
     }
     .runOnQueue(DispatchQueue.global(qos: .userInitiated))
 
-    AsyncFunction("remove") { (name: String, official: Bool, promise: Promise) in Self.remove(name, official: official, promise) }
+    AsyncFunction("remove") { (name: String, official: Bool, folderId: String?, promise: Promise) in Self.remove(name, official: official, folderId: folderId, promise) }
       .runOnQueue(.main)
 
     Function("revealLog") { (name: String) in DispatchQueue.main.async { Self.revealLog(name) } }
@@ -157,8 +157,8 @@ public class PluginsModule: Module {
     }
   }
 
-  private static func remove(_ name: String, official: Bool, _ promise: Promise) {
-    PluginHost.shared.remove(name, official: official) { problem in
+  private static func remove(_ name: String, official: Bool, folderId: String?, _ promise: Promise) {
+    PluginHost.shared.remove(name, official: official, folderId: folderId) { problem in
       if let problem { return promise.resolve(["ok": false, "reason": problem]) }
       if official { return promise.resolve(["ok": true]) }
       PluginPageView.removeData(name) { promise.resolve(["ok": true]) }

@@ -345,3 +345,38 @@ test("Remove stops when a different folder of the same kind took the name while 
   assert.equal(removed.ok, false);
   assert.deepEqual(host.removed, []);
 });
+
+test("a switch by Update… after a migration whose save failed still records the exact approval first", async () => {
+  const { refusedWrites } = await import("../../test-native/shell.ts");
+  usePlugins.setState({ records: {}, candidates: {}, fetches: {}, consent: null });
+  stub.docs.set("plugins.json", RECORDS(OLD_RECEIPT));
+  reload();
+  host.folders = [{ ...LEGACY, candidate: { folderId: PINNED.folderId, text: OLD, legacyHash: officialLegacyHash(OLD), version: "0.5.0" } }];
+  host.promotes.length = 0;
+  resetOfficialUpdatesForTests();
+  refusedWrites.on = true;
+  await lifecycle.rescanPlugins(consentToken());
+  await settle();
+  refusedWrites.on = false;
+  assert.deepEqual(host.promotes, [], "nothing switches while the exact approval can't be saved");
+  assert.equal(P().records.cli.approved, OLD_RECEIPT);
+  const result = await installOfficialPlugin("cli", { showSheet: false });
+  assert.deepEqual(result, { ok: true });
+  assert.equal(P().records.cli.approved, manifestHash(OLD, PINNED.folderId), "the exact approval is on record before the switch");
+  assert.equal(P().records.cli.previous, OLD_RECEIPT);
+  assert.equal(host.promotes.length, 1);
+});
+
+test("Remove hands native the folder identity it saw, so a folder swapped in meanwhile isn't deleted", async () => {
+  usePlugins.setState({ records: {}, candidates: {}, fetches: {}, consent: null });
+  stub.docs.set("plugins.json", JSON.stringify({ version: 1, plugins: {} }));
+  reload();
+  const mine = JSON.stringify({ manifest: 1, name: "mine", title: "Mine", version: "1.0.0" });
+  host.folders = [{ name: "mine", status: "ok", text: mine, folderId: "3:3" }];
+  await lifecycle.rescanPlugins(consentToken());
+  await settle();
+  host.removeFolderIds.length = 0;
+  const removed = await lifecycle.removePlugin("mine", undefined, lifecycle.removalIdentity("mine"));
+  assert.equal(removed.ok, true);
+  assert.deepEqual(host.removeFolderIds, ["3:3"]);
+});

@@ -163,12 +163,18 @@ struct PluginFolders {
     return entries
   }
 
-  func remove(_ name: String, official: Bool) -> String? {
+  func remove(_ name: String, official: Bool, folderId: String?) -> String? {
     guard Self.isName(name) else { return "That isn't a plugin's name." }
     let link = (pluginsLexical as NSString).appendingPathComponent(name)
     var info = stat()
     if official {
       return officialStore().remove(name) ? nil : "Its downloaded copy couldn't be removed."
+    }
+    if let folderId, lstat(link, &info) == 0, PluginFiles.openFolder(link).map({ folder -> String in
+      defer { folder.close() }
+      return folder.id
+    }) != folderId {
+      return "Another folder took its place while it was being removed, so nothing was deleted. Try again."
     }
     if lstat(link, &info) == 0 {
       do {
