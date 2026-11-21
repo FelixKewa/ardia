@@ -7,14 +7,14 @@ import { useWindowChrome } from "../../browser/src/state/windows/windowButtons";
 import { windowButtonsFor } from "../../browser/src/lib/windowChrome";
 import { TintInk } from "../../browser/src/components/ui/TintInk";
 
-type LeadingWindowControlsProps = { windowId: string; size: number; centerY?: number; maximizable?: boolean; onMenu?: () => void };
+type LeadingWindowControlsProps = { windowId: string; size: number; centerY?: number; maximizable?: boolean };
 
-export function LeadingWindowControls({ windowId, size, centerY, maximizable = true, onMenu }: LeadingWindowControlsProps) {
+export function LeadingWindowControls({ windowId, size, centerY, maximizable = true }: LeadingWindowControlsProps) {
   const chrome = useWindowChrome();
   const place = useTrafficLightsPlace(windowId);
   const pageFullScreen = !!useFullscreenTab(windowId);
   const windowFullScreen = useWindowFullScreen(windowId);
-  const buttons = windowButtonsFor(chrome.leadingButtons, { menu: !!onMenu, maximizable });
+  const buttons = windowButtonsFor(chrome.leadingButtons, { menu: false, maximizable });
   if (!leadingButtonsShown({ count: buttons.length, pageFullScreen, windowFullScreen })) return null;
   return (
     <TintInk>
@@ -24,7 +24,6 @@ export function LeadingWindowControls({ windowId, size, centerY, maximizable = t
         centerY={centerY ?? place.center[1]}
         size={size}
         maximizable={maximizable}
-        onMenu={onMenu}
         leading={!place.trailing}
         inset={leadingControlsInset(place, buttons.length)}
       />

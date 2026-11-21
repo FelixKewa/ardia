@@ -555,29 +555,29 @@ test("in a narrow right sidebar the Downloads button leaves the header for the f
   assert.equal(headerFitsDownloads(state({ sidebarWidth: 160 }), "w", false, windowsChrome), true, "a left sidebar's header has no buttons in it");
 });
 
-test("with the desktop's … at the left the header drops its hamburger while the left group is drawn, and the right keeps room only for its own buttons", async () => {
+test("whatever the desktop's layout, the … stays at the right, so the header's hamburger shows only when the … isn't drawn at all", async () => {
   const { menuBesideWindowButtons, linuxSidebarCaptionRoom, linuxSidebarHeaderCollapsed, headerFitsDownloads } = await import("./sidebarHeaderLayout.ts");
   const { nativeButtonsChrome } = await import("../../browser/src/lib/platformChrome.linux.ts");
   const { parseButtonLayout } = await import("../../browser/src/lib/windowButtonLayout.ts");
-  const gnome = nativeButtonsChrome(parseButtonLayout("appmenu:close"));
-  const left = nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:"));
-  const elementary = nativeButtonsChrome(parseButtonLayout("close:maximize"));
-  const layouts = [{}, { compactToolbar: true }, { addressBar: "sidebar" }, { sidebarSide: "right" }, { tabLayout: "top" }, { minimalismMode: true }];
+  const chromes = ["appmenu:close", "menu:close", "close,minimize,maximize:", "close:maximize", ""].map((raw) => [raw, nativeButtonsChrome(parseButtonLayout(raw))]);
+  const layouts = [{}, { compactToolbar: true }, { addressBar: "sidebar" }, { sidebarSide: "right" }, { tabLayout: "top" }, { autoHideTabs: true }, { minimalismMode: true }];
   for (const settings of layouts) {
-    const label = JSON.stringify(settings);
-    for (const chrome of [gnome, left]) {
-      assert.equal(menuBesideWindowButtons(state(settings), "w", false, chrome), true, label);
-      assert.equal(menuBesideWindowButtons(state(settings), "w", true, chrome), false, `${label}: a full-screen page hides the left group too`);
+    for (const [raw, chrome] of chromes) {
+      const label = JSON.stringify([settings, raw]);
+      assert.equal(menuBesideWindowButtons(state(settings), "w", false, chrome), menuBesideWindowButtons(state(settings), "w", false, windowsChrome), label);
+      assert.equal(menuBesideWindowButtons(state(settings), "w", true, chrome), false, `${label}: a full-screen page hides the … and the hamburger comes back`);
       assert.equal(menuBesideWindowButtons(state(settings, { fullScreen: true }), "w", false, chrome), false, `${label}: so does full screen`);
-      assert.equal(linuxSidebarHeaderCollapsed(state(settings), "w", false, chrome), false, `${label}: the header holds the left group`);
     }
-    assert.equal(menuBesideWindowButtons(state(settings), "w", false, elementary), menuBesideWindowButtons(state(settings), "w", false, windowsChrome), `${label}: elementary's … sits in the right group`);
-    assert.equal(linuxSidebarCaptionRoom(state(settings), "w", false, left), 0, label);
+    for (const raw of ["close,minimize,maximize:", "close:maximize"]) {
+      assert.equal(linuxSidebarHeaderCollapsed(state(settings), "w", false, nativeButtonsChrome(parseButtonLayout(raw))), false, `${JSON.stringify(settings)} ${raw}: the header holds the left buttons`);
+    }
   }
+  assert.equal(menuBesideWindowButtons(state({ autoHideTabs: true }), "w", false, chromes[2][1]), true, "with the left buttons gone along with the sidebar the … is still at the right");
+  const gnome = chromes[0][1];
   const right = state({ sidebarSide: "right" });
-  assert.equal(linuxSidebarCaptionRoom(right, "w", false, gnome), gnome.trailingWidth, "the right sidebar keeps room for close alone");
+  assert.equal(linuxSidebarCaptionRoom(right, "w", false, gnome), gnome.trailingWidth, "the right sidebar keeps room for the … and close");
   assert.ok(gnome.trailingWidth < windowsChrome.trailingWidth);
-  assert.equal(headerFitsDownloads(state({ sidebarSide: "right", sidebarWidth: 160 }), "w", false, gnome), true, "one button at the right leaves Downloads room a narrow header lacks with four");
+  assert.equal(headerFitsDownloads(state({ sidebarSide: "right", sidebarWidth: 160 }), "w", false, gnome), true, "two buttons at the right leave Downloads room a narrow header lacks with four");
   assert.equal(headerFitsDownloads(state({ sidebarSide: "right", sidebarWidth: 160 }), "w", false, windowsChrome), false);
 });
 
@@ -600,9 +600,9 @@ test("the header's tools sit as far past the left group as they sit past the Mac
   const { parseButtonLayout } = await import("../../browser/src/lib/windowButtonLayout.ts");
   assert.equal(headerToggleXFor(TRAFFIC_LIGHTS_CHROME), 97.75, "the Mac's toggle stays where it was");
   const afterLights = headerToggleXFor(TRAFFIC_LIGHTS_CHROME) - TRAFFIC_LIGHTS_CHROME.leadingWidth;
-  for (const raw of ["appmenu:close", "close,minimize,maximize:", "close:maximize"]) {
+  for (const raw of ["close:", "close,minimize,maximize:", "close:maximize"]) {
     const chrome = nativeButtonsChrome(parseButtonLayout(raw));
     assert.equal(headerToggleXFor(chrome) - chrome.leadingWidth, afterLights, raw);
   }
-  assert.equal(headerToggleXFor(NATIVE_BUTTONS_CHROME), HEADER_TOOLS.fullScreenToggleX, "with nothing at the left the toggle takes the edge slot");
+  for (const chrome of [NATIVE_BUTTONS_CHROME, nativeButtonsChrome(parseButtonLayout("appmenu:close"))]) assert.equal(headerToggleXFor(chrome), HEADER_TOOLS.fullScreenToggleX, "with nothing at the left the toggle takes the edge slot");
 });

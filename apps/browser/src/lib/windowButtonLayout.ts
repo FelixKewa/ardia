@@ -12,7 +12,7 @@ export const TRAFFIC_LIGHTS_WIDTH = 78;
 
 export const DESKTOP_BUTTON_LAYOUT_FALLBACK = ":minimize,maximize,close";
 
-const BUTTON_OF = new Map<string, WindowButton>([["appmenu", "menu"], ["menu", "menu"], ["minimize", "minimize"], ["maximize", "maximize"], ["close", "close"]]);
+const BUTTON_OF = new Map<string, WindowButton>([["minimize", "minimize"], ["maximize", "maximize"], ["close", "close"]]);
 
 export function parseButtonLayout(raw: string | null | undefined): WindowButtonLayout {
   const source = typeof raw === "string" ? raw : DESKTOP_BUTTON_LAYOUT_FALLBACK;
@@ -27,9 +27,7 @@ export function parseButtonLayout(raw: string | null | undefined): WindowButtonL
     });
   const leading = buttonsOf(colon < 0 ? source : source.slice(0, colon));
   const trailing = buttonsOf(colon < 0 ? "" : source.slice(colon + 1));
-  if (placed.has("menu")) return { leading, trailing };
-  if (trailing.length || !leading.length) return { leading, trailing: ["menu", ...trailing] };
-  return { leading: [...leading, "menu"], trailing };
+  return { leading, trailing: ["menu", ...trailing] };
 }
 
 export const BROWSER_BUTTON_LAYOUT: WindowButtonLayout = parseButtonLayout(DESKTOP_BUTTON_LAYOUT_FALLBACK);

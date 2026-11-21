@@ -22,8 +22,7 @@ export const browserWindowControls = () =>
 function PlacedLeadingControls() {
   const windowId = useWindowId();
   const small = useWindow(windowId, (w) => w?.kind === "small");
-  const onMenu = useCallback(() => void showAppMenu(windowId), [windowId]);
-  return <LeadingWindowControls windowId={windowId} size={small ? WINDOW_CONTROLS.small : WINDOW_CONTROLS.regular} onMenu={onMenu} />;
+  return <LeadingWindowControls windowId={windowId} size={small ? WINDOW_CONTROLS.small : WINDOW_CONTROLS.regular} />;
 }
 
 function PlacedControls() {

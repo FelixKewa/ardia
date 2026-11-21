@@ -7,7 +7,7 @@ import { CARD_INSET } from "../../browser/src/lib/windowLayout";
 import { sidebarWidthIn } from "../../browser/src/state/sidebar/shownWidth";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../../browser/src/components/sidebar/geometry";
 import { addressBarInSidebar, pageFrameIn, sidebarCaptionRoom, sidebarHeaderCollapsed, windowControlsPlace } from "../../browser/src/state/windows/layout";
-import { leadingButtonsShown, windowButtonsRendered } from "./windowControlsRules";
+import { windowButtonsRendered } from "./windowControlsRules";
 
 export * from "../../browser/src/state/windows/layout";
 
@@ -15,9 +15,7 @@ export const trailingButtonsRendered = (s: BrowserState, windowId: string, pageF
   windowButtonsRendered({ placed: chrome.trailingWidth > 0 && windowControlsPlace(s, windowId, pageFrameIn(s, windowId), chrome) !== null, pageFullScreen });
 
 export const menuBesideWindowButtons = (s: BrowserState, windowId: string, pageFullScreen: boolean, chrome: WindowChrome = WINDOW_CHROME): boolean =>
-  chrome.trailingButtons.includes("menu")
-    ? trailingButtonsRendered(s, windowId, pageFullScreen, chrome)
-    : chrome.leadingButtons.includes("menu") && leadingButtonsShown({ count: chrome.leadingButtons.length, pageFullScreen, windowFullScreen: !!s.windows[windowId]?.fullScreen });
+  chrome.trailingButtons.includes("menu") && trailingButtonsRendered(s, windowId, pageFullScreen, chrome);
 
 export const linuxSidebarCaptionRoom = (s: BrowserState, windowId: string, pageFullScreen: boolean, chrome: WindowChrome = WINDOW_CHROME): number =>
   trailingButtonsRendered(s, windowId, pageFullScreen, chrome) ? sidebarCaptionRoom(s, windowId, chrome) : 0;

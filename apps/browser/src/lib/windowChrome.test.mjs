@@ -80,11 +80,12 @@ test("Linux's native buttons take the desktop's layout: room at each top corner 
   const chrome = (raw) => linux.nativeButtonsChrome(parseButtonLayout(raw));
   assert.deepEqual(chrome(":minimize,maximize,close"), windows);
   assert.deepEqual(chrome(null), windows, "an engine that can't tell keeps today's buttons");
-  assert.deepEqual(chrome("appmenu:close"), { leadingWidth: 42, trailingWidth: 72, titleBarHeight: 32, leadingButtons: ["menu"], trailingButtons: ["close"] });
-  assert.deepEqual(chrome("close,minimize,maximize:"), { leadingWidth: 141, trailingWidth: 0, titleBarHeight: 0, leadingButtons: ["close", "minimize", "maximize", "menu"], trailingButtons: [] });
+  assert.deepEqual(chrome("appmenu:close"), { leadingWidth: 0, trailingWidth: 105, titleBarHeight: 32, leadingButtons: [], trailingButtons: ["menu", "close"] });
+  assert.deepEqual(chrome("menu:close"), chrome("appmenu:close"), "Omarchy's window menu token keeps the … at the right too");
+  assert.deepEqual(chrome("close,minimize,maximize:"), { leadingWidth: 108, trailingWidth: 72, titleBarHeight: 32, leadingButtons: ["close", "minimize", "maximize"], trailingButtons: ["menu"] });
   assert.deepEqual(chrome("close:maximize"), { leadingWidth: 42, trailingWidth: 105, titleBarHeight: 32, leadingButtons: ["close"], trailingButtons: ["menu", "maximize"] });
-  assert.equal(windowControlsDrawn(chrome("close,minimize,maximize:")), true, "buttons only at the left are still drawn");
-  assert.equal(captionRoom(0, 0, chrome("close,minimize,maximize:")), 0, "nothing at the right is kept clear when the buttons are all at the left");
+  assert.equal(windowControlsDrawn(chrome("close,minimize,maximize:")), true);
+  assert.equal(captionRoom(0, 0, chrome("close,minimize,maximize:")), 72, "with the buttons all at the left the right keeps room for the … alone");
   assert.equal(linux.applyWindowButtonStyle("native", parseButtonLayout("appmenu:close")), true);
   assert.deepEqual(linux.WINDOW_CHROME, chrome("appmenu:close"));
   assert.equal(linux.applyWindowButtonStyle("native", parseButtonLayout("appmenu:close")), false, "the same layout again changes nothing");

@@ -862,9 +862,10 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     read by the engine as `ArdiaShell.windowButtonLayout` and sent again as its `windowButtonLayout` event when it
     changes): which of minimize, maximize and close show, in what order, on which side, live.
     `lib/windowButtonLayout.ts` parses it as GTK does (start`:`end, comma-separated, only the first colon splits, no
-    colon puts everything at the start; `icon`, `spacer`, unknown and repeated tokens are dropped). The `…` goes where
-    `appmenu` or `menu` is, otherwise at the inner end of the right group, or of the left group when only it has buttons,
-    or alone at the right when neither does. An engine without the call, or a desktop that reports none, keeps
+    colon puts everything at the start; `icon`, `spacer`, unknown and repeated tokens are dropped). The `…` always
+    stays at the right, at the inner end of the right group, or alone where the Windows build puts its buttons when the
+    right has none: `appmenu` and `menu` are read but don't move it, because upstream GNOME (`appmenu:close`) and
+    Omarchy (`menu:close`) would otherwise hide the menu with the sidebar, and browsers keep it at the toolbar's right. An engine without the call, or a desktop that reports none, keeps
     `:minimize,maximize,close`, today's buttons. `desktopButtonLayout.ts` feature-detects the call, follows the event
     and remembers the last layout in `localStorage`, so a new window draws it at once. The layout is part of the
     native chrome (`nativeButtonsChrome`: `leadingButtons`, `trailingButtons` and widths from their counts, a title bar
@@ -872,7 +873,10 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     room for its own count, and the left group (`LeadingWindowControls.tsx`, swapped in for the shared no-op) sits
     where the traffic lights would, 13 px before their first light's center (12 px from the edge at the default
     place), mirrored in a right sidebar, with the Mac's room after it (the sidebar header's tools, the top strip, Little
-    Ardia's bar, Settings' sidebar). Like the lights it slides away with a hidden sidebar and hides in full screen.
+    Ardia's bar, Settings' sidebar). It holds only window buttons. Like the lights it slides away with a hidden sidebar
+    and hides in full screen. Known limit: with the sidebar hidden, a desktop whose buttons are all at the left shows
+    none until the sidebar peeks (the `…` stays at the right); giving the toolbar room at its left for them is a
+    follow-up.
     With the address bar in a left sidebar and both groups, the right group sits at the sidebar's right end of the row
     atop it (`windowControlsInset`). A change wakes every window-settings hook (`onWindowChromeChange`). Traffic
     lights and Hidden ignore the layout. The daily settings snapshot carries `window_buttons_side` (right, left, both,
@@ -908,7 +912,7 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     one, and an activation with neither (assistive technology) to the visible one. Pressing it, or Enter on it, while
     a menu is open closes the menu. The buttons take keyboard focus like any button (`focusable` on the shared
     `ControlButton`), and the `…` counts as a menu surface, so tabbing to it keeps the field Edit › Copy and Paste act
-    on. There are never two menu buttons: the `…` while the window buttons that hold it are drawn, the header's hamburger
+    on. There are never two menu buttons: the `…` while the right group that holds it is drawn, the header's hamburger
     otherwise (window or page full screen, traffic lights or hidden). Linux keeps the sidebar header the Windows rule
     would collapse whenever the hamburger has no other home (`sidebarHeaderLayout.ts`). The hamburger lives in the
     header's profile controls (`ProfileIndicator.tsx`), which the sidebar and the top strip mount even when minimalism
