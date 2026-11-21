@@ -5,10 +5,10 @@ import { useBookmarks } from "../../state/bookmarks/hooks";
 import { openUrl } from "../../state/bookmarks/actions";
 import { plural } from "../../state/browser/model";
 import { Favicon } from "../favicon/Favicon";
-import { ContextMenuArea, MouseArea, radius, space, Symbol, Text, useHover, useTheme } from "../ui";
+import { ContextMenuArea, MouseArea, radius, space, Symbol, Text, useTheme } from "../ui";
 import { openBookmarkRowMenu } from "../../state/bookmarks/bookmarkMenus";
 import { bookmarkDrag } from "../bookmarks/tokens";
-import { hostLabel, RowMenuSlot } from "./PageLayout";
+import { hostLabel, RowMenuSlot, useRowControls } from "./PageLayout";
 import { bookmarkList, pagesColors } from "./tokens";
 import { perLook } from "../ui/tokens";
 
@@ -54,21 +54,7 @@ export function BookmarkRow({
   const colors = pagesColors(theme);
   const node = useBookmarks((b) => b.nodes[id]);
   const path = useBookmarks((b) => (showPath ? bookmarkAncestors(b, id).map((a) => a.title).reverse().join(" › ") : ""));
-  const { hovered, hoverProps } = useHover();
-  const [focused, setFocused] = useState(false);
-  const [focusProps] = useState(() => {
-    let blurTimer: ReturnType<typeof setTimeout> | undefined;
-    return {
-      onFocus: () => {
-        clearTimeout(blurTimer);
-        setFocused(true);
-      },
-      onBlur: () => {
-        clearTimeout(blurTimer);
-        blurTimer = setTimeout(() => setFocused(false), 0);
-      },
-    };
-  });
+  const { hovered, controlsShown, rowProps } = useRowControls(id);
   const dy = useRef(new Animated.Value(0)).current;
   const [dragging, setDragging] = useState(false);
   const handlers = useRef({ onDragStart, onDragMove, onDragEnd });
@@ -110,8 +96,7 @@ export function BookmarkRow({
     <Animated.View
       ref={targetRef as never}
       {...responder.panHandlers}
-      {...hoverProps}
-      {...focusProps}
+      {...rowProps}
       style={{ position: "absolute", top, left: 0, right: 0, zIndex: dragging ? 10 : 0, opacity: dragging ? bookmarkList.dragOpacity : 1, transform: [{ translateY: dy }] }}
     >
       <ContextMenuArea onContextMenu={() => void menu()}>
@@ -132,7 +117,7 @@ export function BookmarkRow({
               <Text lines={1} size="small" tone="textTertiary" style={DETAIL}>
                 {showPath ? path : node.kind === "url" ? hostLabel(node.url) : plural(node.children.length, "item")}
               </Text>
-              <RowMenuSlot shown={hovered || focused} onPress={() => void menu()} />
+              <RowMenuSlot shown={controlsShown} onPress={() => void menu()} />
             </View>
           </Pressable>
         </MouseArea>

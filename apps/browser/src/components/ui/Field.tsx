@@ -7,7 +7,7 @@ import { useEffect, useRef, type Ref } from "react";
 import { Animated, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
 import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
 import { useTheme } from "./theme";
-import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
+import { capsule, lineHeight, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
@@ -292,6 +292,7 @@ export function Checkbox({
   mixed,
   look = "form",
   size = "m",
+  labelSize = "body",
 }: {
   value: boolean;
   onChange?: (value: boolean, modifiers?: ClickModifiers) => void;
@@ -300,11 +301,13 @@ export function Checkbox({
   mixed?: boolean;
   look?: "form" | "ring";
   size?: keyof typeof CHECK_RING;
+  labelSize?: "body" | "small";
 }) {
   const theme = useTheme();
   const on = value || mixed;
   const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
+  const a11y = { accessibilityRole: "checkbox", accessibilityLabel: label, accessibilityState: { checked: mixed && !value ? "mixed" : value, disabled: !!disabled } } as const;
   if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
   if (look === "ring")
     return (
@@ -313,8 +316,7 @@ export function Checkbox({
         onPress={() => onChange?.(!value)}
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: value, disabled }}
+        {...a11y}
         style={{ opacity: disabled ? opacity.disabled : 1 }}
       >
         <Animated.View style={[CHECK_RING_FRAME[size], scaleStyle]}>
@@ -328,7 +330,8 @@ export function Checkbox({
       onPress={(e) => onChange?.(!value, modifiersOf(e))}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
-      style={{ flexDirection: "row", alignItems: "center", gap: space.m, opacity: disabled ? opacity.disabled : 1 }}
+      {...a11y}
+      style={{ flexDirection: "row", alignItems: labelSize === "small" ? "flex-start" : "center", gap: space.m, opacity: disabled ? opacity.disabled : 1 }}
     >
       <Animated.View style={[CHECK_BOX_FRAME, scaleStyle]}>
         <View
@@ -346,7 +349,7 @@ export function Checkbox({
           {on && <Symbol name={mixed && !value ? "minus" : "checkmark"} size={9} weight="bold" color={theme.onAccent} style={{ width: 14, height: 14 }} />}
         </View>
       </Animated.View>
-      {label ? <Text style={{ ...typeScale.body, color: theme.textPrimary }}>{label}</Text> : null}
+      {label ? <Text style={labelSize === "small" ? { ...typeScale.small, lineHeight: lineHeight.body, flex: 1, color: theme.textPrimary } : { ...typeScale.body, color: theme.textPrimary }}>{label}</Text> : null}
     </Pressable>
   );
 }

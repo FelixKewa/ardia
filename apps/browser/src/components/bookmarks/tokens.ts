@@ -1,4 +1,3 @@
-import { duration } from "../ui/motion";
 import { capsule, radius, space } from "../ui/tokens";
 
 export const folderTreeInk = { selectedChevron: "#FFFFFFCC" } as const;
@@ -18,8 +17,6 @@ export const bookmarksBar = {
   dropRing: 1.5,
   springOpenMs: 550,
   ghostOpacity: 0.92,
-  hoverIn: duration.fast,
-  hoverOut: duration.base,
 } as const;
 
 export type BarSize = {

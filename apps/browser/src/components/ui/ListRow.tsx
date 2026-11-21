@@ -55,7 +55,7 @@ export function ListRow({
               backgroundColor: selected ? (selectedTone === "accent" ? theme.formAccent : theme.rowSelected) : undefined,
             }}
           >
-            <HoverFill shown={hovered && !selected} instant={selected} color={theme.rowHover} radius={radius.tile} />
+            <HoverFill shown={hovered || (pressed && !!onPress)} instant={pressed && !!onPress} color={pressed && onPress ? theme.popoverRowPressed : theme.rowHover} radius={radius.tile} />
             {typeof children === "function" ? children({ hovered, pressed, selected }) : children}
           </View>
         )}

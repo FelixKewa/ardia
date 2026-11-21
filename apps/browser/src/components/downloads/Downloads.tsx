@@ -38,6 +38,7 @@ import { useDownload } from "../../state/downloads/hooks";
 import { useDownloadsInSidebarFooter, useTabLayout, useToolbarLightsCenter } from "../../state/windows/layout";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { PROFILE_DOTS_HEIGHT } from "../profiles/ProfileDots";
+import { useFocusWithin } from "../pages/PageLayout";
 import { openInternalPage } from "../../state/pages/urls";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { hairline, shadow } from "../ui/tokens";
@@ -201,10 +202,11 @@ const DownloadRowItem = memo(function DownloadRowItem({ id, windowId }: { id: st
 function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
+  const { focused, focusProps } = useFocusWithin(d.id);
   const { exists, done, progress, blocked } = useDownloadView(d);
   const glass = useGlass();
   return (
-    <View {...hoverProps}>
+    <View {...hoverProps} {...focusProps}>
       <MouseArea path={done ? d.path : null}>
         <ContextMenuArea onContextMenu={() => void downloadMenu(d, windowId)}>
           <Pressable onPress={() => done && void openDownload(d.path)}>
@@ -256,7 +258,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                   </View>
                 ) : done ? (
                   <HoverSlot
-                    hovered={hovered}
+                    hovered={hovered || focused}
                     width={L.rowButton}
                     style={{ marginRight: -L.rowButtonBearing }}
                     hover={<RowButton icon="magnifyingglass.circle.fill" onPress={() => void revealFile(d.path)} tooltip={`Show in ${PLATFORM_TERMS.fileManager}`} />}

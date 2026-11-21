@@ -1,21 +1,19 @@
 import { CastMode, preferredCastMode, startCasting, stopCasting, type CastSink, closeCastPicker, useCast } from "../../state/media/cast";
 import { openExternalURL, showMenu } from "../../state/app/system";
-import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, useHover } from "../ui";
+import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, usePopoverPresenceOf } from "../ui";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { space } from "../ui/tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const FLEX = { flex: 1 } as const;
-const UNDERLINE = { textDecorationLine: "underline" } as const;
-const NO_UNDERLINE = { textDecorationLine: "none" } as const;
 
 const SINK_ICON: Record<number, string> = { 0: "tv", 1: "hifispeaker.2", 2: "hifispeaker", 6: "display", 7: "tv" };
 
 export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
   const theme = useTheme();
-  const dialog = useCast((c) => c.dialogs[tabId]);
+  const { shown: dialog, closing, onClosed } = usePopoverPresenceOf(useCast((c) => c.dialogs[tabId]) ?? null);
   const [screen, setScreen] = useState(false);
   useEffect(() => setScreen(false), [dialog?.id]);
   if (!dialog) return null;
@@ -29,7 +27,7 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
   };
 
   return (
-    <Popover key={dialog.id} width={width} top={POPOVER_MARGIN} right={POPOVER_MARGIN} onDismiss={close}>
+    <Popover key={dialog.id} width={width} top={POPOVER_MARGIN} right={POPOVER_MARGIN} onDismiss={close} closing={closing} onClosed={onClosed}>
       <View style={{ paddingBottom: PANEL.inset }}>
         <PanelHeader
           icon={<Symbol name="tv.and.mediabox" size={14} color={theme.icon} style={{ width: PANEL.iconSlot, height: PANEL.iconSlot }} />}
@@ -97,17 +95,10 @@ function SourceButton({ screen, onChange }: { screen: boolean; onChange: (screen
 }
 
 function Message({ text, link, onLink }: { text: string; link: string | null; onLink: () => void }) {
-  const { hovered, hoverProps } = useHover();
   return (
-    <View style={{ paddingHorizontal: PANEL.inset, paddingTop: space.xs, gap: space.xs }}>
+    <View style={{ paddingHorizontal: PANEL.inset, paddingTop: space.xs, gap: space.xs, alignItems: "flex-start" }}>
       <Text size="small" tone="textSecondary">{text}</Text>
-      {link ? (
-        <View {...hoverProps}>
-          <Pressable onPress={onLink}>
-            <Text size="small" weight="medium" tone="accent" style={hovered ? UNDERLINE : NO_UNDERLINE}>{link}</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      {link ? <Button variant="text" look="link" title={link} onPress={onLink} /> : null}
     </View>
   );
 }

@@ -73,18 +73,21 @@ function CreateProfileSheet({ windowId, preset, onDone }: { windowId: string | n
           {share && !single && (
             <Box pad="l">
               <View style={{ borderRadius: radius.tile, backgroundColor: theme.field, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: theme.fieldBorder, overflow: "hidden" }}>
-                {groups.map((g, i) => (
-                  <Pressable key={g.dataId} onPress={() => setShareWith(g.profileIds[0]!)}>
-                    {i ? <Divider thick /> : null}
-                    <Box row gap="ml" padX="ml" style={SHARE_ROW}>
-                      <Radio on={g === selectedGroup} look="compact" />
-                      <ColorStack colors={g.profileIds.map((id) => PROFILE_COLORS[profiles[id]!.color]?.swatch ?? PROFILE_COLORS.neutral.swatch)} />
-                      <Text numberOfLines={1} style={FLEX}>
-                        {profileNames(g.profileIds.map((id) => profiles[id]!.name))}
-                      </Text>
-                    </Box>
-                  </Pressable>
-                ))}
+                {groups.map((g, i) => {
+                  const names = profileNames(g.profileIds.map((id) => profiles[id]!.name));
+                  return (
+                    <Pressable key={g.dataId} onPress={() => setShareWith(g.profileIds[0]!)} accessibilityRole="radio" accessibilityState={{ selected: g === selectedGroup }} accessibilityLabel={names}>
+                      {i ? <Divider thick /> : null}
+                      <Box row gap="ml" padX="ml" style={SHARE_ROW}>
+                        <Radio on={g === selectedGroup} look="compact" />
+                        <ColorStack colors={g.profileIds.map((id) => PROFILE_COLORS[profiles[id]!.color]?.swatch ?? PROFILE_COLORS.neutral.swatch)} />
+                        <Text numberOfLines={1} style={FLEX}>
+                          {names}
+                        </Text>
+                      </Box>
+                    </Pressable>
+                  );
+                })}
               </View>
             </Box>
           )}

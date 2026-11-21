@@ -8,18 +8,18 @@ import {
   pageOf,
   setPopover,
   usePage,
+  usePages,
 } from "../../state/tabs/pageState";
 import { dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
 import { useState } from "react";
-import { Image, View } from "react-native";
-import { useTheme } from "../ui/theme";
+import { View } from "react-native";
 import { space } from "../ui/tokens";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { currentEngineProfile, currentTab } from "../../state/browser/current";
-import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseButton, Popover, POPOVER_WIDTH, Symbol, Text, tracking } from "../ui";
+import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseButton, Popover, POPOVER_WIDTH, Text, tracking, usePopoverPresenceOf } from "../ui";
 import { answerPermission, describePermission } from "../../state/site/permissions";
 import { hostOrOrigin } from "../../lib/url";
-import { CheckRow, PromptIcon, usePromptInputGuard, Well } from "./PromptParts";
+import { CheckRow, PromptHeader, usePromptInputGuard, Well } from "./PromptParts";
 
 export function PromptBody({
   icons,
@@ -39,20 +39,7 @@ export function PromptBody({
   return (
     <View style={{ padding: PANEL.inset }}>
       <Box gap="ml">
-        <Box row gap="s">
-          {image ? <Image source={{ uri: image }} style={PROMPT_IMAGE} /> : null}
-          {icons.map((icon) => (
-            <PromptIcon key={icon} icon={icon} />
-          ))}
-        </Box>
-        <Box gap="xs">
-          <Text weight="semibold">{title}</Text>
-          {message ? (
-            <Text size="small" tone="textSecondary">
-              {message}
-            </Text>
-          ) : null}
-        </Box>
+        <PromptHeader icons={icons} image={image} title={title} message={message} />
         {detail}
       </Box>
       <DialogActions>{children}</DialogActions>
@@ -60,18 +47,17 @@ export function PromptBody({
   );
 }
 
-const PROMPT_IMAGE = { width: 32, height: 32 } as const;
-
 export const PERMISSION_PROMPT_WIDTH = POPOVER_WIDTH.s;
 export const EXTERNAL_APP_WIDTH = POPOVER_WIDTH.m;
 
 export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: number; top: number }) {
-  const request = usePage(tabId, (p) => p.permission);
-  const guard = usePromptInputGuard(request?.id);
+  const live = usePage(tabId, (p) => p.permission);
+  const { shown: request, closing, onClosed } = usePopoverPresenceOf(live);
+  const guard = usePromptInputGuard(live?.id);
   if (!request) return null;
   const { icons, question } = describePermission(request);
   return (
-    <Popover key={request.id} width={PERMISSION_PROMPT_WIDTH} top={top} left={left} modal={false}>
+    <Popover key={request.id} width={PERMISSION_PROMPT_WIDTH} top={top} left={left} modal={false} closing={closing} onClosed={onClosed}>
       <View>
         <PromptBody icons={icons} title={question} message="Click the lock to change this any time">
           <Button variant="pill" title="Don't Allow" onPress={guard(() => answerPermission(tabId, request.id, "deny"))} />
@@ -86,8 +72,10 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
 export const BLOCKED_POPUPS_WIDTH = POPOVER_WIDTH.l;
 
 export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string; right?: number; left?: number; top: number }) {
-  const popups = usePage(tabId, (p) => p.popups);
-  if (!popups.length) return null;
+  const open = usePages((s) => s.popover[tabId] === "popups");
+  const live = usePage(tabId, (p) => p.popups);
+  const { shown: popups, closing, onClosed } = usePopoverPresenceOf(open && live.length ? live : null);
+  if (!popups) return null;
   const origin = popups[0]!.origin;
   const site = hostOrOrigin(origin);
   const web = () => webviews.get(tabId);
@@ -98,7 +86,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
   };
   const profile = () => currentEngineProfile(currentTab(tabId)?.profileId ?? "");
   return (
-    <Popover width={BLOCKED_POPUPS_WIDTH} top={top} right={right} left={left} onDismiss={() => dismissPopoverByPress(tabId)}>
+    <Popover width={BLOCKED_POPUPS_WIDTH} top={top} right={right} left={left} onDismiss={() => dismissPopoverByPress(tabId)} closing={closing} onClosed={onClosed}>
       <View style={{ paddingBottom: PANEL.listPadding }}>
         <PromptBody
           icons={["macwindow.badge.plus"]}
@@ -311,8 +299,5 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
 }
 
 function UsernameChoice({ name, selected, onPress }: { name: string; selected: boolean; onPress: () => void }) {
-  const theme = useTheme();
-  return <MenuRow leading={selected ? <Symbol name="checkmark" size={10} weight="semibold" color={theme.textPrimary} style={CHECK_GLYPH} /> : <View style={CHECK_GLYPH} />} title={name || "No username"} onPress={onPress} />;
+  return <MenuRow checked={selected} title={name || "No username"} onPress={onPress} />;
 }
-
-const CHECK_GLYPH = { width: 14, height: 14 } as const;

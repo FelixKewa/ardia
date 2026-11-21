@@ -9,7 +9,7 @@ import { openImport } from "../../state/settings/settingsWindows";
 import { Favicon } from "../favicon/Favicon";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import type { SidebarEdge } from "../../state/bookmarks/sidebarEdge";
-import { ContextMenuArea, MouseArea, Symbol, Text, useHover, useTheme } from "../ui";
+import { ContextMenuArea, HoverFill, MouseArea, Symbol, Text, useHover, useTheme } from "../ui";
 import { openBarMenu, openImportButtonMenu, type ClickMods } from "../../state/bookmarks/barMenus";
 import { bookmarkDrag, bookmarksBar, type BarSize } from "./tokens";
 import { chipFrame } from "./chipFrame";
@@ -166,7 +166,6 @@ export function Chip({
   children: ReactNode;
 }) {
   const theme = useTheme();
-  const plate = useEased(hovered || pressed);
   const ring = useEased(dropRing);
   const shape = { borderRadius: size.radius, borderCurve: "continuous" } as const;
   return (
@@ -181,7 +180,7 @@ export function Chip({
         gap: size.titleGap,
       }}
     >
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: plate, backgroundColor: pressed ? theme.toolbarPressed : theme.toolbarHover }]} />
+      <HoverFill shown={!!hovered || !!pressed} instant={!!pressed} color={pressed ? theme.toolbarPressed : theme.toolbarHover} radius={size.radius} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: ring, borderWidth: bookmarksBar.dropRing, borderColor: theme.accent }]} />
       {children}
     </View>

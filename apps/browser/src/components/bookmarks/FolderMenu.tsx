@@ -14,7 +14,7 @@ import { currentBookmarks } from "../../state/browser/current";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { modifiersOf } from "../../lib/keys";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { ContextMenuArea, menuRowFill, MenuSeparator, MouseArea, opacity, PANEL, PopoverSurface, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
+import { ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -146,10 +146,10 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
             <MenuSeparator />
             {openAllItems(footer.links).map((item) =>
               "id" in item ? (
-                <ActionRow
+                <MenuRow
                   key={item.id}
-                  size={size}
-                  symbol={item.symbol}
+                  minHeight={size.menuRow}
+                  icon={item.symbol}
                   title={item.title}
                   onPress={() => {
                     closeFolderMenus();
@@ -158,9 +158,9 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
                 />
               ) : null,
             )}
-            <ActionRow
-              size={size}
-              symbol="sidebar.left"
+            <MenuRow
+              minHeight={size.menuRow}
+              icon="sidebar.left"
               title="Add to Sidebar as Group"
               disabled={!footer.group}
               onPress={() => {
@@ -210,33 +210,13 @@ function MenuLine({ y }: { y: number | null }) {
 
 function RowFrame({ size, children, plate = false, pressed = false, ring = false }: { size: BarSize; children: ReactNode; plate?: boolean; pressed?: boolean; ring?: boolean }) {
   const theme = useTheme();
-  const fill = useEased(plate || pressed);
   const ringOpacity = useEased(ring);
   const shape = { borderRadius: PANEL.rowRadius, borderCurve: "continuous" } as const;
   return (
     <View style={{ height: size.menuRow, marginHorizontal: PANEL.rowInset, paddingHorizontal: PANEL.rowPadding, flexDirection: "row", alignItems: "center", gap: PANEL.iconGap }}>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: fill, backgroundColor: menuRowFill(theme, pressed) }]} />
+      <HoverFill shown={plate || pressed} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: ringOpacity, borderWidth: bookmarksBar.dropRing, borderColor: theme.accent }]} />
       {children}
-    </View>
-  );
-}
-
-function ActionRow({ size, symbol, title, onPress, disabled }: { size: BarSize; symbol?: string; title: string; onPress: () => void; disabled?: boolean }) {
-  const theme = useTheme();
-  const [hovered, setHovered] = useState(false);
-  return (
-    <View onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={disabled ? DISABLED : undefined} pointerEvents={disabled ? "none" : "auto"}>
-      <Pressable onPress={onPress}>
-        {({ pressed }) => (
-          <RowFrame size={size} plate={hovered} pressed={pressed}>
-            <View style={ICON_SLOT}>{symbol ? <Symbol name={symbol} size={PANEL.iconSize} color={theme.icon} style={ICON_SLOT} /> : null}</View>
-            <Text size="body" lines={1} style={TITLE}>
-              {title}
-            </Text>
-          </RowFrame>
-        )}
-      </Pressable>
     </View>
   );
 }
@@ -332,4 +312,3 @@ const MENU_ICON: IconMetrics = { favicon: folderMenu.favicon, icon: PANEL.iconSi
 const ICON_SLOT = { width: PANEL.iconSlot, height: PANEL.iconSlot, alignItems: "center", justifyContent: "center" } as const;
 const TITLE = { flex: 1 } as const;
 const CHEVRON = { width: folderMenu.chevronBox, height: folderMenu.chevronBox } as const;
-const DISABLED = { opacity: opacity.disabled } as const;

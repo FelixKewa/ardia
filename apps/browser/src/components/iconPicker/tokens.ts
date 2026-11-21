@@ -15,8 +15,3 @@ export const ICON_PICKER = {
 } as const;
 
 export const ICON_PICKER_WIDTH = ICON_PICKER.columns * ICON_PICKER.cell + ICON_PICKER.pad * 2 + hairline.panel * 2;
-
-const DARK = { cellHover: "rgba(255,255,255,0.25)" };
-const LIGHT: typeof DARK = { cellHover: "rgba(134,136,141,0.25)" };
-
-export const iconPickerColors = (dark: boolean) => (dark ? DARK : LIGHT);

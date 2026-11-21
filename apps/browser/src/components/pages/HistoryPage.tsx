@@ -96,7 +96,7 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
       <>
         <Text size="small" tone="textSecondary">{`${selected.size} selected`}</Text>
         <Button title="Cancel" onPress={() => setSelection((prev) => ({ ...prev, selected: new Set() }))} />
-        <Button title="Delete" kind="primary" onPress={() => void deleteSelected("button")} />
+        <Button title="Remove…" kind="primary" onPress={() => void deleteSelected("button")} />
       </>
     ) : (
       <Button title="Clear Browsing Data…" onPress={() => setClearOpen(true)} />

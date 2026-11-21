@@ -10,7 +10,8 @@ import {
   shareTab,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, IconTile, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Text, useHover } from "../ui";
+import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, Text, useHover, usePopoverPresenceOf } from "../ui";
+import { PromptHeader } from "../site/PromptParts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -35,7 +36,7 @@ const audioOffered = (kind: SourceKind | null, audio: DisplayMediaAudio | null) 
   !!audio && (kind === "tab" ? audio.tab : kind === "screen" ? audio.screen : kind === "window" ? !!audio.window : false);
 
 export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
-  const request = useMedia((m) => m.displayRequests[tabId]);
+  const { shown: request, closing, onClosed } = usePopoverPresenceOf(useMedia((m) => m.displayRequests[tabId]) ?? null);
   const [sources, setSources] = useState<DisplayMediaSource[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [shareAudio, setShareAudio] = useState(AUDIO_SHARED_BY_DEFAULT);
@@ -44,7 +45,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const list = useRef<ScrollView>(null);
 
   useEffect(() => {
-    if (!request) return;
+    if (!request || closing) return;
     setSources(request.sources);
     setSelected(null);
     setShareAudio(AUDIO_SHARED_BY_DEFAULT);
@@ -65,7 +66,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
       clearInterval(t);
       clearTimeout(focusList);
     };
-  }, [request?.id]);
+  }, [request?.id, closing]);
 
   useEffect(() => {
     const missing = [...new Set(sources.map((s) => s.pid).filter((pid): pid is number => pid !== undefined && !(pid in icons)))];
@@ -97,27 +98,28 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const width = Math.min(WIDTH, paneWidth - 24);
 
   return (
-    <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
+    <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel} closing={closing} onClosed={onClosed}>
       <View style={{ paddingBottom: PANEL.inset }}>
-        <PanelHeader
-          large
-          icon={<IconTile symbol="rectangle.inset.filled.and.person.filled" />}
-          title={`Share your screen with ${originForSecurityDisplay(request.origin)}`}
-          subtitle={
-            audioFor(selectedKind)
-              ? `${receiver} will see and hear what you choose.`
-              : request.audio && !request.audio.screen && !request.audio.window && selectedKind !== "tab"
-                ? `${receiver} will see what you choose. Only tabs share their audio.`
-                : `${receiver} will see what you choose.`
-          }
-        />
+        <View style={HEADER}>
+          <PromptHeader
+            icons={["rectangle.inset.filled.and.person.filled"]}
+            title={`Share your screen with ${originForSecurityDisplay(request.origin)}`}
+            message={
+              audioFor(selectedKind)
+                ? `${receiver} will see and hear what you choose.`
+                : request.audio && !request.audio.screen && !request.audio.window && selectedKind !== "tab"
+                  ? `${receiver} will see what you choose. Only tabs share their audio.`
+                  : `${receiver} will see what you choose.`
+            }
+          />
+        </View>
 
         <ScrollView
           ref={list}
           focusable
           enableFocusRing={false}
           keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
-          onKeyDown={(e) => (e.nativeEvent.key === "Escape" ? cancel() : share())}
+          onKeyDown={closing ? undefined : (e) => (e.nativeEvent.key === "Escape" ? cancel() : share())}
           style={{ maxHeight: 340, marginTop: space.xs }}
         >
           {tabs.length ? (
@@ -182,7 +184,8 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
 
 const EMPTY = { padding: space.l, textAlign: "center" } as const;
 const SCREEN_GRID = { flexDirection: "row", flexWrap: "wrap", gap: space.m, paddingHorizontal: PANEL.rowInset } as const;
-const NOTICE = { paddingHorizontal: PANEL.inset, paddingBottom: space.s, gap: space.m, alignItems: "flex-start" } as const;
+const HEADER = { paddingHorizontal: PANEL.inset, paddingTop: PANEL.inset } as const;
+const NOTICE = { paddingHorizontal: PANEL.inset, paddingBottom: space.s, gap: space.xs, alignItems: "flex-start" } as const;
 
 function ScreenRecordingNeeded() {
   return (
@@ -190,7 +193,7 @@ function ScreenRecordingNeeded() {
       <Text size="small" tone="textSecondary">
         To share a window or your entire screen, turn on Ardia in System Settings › Privacy & Security › Screen Recording, then quit and reopen Ardia.
       </Text>
-      <Button variant="pill" title="Open System Settings" onPress={() => void askForScreenRecording()} />
+      <Button variant="text" look="link" title="Open System Settings" onPress={() => void askForScreenRecording()} />
     </View>
   );
 }
@@ -249,7 +252,6 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
 const TILE_NAME = { marginTop: space.s } as const;
 const TILE_RESOLUTION: TextStyle = { fontVariant: ["tabular-nums"] };
 const ROW_DETAIL = { flexShrink: 1 } as const;
-const CHECK_GLYPH = { width: 16, height: 16 } as const;
 
 function WindowRow({ source, icon, selected, onSelect, onShare }: { source: DisplayMediaSource; icon: string | null | undefined; selected: boolean; onSelect(): void; onShare(): void }) {
   const theme = useTheme();
@@ -285,23 +287,19 @@ function SourceRow({
   onSelect(): void;
   onShare(): void;
 }) {
-  const theme = useTheme();
   return (
     <View onDoubleClick={onShare}>
       <MenuRow
-        selected={selected}
+        checked={selected}
         leading={leading}
         title={title}
         onPress={onSelect}
         accessory={
-          <>
-            {detail ? (
-              <Text lines={1} size="caption" tone="textSecondary" style={detailShrinks ? ROW_DETAIL : undefined}>
-                {detail}
-              </Text>
-            ) : null}
-            {selected ? <Symbol name="checkmark" size={11} weight="semibold" color={theme.accent} style={CHECK_GLYPH} /> : null}
-          </>
+          detail ? (
+            <Text lines={1} size="caption" tone="textSecondary" style={detailShrinks ? ROW_DETAIL : undefined}>
+              {detail}
+            </Text>
+          ) : null
         }
       />
     </View>

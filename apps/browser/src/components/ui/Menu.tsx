@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { Divider } from "./Divider";
 import { GlassFill, useGlass } from "./Glass";
+import { HoverFill } from "./HoverFill";
 import { PANEL } from "./Popover";
 import { useTheme, type Theme } from "./theme";
 import { opacity, space, typeFace } from "./tokens";
@@ -11,6 +12,7 @@ import { useHover } from "./useHover";
 export const menuRowFill = (theme: Theme, pressed = false) => (pressed ? theme.popoverRowPressed : theme.rowHover);
 
 const RING_WIDTH = 1.5;
+const CHECK = { glyph: 11, slot: { width: 16, height: 16 } } as const;
 
 export function MenuRow({
   icon,
@@ -24,6 +26,7 @@ export function MenuRow({
   disabled,
   destructive,
   selected,
+  checked,
   minHeight = PANEL.rowHeight,
   ring,
   tooltip,
@@ -39,6 +42,7 @@ export function MenuRow({
   disabled?: boolean;
   destructive?: boolean;
   selected?: boolean;
+  checked?: boolean;
   minHeight?: number;
   ring?: boolean;
   tooltip?: string;
@@ -47,9 +51,10 @@ export function MenuRow({
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
   const tint = destructive ? theme.destructive : theme.textPrimary;
+  const interactive = !!onPress && !disabled;
+  const marked = !!(selected || checked);
   const content = (pressed: boolean) => {
-    const lit = !!onPress && !disabled && (pressed || hovered);
-    const fill = lit ? menuRowFill(theme, pressed) : selected ? theme.rowSelected : undefined;
+    const lit = interactive && (pressed || hovered);
     return (
       <View
         style={{
@@ -61,12 +66,16 @@ export function MenuRow({
           alignItems: "center",
           gap: PANEL.iconGap,
           opacity: disabled ? opacity.disabled : 1,
-          backgroundColor: glass && lit ? undefined : fill,
+          backgroundColor: marked ? theme.rowSelected : undefined,
           borderWidth: ring ? RING_WIDTH : undefined,
           borderColor: ring ? theme.accent : undefined,
         }}
       >
-        {glass && lit ? <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} /> : null}
+        {glass ? (
+          lit ? <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} /> : null
+        ) : interactive ? (
+          <HoverFill shown={lit} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} />
+        ) : null}
         {leading ? (
           <View style={{ width: PANEL.iconSlot, height: PANEL.iconSlot, alignItems: "center", justifyContent: "center" }}>{leading}</View>
         ) : icon ? (
@@ -83,6 +92,7 @@ export function MenuRow({
           ) : null}
         </View>
         {accessory}
+        {checked === undefined ? null : checked ? <Symbol name="checkmark" size={CHECK.glyph} weight="semibold" color={theme.textPrimary} style={CHECK.slot} /> : <View style={CHECK.slot} />}
       </View>
     );
   };
@@ -92,9 +102,15 @@ export function MenuRow({
         {content(false)}
       </View>
     );
+  const choosable = checked !== undefined;
   return (
     <View {...hoverProps} tooltip={tooltip}>
-      <Pressable onPress={onPress} disabled={disabled}>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        accessibilityRole={choosable ? "radio" : "button"}
+        accessibilityState={{ selected: choosable || selected !== undefined ? marked : undefined, disabled: !!disabled }}
+      >
         {({ pressed }) => content(pressed)}
       </Pressable>
     </View>

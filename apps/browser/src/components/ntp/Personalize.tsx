@@ -1,10 +1,9 @@
 import { devRegister } from "../dev/devRegister";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { PERSONALIZE_COPY, TabLayoutPicker } from "../onboarding/Personalize";
 import { ThemePicker } from "../settings/ThemeEditor";
-import { Box, capsule, Panel, proseLineHeight, shadow, space, Symbol, Text, useHover, useTheme } from "../ui";
-import { PERSONALIZE_PANEL } from "./tokens";
+import { Box, capsule, PopoverSurface, proseLineHeight, space, Symbol, Text, useHover, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence, useTheme } from "../ui";
 import { closePersonalizePanelOf, setPersonalizePanel as setOpen, usePersonalizePanel } from "../../state/pages/personalizePanel";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
@@ -19,10 +18,11 @@ export function PersonalizeButton({ windowId }: { windowId: string }) {
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const open = usePersonalizePanel((s) => s.windowId === windowId);
+  const { shown, closing, onClosed } = usePopoverPresence(open);
   useEffect(() => () => closePersonalizePanelOf(windowId), [windowId]);
   return (
     <>
-      {open ? <PersonalizePanel windowId={windowId} onClose={() => setOpen(null)} /> : null}
+      {shown ? <PersonalizePanel windowId={windowId} onClose={() => setOpen(null)} closing={closing} onClosed={onClosed} /> : null}
       <View {...hoverProps} tooltip="Personalize" style={{ position: "absolute", right: INSET, bottom: INSET - GLYPH_DROP }}>
         <Pressable
           onPress={() => setOpen(open ? null : windowId)}
@@ -56,25 +56,23 @@ export function PersonalizeButton({ windowId }: { windowId: string }) {
 
 const PERSONALIZE_GLYPH = { width: BUTTON, height: BUTTON, alignItems: "center", justifyContent: "center" } as const;
 
-function PersonalizePanel({ windowId, onClose }: { windowId: string; onClose: () => void }) {
-  const t = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(t, { toValue: 1, ...PERSONALIZE_PANEL.spring, useNativeDriver: true }).start();
-  }, []);
+function PersonalizePanel({ windowId, onClose, closing, onClosed }: { windowId: string; onClose: () => void; closing: boolean; onClosed: () => void }) {
+  const appear = usePopoverMotion(closing, onClosed);
+  const motion = usePopoverMotionStyle(appear, "bottom right", true);
   return (
     <>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close Personalize" />
+      {closing ? null : <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close Personalize" />}
       <Animated.View
+        pointerEvents={closing ? "none" : "auto"}
         style={{
           position: "absolute",
           right: INSET,
           bottom: INSET + BUTTON + space.m,
           width: PANEL_WIDTH,
-          opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-          transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
+          ...motion,
         }}
       >
-        <Panel radius={PERSONALIZE_PANEL.radius} shadow={shadow.dialog}>
+        <PopoverSurface>
           <Box pad="xl" gap="xl">
             <Box gap="xs">
               <Text size="title" weight="semibold">
@@ -92,7 +90,7 @@ function PersonalizePanel({ windowId, onClose }: { windowId: string; onClose: ()
               <TabLayoutPicker windowId={windowId} />
             </Box>
           </Box>
-        </Panel>
+        </PopoverSurface>
       </Animated.View>
     </>
   );

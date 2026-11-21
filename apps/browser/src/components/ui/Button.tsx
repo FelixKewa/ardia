@@ -234,13 +234,13 @@ function TextButtonView(props: TextProps) {
         </Pressable>
       </View>
     );
-  const shows = (pressed: boolean) => !disabled && ((plate === "toolbar" && pressed) || hovered);
+  const shows = (pressed: boolean) => !disabled && (pressed || hovered);
   return (
     <View {...hoverProps}>
       <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
         {({ pressed }) => (
           <Plate style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
-            {lit ? <HoverFill shown={shows(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}
+            {lit ? <HoverFill shown={shows(pressed)} color={pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}
             <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
           </Plate>
         )}

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "./Button";
 import { PANEL_CLOSE_GLYPH, PANEL_CLOSE_SIZE } from "./ButtonKinds";
-import { curve, duration } from "./motion";
+import { curve, duration, popoverMotionStyle } from "./motion";
+import { reduceMotion } from "./reduceMotion";
 import { surfaceTheme, useTheme } from "./theme";
 import { ThemeOverride } from "./ThemeOverride";
 import { concentric, font as typeScale, lineHeight, POPOVER_WIDTH, radius, shadow, space, typeFace, weight } from "./tokens";
@@ -104,17 +105,8 @@ export function usePopoverMotion(closing: boolean, onClosed?: () => void, ready 
 }
 
 export function usePopoverMotionStyle(appear: Animated.Value, origin: string | [number | string, number | string, number], upward = false) {
-  return useMemo(
-    () => ({
-      opacity: appear,
-      transformOrigin: origin,
-      transform: [
-        { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
-        { translateY: appear.interpolate({ inputRange: [0, 1], outputRange: upward ? [4, 0] : [-4, 0] }) },
-      ],
-    }),
-    [appear, origin, upward],
-  );
+  const reduced = reduceMotion() !== false;
+  return useMemo(() => popoverMotionStyle(appear, origin, upward, reduced), [appear, origin, upward, reduced]);
 }
 
 export function Popover({

@@ -1,6 +1,6 @@
 import { useEffect, type ComponentType } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
-import { space, VisualEffect, WindowDragRegion } from "../ui";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { ActivitySpinner, space, VisualEffect, WindowDragRegion } from "../ui";
 import { PageToolbar } from "../pages/PageLayout";
 import { ChooseBody, ChooseFooter } from "./steps/ChooseStep";
 import { DoneBody, DoneFooter } from "./steps/DoneStep";
@@ -22,7 +22,7 @@ const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth(2) + WINDOW_CON
 type StepView = ComponentType<{ flow: ImportFlow }>;
 
 function Loading() {
-  return <ActivityIndicator style={{ marginTop: importLayout.loadingTop }} />;
+  return <ActivitySpinner style={LOADING} />;
 }
 
 const STEPS: Record<ImportStepName, { Body: StepView; Footer: StepView | null }> = {
@@ -57,3 +57,5 @@ export function ImportWindow() {
     </View>
   );
 }
+
+const LOADING = { width: importLayout.loadingSpinner, height: importLayout.loadingSpinner, marginTop: importLayout.loadingTop, alignSelf: "center" } as const;

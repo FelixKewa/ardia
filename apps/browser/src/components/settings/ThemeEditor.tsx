@@ -211,14 +211,14 @@ function ThemeStops({ theme, onChange, onReset, resetLabel, onBegin, start }: { 
       <LightnessBar theme={theme} index={index} onChange={onChange} snapTo={start?.stops.length === theme.stops.length && start.stops[index] ? stopLightness(start.stops[index]) : undefined} />
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text size="caption" tone="textSecondary">
-          {theme.stops.length} of {MAX_THEME_STOPS} colours
+          {theme.stops.length} of {MAX_THEME_STOPS} colors
         </Text>
         <Box row gap="xs" style={CENTERED}>
           {onReset ? <Button variant="text" look="link" size="caption" title="Reset" label={resetLabel ? `Reset to ${resetLabel}` : "Reset"} onPress={onReset} /> : null}
           <Button
             variant="stepper"
             icon="minus"
-            tooltip="Remove Colour"
+            tooltip="Remove Color"
             disabled={theme.stops.length <= 1}
             onPress={() => {
               onChange(withoutStop(theme, index), true);
@@ -228,7 +228,7 @@ function ThemeStops({ theme, onChange, onReset, resetLabel, onBegin, start }: { 
           <Button
             variant="stepper"
             icon="plus"
-            tooltip="Add Colour"
+            tooltip="Add Color"
             disabled={theme.stops.length >= MAX_THEME_STOPS}
             onPress={() => {
               onChange(withAddedStop(theme), true);

@@ -1,9 +1,9 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryEntry } from "../../state/browser/types";
 import { type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
-import { assignSlots, historyScroll, rowAt, type Layout } from "./historyLayout";
+import { assignSlots, rowAt, type Layout } from "./historyLayout";
 import { DayHeader, HistoryRow } from "./HistoryRow";
-import { PAGE_WIDTH } from "./PageLayout";
+import { notePageScroll, PAGE_WIDTH } from "./PageLayout";
 import { historyRow, pageList } from "./tokens";
 
 const ROW = historyRow.height;
@@ -43,7 +43,7 @@ export function HistoryList({
   rendered.current = { rows, overscan, band };
   const [onScroll] = useState(() => (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = e.nativeEvent.contentOffset.y;
-    historyScroll.lastAt = Date.now();
+    notePageScroll();
     const { rows, overscan, band } = rendered.current;
     if (rowAt(rows, scrollY.current - overscan) !== band) rerender((n) => n + 1);
   });

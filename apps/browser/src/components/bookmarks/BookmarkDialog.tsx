@@ -89,7 +89,7 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
       <FormField label="Folder">
         <FolderPicker profileId={profileId} selectedId={folderId} onSelect={setFolderId} />
       </FormField>
-      <DialogActions leading={<Button title="New Folder" onPress={newFolder} />}>
+      <DialogActions leading={<Button title="New Folder…" onPress={newFolder} />}>
         {state.kind === "page" ? <Button title="Remove" onPress={remove} /> : <Button title="Cancel" onPress={close} />}
         <Button title={state.kind === "page" ? "Done" : "Save"} kind="primary" onPress={done} />
       </DialogActions>

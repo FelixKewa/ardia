@@ -102,8 +102,16 @@ const ERROR = { marginTop: space.ml } as const;
 
 function Option({ value, onChange, disabled, title, subtitle }: { value: boolean; onChange: (v: boolean) => void; disabled: boolean; title: string; subtitle: string }) {
   return (
-    <Pressable disabled={disabled} onPress={() => onChange(!value)}>
-      <Row icon={<Checkbox value={value} onChange={onChange} disabled={disabled} />} title={title} description={subtitle} />
+    <Pressable disabled={disabled} onPress={() => onChange(!value)} accessibilityRole="checkbox" accessibilityLabel={title} accessibilityState={{ checked: value, disabled }}>
+      <Row
+        icon={
+          <View pointerEvents="none" accessibilityElementsHidden>
+            <Checkbox value={value} disabled={disabled} />
+          </View>
+        }
+        title={title}
+        description={subtitle}
+      />
     </Pressable>
   );
 }

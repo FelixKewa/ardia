@@ -14,7 +14,7 @@ import { openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
 import { BookmarkRow } from "./BookmarkRow";
 import { listedBookmarks } from "./bookmarkResults";
 import { DropTargets } from "./dropTargets";
-import { PageHeader } from "./PageLayout";
+import { notePageScroll, PageHeader } from "./PageLayout";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
@@ -68,7 +68,10 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   const [viewport, setViewport] = useState(800);
   const [scrollY, setScrollY] = useState(0);
   const onListLayout = useCallback((e: LayoutChangeEvent) => setViewport(Math.max(bookmarkList.row, Math.round(e.nativeEvent.layout.height))), []);
-  const onListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => setScrollY(e.nativeEvent.contentOffset.y), []);
+  const onListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    notePageScroll();
+    setScrollY(e.nativeEvent.contentOffset.y);
+  }, []);
   const shown = rowWindow(ids.length, bookmarkList.row, scrollY, viewport);
   useEffect(() => {
     if (!undo) return;

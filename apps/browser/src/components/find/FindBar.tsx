@@ -9,15 +9,19 @@ import { currentTab } from "../../state/browser/current";
 import { setFind as setTabFind } from "../../state/windows/actions";
 import { closeFind, findStep, noteFind, submitRepeatsKey, takeFindFocusRequest } from "../../state/find/actions";
 import type { FindState } from "../../state/browser/types";
-import { Button, Divider, font, Panel, radius, shadow, space, Symbol, Text } from "../ui";
+import { Button, Divider, font, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf } from "../ui";
 import { replaceInField } from "../../state/site/selection";
-import { FIND_APPEAR, FIND_WIDTH } from "./tokens";
+import { FIND_WIDTH } from "./tokens";
 
 export function FindBar({ tabId }: { tabId: string }) {
+  return <FindBarPresence key={tabId} tabId={tabId} />;
+}
+
+function FindBarPresence({ tabId }: { tabId: string }) {
   const hasPage = useTab(tabId, (t) => !!t?.url);
   const find = useFind(tabId);
-  if (!find.open || !hasPage) return null;
-  return <FindBarPanel key={tabId} tabId={tabId} find={find} />;
+  const { shown, closing, onClosed } = usePopoverPresenceOf(find.open && hasPage ? find : null);
+  return shown ? <FindBarPanel tabId={tabId} find={shown} closing={closing} onClosed={onClosed} /> : null;
 }
 
 const FIND_KEYS = [
@@ -28,15 +32,13 @@ const FIND_KEYS = [
   { key: "Enter", altKey: true, shiftKey: true },
 ];
 
-function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
+function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find: FindState; closing: boolean; onClosed: () => void }) {
   const previousHint = useShortcutHint("findPrevious");
   const nextHint = useShortcutHint("findNext");
   const theme = useTheme();
   const input = useRef<TextInput>(null);
-  const appear = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(appear, { toValue: 1, ...FIND_APPEAR, useNativeDriver: true }).start();
-  }, []);
+  const appear = usePopoverMotion(closing, onClosed);
+  const motion = usePopoverMotionStyle(appear, "top right");
   useEffect(() => {
     if (!find.focusRequest) return;
     takeFindFocusRequest(tabId);
@@ -73,15 +75,15 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
 
   return (
     <Animated.View
+      pointerEvents={closing ? "none" : "auto"}
       style={{
         position: "absolute",
         top: space.ml,
         right: space.l,
-        opacity: appear,
-        transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }],
+        ...motion,
       }}
     >
-      <Panel radius={radius.panel} shadow={shadow.card} style={{ width: FIND_WIDTH }}>
+      <Panel radius={radius.panel} border={theme.popoverBorder} shadow={shadow.popover} style={{ width: FIND_WIDTH }}>
         <View style={{ height: 40, flexDirection: "row", alignItems: "center", paddingLeft: space.l, paddingRight: space.xs, gap: space.xxs }}>
           <Symbol name="magnifyingglass" size={13} color={theme.textSecondary} style={{ width: 16, height: 16, marginRight: space.xs }} />
           <TextInput

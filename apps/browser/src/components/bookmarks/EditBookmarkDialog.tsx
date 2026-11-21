@@ -60,7 +60,7 @@ function Sheet({ state }: { state: EditorState }) {
       )}
       <DialogActions>
         <Button title="Cancel" onPress={close} />
-        <Button title="Save" kind="primary" disabled={!valid} onPress={save} />
+        <Button title={state.folder && !node ? "Create" : "Save"} kind="primary" disabled={!valid} onPress={save} />
       </DialogActions>
     </Dialog>
   );

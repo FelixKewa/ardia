@@ -23,6 +23,8 @@ export const importLayout = {
   dropHeight: 130,
   textMax: 420,
   loadingTop: 80,
+  loadingSpinner: 20,
+  spinner: 14,
   doneTop: 40,
 } as const;
 
