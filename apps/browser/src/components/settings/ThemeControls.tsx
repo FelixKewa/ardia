@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
-import { colorHex, flatColors, lookAngle, PAD_LIGHTNESS, padColor, stopLightness, themeGrainAlpha, themeLayerAlpha, themeUnderColor, withStopAt, withStopLightness, type ShownLook } from "../../lib/profileLook";
+import { colorHex, flatColors, lookAngle, PAD_LIGHTNESS, padColor, stopLightness, themeGrainAlpha, themeLayerAlpha, themeUnderColor, withStopAt, withStopLightness, type ShownLook, type ThemeStop } from "../../lib/profileLook";
+import { snapPointToStart, snapToStart } from "../../lib/presetLook";
 import type { ProfileTheme } from "../../state/browser/types";
 import { Box, capsule, Dot, ink, ProgressTrack, radius, tabularNums, Text, ThemeSwatch, useTheme } from "../ui";
 import { MiniWindow } from "./MiniWindow";
@@ -93,11 +94,15 @@ export function ColorPad({
   selected,
   onSelect,
   onChange,
+  onBegin,
+  start,
 }: {
   theme: ProfileTheme;
   selected: number;
   onSelect: (index: number) => void;
   onChange: (next: ProfileTheme, settle?: boolean) => void;
+  onBegin?: () => void;
+  start?: readonly ThemeStop[];
 }) {
   const ref = useRef<View>(null);
   const origin = useRef({ x: 0, y: 0 });
@@ -114,7 +119,8 @@ export function ColorPad({
     return r <= 0.5 ? p : { x: 0.5 + (dx / r) * 0.5, y: 0.5 + (dy / r) * 0.5 };
   };
   const move = (e: GestureResponderEvent, settle = false) => {
-    const p = insideCircle(point(e));
+    const origin = start?.[dragging.current];
+    const p = origin ? snapPointToStart(insideCircle(point(e)), origin, PAD) : insideCircle(point(e));
     onChange(withStopAt(latest.current, dragging.current, p.x, p.y), settle);
   };
   return (
@@ -131,6 +137,7 @@ export function ColorPad({
         const hit = stops.findIndex((s) => Math.hypot((s.x - p.x) * PAD, (s.y - p.y) * PAD) <= KNOB / 2 + 3);
         dragging.current = hit >= 0 ? hit : selected;
         onSelect(dragging.current);
+        onBegin?.();
         if (hit < 0) move(e);
       }}
       onResponderMove={(e) => move(e)}
@@ -162,12 +169,13 @@ export function ColorPad({
     </View>
   );
 }
-export function LightnessBar({ theme, index, onChange }: { theme: ProfileTheme; index: number; onChange: (next: ProfileTheme, settle?: boolean) => void }) {
+export function LightnessBar({ theme, index, onChange, snapTo }: { theme: ProfileTheme; index: number; onChange: (next: ProfileTheme, settle?: boolean) => void; snapTo?: number }) {
   const stop = theme.stops[index]!;
   return (
     <View style={{ width: PAD }}>
       <Track
         value={stopLightness(stop)}
+        snapTo={snapTo}
         thumbColor={colorHex(stop.color)}
         tooltip="Brightness"
         onChange={(v, settle) => onChange(withStopLightness(theme, index, v), settle)}
@@ -198,17 +206,20 @@ export function Slider({
   onChange,
   stacked,
   children,
+  snapTo,
 }: {
   label: string;
   value: number;
   onChange: (value: number, settle: boolean) => void;
   stacked?: boolean;
   children?: ReactNode;
+  snapTo?: number;
 }) {
   const ui = useTheme();
   const track = (
     <Track
       value={value}
+      snapTo={snapTo}
       onChange={onChange}
       bar={<ProgressTrack value={value} height={4} tone="formAccent" style={{ backgroundColor: ui.switchOff }} />}
     />
@@ -254,17 +265,22 @@ function Track({
   bar,
   thumbColor,
   tooltip,
+  snapTo,
 }: {
   value: number;
   onChange: (value: number, settle: boolean) => void;
   bar: ReactNode;
   thumbColor?: string;
   tooltip?: string;
+  snapTo?: number;
 }) {
   const ref = useRef<View>(null);
   const frame = useRef({ x: 0, width: 1 });
   const measure = () => ref.current?.measureInWindow((x, _y, width) => (frame.current = { x, width: Math.max(1, width) }));
-  const at = (e: GestureResponderEvent) => clamp01((e.nativeEvent.pageX - frame.current.x) / frame.current.width);
+  const at = (e: GestureResponderEvent) => {
+    const value = clamp01((e.nativeEvent.pageX - frame.current.x) / frame.current.width);
+    return snapTo === undefined ? value : snapToStart(value, snapTo, frame.current.width);
+  };
   return (
     <View
       onLayout={measure}

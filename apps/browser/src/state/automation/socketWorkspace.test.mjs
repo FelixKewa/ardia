@@ -134,6 +134,11 @@ test("profiles: create, update, look, reorder, default", async () => {
   const look = await ok("profiles.setLook", { profile: home.id, color: "green", theme: "#3366cc" });
   assert.equal(look.color, "green");
   assert.ok(S().profiles[home.id].theme);
+  const greenEdit = S().profiles[home.id].theme;
+  await ok("profiles.setLook", { profile: home.id, color: "blue" });
+  assert.equal(S().profiles[home.id].theme, null, "another colour shows plain until it's edited");
+  await ok("profiles.setLook", { profile: home.id, color: "green" });
+  assert.deepEqual(S().profiles[home.id].theme, greenEdit, "switching back brings green's edit back");
   await ok("profiles.setLook", { profile: home.id, theme: null });
   assert.equal(S().profiles[home.id].theme ?? null, null);
   const order = S().profileOrder.slice().reverse();

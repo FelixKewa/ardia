@@ -4,6 +4,7 @@ import type { BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { deleteProfile } from "../browser/actions";
 import { sanitizeTheme, startingTheme } from "../../lib/profileLook";
+import { withPresetChosen } from "../../lib/presetLook";
 import type { ProfileColor } from "../browser/types";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { setOpenTabsSynced } from "../sync/engine";
@@ -73,7 +74,8 @@ function setLook(params: Record<string, unknown>) {
     if (!theme) throw new OpError("bad_request", "That theme object isn't one Ardia reads (profiles.list shows the shape).");
   }
   if (params.color === undefined && theme === undefined) throw new OpError("bad_request", "profiles.setLook needs color or theme.");
-  now().setProfileLook(id, { ...(params.color !== undefined ? { color: params.color as ProfileColor } : {}), ...(theme !== undefined ? { theme } : {}) });
+  const chosen = params.color !== undefined ? withPresetChosen(now().profiles[id]!, params.color as ProfileColor) : null;
+  now().setProfileLook(id, { ...chosen, ...(theme !== undefined ? { theme } : {}) });
   return profileRow(now(), id);
 }
 
@@ -119,7 +121,7 @@ export const PROFILE_METHODS: MethodSpec[] = [
     name: "profiles.setLook",
     mutates: true,
     description: "Change a profile's colour and theme",
-    params: obj({ profile: PROFILE, color: oneOf(COLORS, "Its colour"), theme: { type: ["string", "object", "null"], description: "A #rrggbb to start a theme from, a theme object as profiles.list shows, or null for none" } }, ["profile"]),
+    params: obj({ profile: PROFILE, color: oneOf(COLORS, "Its theme colour; switching brings back the edits you made to that colour"), theme: { type: ["string", "object", "null"], description: "An edit of the theme colour: a #rrggbb to start one from, a theme object as profiles.list shows, or null to reset the colour to its original" } }, ["profile"]),
     result: "profile",
     run: setLook,
   },

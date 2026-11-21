@@ -1,9 +1,10 @@
 import type { BarPlacement } from "../omnibox/barPlacement";
 import type { TabGroupColor } from "@ardia/core";
 import type { PageEngine } from "../../platform/tabs";
-import type { ProfileColor, ProfileTheme } from "../../lib/profileLook";
+import type { PresetThemes, ProfileColor, ProfileTheme } from "../../lib/profileLook";
+import type { PreviousTheme } from "../../lib/presetLook";
 
-export type { ProfileColor, ProfileTheme, ThemeColor, ThemeLook, ThemeStop } from "../../lib/profileLook";
+export type { PresetThemes, ProfileColor, ProfileTheme, ThemeColor, ThemeLook, ThemeStop } from "../../lib/profileLook";
 export type { ThemeMode, ThemeTexture } from "@ardia/core";
 
 export type Frame = [number, number, number, number];
@@ -17,6 +18,8 @@ export type Profile = {
   createdAt: number;
   dataId?: string;
   theme?: ProfileTheme | null;
+  presetThemes?: PresetThemes;
+  previousTheme?: PreviousTheme;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
   syncTabs?: true;
