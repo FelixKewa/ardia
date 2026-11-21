@@ -19,6 +19,7 @@ export type Profile = {
   theme?: ProfileTheme | null;
   presetThemes?: PresetThemes;
   seenTheme?: ProfileTheme | null;
+  seenColor?: ProfileColor;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
   syncTabs?: true;

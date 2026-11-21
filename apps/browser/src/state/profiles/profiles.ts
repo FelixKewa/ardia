@@ -22,7 +22,7 @@ export type ProfilesSlice = {
   profileDataDeleted(engineId: string): void;
 };
 
-export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {} };
+export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "plum" };
 
 const COLORS: ProfileColor[] = ["blue", "green", "orange", "purple", "red", "yellow", "pink"];
 
@@ -57,13 +57,16 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     createProfile({ name, color, icon = null, shareWith, shareTopApps }) {
       const s = get();
       const source = shareWith ? s.profiles[shareWith] : undefined;
+      const chosen = color ?? unusedProfileColor(s.profiles);
       const profile: Profile = {
         id: newId("p"),
         name: name.trim() || `Profile ${s.profileOrder.length + 1}`,
-        color: color ?? unusedProfileColor(s.profiles),
+        color: chosen,
         icon,
         createdAt: Date.now(),
         presetThemes: {},
+        seenTheme: null,
+        seenColor: chosen,
         ...(source ? { dataId: dataIdOf(source) } : {}),
         ...(shareTopApps ? { shareTopApps: true as const } : {}),
       };
@@ -78,8 +81,12 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     setProfileLook(id, look) {
-      const seen = "theme" in look ? { seenTheme: look.theme } : {};
-      set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: { ...s.profiles[id]!, ...look, ...seen } } } : {}));
+      set((s) => {
+        const profile = s.profiles[id];
+        if (!profile) return {};
+        const seen = "theme" in look ? { seenTheme: look.theme, seenColor: look.color ?? profile.color } : {};
+        return { profiles: { ...s.profiles, [id]: { ...profile, ...look, ...seen } } };
+      });
     },
 
     deleteProfile(id) {

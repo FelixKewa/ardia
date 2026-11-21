@@ -70,12 +70,15 @@ export function editedPresetCount(profile: PresetLookFields): number {
   return Object.keys(ownLooksOf(profile)).length;
 }
 
-export function withOwnLooksSeeded<T extends PresetLookFields & { seenTheme?: ProfileTheme | null }>(profile: T): T {
-  if (profile.presetThemes === undefined) return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {}, seenTheme: profile.theme ?? null };
+export function withOwnLooksSeeded<T extends PresetLookFields & { seenTheme?: ProfileTheme | null; seenColor?: ProfileColor }>(profile: T): T {
+  const seen = { seenTheme: profile.theme ?? null, seenColor: profile.color };
+  if (profile.presetThemes === undefined) return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {}, ...seen };
   const shown = profile.theme ?? null;
   if (profile.seenTheme === undefined || JSON.stringify(shown) === JSON.stringify(profile.seenTheme)) return profile;
+  const pickedElsewhere = !shown && profile.seenColor !== undefined && profile.seenColor !== profile.color;
+  if (pickedElsewhere) return { ...profile, ...seen };
   const { [profile.color]: _replaced, ...others } = profile.presetThemes;
-  return { ...profile, presetThemes: shown ? { ...others, [profile.color]: shown } : others, seenTheme: shown };
+  return { ...profile, presetThemes: shown ? { ...others, [profile.color]: shown } : others, ...seen };
 }
 
 export const profilesWithOwnLooks = <T extends PresetLookFields>(profiles: Record<string, T>): Record<string, T> =>

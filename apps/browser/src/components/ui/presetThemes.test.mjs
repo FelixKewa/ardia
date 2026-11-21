@@ -198,3 +198,23 @@ test("a press that was never armed doesn't commit when it's taken away", () => {
   press.grant(120);
   assert.equal(press.armed(), true);
 });
+
+test("a preset picked on 0.2.47 after a downgrade never deletes this Mac's saved look of it", () => {
+  const { withOwnLooksSeeded } = look_;
+  const after = { color: "blue", theme: null, presetThemes: { plum: EDIT_A, blue: EDIT_B }, seenTheme: EDIT_A, seenColor: "plum" };
+  assert.deepEqual(withOwnLooksSeeded(after).presetThemes, { plum: EDIT_A, blue: EDIT_B }, "0.2.47 cleared the theme because it switched colour, not because blue was reset");
+  const reset = { color: "plum", theme: null, presetThemes: { plum: EDIT_A, blue: EDIT_B }, seenTheme: EDIT_A, seenColor: "plum" };
+  assert.deepEqual(withOwnLooksSeeded(reset).presetThemes, { blue: EDIT_B }, "a clear on the same colour is a reset");
+});
+
+test("a profile made on this version records the look it starts with, so a 0.2.47 edit of it is kept on the way back", async () => {
+  const { withOwnLooksSeeded } = look_;
+  const { useBrowser } = await import("../../state/browser/store.ts");
+  useBrowser.getState().hydrate({});
+  const id = useBrowser.getState().createProfile({ name: "Fresh", color: "green" });
+  const made = useBrowser.getState().profiles[id];
+  assert.equal(made.seenTheme, null);
+  assert.equal(made.seenColor, "green");
+  const editedOn0247 = { ...made, theme: EDIT_A };
+  assert.deepEqual(withOwnLooksSeeded(editedOn0247).presetThemes, { green: EDIT_A });
+});

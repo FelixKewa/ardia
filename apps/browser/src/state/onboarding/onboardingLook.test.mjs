@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { useBrowser } from "../browser/store.ts";
 import { chooseSource, goToStep, previewTheme, skipStep, startOnboarding, useOnboarding } from "./onboarding.ts";
+import { adoptSetupChoices } from "./setupCodeChoices.ts";
 import { usePlugins } from "../plugins/store.ts";
 
 usePlugins.setState({ scanned: true });
@@ -45,5 +46,26 @@ test("previewing in Personal, switching the window to Work and resetting Work's 
   assert.deepEqual(S().profiles[work].theme, look(0.9), "Skip puts Work's look back");
   assert.deepEqual(S().profiles[work].presetThemes, { blue: look(0.9) }, "and its saved looks");
   assert.equal(S().profiles[personal].theme, null, "Personal's preview is undone too");
+  useOnboarding.setState({ windowId: null, leaving: false, redo: false });
+});
+
+test("a setup code that sets the colour drops only the window profile's snapshot, so leaving still restores the other profile", () => {
+  const windowId = S().createWindow();
+  const personal = S().windows[windowId].profileId;
+  S().setProfileLook(personal, { color: "plum", theme: null, presetThemes: {} });
+  const work = S().createProfile({ name: "Work 3", color: "blue" });
+  S().setProfileLook(work, { theme: look(0.9), presetThemes: { blue: look(0.9) } });
+  startOnboarding(windowId, "source");
+  chooseSource("fresh");
+  goToStep("look");
+  useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: work } } }));
+  previewTheme(null);
+  useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: personal } } }));
+  previewTheme(look(0.5));
+  adoptSetupChoices({ settings: {}, color: "green" }, []);
+  assert.deepEqual(Object.keys(useOnboarding.getState().baseline.looks ?? {}), [work], "only Personal's snapshot goes");
+  skipStep();
+  assert.deepEqual(S().profiles[work].theme, look(0.9), "Work's reset is still undone");
+  assert.deepEqual(S().profiles[work].presetThemes, { blue: look(0.9) });
   useOnboarding.setState({ windowId: null, leaving: false, redo: false });
 });

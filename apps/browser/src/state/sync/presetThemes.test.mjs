@@ -9,6 +9,7 @@ const adapters = await import("./profileAdapters.ts");
 const v0247 = await import("./fixtures/profileAdapters-v0.2.47.ts");
 const { pairTheme, settleThemeAdoption } = await import("./syncThemes.ts");
 const { choosePresetColor, resetPresetTheme, setProfileTheme } = await import("../profiles/themeActions.ts");
+const { profilesWithOwnLooks } = await import("../../lib/presetLook.ts");
 
 const S = () => useBrowser.getState();
 
@@ -435,4 +436,44 @@ test("over random sequences: no sync publishes without a user action, no synced 
       assert.deepEqual(mac.profile().theme ?? null, a.profile().theme ?? null, `seed ${seed}: ${mac.id} look`);
     }
   }
+});
+
+const restart = (mac) => mac.with(() => useBrowser.setState((s) => ({ profiles: profilesWithOwnLooks(JSON.parse(JSON.stringify(s.profiles))) })));
+
+test("a plain upgrade from 0.2.47 with a custom theme keeps the look, on screen and after switching away and back", async () => {
+  const folder = new Folder();
+  const a = new Mac("a", folder, { old: true });
+  a.with(() => useBrowser.setState((s) => ({ profiles: { ...s.profiles, default: { id: "default", name: "Personal", color: "blue", icon: null, createdAt: 0, theme: BLUE } } })));
+  await a.sync();
+  const b = new Mac("b", folder, { old: true, joining: true });
+  await rounds([a, b], 3);
+  a.upgrade();
+  restart(a);
+  assert.deepEqual(a.profile().theme, BLUE);
+  a.pick("plum");
+  a.pick("blue");
+  assert.deepEqual(a.profile().theme, BLUE, "nothing lost by switching away and back");
+  await rounds([a, b], 3);
+  assert.deepEqual(b.profile().theme, BLUE, "the older Mac still shows it");
+  assert.equal(await rounds([a, b], 3), 0, "and they settle");
+});
+
+test("0.2.48 to 0.2.47 and back with nothing done on 0.2.47 keeps every look", async () => {
+  const folder = new Folder();
+  const a = new Mac("a", folder);
+  a.edit(PLUM);
+  a.pick("blue");
+  a.edit(BLUE);
+  a.pick("plum");
+  await a.sync();
+  const before = { theme: a.profile().theme, stash: a.stash(), color: a.profile().color };
+  a.adapters = a.oldAdapters();
+  restart(a);
+  await a.sync();
+  a.upgrade();
+  restart(a);
+  await a.sync();
+  assert.deepEqual({ theme: a.profile().theme, stash: a.stash(), color: a.profile().color }, before);
+  a.pick("blue");
+  assert.deepEqual(a.profile().theme, BLUE);
 });
