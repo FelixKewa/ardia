@@ -117,7 +117,7 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertEqual(made.copy.path, "\(root)/OfficialPlugins/tool/\(sha)")
     XCTAssertEqual(made.copy.payloadDigest, PluginPrograms.payloadDigest(made.copy.path))
     XCTAssertNil(store.active("tool"), "a candidate isn't active until the user confirms")
-    XCTAssertFalse(OfficialStore.hasQuarantine("\(made.copy.path)/bin/tool"), "the copy isn't quarantined, so Gatekeeper never asks to notarize it")
+    XCTAssertFalse(hasQuarantine("\(made.copy.path)/bin/tool"), "the copy isn't quarantined, so Gatekeeper never asks to notarize it")
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: made.copy.folderId)
     let pin = OfficialPin(entries: [entry(sha: sha)])
     XCTAssertEqual(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: "0" + approved.dropFirst(), store: store, pin: pin), "It changed since you approved it. Try again.")
@@ -155,7 +155,9 @@ final class OfficialPluginsTests: XCTestCase {
     let device = ("tool/dev", UInt8(ascii: "3"), Data(), 0o644, "")
     let absolute = ("/tool/abs", UInt8(ascii: "0"), Data("x".utf8), 0o644, "")
     let twice = ("tool/plugin.json", UInt8(ascii: "0"), Data("{}".utf8), 0o644, "")
-    for bad in [link, hard, escape, stray, device, absolute, twice] {
+    let reservedAlias = ("tool/.AFTER-UPDATE", UInt8(ascii: "0"), Data(), 0o644, "")
+    let cachesAlias = ("tool/bin/__PyCache__/x.pyc", UInt8(ascii: "0"), Data("x".utf8), 0o644, "")
+    for bad in [link, hard, escape, stray, device, absolute, twice, reservedAlias, cachesAlias] {
       let archive = try pluginArchive(manifest(), extra: [bad])
       let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
       guard case .failure(let failure) = publish(archive, entry: entry(sha: sha)) else { return XCTFail("\(bad.0) was accepted") }
@@ -176,6 +178,10 @@ final class OfficialPluginsTests: XCTestCase {
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let registry = ProgramRegistry(claims: ["tool": "tool"], legacy: [], failClosed: false)
     XCTAssertNoThrow(try publish(archive, entry: entry(sha: sha, reserved: ["tool"]), registry: registry).get(), "a claim the pin and registry both give it is fine")
+  }
+
+  func hasQuarantine(_ path: String) -> Bool {
+    getxattr(path, OfficialStore.quarantineName, nil, 0, 0, XATTR_NOFOLLOW) >= 0
   }
 
   func tamper(_ path: String, _ text: String) throws {
@@ -213,7 +219,7 @@ final class OfficialPluginsTests: XCTestCase {
     try run.run()
     run.waitUntilExit()
     XCTAssertEqual(run.terminationStatus, 0, "trust comes from the pinned SHA-256, not a team signature")
-    XCTAssertFalse(OfficialStore.hasQuarantine("\(places.store)/tool/current/bin/tool"))
+    XCTAssertFalse(hasQuarantine("\(places.store)/tool/current/bin/tool"))
   }
 
   func testAQuarantinedDownloadIsClearedOnlyAfterItsDigestMatches() throws {
@@ -222,8 +228,8 @@ final class OfficialPluginsTests: XCTestCase {
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     guard case .failure = publish(archive, entry: entry(sha: String(repeating: "1", count: 64))) else { return XCTFail("a mismatch was published") }
     let made = try publish(archive, entry: entry(sha: sha)).get()
-    XCTAssertFalse(OfficialStore.hasQuarantine("\(made.copy.path)/bin/tool"))
-    XCTAssertFalse(OfficialStore.hasQuarantine("\(made.copy.path)/plugin.json"))
+    XCTAssertFalse(hasQuarantine("\(made.copy.path)/bin/tool"))
+    XCTAssertFalse(hasQuarantine("\(made.copy.path)/plugin.json"))
   }
 
   func testLinkingRefusesAProgramCopyThatIsntTheVerifiedDownload() throws {
@@ -350,15 +356,51 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertNil(store.copy("tool", sha: sha), "a download that isn't the pinned SHA-256 vouches for nothing")
   }
 
-  func testAnEarlierCopyIsntTakenForADamagedNewOne() throws {
+  func testAFailedSwitchKeepsTheEarlierCopyOnlyWhileItMatchesACheckedCopy() throws {
     let old = try makeFolder("0.4.0", say: "old")
     defer { old.close() }
     _ = try install(old, version: "0.4.0", identity: OfficialPin.legacyFolderId)
-    XCTAssertFalse(PluginPrograms.currentIsDamaged(plugin: "tool", places: places, version: "0.5.0", approved: String(repeating: "b", count: 64), digest: String(repeating: "c", count: 64)), "a failed update leaves the earlier copy's ardia on PATH")
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", places: places, trusted: []), .trusted, "a failed update leaves 0.2.47's ardia on PATH")
+    XCTAssertNotNil(PluginPrograms.linkTarget("\(places.binDir)/tool"))
+
+    let first = try pluginArchive(manifest())
+    let firstSha = try XCTUnwrap(OfficialArchive.sha256(file: first))
+    let earlier = try publish(first, entry: entry(sha: firstSha)).get()
+    let second = try pluginArchive(manifest(), tool: Data("#!/bin/sh\necho second\n".utf8))
+    let secondSha = try XCTUnwrap(OfficialArchive.sha256(file: second))
+    let later = try publish(second, entry: entry(sha: secondSha)).get()
+    let source = { (made: (copy: OfficialCopy, manifest: String)) in
+      TrustedProgramCopy(version: "1.2.0", approved: PluginFiles.approvalHash(text: made.manifest, folderId: made.copy.folderId), digest: made.copy.payloadDigest)
+    }
+    let folder = try XCTUnwrap(PluginFiles.openFolder(earlier.copy.path))
+    defer { folder.close() }
+    _ = try PluginPrograms.install(
+      plugin: "tool", from: OpenedFolder(fd: folder.fd, path: folder.path, id: earlier.copy.folderId), approved: source(earlier).approved, version: "1.2.0",
+      programs: [PluginProgram(name: "tool", path: "bin/tool")], places: places, expectedDigest: earlier.copy.payloadDigest
+    ).get()
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", places: places, trusted: [source(earlier), source(later)]), .trusted)
+    XCTAssertNotNil(PluginPrograms.linkTarget("\(places.binDir)/tool"))
+
     let version = try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current"))
     try tamper("\(places.store)/tool/\(version)/bin/tool", "#!/bin/sh\necho swapped\n")
-    guard case .text(let text) = PluginFiles.readManifest(in: OpenedFolder(fd: old.fd, path: old.path, id: OfficialPin.legacyFolderId)) else { return XCTFail("no manifest") }
-    XCTAssertTrue(PluginPrograms.currentIsDamaged(plugin: "tool", places: places, version: "0.4.0", approved: PluginFiles.approvalHash(text: text, folderId: OfficialPin.legacyFolderId), digest: String(repeating: "c", count: 64)))
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", places: places, trusted: [source(earlier), source(later)]), .dropped, "the earlier copy is held to its own checked digest, not the new one's")
+    XCTAssertNil(PluginPrograms.linkTarget("\(places.binDir)/tool"))
+    XCTAssertNil(PluginPrograms.linkTarget("\(places.store)/tool/current"))
+  }
+
+  func testAFailedSwitchDropsAnEarlierCopyWithNoCheckedSource() throws {
+    let archive = try pluginArchive(manifest())
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    let made = try publish(archive, entry: entry(sha: sha)).get()
+    let folder = try XCTUnwrap(PluginFiles.openFolder(made.copy.path))
+    defer { folder.close() }
+    _ = try PluginPrograms.install(
+      plugin: "tool", from: OpenedFolder(fd: folder.fd, path: folder.path, id: made.copy.folderId),
+      approved: PluginFiles.approvalHash(text: made.manifest, folderId: made.copy.folderId), version: "1.2.0",
+      programs: [PluginProgram(name: "tool", path: "bin/tool")], places: places, expectedDigest: made.copy.payloadDigest
+    ).get()
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", places: places, trusted: []), .dropped, "a copy whose download is gone can't be vouched for")
+    XCTAssertNil(PluginPrograms.linkTarget("\(places.binDir)/tool"))
   }
 
   func testTurningAnOfficialPluginOffKeepsItsCopySoItCanTurnBackOn() throws {
@@ -444,17 +486,29 @@ final class OfficialPluginsTests: XCTestCase {
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: folder.id)
     let programs = [PluginProgram(name: "tool", path: "bin/tool")]
     _ = try PluginPrograms.install(plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: programs, places: places, expectedDigest: made.copy.payloadDigest).get()
-    XCTAssertTrue(PluginPrograms.currentHolds(plugin: "tool", places: places, digest: made.copy.payloadDigest))
-    let staged = "\(places.store)/tool/\(try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current")))"
+    let trusted = [TrustedProgramCopy(version: "1.2.0", approved: approved, digest: made.copy.payloadDigest)]
+    let version = try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current"))
+    XCTAssertTrue(PluginPrograms.currentIsTrusted(version, plugin: "tool", places: places, trusted: trusted))
+    let staged = "\(places.store)/tool/\(version)"
     XCTAssertTrue(PluginPrograms.holdsApproved(staged, folderId: folder.id, approved: approved, programs: programs, expectedDigest: made.copy.payloadDigest))
     XCTAssertEqual(chmod("\(staged)/bin", 0o755), 0)
     XCTAssertEqual(chmod("\(staged)/bin/tool", 0o755), 0)
     XCTAssertFalse(PluginPrograms.holdsApproved(staged, folderId: folder.id, approved: approved, programs: programs, expectedDigest: made.copy.payloadDigest), "a program copy that can be written is not reused, even with the same bytes")
-    XCTAssertFalse(PluginPrograms.currentHolds(plugin: "tool", places: places, digest: made.copy.payloadDigest))
-    XCTAssertTrue(PluginPrograms.currentIsDamaged(plugin: "tool", places: places, version: "1.2.0", approved: approved, digest: made.copy.payloadDigest))
+    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", places: places, trusted: trusted), .dropped)
     XCTAssertEqual(chmod("\(made.copy.path)/bin", 0o755), 0)
     OfficialVerification.shared.forget()
     XCTAssertNil(store.copy("tool", sha: sha), "a published copy that can be written is not official")
+  }
+
+  func testNothingIsUnpackedUnderAFolderOtherUsersCanRename() throws {
+    let shared = "\(root)/shared"
+    XCTAssertEqual(mkdir(shared, 0o755), 0)
+    XCTAssertEqual(chmod(shared, 0o777), 0)
+    let exposed = OfficialStore(root: "\(shared)/OfficialPlugins")
+    XCTAssertNil(exposed.makeScratch("tool", prefix: ".stage-"), "another user could swap the folder out before it is unpacked into")
+    XCTAssertEqual(chmod(shared, 0o1777), 0)
+    XCTAssertNotNil(exposed.makeScratch("tool", prefix: ".stage-"), "a sticky folder like /tmp keeps its entries to their owners")
+    XCTAssertEqual(chmod(shared, 0o755), 0)
   }
 
   func testAQuarantineFlagStaysOnADownloadThatDoesntMatch() throws {
@@ -464,7 +518,7 @@ final class OfficialPluginsTests: XCTestCase {
     let result = OfficialInstaller.verifyAndPublish(entry(sha: String(repeating: "1", count: 64)), archive: archive, scratch: scratch, store: store, registry: .empty)
     guard case .failure(let failure) = result else { return XCTFail("a mismatch was published") }
     XCTAssertEqual(failure.code, "verify")
-    XCTAssertTrue(OfficialStore.hasQuarantine(archive), "nothing is cleared before the SHA-256 matches")
+    XCTAssertTrue(hasQuarantine(archive), "nothing is cleared before the SHA-256 matches")
     XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch), [], "nothing was unpacked")
   }
 
@@ -473,7 +527,7 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertEqual(setxattr(archive, OfficialStore.quarantineName, "0081;0;Test;", 12, 0, XATTR_NOFOLLOW), 0)
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     _ = try publish(archive, entry: entry(sha: sha)).get()
-    XCTAssertFalse(OfficialStore.hasQuarantine(store.archivePath("tool", sha)))
+    XCTAssertFalse(hasQuarantine(store.archivePath("tool", sha)))
   }
 
   func testAnArchivePackedLikeBuildShUnpacks() throws {

@@ -119,10 +119,8 @@ enum PluginProgramLinks {
     case .failure: clean = false
     case .success(let linked): clean = linked.refused.isEmpty
     }
-    if !clean, let copy,
-      PluginPrograms.currentIsDamaged(plugin: name, places: places, version: spec["version"] as? String, approved: approved, digest: copy.payloadDigest)
-    {
-      PluginPrograms.dropDamaged(plugin: name, programs: programs.map(\.name), places: places)
+    if !clean, copy != nil, PluginPrograms.dropCurrentUnlessTrusted(plugin: name, places: places, trusted: folders.trustedProgramCopies(name)) == .stuck {
+      return ["ok": false, "reason": "its programs on PATH don't match a copy Ardia checked, and couldn't be taken off PATH"]
     }
     switch result {
     case .failure(let refusal):
@@ -216,7 +214,7 @@ enum PluginProgramLinks {
         let (program, arguments) = steps[step]
         guard isCurrent(name, generation) else { return }
         let started = PluginPrograms.whileCurrent(plugin: name, version: version, places: places) { () -> AfterUpdateSpawn in
-          if let digest, PluginPrograms.payloadDigest(folder, keepingCaches: true) != digest { return .failed }
+          if let digest, !PluginPrograms.isSealed(folder, keepingRootWritable: true) || PluginPrograms.payloadDigest(folder, keepingCaches: true) != digest { return .failed }
           return runs.spawn((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
         }
         switch started {

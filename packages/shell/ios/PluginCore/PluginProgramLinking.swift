@@ -83,25 +83,44 @@ extension PluginPrograms {
     return version == base || version.hasPrefix(base + "-r") ? folder : nil
   }
 
-  static func currentIsDamaged(plugin: String, places: ProgramPlaces, version: String?, approved: String, digest: String) -> Bool {
-    let pluginStore = places.pluginStore(plugin)
-    guard let current = linkTarget((pluginStore as NSString).appendingPathComponent(currentName)), !current.contains("/") else { return false }
-    let base = versionFolderName(version: version, approved: approved)
-    guard current == base || current.hasPrefix(base + "-r") else { return false }
-    return !currentHolds(plugin: plugin, places: places, digest: digest)
-  }
-
-  static func dropDamaged(plugin: String, programs: [String], places: ProgramPlaces) {
-    withdraw(plugin: plugin, programs: programs, places: places, keepCopy: true)
-    guard let lock = lock(plugin, places) else { return }
+  static func dropCurrentUnlessTrusted(plugin: String, places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> CurrentCheck {
+    guard let lock = lock(plugin, places) else { return .stuck }
     defer { close(lock) }
-    unlink((places.pluginStore(plugin) as NSString).appendingPathComponent(currentName))
+    let pluginStore = places.pluginStore(plugin)
+    let currentPath = (pluginStore as NSString).appendingPathComponent(currentName)
+    guard let version = linkTarget(currentPath) else { return .trusted }
+    if currentIsTrusted(version, plugin: plugin, places: places, trusted: trusted) { return .trusted }
+    var offPath = false
+    if let bin = binLock(places) {
+      unlinkOthers(plugin: plugin, keeping: [], places: places)
+      offPath = !linksIntoStore(places).contains { isInside($0.1, pluginStore) }
+      close(bin)
+    }
+    let severed = unlink(currentPath) == 0 || errno == ENOENT
+    return offPath || severed ? .dropped : .stuck
   }
 
-  static func currentHolds(plugin: String, places: ProgramPlaces, digest: String) -> Bool {
-    let pluginStore = places.pluginStore(plugin)
-    guard let version = linkTarget((pluginStore as NSString).appendingPathComponent(currentName)), !version.contains("/") else { return false }
-    let folder = (pluginStore as NSString).appendingPathComponent(version)
-    return isRealFolder(folder) && isSealed(folder, keepingRootWritable: true) && payloadDigest(folder, keepingCaches: true) == digest
+  static func currentIsTrusted(_ version: String, plugin: String, places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> Bool {
+    guard !version.contains("/") else { return false }
+    let folder = (places.pluginStore(plugin) as NSString).appendingPathComponent(version)
+    if legacyCopy(plugin: plugin, places: places) == folder { return true }
+    let sources = trusted.filter { source in
+      let base = versionFolderName(version: source.version, approved: source.approved)
+      return version == base || version.hasPrefix(base + "-r")
+    }
+    guard !sources.isEmpty, isRealFolder(folder), isSealed(folder, keepingRootWritable: true), let digest = payloadDigest(folder, keepingCaches: true) else { return false }
+    return sources.contains { $0.digest == digest }
   }
+}
+
+struct TrustedProgramCopy: Equatable {
+  let version: String?
+  let approved: String
+  let digest: String
+}
+
+enum CurrentCheck: Equatable {
+  case trusted
+  case dropped
+  case stuck
 }

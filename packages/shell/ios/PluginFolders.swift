@@ -69,6 +69,15 @@ struct PluginFolders {
     return sha == entry.sha256 ? store.copy(name, sha: sha) : nil
   }
 
+  func trustedProgramCopies(_ name: String) -> [TrustedProgramCopy] {
+    officialStore().copies(name).compactMap { copy in
+      guard let opened = PluginFiles.openFolder(copy.path) else { return nil }
+      defer { opened.close() }
+      guard case .text(let text) = PluginFiles.readManifest(in: opened) else { return nil }
+      return TrustedProgramCopy(version: OfficialPin.manifestVersion(text), approved: PluginFiles.approvalHash(text: text, folderId: OfficialPin.folderId(copy.sha)), digest: copy.payloadDigest)
+    }
+  }
+
   func legacyFolder(_ name: String, pin: OfficialPin? = PluginFolders.officialPin()) -> String? {
     guard pin?.entry(name) != nil, officialStore().active(name) == nil, case .success(let places) = programPlaces() else { return nil }
     return PluginPrograms.legacyCopy(plugin: name, places: places)

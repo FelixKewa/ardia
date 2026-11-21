@@ -40,6 +40,10 @@ enum PluginPrograms {
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
   private static let versionCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
 
+  static func isReserved(_ name: String) -> Bool {
+    reserved.contains(name.lowercased())
+  }
+
   static func isName(_ name: String) -> Bool {
     namePattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
   }
@@ -256,13 +260,13 @@ enum PluginPrograms {
     return fd
   }
 
-  private static func unlinkOthers(plugin: String, keeping: Set<String>, places: ProgramPlaces) {
+  static func unlinkOthers(plugin: String, keeping: Set<String>, places: ProgramPlaces) {
     for (name, target) in linksIntoStore(places) where !keeping.contains(name) && isInside(target, places.pluginStore(plugin)) {
       unlink((places.binDir as NSString).appendingPathComponent(name))
     }
   }
 
-  private static func linksIntoStore(_ places: ProgramPlaces) -> [(String, String)] {
+  static func linksIntoStore(_ places: ProgramPlaces) -> [(String, String)] {
     let names = (try? FileManager.default.contentsOfDirectory(atPath: places.binDir)) ?? []
     return names.compactMap { name in
       guard isName(name), let target = linkTarget((places.binDir as NSString).appendingPathComponent(name)), isInside(target, places.store) else { return nil }
@@ -389,7 +393,7 @@ enum PluginPrograms {
     for name in names.sorted() {
       let shown = relative.isEmpty ? name : "\(relative)/\(name)"
       if name.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f }) { return "a name in \(relative.isEmpty ? "its folder" : relative) has control characters" }
-      if relative.isEmpty && reserved.contains(name) { return "\(shown) is reserved for Ardia" }
+      if relative.isEmpty && isReserved(name) { return "\(shown) is reserved for Ardia" }
       var info = stat()
       guard fstatat(source, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return "\(shown) couldn't be read" }
       if name == caches && (info.st_mode & S_IFMT) == S_IFDIR { continue }
@@ -573,6 +577,20 @@ enum PluginPrograms {
     for folder in folders.reversed() where chmod(folder, 0o555) != 0 { sealed = false }
     if !keepingRootWritable && chmod(root, 0o555) != 0 { sealed = false }
     return sealed && isSealed(root, keepingRootWritable: keepingRootWritable)
+  }
+
+  static func hasPrivateAncestry(_ path: String) -> Bool {
+    guard let resolved = realpath(path, nil) else { return false }
+    var current = String(cString: resolved)
+    free(resolved)
+    let owner = getuid()
+    while true {
+      var info = stat()
+      guard lstat(current, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR, info.st_uid == owner || info.st_uid == 0 else { return false }
+      if info.st_mode & 0o022 != 0 && info.st_mode & S_ISVTX == 0 { return false }
+      if current == "/" { return true }
+      current = (current as NSString).deletingLastPathComponent
+    }
   }
 
   static func isSealed(_ root: String, keepingRootWritable: Bool) -> Bool {

@@ -42,7 +42,7 @@ struct OfficialStore {
   }
 
   func makeScratch(_ name: String, prefix: String) -> String? {
-    guard PluginPrograms.isName(name), let folder = PluginPrograms.realFolder(pluginFolder(name), creating: true) else { return nil }
+    guard PluginPrograms.isName(name), let folder = PluginPrograms.realFolder(pluginFolder(name), creating: true), PluginPrograms.hasPrivateAncestry(folder) else { return nil }
     let path = (folder as NSString).appendingPathComponent("\(prefix)\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
     return mkdir(path, 0o700) == 0 ? path : nil
   }
@@ -54,6 +54,11 @@ struct OfficialStore {
       let digest = OfficialVerification.shared.digest(archive: archivePath(name, sha), sha: sha, copy: path, top: name, scratch: pluginFolder(name), fresh: fresh)
     else { return nil }
     return OfficialCopy(name: name, sha: sha, path: path, payloadDigest: digest)
+  }
+
+  func copies(_ name: String) -> [OfficialCopy] {
+    guard PluginPrograms.isName(name), let entries = try? FileManager.default.contentsOfDirectory(atPath: pluginFolder(name)) else { return [] }
+    return entries.filter(OfficialPin.isSha).sorted().compactMap { copy(name, sha: $0) }
   }
 
   func active(_ name: String) -> OfficialCopy? {
@@ -75,7 +80,7 @@ struct OfficialStore {
       }
       if PluginPrograms.isRealFolder(copyPath(name, sha)) { PluginPrograms.discard(copyPath(name, sha)) }
       unlink(archivePath(name, sha))
-      if Self.hasQuarantine(archive) && removexattr(archive, Self.quarantineName, XATTR_NOFOLLOW) != 0 {
+      if !Self.clearQuarantine(archive) {
         PluginPrograms.discard(staged)
         return .failure(FolderRefusal(reason: "its download couldn't be cleared for use"))
       }
@@ -155,18 +160,15 @@ struct OfficialStore {
     return Int(Date().timeIntervalSince1970) - info.st_mtimespec.tv_sec > seconds
   }
 
-  static func hasQuarantine(_ path: String) -> Bool {
-    getxattr(path, quarantineName, nil, 0, 0, XATTR_NOFOLLOW) >= 0
+  static func clearQuarantine(_ path: String) -> Bool {
+    removexattr(path, quarantineName, XATTR_NOFOLLOW) == 0 || errno == ENOATTR
   }
 
   static func stripQuarantine(tree root: String) -> Bool {
     guard let walker = FileManager.default.enumerator(atPath: root) else { return false }
     var paths = [root]
     while let relative = walker.nextObject() as? String { paths.append((root as NSString).appendingPathComponent(relative)) }
-    for path in paths where hasQuarantine(path) {
-      guard removexattr(path, quarantineName, XATTR_NOFOLLOW) == 0 else { return false }
-    }
-    return true
+    return paths.allSatisfy(clearQuarantine)
   }
 }
 
