@@ -4,7 +4,7 @@ import type { BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { deleteProfile } from "../browser/actions";
 import { sanitizeTheme, startingTheme } from "../../lib/profileLook";
-import { withPresetChosen } from "../../lib/presetLook";
+import { choosePresetColor, setProfileTheme } from "../profiles/themeActions";
 import type { ProfileColor } from "../browser/types";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { setOpenTabsSynced } from "../sync/engine";
@@ -74,8 +74,9 @@ function setLook(params: Record<string, unknown>) {
     if (!theme) throw new OpError("bad_request", "That theme object isn't one Ardia reads (profiles.list shows the shape).");
   }
   if (params.color === undefined && theme === undefined) throw new OpError("bad_request", "profiles.setLook needs color or theme.");
-  const chosen = params.color !== undefined ? withPresetChosen(now().profiles[id]!, params.color as ProfileColor) : null;
-  now().setProfileLook(id, { ...chosen, ...(theme !== undefined ? { theme } : {}) });
+  const leaveSync = () => {};
+  if (params.color !== undefined) choosePresetColor(id, params.color as ProfileColor, leaveSync);
+  if (theme !== undefined) setProfileTheme(id, theme, leaveSync);
   return profileRow(now(), id);
 }
 

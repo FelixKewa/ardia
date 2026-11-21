@@ -102,9 +102,8 @@ class Mac {
   profile() {
     return this.browser.profiles.default;
   }
-  edits() {
-    const p = this.profile();
-    return { ...(p.presetThemes ?? {}), ...(p.theme ? { [p.color]: p.theme } : {}) };
+  stash() {
+    return { ...(this.profile().presetThemes ?? {}) };
   }
 }
 
@@ -123,17 +122,92 @@ async function twoMacsWithPlumEdited(folder) {
   return { a, b };
 }
 
-test("a reset reaches the other Mac and replaces its edit of that preset", async () => {
+test("a local edit is this Mac's own look of the preset it was made on; a synced look is only shown", async () => {
+  const folder = new Folder();
+  const { a, b } = await twoMacsWithPlumEdited(folder);
+  assert.deepEqual(a.stash(), { plum: PLUM });
+  assert.deepEqual(b.profile().theme, PLUM, "b shows the synced look");
+  assert.deepEqual(b.stash(), {}, "but keeps no look of its own");
+});
+
+test("a reset reaches the other Mac's screen", async () => {
+  const folder = new Folder();
+  const { a, b } = await twoMacsWithPlumEdited(folder);
+  a.reset();
+  await rounds([a, b], 2);
+  assert.equal(b.profile().theme, null);
+  assert.deepEqual(a.stash(), {});
+  assert.equal(await rounds([a, b], 3), 0, "and they settle");
+});
+
+test("my presets are mine on this Mac: after another Mac edits the showing preset, switching away and back here brings back this Mac's own look and sends it", async () => {
+  const folder = new Folder();
+  const { a, b } = await twoMacsWithPlumEdited(folder);
+  b.edit(BLUE);
+  await rounds([b, a], 2);
+  a.edit(GREEN);
+  await rounds([a, b], 2);
+  assert.deepEqual(b.profile().theme, GREEN, "b shows a's newer edit");
+  assert.deepEqual(b.stash(), { plum: BLUE }, "and keeps its own look of plum");
+  b.pick("blue");
+  b.pick("plum");
+  assert.deepEqual(b.profile().theme, BLUE);
+  await rounds([b, a], 2);
+  assert.deepEqual(a.profile().theme, BLUE, "the pick sends it");
+  assert.deepEqual(a.stash(), { plum: GREEN }, "a keeps its own look of plum for later");
+  assert.equal(await rounds([a, b], 3), 0, "and they settle");
+});
+
+test("my presets are mine on this Mac: after another Mac resets the showing preset, switching away and back here brings back this Mac's own look", async () => {
   const folder = new Folder();
   const { a, b } = await twoMacsWithPlumEdited(folder);
   b.reset();
   await rounds([b, a], 2);
   assert.equal(a.profile().theme, null);
-  assert.deepEqual(a.edits(), {});
-  assert.equal(await rounds([a, b], 3), 0, "and they settle");
+  a.pick("blue");
+  a.pick("plum");
+  assert.deepEqual(a.profile().theme, PLUM);
 });
 
-test("U1: switching to a preset and resetting it before syncing resets it on the other Mac too, even where it was edited", async () => {
+async function splitPick(order, setup) {
+  const folder = new Folder();
+  const { a, b } = await twoMacsWithPlumEdited(folder);
+  await setup?.(a, b);
+  a.pick("blue");
+  await a.sync();
+  const colourFile = `f${folder.counter}`;
+  a.edit(BLUE);
+  await a.sync();
+  const lookFile = `f${folder.counter}`;
+  folder.withhold = (id) => id === (order === "look first" ? colourFile : lookFile);
+  await b.sync();
+  folder.withhold = null;
+  await b.sync();
+  return { a, b, folder };
+}
+
+for (const order of ["look first", "colour first"]) {
+  test(`W1, ${order}: a look and its colour arriving in separate pulls never land in this Mac's own looks`, async () => {
+    const { b } = await splitPick(order, (a) => a.reset());
+    assert.equal(b.profile().color, "blue");
+    assert.deepEqual(b.profile().theme, BLUE);
+    assert.deepEqual(b.stash(), {}, "plum was plain here and stays plain; blue's look isn't b's");
+  });
+
+  test(`W1, ${order}: this Mac's own look of the preset it was on stays under that preset through a later switch`, async () => {
+    const { a, b } = await splitPick(order, async (a, b) => {
+      b.edit(GREEN);
+      await rounds([b, a], 2);
+    });
+    a.pick("green");
+    await rounds([a, b], 2);
+    assert.deepEqual(b.stash(), { plum: GREEN }, "only b's own plum look, under plum");
+    b.pick("plum");
+    assert.deepEqual(b.profile().theme, GREEN);
+  });
+}
+
+test("U1: switching to a preset and resetting it before syncing shows it plain on the other Mac too", async () => {
   const folder = new Folder();
   const { a, b } = await twoMacsWithPlumEdited(folder);
   b.pick("blue");
@@ -145,19 +219,19 @@ test("U1: switching to a preset and resetting it before syncing resets it on the
   await rounds([a, b], 3);
   for (const mac of [a, b]) {
     assert.equal(mac.profile().color, "blue", mac.id);
-    assert.equal(mac.profile().theme, null, `${mac.id}: blue is plain, as the Mac that reset it shows`);
+    assert.equal(mac.profile().theme, null, `${mac.id}: blue shows plain, as the Mac that reset it`);
   }
-  assert.deepEqual(b.edits().plum, PLUM, "b keeps the plum edit it switched away from");
+  assert.deepEqual(b.stash(), { blue: BLUE }, "b keeps its own blue look");
   assert.equal(await rounds([a, b], 3), 0, "and they settle");
 });
 
-test("U2: picking a preset whose look equals the one it left still moves that look to the other Mac", async () => {
+test("U2: picking a preset whose look equals the one it left still shows that look on the other Mac", async () => {
   const folder = new Folder();
   const a = new Mac("a", folder);
-  a.edit(BLUE);
   a.pick("blue");
   a.edit(BLUE);
   a.pick("plum");
+  a.edit(BLUE);
   await a.sync();
   const b = new Mac("b", folder, { joining: true });
   await rounds([a, b], 2);
@@ -165,13 +239,12 @@ test("U2: picking a preset whose look equals the one it left still moves that lo
   await rounds([a, b], 3);
   for (const mac of [a, b]) {
     assert.equal(mac.profile().color, "blue", mac.id);
-    assert.deepEqual(mac.profile().theme, BLUE, `${mac.id} shows a's blue edit`);
+    assert.deepEqual(mac.profile().theme, BLUE, mac.id);
   }
-  assert.deepEqual(a.edits(), { plum: BLUE, blue: BLUE }, "nothing is erased on a");
   assert.equal(await rounds([a, b], 3), 0, "and they settle");
 });
 
-test("U3: a rename after a plain switch still lands the switch's look on the other Mac", async () => {
+test("U3: a rename after a plain switch changes nothing about the look", async () => {
   const folder = new Folder();
   const { a, b } = await twoMacsWithPlumEdited(folder);
   a.pick("blue");
@@ -181,7 +254,6 @@ test("U3: a rename after a plain switch still lands the switch's look on the oth
     assert.equal(mac.profile().color, "blue", mac.id);
     assert.equal(mac.profile().theme, null, mac.id);
   }
-  assert.deepEqual(b.edits(), { plum: PLUM }, "b keeps plum's edit");
   assert.equal(await rounds([a, b], 3), 0, "and they settle");
 });
 
@@ -195,21 +267,45 @@ test("U4: a switch on one Mac and an edit on the other at once end with both Mac
   await b.sync();
   await rounds([a, b], 3);
   assert.equal(a.profile().color, b.profile().color);
-  assert.deepEqual(a.profile().theme, b.profile().theme, "same look on both");
+  assert.deepEqual(a.profile().theme, b.profile().theme);
+  assert.deepEqual(b.stash(), { plum: GREEN }, "b's own edit stays its own look of plum");
   assert.equal(await rounds([a, b], 3), 0, "and they settle");
 });
 
-test("U5: pairing takes the synced colour even when the other Mac never synced a look", async () => {
+test("U5 and V1: pairing takes the synced colour, keeps this Mac's own looks, and publishes nothing until a look arrives", async () => {
   const folder = new Folder();
   const a = new Mac("a", folder);
   a.with(() => S().setProfileLook("default", { color: "blue" }));
   await a.sync();
   const fresh = new Mac("fresh", folder, { joining: true });
-  fresh.with(() => pairTheme(a.scope, "default", { syncId: "s1" }));
+  fresh.edit(PLUM);
+  await fresh.sync();
   assert.equal(fresh.profile().color, "blue");
+  assert.equal(fresh.profile().theme ?? null, null);
+  assert.deepEqual(fresh.stash(), { plum: PLUM });
+  assert.equal(await rounds([fresh, a, fresh], 3), 0, "nothing publishes without a user action");
+  a.edit(BLUE);
+  await rounds([a, fresh], 2);
+  assert.deepEqual(fresh.profile().theme, BLUE);
+  assert.deepEqual(fresh.stash(), { plum: PLUM });
 });
 
-test("a switch made on 0.2.47 keeps the edit of the preset it left on a newer Mac", async () => {
+test("pairing a fresh Mac shows the synced colour and look", async () => {
+  const folder = new Folder();
+  const a = new Mac("a", folder);
+  a.edit(PLUM);
+  a.pick("blue");
+  a.edit(BLUE);
+  await a.sync();
+  const fresh = new Mac("fresh", folder, { joining: true });
+  fresh.with(() => pairTheme(a.scope, "default", { syncId: "s1" }));
+  assert.equal(fresh.profile().color, "blue");
+  assert.deepEqual(fresh.profile().theme, BLUE);
+  fresh.pick("plum");
+  assert.equal(fresh.profile().theme, null, "plum on the new Mac is plain");
+});
+
+test("a switch made on 0.2.47 leaves this Mac's own looks alone", async () => {
   const folder = new Folder();
   const a = new Mac("a", folder);
   a.edit(PLUM);
@@ -220,29 +316,11 @@ test("a switch made on 0.2.47 keeps the edit of the preset it left on a newer Ma
   await rounds([old, a], 3);
   assert.equal(a.profile().color, "blue");
   assert.equal(a.profile().theme, null);
-  assert.deepEqual(a.edits(), { plum: PLUM });
+  assert.deepEqual(a.stash(), { plum: PLUM });
   assert.equal(await rounds([a, old], 3), 0, "and they settle");
 });
 
-test("picking a preset on 0.2.47 shows the look it synced, plain included, on the newer Mac", async () => {
-  const folder = new Folder();
-  const a = new Mac("a", folder);
-  a.pick("blue");
-  a.edit(BLUE);
-  a.pick("plum");
-  a.edit(PLUM);
-  await a.sync();
-  const old = new Mac("old", folder, { old: true, joining: true });
-  await rounds([a, old], 3);
-  old.oldPick("blue");
-  await rounds([old, a], 3);
-  assert.equal(a.profile().color, "blue");
-  assert.equal(a.profile().theme, null, "the synced plain look replaces the newer Mac's blue edit, as a pick clears the custom theme on main");
-  assert.deepEqual(a.edits(), { plum: PLUM });
-  assert.equal(await rounds([a, old], 3), 0, "and they settle");
-});
-
-test("an edit made on 0.2.47 lands on the preset that's showing", async () => {
+test("an edit made on 0.2.47 shows on the newer Mac without becoming its own look", async () => {
   const folder = new Folder();
   const a = new Mac("a", folder);
   a.edit(PLUM);
@@ -253,7 +331,8 @@ test("an edit made on 0.2.47 lands on the preset that's showing", async () => {
   old.edit(GREEN);
   await rounds([old, a], 3);
   assert.equal(a.profile().color, "blue");
-  assert.deepEqual(a.edits(), { plum: PLUM, blue: GREEN });
+  assert.deepEqual(a.profile().theme, GREEN);
+  assert.deepEqual(a.stash(), { plum: PLUM });
   assert.equal(await rounds([a, old], 3), 0, "and they settle");
 });
 
@@ -272,21 +351,6 @@ test("a Mac upgraded from 0.2.47 keeps its newest edit and settles", async () =>
   assert.equal(await rounds([a, old], 3), 0, "and they settle");
 });
 
-test("pairing a fresh Mac takes the synced colour with its look", async () => {
-  const folder = new Folder();
-  const a = new Mac("a", folder);
-  a.edit(PLUM);
-  a.pick("blue");
-  a.edit(BLUE);
-  await a.sync();
-  const fresh = new Mac("fresh", folder, { joining: true });
-  fresh.with(() => pairTheme(a.scope, "default", { syncId: "s1" }));
-  assert.equal(fresh.profile().color, "blue");
-  assert.deepEqual(fresh.profile().theme, BLUE);
-  fresh.pick("plum");
-  assert.equal(fresh.profile().theme, null, "plum on the new Mac is plain, never blue's edit");
-});
-
 test("only the showing look is ever written to sync", async () => {
   const folder = new Folder();
   const a = new Mac("a", folder);
@@ -298,81 +362,20 @@ test("only the showing look is ever written to sync", async () => {
   assert.deepEqual([...keys].filter((k) => !/^(prof|pth):s1(:angle)?$/.test(k)), []);
 });
 
-test("V1: pairing with a Mac that never synced a look keeps this Mac's edit for its own preset and publishes nothing until a look arrives", async () => {
+test("W2: a colour change for a profile whose look this Mac doesn't sync leaves its look alone, as main does", async () => {
   const folder = new Folder();
   const a = new Mac("a", folder);
-  a.with(() => S().setProfileLook("default", { color: "blue" }));
-  await a.sync();
-  const fresh = new Mac("fresh", folder, { joining: true });
-  fresh.edit(PLUM);
-  await fresh.sync();
-  assert.equal(fresh.profile().color, "blue");
-  assert.equal(fresh.profile().theme ?? null, null, "blue shows plain: no look came with it");
-  assert.deepEqual(fresh.edits(), { plum: PLUM }, "the plum edit is kept under plum");
-  assert.equal(await rounds([fresh, a, fresh], 3), 0, "nothing publishes without a user action");
-  assert.equal(a.profile().theme ?? null, null, "and plum's edit never reaches the other Mac as blue's look");
+  a.edit(PLUM);
+  a.pick("blue");
   a.edit(BLUE);
-  await rounds([a, fresh], 2);
-  assert.deepEqual(fresh.profile().theme, BLUE, "a look that arrives later shows");
-  assert.deepEqual(fresh.edits().plum, PLUM);
-});
-
-async function splitPick(order) {
-  const folder = new Folder();
-  const { a, b } = await twoMacsWithPlumEdited(folder);
+  await a.sync();
+  const b = new Mac("b", folder, { joining: true });
+  b.paired = true;
   b.edit(GREEN);
-  await rounds([b, a], 2);
-  a.pick("blue");
-  await a.sync();
-  const colourFile = `f${folder.counter}`;
-  a.edit(BLUE);
-  await a.sync();
-  const lookFile = `f${folder.counter}`;
-  folder.withhold = (id) => id === (order === "look first" ? colourFile : lookFile);
+  b.adapters = [adapters.profilesAdapter(() => b.links, undefined, () => b.scope.records, () => ({})), adapters.profileThemesAdapter(() => ({}), () => b.scope.records)];
   await b.sync();
-  folder.withhold = null;
-  await b.sync();
-  return { a, b };
-}
-
-test("V2: the look arriving before its colour doesn't erase this Mac's own edit of the preset it was on", async () => {
-  const { b } = await splitPick("look first");
   assert.equal(b.profile().color, "blue");
-  assert.deepEqual(b.profile().theme, BLUE);
-  assert.deepEqual(b.edits().plum, GREEN, "plum keeps this Mac's own edit, not blue's look");
-});
-
-test("V2: the colour arriving before its look keeps this Mac's own edit of the preset it was on", async () => {
-  const { b } = await splitPick("colour first");
-  assert.equal(b.profile().color, "blue");
-  assert.deepEqual(b.profile().theme, BLUE);
-  assert.deepEqual(b.edits().plum, GREEN);
-});
-
-test("V2: an edit of the showing preset from another Mac shows here, and this Mac keeps its replaced look locally until it acts", async () => {
-  const folder = new Folder();
-  const { a, b } = await twoMacsWithPlumEdited(folder);
-  a.edit(GREEN);
-  await rounds([a, b], 2);
-  assert.deepEqual(b.profile().theme, GREEN);
-  assert.deepEqual(b.profile().previousTheme, { color: "plum", theme: PLUM });
-  b.edit(BLUE);
-  assert.equal(b.profile().previousTheme, undefined, "any user action drops it");
-  assert.equal(await rounds([b, a, b], 3) > 0, true);
-  assert.equal(await rounds([a, b], 3), 0, "and they settle");
-});
-
-test("V2, the case records can't tell apart: another Mac edits the showing preset, then a later switch from sync keeps this Mac's older look of it locally", async () => {
-  const folder = new Folder();
-  const { a, b } = await twoMacsWithPlumEdited(folder);
-  a.edit(GREEN);
-  await rounds([a, b], 2);
-  a.pick("blue");
-  await rounds([a, b], 2);
-  assert.equal(b.profile().color, "blue");
-  assert.deepEqual(b.edits().plum, PLUM, "b's stash for plum is its own older look, never another preset's look");
-  assert.deepEqual(a.edits().plum, GREEN, "the Mac that made the newer edit keeps it");
-  assert.equal(await rounds([a, b], 3), 0, "nothing publishes from it");
+  assert.deepEqual(b.profile().theme, GREEN, "its own look stays, never blue's synced look");
 });
 
 function random(seed) {
@@ -385,7 +388,7 @@ function random(seed) {
   };
 }
 
-test("over random sequences, a sync never publishes unless that Mac had a user action, and quiet Macs agree", async () => {
+test("over random sequences: no sync publishes without a user action, no synced record changes a Mac's own looks, and quiet Macs agree", async () => {
   const colors = ["plum", "blue", "green"];
   const looks = [PLUM, BLUE, GREEN, look(0.5, 0.3)];
   for (let seed = 1; seed <= 80; seed++) {
@@ -419,8 +422,10 @@ test("over random sequences, a sync never publishes unless that Mac had a user a
       const wasDirty = dirty.has(mac);
       dirty.delete(mac);
       let midRead = false;
+      const before = JSON.stringify(mac.profile().presetThemes ?? {});
       const published = await mac.sync(next() < 0.2 ? () => ((midRead = true), act(mac, true)) : null);
       if (!wasDirty && !midRead) assert.equal(published, 0, `seed ${seed} step ${step}: ${mac.id} published after only applying`);
+      if (!midRead) assert.equal(JSON.stringify(mac.profile().presetThemes ?? {}), before, `seed ${seed} step ${step}: a sync changed ${mac.id}'s own looks`);
     }
     folder.withhold = null;
     await rounds(macs, 4);

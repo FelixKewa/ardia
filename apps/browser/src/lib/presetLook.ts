@@ -5,9 +5,11 @@ export function presetStartingTheme(swatch: string): ProfileTheme {
   return { stops: [{ ...padPosition(color), color }], intensity: 0.6, mode: "auto", grain: 0, texture: "grain", translucency: 1 };
 }
 
+const ownLooksOf = (profile: PresetLookFields): PresetThemes => profile.presetThemes ?? {};
+
 export function presetThemeOf(profile: PresetLookFields, color: ProfileColor): ProfileTheme | null {
   if (color === profile.color) return profile.theme ?? null;
-  return profile.presetThemes?.[color] ?? null;
+  return ownLooksOf(profile)[color] ?? null;
 }
 
 const SAME_VALUE = 1e-9;
@@ -44,28 +46,40 @@ export function sameTheme(a: ProfileTheme | null | undefined, b: ProfileTheme | 
   return a.dark && b.dark ? sameLook(a.dark, b.dark) : !a.dark && !b.dark;
 }
 
-export type PresetChoice = { color: ProfileColor; theme: ProfileTheme | null; presetThemes: PresetThemes | undefined };
+export type OwnLook = { theme: ProfileTheme | null; presetThemes: PresetThemes };
+
+export function withOwnLook(profile: PresetLookFields, theme: ProfileTheme | null): OwnLook {
+  const { [profile.color]: _replaced, ...others } = ownLooksOf(profile);
+  return { theme, presetThemes: theme ? { ...others, [profile.color]: theme } : others };
+}
+
+export type PresetChoice = { color: ProfileColor; theme: ProfileTheme | null };
 
 export function withPresetChosen(profile: PresetLookFields, color: ProfileColor): PresetChoice | null {
   if (color === profile.color) return null;
-  const { [profile.color]: _leaving, [color]: arriving, ...others } = profile.presetThemes ?? {};
-  const presetThemes: PresetThemes = profile.theme ? { ...others, [profile.color]: profile.theme } : others;
-  return { color, theme: arriving ?? null, presetThemes: Object.keys(presetThemes).length ? presetThemes : undefined };
+  return { color, theme: ownLooksOf(profile)[color] ?? null };
 }
 
-export type PreviousTheme = { color: ProfileColor; theme: ProfileTheme };
+export type SyncedColor = { color: ProfileColor; theme: ProfileTheme | null | undefined };
 
-export type SyncedColor = { color: ProfileColor; theme: ProfileTheme | null | undefined; presetThemes: PresetThemes | undefined; previousTheme: undefined };
-
-export function withSyncedColor(profile: PresetLookFields & { previousTheme?: PreviousTheme }, color: ProfileColor, synced: ProfileTheme | null | undefined): SyncedColor | null {
-  if (color === profile.color) return null;
-  const departing = profile.previousTheme?.color === profile.color ? profile.previousTheme.theme : profile.theme;
-  const { [profile.color]: _leaving, [color]: _replaced, ...others } = profile.presetThemes ?? {};
-  const presetThemes: PresetThemes = departing ? { ...others, [profile.color]: departing } : others;
-  return { color, theme: synced, presetThemes: Object.keys(presetThemes).length ? presetThemes : undefined, previousTheme: undefined };
+export function withSyncedColor(profile: PresetLookFields, color: ProfileColor, synced: ProfileTheme | null | undefined): SyncedColor | null {
+  return color === profile.color ? null : { color, theme: synced };
 }
 
 export function editedPresetCount(profile: PresetLookFields): number {
-  const stashed = Object.keys(profile.presetThemes ?? {}).filter((color) => color !== profile.color).length;
-  return stashed + (profile.theme ? 1 : 0);
+  return Object.keys(ownLooksOf(profile)).length;
+}
+
+export function withOwnLooksSeeded<T extends PresetLookFields>(profile: T): T {
+  if (profile.presetThemes !== undefined) return profile;
+  return { ...profile, presetThemes: profile.theme ? { [profile.color]: profile.theme } : {} };
+}
+
+export const profilesWithOwnLooks = <T extends PresetLookFields>(profiles: Record<string, T>): Record<string, T> =>
+  Object.fromEntries(Object.entries(profiles).map(([id, profile]) => [id, withOwnLooksSeeded(profile)]));
+
+export function trackValueAt(pageX: number, trackX: number, trackPixels: number, snapTo: number | undefined): number | null {
+  if (!(trackPixels > 0)) return null;
+  const value = Math.min(1, Math.max(0, (pageX - trackX) / trackPixels));
+  return snapTo === undefined ? value : snapToStart(value, snapTo, trackPixels);
 }

@@ -2,7 +2,7 @@ import { canonical, type Adapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { sanitizeTheme } from "../../lib/profileLook";
-import { sameTheme, withSyncedColor } from "../../lib/presetLook";
+import { withSyncedColor } from "../../lib/presetLook";
 import type { Profile, ProfileTheme } from "../browser/types";
 import { noteTopAppsSharingFromSync, startedBySync } from "../telemetry/topAppsSharing";
 import { PROFILE, PROFILE_OPEN_TABS, PROFILE_THEME, PROFILE_TOP_APPS, SHARE, openTabsRecord, profileRecord, topAppsRecord, type OpenTabsRecord, type TopAppsRecord } from "./records";
@@ -50,7 +50,7 @@ export function legacyThemeOf(record: ProfileRecord): Pick<Profile, "theme"> | n
   return theme ? { theme } : null;
 }
 
-export function profilesAdapter(links: () => Record<string, { syncId: string }>, removed: Removed = NOTHING_REMOVED, records: () => Record<string, Stamped> | undefined = () => undefined): Adapter {
+export function profilesAdapter(links: () => Record<string, { syncId: string }>, removed: Removed = NOTHING_REMOVED, records: () => Record<string, Stamped> | undefined = () => undefined, themed: () => Record<string, unknown> = links): Adapter {
   const linked = () => Object.entries(links()).filter(([id]) => store().profiles[id]);
   return {
     prefix: PROFILE,
@@ -79,9 +79,9 @@ export function profilesAdapter(links: () => Record<string, { syncId: string }>,
         if (!record || !changed.has(`${PROFILE}${syncId}`)) continue;
         const legacy = store().profiles[id]!.theme === undefined && !applied.known(`${PROFILE_THEME}${syncId}`) ? legacyThemeOf(record) : null;
         store().updateProfile(id, { name: record.n, icon: record.i });
-        const synced = records()?.[`${PROFILE_THEME}${syncId}`];
+        const synced = themed()[id] ? records()?.[`${PROFILE_THEME}${syncId}`] : undefined;
         const look = synced ? themeFromRecord(synced.v, records()?.[themeAngleKey(syncId)]?.v) : null;
-        const chosen = legacy ? null : withSyncedColor(store().profiles[id]!, record.c, look ? look.theme : undefined);
+        const chosen = legacy || !themed()[id] ? null : withSyncedColor(store().profiles[id]!, record.c, look ? look.theme : undefined);
         store().setProfileLook(id, chosen ?? { color: record.c, ...legacy });
       }
     },
@@ -122,11 +122,7 @@ export function profileThemesAdapter(
         if (!changed.has(`${PROFILE_THEME}${syncId}`) && !changed.has(angleKey)) continue;
         const patch = themeFromRecord(visible.get(`${PROFILE_THEME}${syncId}`), visible.get(angleKey));
         if (!patch) continue;
-        const profile = store().profiles[id]!;
-        const earlier = profile.previousTheme?.color === profile.color ? profile.previousTheme : undefined;
-        const replaced = profile.theme && !sameTheme(profile.theme, patch.theme) ? { color: profile.color, theme: profile.theme } : undefined;
-        const kept = earlier ?? replaced;
-        store().setProfileLook(id, { ...patch, previousTheme: kept });
+        store().setProfileLook(id, patch);
       }
     },
   };

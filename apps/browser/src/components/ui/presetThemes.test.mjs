@@ -39,49 +39,72 @@ test("the nine presets are the only swatches, in the order the picker draws them
   assert.deepEqual(Object.keys(PROFILE_COLORS), [...PROFILE_COLOR_NAMES]);
 });
 
-test("each preset keeps its own edit: switching away stashes it and switching back brings it back", () => {
-  let profile = { color: "plum", theme: EDIT_A };
+test("this Mac's own looks: an edit is kept under the preset it was made on, and a pick shows that preset's own look or plain", () => {
+  const { withOwnLook } = look_;
+  let profile = { color: "plum", theme: null, presetThemes: {} };
+  profile = { ...profile, ...withOwnLook(profile, EDIT_A) };
+  assert.deepEqual(profile.presetThemes, { plum: EDIT_A });
   profile = { ...profile, ...withPresetChosen(profile, "blue") };
   assert.equal(profile.color, "blue");
-  assert.equal(profile.theme, null, "blue was never edited, so it shows as the plain preset");
-  assert.deepEqual(profile.presetThemes, { plum: EDIT_A });
-  assert.deepEqual(presetThemeOf(profile, "plum"), EDIT_A);
-  assert.equal(presetThemeOf(profile, "blue"), null);
-  profile = { ...profile, theme: EDIT_B };
+  assert.equal(profile.theme, null, "blue has no own look, so it shows plain");
+  assert.deepEqual(profile.presetThemes, { plum: EDIT_A }, "a pick never moves anything");
+  profile = { ...profile, ...withOwnLook(profile, EDIT_B) };
   profile = { ...profile, ...withPresetChosen(profile, "plum") };
   assert.deepEqual(profile.theme, EDIT_A);
-  assert.deepEqual(profile.presetThemes, { blue: EDIT_B });
+  assert.deepEqual(profile.presetThemes, { plum: EDIT_A, blue: EDIT_B });
   assert.equal(editedPresetCount(profile), 2);
-  profile = { ...profile, ...withPresetChosen(profile, "blue") };
-  assert.deepEqual(profile.theme, EDIT_B);
-  assert.deepEqual(profile.presetThemes, { plum: EDIT_A });
+  assert.deepEqual(presetThemeOf(profile, "blue"), EDIT_B);
 });
 
-test("picking the preset that's already showing keeps its edit", () => {
-  assert.equal(withPresetChosen({ color: "plum", theme: EDIT_A }, "plum"), null);
+test("picking the preset that's already showing changes nothing", () => {
+  assert.equal(withPresetChosen({ color: "plum", theme: EDIT_A, presetThemes: { plum: EDIT_A } }, "plum"), null);
 });
 
-test("reset clears only the showing preset: the others keep their edits", () => {
-  const profile = { color: "blue", theme: EDIT_B, presetThemes: { plum: EDIT_A } };
-  const reset = { ...profile, theme: null };
-  assert.equal(presetThemeOf(reset, "blue"), null);
-  assert.deepEqual(presetThemeOf(reset, "plum"), EDIT_A);
-  assert.deepEqual({ ...reset, ...withPresetChosen(reset, "plum") }, { color: "plum", theme: EDIT_A, presetThemes: undefined });
+test("Reset clears the showing preset's own look and nothing else", () => {
+  const { withOwnLook } = look_;
+  const profile = { color: "blue", theme: EDIT_B, presetThemes: { blue: EDIT_B, plum: EDIT_A } };
+  assert.deepEqual(withOwnLook(profile, null), { theme: null, presetThemes: { plum: EDIT_A } });
 });
 
-test("leaving a plain preset drops a stale stash for it, so a reset made elsewhere sticks", () => {
-  const profile = { color: "blue", theme: null, presetThemes: { blue: EDIT_B, plum: EDIT_A } };
-  assert.equal(presetThemeOf(profile, "blue"), null, "the showing preset reads from theme, never from the stash");
-  assert.deepEqual(withPresetChosen(profile, "plum"), { color: "plum", theme: EDIT_A, presetThemes: undefined });
+test("the showing swatch draws what's on screen, which may be a synced look; the others draw this Mac's own looks", () => {
+  const profile = { color: "blue", theme: EDIT_A, presetThemes: { blue: EDIT_B } };
+  assert.deepEqual(presetThemeOf(profile, "blue"), EDIT_A);
+  assert.equal(presetThemeOf(profile, "plum"), null);
+});
+
+test("a colour or look from sync never touches this Mac's own looks", () => {
+  const { withSyncedColor } = look_;
+  const profile = { color: "plum", theme: EDIT_A, presetThemes: { plum: EDIT_B } };
+  assert.deepEqual(withSyncedColor(profile, "blue", EDIT_A), { color: "blue", theme: EDIT_A });
+  assert.deepEqual(withSyncedColor(profile, "blue", undefined), { color: "blue", theme: undefined }, "no synced look: nothing shows until one arrives");
+  assert.equal(withSyncedColor(profile, "plum", EDIT_A), null);
+});
+
+test("a profile saved before this version takes its shown theme as its own look of that preset, once", () => {
+  const { withOwnLooksSeeded } = look_;
+  assert.deepEqual(withOwnLooksSeeded({ color: "blue", theme: EDIT_A }).presetThemes, { blue: EDIT_A });
+  assert.deepEqual(withOwnLooksSeeded({ color: "blue", theme: null }).presetThemes, {});
+  const migrated = { color: "blue", theme: EDIT_A, presetThemes: {} };
+  assert.equal(withOwnLooksSeeded(migrated), migrated, "a profile that already has its own looks is left as it is");
+});
+
+test("a slider ignores the pointer until its track has a real width, and snaps only within half a pixel of the start", () => {
+  const { trackValueAt } = look_;
+  assert.equal(trackValueAt(500, 100, 0, 0.6), null, "no measurement yet: no value");
+  assert.equal(trackValueAt(500, 100, -1, 0.6), null);
+  assert.equal(trackValueAt(220, 100, 120, undefined), 1);
+  assert.equal(trackValueAt(220, 100, 120, 0.6), 1, "a clamped 1 stays 1");
+  assert.equal(trackValueAt(172.3, 100, 120, 0.6), 0.6, "0.3 px from the start snaps to it");
 });
 
 test("a 0.2.47 custom theme becomes the edit of the preset it was on, and the window looks exactly the same", () => {
   for (const color of PROFILE_COLOR_NAMES) {
     const saved = { color, theme: SAVED_CUSTOM };
     for (const mode of ["light", "dark"]) assert.equal(digests()[`custom:${color}:${mode}`], BEFORE[`custom:${color}:${mode}`], `${color} ${mode}: drawn as 0.2.47 drew it`);
-    assert.deepEqual(presetThemeOf(saved, color), SAVED_CUSTOM, `${color}: its swatch draws the custom look`);
-    assert.equal(editedPresetCount(saved), 1);
-    const away = { ...saved, ...withPresetChosen(saved, color === "green" ? "red" : "green") };
+    const seeded = look_.withOwnLooksSeeded(saved);
+    assert.deepEqual(presetThemeOf(seeded, color), SAVED_CUSTOM, `${color}: its swatch draws the custom look`);
+    assert.equal(editedPresetCount(seeded), 1);
+    const away = { ...seeded, ...withPresetChosen(seeded, color === "green" ? "red" : "green") };
     assert.deepEqual({ ...away, ...withPresetChosen(away, color) }.theme, SAVED_CUSTOM, `${color}: nothing is lost by switching away and back`);
   }
 });

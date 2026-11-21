@@ -1,14 +1,16 @@
 import { useBrowser } from "../browser/store";
 import type { ProfileColor, ProfileTheme } from "../browser/types";
 import { adoptProfileTheme } from "../sync/engine";
-import { withPresetChosen } from "../../lib/presetLook";
+import { withOwnLook, withPresetChosen } from "../../lib/presetLook";
 import { noteThemePreset } from "../telemetry/themePresetCounts";
 
 export { holdThemedWindowsKeyLook } from "../../platform/theme";
 
 export function setProfileTheme(profileId: string, theme: ProfileTheme | null, adopt = adoptProfileTheme) {
+  const profile = useBrowser.getState().profiles[profileId];
+  if (!profile) return;
   adopt(profileId);
-  useBrowser.getState().setProfileLook(profileId, { theme, previousTheme: undefined });
+  useBrowser.getState().setProfileLook(profileId, withOwnLook(profile, theme));
 }
 
 export const showingPreset = (profileId: string): ProfileColor => useBrowser.getState().profiles[profileId]?.color ?? "plum";
@@ -18,13 +20,14 @@ export function choosePresetColor(profileId: string, color: ProfileColor, adopt 
   const choice = profile ? withPresetChosen(profile, color) : null;
   if (!choice) return;
   adopt(profileId);
-  useBrowser.getState().setProfileLook(profileId, { ...choice, previousTheme: undefined });
+  useBrowser.getState().setProfileLook(profileId, choice);
 }
 
 export function resetPresetTheme(profileId: string, adopt = adoptProfileTheme) {
-  if (!useBrowser.getState().profiles[profileId]?.theme) return;
+  const profile = useBrowser.getState().profiles[profileId];
+  if (!profile?.theme) return;
   adopt(profileId);
-  useBrowser.getState().setProfileLook(profileId, { theme: null, previousTheme: undefined });
+  useBrowser.getState().setProfileLook(profileId, withOwnLook(profile, null));
   noteThemePreset("reset");
 }
 

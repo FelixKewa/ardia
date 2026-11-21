@@ -16,5 +16,5 @@ test("taking an imported space's colour brings back that preset's edit instead o
   assert.ok(adoptSpaceIdentity(id, { name: "Work", color: "#4691C3" }));
   assert.equal(S().profiles[id].color, "blue");
   assert.deepEqual(S().profiles[id].theme, BLUE);
-  assert.equal(S().profiles[id].presetThemes, undefined);
+  assert.deepEqual(S().profiles[id].presetThemes, { blue: BLUE }, "and it stays this Mac's own look of blue");
 });

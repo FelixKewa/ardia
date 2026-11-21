@@ -15,14 +15,14 @@ export type ProfilesSlice = {
 
   createProfile(options: { name: string; color?: ProfileColor; icon?: string | null; shareWith?: string | null; shareTopApps?: boolean }): string;
   updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "switcherDot" | "pinnedCollapsed" | "shareTopApps" | "syncTabs" | "passwordManager">>): void;
-  setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme" | "presetThemes" | "previousTheme">>): void;
+  setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme" | "presetThemes">>): void;
   deleteProfile(id: string): void;
   reorderProfiles(ids: string[]): void;
   setDefaultProfile(id: string): void;
   profileDataDeleted(engineId: string): void;
 };
 
-export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0 };
+export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {} };
 
 const COLORS: ProfileColor[] = ["blue", "green", "orange", "purple", "red", "yellow", "pink"];
 
@@ -63,6 +63,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
         color: color ?? unusedProfileColor(s.profiles),
         icon,
         createdAt: Date.now(),
+        presetThemes: {},
         ...(source ? { dataId: dataIdOf(source) } : {}),
         ...(shareTopApps ? { shareTopApps: true as const } : {}),
       };

@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { colorHex, flatColors, lookAngle, PAD_LIGHTNESS, padColor, stopLightness, themeGrainAlpha, themeLayerAlpha, themeUnderColor, withStopAt, withStopLightness, type ShownLook, type ThemeStop } from "../../lib/profileLook";
-import { snapPointToStart, snapToStart } from "../../lib/presetLook";
+import { snapPointToStart, trackValueAt } from "../../lib/presetLook";
 import type { ProfileTheme } from "../../state/browser/types";
 import { Box, capsule, Dot, ink, ProgressTrack, radius, tabularNums, Text, ThemeSwatch, useTheme } from "../ui";
 import { MiniWindow } from "./MiniWindow";
@@ -275,11 +275,11 @@ function Track({
   snapTo?: number;
 }) {
   const ref = useRef<View>(null);
-  const frame = useRef({ x: 0, width: 1 });
-  const measure = () => ref.current?.measureInWindow((x, _y, width) => (frame.current = { x, width: Math.max(1, width) }));
-  const at = (e: GestureResponderEvent) => {
-    const value = clamp01((e.nativeEvent.pageX - frame.current.x) / frame.current.width);
-    return snapTo === undefined ? value : snapToStart(value, snapTo, frame.current.width);
+  const frame = useRef({ x: 0, width: 0 });
+  const measure = () => ref.current?.measureInWindow((x, _y, width) => (frame.current = { x, width }));
+  const report = (e: GestureResponderEvent, settle: boolean) => {
+    const value = trackValueAt(e.nativeEvent.pageX, frame.current.x, frame.current.width, snapTo);
+    if (value !== null) onChange(value, settle);
   };
   return (
     <View
@@ -290,10 +290,10 @@ function Track({
       onStartShouldSetResponder={() => true}
       onResponderGrant={(e) => {
         measure();
-        onChange(at(e), false);
+        report(e, false);
       }}
-      onResponderMove={(e) => onChange(at(e), false)}
-      onResponderRelease={(e) => onChange(at(e), true)}
+      onResponderMove={(e) => report(e, false)}
+      onResponderRelease={(e) => report(e, true)}
       onResponderTerminate={() => onChange(value, true)}
     >
       <View ref={ref} style={{ height: 20, justifyContent: "center" }}>

@@ -117,7 +117,7 @@ test("a profile's own theme that was never picked still gives way to a theme tha
   assert.deepEqual(S().profiles.default.theme, THEME_B, "a look set without a pick doesn't publish over the arrived theme");
 });
 
-test("V3: a pick and an edit made while a pull reads end as main's custom-theme case does, and the edit is kept here as the previous look", async () => {
+test("V3: a pick and an edit made while a pull reads end as main's custom-theme case does, and the edit stays this Mac's own look", async () => {
   shell.docs.clear();
   folder.clear();
   S().hydrate({});
@@ -141,6 +141,5 @@ test("V3: a pick and an edit made while a pull reads end as main's custom-theme 
   await cycle;
   assert.equal(S().profiles.default.color, "green");
   assert.deepEqual(S().profiles.default.theme, THEME_B, "the newer synced look wins, as in the known issue above for a custom theme");
-  assert.deepEqual(S().profiles.default.previousTheme, { color: "green", theme: THEME_C }, "the edit made during the read is kept on this Mac");
-  assert.deepEqual(S().profiles.default.presetThemes, { plum: THEME_A }, "the preset it left keeps its edit");
+  assert.deepEqual(S().profiles.default.presetThemes, { green: THEME_C }, "the edit made during the read stays this Mac's own look of green");
 });
