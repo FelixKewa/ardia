@@ -261,14 +261,20 @@ AC_PROFILE_CALL(ac_extension_alarms_watch, ardia::OffTheRecord::kAllow) {
     reply.Error("id is missing");
     return;
   }
-  scoped_refptr<const extensions::Extension> extension =
-      ardia::mirror::EnabledExtension(ardia::mirror::PrimaryProfile(call), id);
-  if (extension && ardia::SplitModePrivate(call, extension.get())) {
-    reply.Error(ardia::kSplitModePrivate);
-    return;
+  const bool on = call.Bool("on", true);
+  if (on && ardia::mirror::ForPrivateSession(call)) {
+    scoped_refptr<const extensions::Extension> extension =
+        ardia::mirror::CallerExtension(call, reply);
+    if (!extension) {
+      return;
+    }
+    if (ardia::SplitModePrivate(call, extension.get())) {
+      reply.Error(ardia::kSplitModePrivate);
+      return;
+    }
   }
   ardia::InstallHook();
   ardia::StateFor<ardia::AlarmsWatched>(ardia::mirror::PrimaryProfile(call))
-      .Set(id, call.Bool("on", true));
+      .Set(id, on);
   reply.Ok();
 }

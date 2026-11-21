@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -132,6 +133,89 @@ void SendItems(mojo::Remote<blink::mojom::StorageArea>,
   reply.Send(base::DictValue().Set("items", std::move(items)));
 }
 
+struct StorageChange {
+  std::u16string key;
+  std::optional<std::u16string> value;
+};
+
+using AreaRef = base::RefCountedData<mojo::Remote<blink::mojom::StorageArea>>;
+using WriteCount = base::RefCountedData<int>;
+using StoredItem = std::pair<std::vector<uint8_t>, std::vector<uint8_t>>;
+
+std::vector<StorageChange> LastChangePerKey(std::vector<StorageChange> changes) {
+  std::map<std::u16string, size_t> last;
+  for (size_t i = 0; i < changes.size(); ++i) {
+    last[changes[i].key] = i;
+  }
+  std::vector<StorageChange> kept;
+  kept.reserve(last.size());
+  for (size_t i = 0; i < changes.size(); ++i) {
+    if (last[changes[i].key] == i) {
+      kept.push_back(std::move(changes[i]));
+    }
+  }
+  return kept;
+}
+
+void Written(scoped_refptr<AreaRef> area,
+             scoped_refptr<WriteCount> written,
+             base::RepeatingClosure done,
+             std::optional<StoredItem> legacy,
+             bool success) {
+  if (success) {
+    ++written->data;
+    done.Run();
+    return;
+  }
+  if (!legacy) {
+    done.Run();
+    return;
+  }
+  area->data->Put(std::move(legacy->first), std::move(legacy->second), std::nullopt, nullptr,
+                  base::BindOnce([](base::RepeatingClosure done, bool) { done.Run(); },
+                                 std::move(done)));
+}
+
+void ApplyChanges(scoped_refptr<AreaRef> area,
+                  std::vector<StorageChange> changes,
+                  Reply reply,
+                  std::vector<blink::mojom::KeyValuePtr> data) {
+  std::map<std::vector<uint8_t>, std::vector<uint8_t>> stored;
+  for (blink::mojom::KeyValuePtr& entry : data) {
+    stored.emplace(std::move(entry->key), std::move(entry->value));
+  }
+  auto written = base::MakeRefCounted<WriteCount>(0);
+  base::RepeatingClosure done = base::BarrierClosure(
+      changes.size(),
+      base::BindOnce(
+          [](scoped_refptr<AreaRef>, scoped_refptr<WriteCount> written, Reply reply) {
+            reply.Send(base::DictValue().Set("written", written->data));
+          },
+          area, written, std::move(reply)));
+  for (const StorageChange& change : changes) {
+    std::optional<StoredItem> legacy;
+    if (std::optional<std::vector<uint8_t>> stray = StrayUtf16Form(change.key)) {
+      auto found = stored.find(*stray);
+      if (found != stored.end()) {
+        legacy.emplace(found->first, found->second);
+        area->data->Delete(std::move(*stray), std::nullopt, nullptr, base::DoNothing());
+      }
+    }
+    if (!change.value) {
+      area->data->Delete(Encode(change.key), std::nullopt, nullptr,
+                         base::BindOnce(
+                             [](scoped_refptr<WriteCount> written, base::RepeatingClosure done) {
+                               ++written->data;
+                               done.Run();
+                             },
+                             written, done));
+      continue;
+    }
+    area->data->Put(Encode(change.key), Encode(*change.value), std::nullopt, nullptr,
+                    base::BindOnce(&Written, area, written, done, std::move(legacy)));
+  }
+}
+
 }
 }
 
@@ -156,11 +240,7 @@ AC_PROFILE_CALL(ac_local_storage_write, ardia::Sensitive{ardia::kMaxStorageArgsB
   if ((set ? set->size() : 0) + (remove ? remove->size() : 0) > ardia::kMaxStorageWrites) {
     return call.TakeReply().Error("too many writes in one call");
   }
-  struct Change {
-    std::u16string key;
-    std::optional<std::u16string> value;
-  };
-  std::vector<Change> changes;
+  std::vector<ardia::StorageChange> changes;
   if (set) {
     for (const base::Value& pair : *set) {
       const base::ListValue* entry = pair.GetIfList();
@@ -177,52 +257,11 @@ AC_PROFILE_CALL(ac_local_storage_write, ardia::Sensitive{ardia::kMaxStorageArgsB
       }
     }
   }
-  using AreaRef = base::RefCountedData<mojo::Remote<blink::mojom::StorageArea>>;
-  auto area = base::MakeRefCounted<AreaRef>(ardia::AreaFor(call.profile(), *key));
-  auto written = base::MakeRefCounted<base::RefCountedData<int>>(0);
-  base::RepeatingClosure done = base::BarrierClosure(
-      changes.size(), base::BindOnce(
-                          [](scoped_refptr<AreaRef>, scoped_refptr<base::RefCountedData<int>> written,
-                             ardia::Reply reply) {
-                            reply.Send(base::DictValue().Set("written", written->data));
-                          },
-                          area, written, call.TakeReply()));
-  auto deleted = [](scoped_refptr<base::RefCountedData<int>> written, base::RepeatingClosure done) {
-    ++written->data;
-    done.Run();
-  };
-  auto put = [](scoped_refptr<AreaRef> area, scoped_refptr<base::RefCountedData<int>> written,
-                base::RepeatingClosure done, std::optional<std::vector<uint8_t>> stray,
-                std::vector<uint8_t> canonical, std::vector<uint8_t> value, bool success) {
-    if (!success) {
-      done.Run();
-      return;
-    }
-    ++written->data;
-    if (!stray) {
-      done.Run();
-      return;
-    }
-    area->data->Delete(*stray, std::nullopt, nullptr, base::DoNothing());
-    area->data->Put(std::move(canonical), std::move(value), std::nullopt, nullptr,
-                    base::BindOnce([](base::RepeatingClosure done, bool) { done.Run(); },
-                                   std::move(done)));
-  };
-  for (const Change& change : changes) {
-    std::optional<std::vector<uint8_t>> stray = ardia::StrayUtf16Form(change.key);
-    std::vector<uint8_t> canonical = ardia::Encode(change.key);
-    if (!change.value) {
-      if (stray) {
-        area->data->Delete(*stray, std::nullopt, nullptr, base::DoNothing());
-      }
-      area->data->Delete(std::move(canonical), std::nullopt, nullptr,
-                         base::BindOnce(deleted, written, done));
-      continue;
-    }
-    std::vector<uint8_t> value = ardia::Encode(*change.value);
-    area->data->Put(canonical, value, std::nullopt, nullptr,
-                    base::BindOnce(put, area, written, done, std::move(stray), canonical, value));
-  }
+  auto area = base::MakeRefCounted<ardia::AreaRef>(ardia::AreaFor(call.profile(), *key));
+  blink::mojom::StorageArea* raw = area->data.get();
+  raw->GetAll(mojo::NullRemote(),
+              base::BindOnce(&ardia::ApplyChanges, area,
+                             ardia::LastChangePerKey(std::move(changes)), call.TakeReply()));
 }
 
 AC_ARGS_CALL(ac_registrable_domains) {
