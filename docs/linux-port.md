@@ -810,8 +810,11 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     `Updates` must be a real directory, and only version folders in it are pruned). Redirects go only to https on
     github.com, objects.githubusercontent.com and release-assets.githubusercontent.com. Caps: 4096 bytes for the
     manifest, 64 for the signature, the manifest's size (at most 512 MiB) for the package, and the package size plus
-    64 MiB free. Then it runs `pkexec <helper> install <dir>` for a `.deb` or tarball, or the helper as the user with
-    `APPIMAGE` and `APPDIR` for an AppImage, with a clean environment and a 10 min deadline (the helper's own is 9).
+    64 MiB free. Then it runs `pkexec --disable-internal-agent <helper> install <dir>` for a `.deb` or tarball, or the
+    helper as the user with `APPIMAGE` and `APPDIR` for an AppImage, with a clean environment and a 10 min deadline
+    (the helper's own is 9). Without its text agent, pkexec never prompts on the terminal Ardia was started from (the
+    helper's own process group would stop on SIGTTIN there): a session with no polkit agent fails at once with
+    `polkit`, and Ardia offers the release page.
     Failure reasons: `version`, `kind`, `network`, `manifest`, `tooLarge`, `busy`, `disk`, the helper's, `polkit`,
     `timeout`, `missing`. A successful install deletes the folder, and so does a `signature`, `checksum`, `manifest` or
     `notNewer` failure, so the next try downloads afresh.
