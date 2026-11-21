@@ -128,14 +128,14 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertEqual(again.copy, made.copy, "the same download is reused, not replaced")
   }
 
-  func testTheOldReceiptPromotesOnlyTheSameManifest() throws {
+  func testPromotionTakesOnlyTheExactApprovalOfTheDownload() throws {
     let archive = try pluginArchive(manifest())
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let made = try publish(archive, entry: entry(sha: sha)).get()
-    let old = PluginFiles.approvalHash(text: made.manifest, folderId: OfficialPin.legacyFolderId)
     let pin = OfficialPin(entries: [entry(sha: sha)])
-    XCTAssertNotNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: PluginFiles.approvalHash(text: manifest("1.1.0"), folderId: OfficialPin.legacyFolderId), store: store, pin: pin))
-    XCTAssertNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: old, store: store, pin: pin))
+    let old = PluginFiles.approvalHash(text: made.manifest, folderId: OfficialPin.legacyFolderId)
+    XCTAssertNotNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: old, store: store, pin: pin), "the old receipt is turned into an exact approval before any switch, never used for one")
+    XCTAssertNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: PluginFiles.approvalHash(text: made.manifest, folderId: made.copy.folderId), store: store, pin: pin))
   }
 
   func testASha256MismatchIsRefusedAndLeavesNothing() throws {

@@ -41,10 +41,7 @@ enum OfficialInstaller {
     guard let opened = PluginFiles.openFolder(copy.path) else { return "Its download is gone. Try again." }
     let read = PluginFiles.readManifest(in: opened)
     opened.close()
-    let pinned = sha == entry.sha256
-    guard case .text(let text) = read,
-      PluginFiles.approvalHash(text: text, folderId: folderId) == approved || (pinned && PluginFiles.approvalHash(text: text, folderId: OfficialPin.legacyFolderId) == approved)
-    else { return "It changed since you approved it. Try again." }
+    guard case .text(let text) = read, PluginFiles.approvalHash(text: text, folderId: folderId) == approved else { return "It changed since you approved it. Try again." }
     return store.activate(name, sha: sha) ? nil : "It couldn't be switched to the new copy."
   }
 }

@@ -356,7 +356,7 @@ export type RemovalIdentity = { official: boolean; folderId: string | null };
 export function removalIdentity(name: string): RemovalIdentity {
   const listed = Object.hasOwn(currentPlugins().listings, name) ? currentPlugins().listings[name] : undefined;
   const official = listed ? !!listed.official : !!currentPlugins().pinned?.some((p) => p.name === name) || Object.hasOwn(currentPlugins().candidates, name);
-  return { official, folderId: listed?.folderId ?? null };
+  return { official, folderId: listed?.folderId || null };
 }
 
 export async function removePlugin(name: string, mayGoOn: () => boolean = () => true, expected?: RemovalIdentity): Promise<{ ok: boolean; removed?: boolean; reason?: string }> {
