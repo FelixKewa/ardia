@@ -6,7 +6,7 @@ when Chromium's copy has none. AlarmManager::OnAlarm calls g_ardia_extension_ala
 the alarm before it hands the alarm to its delegate, so the WebKit copy's onAlarm fires for the same alarm Chromium's
 does. RulesMonitorService wraps the callback of UpdateDynamicRules, UpdateSessionRules, UpdateEnabledStaticRulesets and
 UpdateStaticRules: once one succeeds it calls g_ardia_dnr_rules_changed with the context, the id and what changed
-("dynamic", "session", "rulesets"). //chrome/browser/ardia (ac_extension_storage.cc, ac_extension_alarms.cc,
+("dynamic", "session", "rulesets"), holding the context by a WeakPtr so a reply after the profile is gone calls nothing. //chrome/browser/ardia (ac_extension_storage.cc, ac_extension_alarms.cc,
 ac_extension_dnr.cc) sets the hooks the first time the app asks for them and passes on only changes for extensions the
 app watches. Unset, Chrome behaves as stock.
 
@@ -64,7 +64,15 @@ app watches. Unset, Chrome behaves as stock.
    constexpr size_t kExtensionsIdLength = 32;
 --- a/extensions/browser/api/declarative_net_request/rules_monitor_service.cc
 +++ b/extensions/browser/api/declarative_net_request/rules_monitor_service.cc
-@@ -57,6 +57,10 @@
+@@ -24,6 +24,7 @@
+ #include "base/task/sequenced_task_runner.h"
+ #include "base/threading/thread_restrictions.h"
+ #include "base/token.h"
++#include "content/public/browser/browser_context.h"
+ #include "content/public/browser/browser_task_traits.h"
+ #include "content/public/browser/browser_thread.h"
+ #include "extensions/browser/api/declarative_net_request/composite_matcher.h"
+@@ -58,6 +59,10 @@
  #include "extensions/common/permissions/api_permission.h"
  #include "tools/json_schema_compiler/util.h"
  
@@ -75,11 +83,10 @@ app watches. Unset, Chrome behaves as stock.
  namespace extensions {
  namespace declarative_net_request {
  
-@@ -168,6 +172,28 @@
- }
+@@ -170,6 +175,29 @@ HostPermissionsAlwaysRequired GetHostPermissionsAlwaysRequired(
  
  LoadRulesetThrottleCallback* g_test_throttle_override_ = nullptr;
-+
+ 
 +RulesMonitorService::ApiCallback ArdiaNotifyingRulesChanged(
 +    content::BrowserContext* context,
 +    const ExtensionId& extension_id,
@@ -89,22 +96,24 @@ app watches. Unset, Chrome behaves as stock.
 +    return callback;
 +  }
 +  return base::BindOnce(
-+      [](content::BrowserContext* context, const ExtensionId& extension_id,
-+         const std::string& kind, RulesMonitorService::ApiCallback callback,
++      [](base::WeakPtr<content::BrowserContext> context,
++         const ExtensionId& extension_id, const std::string& kind,
++         RulesMonitorService::ApiCallback callback,
 +         std::optional<std::string> error) {
 +        const bool changed = !error.has_value();
 +        std::move(callback).Run(std::move(error));
-+        if (changed && g_ardia_dnr_rules_changed) {
-+          g_ardia_dnr_rules_changed(context, extension_id, kind);
++        if (changed && context && g_ardia_dnr_rules_changed) {
++          g_ardia_dnr_rules_changed(context.get(), extension_id, kind);
 +        }
 +      },
-+      base::Unretained(context), extension_id, std::string(kind),
++      context->GetWeakPtr(), extension_id, std::string(kind),
 +      std::move(callback));
 +}
- 
++
  }  // namespace
  
-@@ -411,7 +437,8 @@
+ // Helper to bridge tasks to FileSequenceHelper. Lives on the UI thread.
+@@ -412,7 +440,8 @@ void RulesMonitorService::UpdateDynamicRules(
                           weak_factory_.GetWeakPtr(), extension.id(),
                           std::move(rule_ids_to_remove),
                           std::move(rules_to_add)),
@@ -114,7 +123,7 @@ app watches. Unset, Chrome behaves as stock.
  }
  
  void RulesMonitorService::UpdateEnabledStaticRulesets(
-@@ -426,7 +453,8 @@
+@@ -427,7 +456,8 @@ void RulesMonitorService::UpdateEnabledStaticRulesets(
        base::BindOnce(&RulesMonitorService::UpdateEnabledStaticRulesetsInternal,
                       weak_factory_.GetWeakPtr(), extension.id(),
                       std::move(ids_to_disable), std::move(ids_to_enable)),
@@ -124,7 +133,7 @@ app watches. Unset, Chrome behaves as stock.
  }
  
  void RulesMonitorService::UpdateStaticRules(const Extension& extension,
-@@ -440,7 +468,8 @@
+@@ -441,7 +471,8 @@ void RulesMonitorService::UpdateStaticRules(const Extension& extension,
        base::BindOnce(&RulesMonitorService::UpdateStaticRulesInternal,
                       weak_factory_.GetWeakPtr(), extension.id(),
                       std::move(ruleset_id), std::move(rule_ids_to_update)),
@@ -134,7 +143,7 @@ app watches. Unset, Chrome behaves as stock.
  }
  
  void RulesMonitorService::GetDisabledRuleIds(
-@@ -489,7 +518,8 @@
+@@ -490,7 +521,8 @@ void RulesMonitorService::UpdateSessionRules(
                           weak_factory_.GetWeakPtr(), extension.id(),
                           std::move(rule_ids_to_remove),
                           std::move(rules_to_add)),

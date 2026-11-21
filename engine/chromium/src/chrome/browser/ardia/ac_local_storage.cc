@@ -9,6 +9,7 @@
 
 #include "base/barrier_closure.h"
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -176,42 +177,51 @@ AC_PROFILE_CALL(ac_local_storage_write, ardia::Sensitive{ardia::kMaxStorageArgsB
       }
     }
   }
-  size_t operations = 0;
-  for (const Change& change : changes) {
-    operations += ardia::StrayUtf16Form(change.key) ? 2 : 1;
-  }
-  auto area = base::MakeRefCounted<base::RefCountedData<mojo::Remote<blink::mojom::StorageArea>>>(
-      ardia::AreaFor(call.profile(), *key));
+  using AreaRef = base::RefCountedData<mojo::Remote<blink::mojom::StorageArea>>;
+  auto area = base::MakeRefCounted<AreaRef>(ardia::AreaFor(call.profile(), *key));
   auto written = base::MakeRefCounted<base::RefCountedData<int>>(0);
   base::RepeatingClosure done = base::BarrierClosure(
-      operations, base::BindOnce(
-                      [](scoped_refptr<base::RefCountedData<mojo::Remote<blink::mojom::StorageArea>>>,
-                         scoped_refptr<base::RefCountedData<int>> written, ardia::Reply reply) {
-                        reply.Send(base::DictValue().Set("written", written->data));
-                      },
-                      area, written, call.TakeReply()));
-  auto put = [](scoped_refptr<base::RefCountedData<int>> written, base::RepeatingClosure done,
-                bool success) {
-    if (success) {
-      ++written->data;
-    }
-    done.Run();
-  };
+      changes.size(), base::BindOnce(
+                          [](scoped_refptr<AreaRef>, scoped_refptr<base::RefCountedData<int>> written,
+                             ardia::Reply reply) {
+                            reply.Send(base::DictValue().Set("written", written->data));
+                          },
+                          area, written, call.TakeReply()));
   auto deleted = [](scoped_refptr<base::RefCountedData<int>> written, base::RepeatingClosure done) {
     ++written->data;
     done.Run();
   };
+  auto put = [](scoped_refptr<AreaRef> area, scoped_refptr<base::RefCountedData<int>> written,
+                base::RepeatingClosure done, std::optional<std::vector<uint8_t>> stray,
+                std::vector<uint8_t> canonical, std::vector<uint8_t> value, bool success) {
+    if (!success) {
+      done.Run();
+      return;
+    }
+    ++written->data;
+    if (!stray) {
+      done.Run();
+      return;
+    }
+    area->data->Delete(*stray, std::nullopt, nullptr, base::DoNothing());
+    area->data->Put(std::move(canonical), std::move(value), std::nullopt, nullptr,
+                    base::BindOnce([](base::RepeatingClosure done, bool) { done.Run(); },
+                                   std::move(done)));
+  };
   for (const Change& change : changes) {
-    if (std::optional<std::vector<uint8_t>> stray = ardia::StrayUtf16Form(change.key)) {
-      area->data->Delete(*stray, std::nullopt, nullptr, done);
-    }
-    if (change.value) {
-      area->data->Put(ardia::Encode(change.key), ardia::Encode(*change.value), std::nullopt, nullptr,
-                      base::BindOnce(put, written, done));
-    } else {
-      area->data->Delete(ardia::Encode(change.key), std::nullopt, nullptr,
+    std::optional<std::vector<uint8_t>> stray = ardia::StrayUtf16Form(change.key);
+    std::vector<uint8_t> canonical = ardia::Encode(change.key);
+    if (!change.value) {
+      if (stray) {
+        area->data->Delete(*stray, std::nullopt, nullptr, base::DoNothing());
+      }
+      area->data->Delete(std::move(canonical), std::nullopt, nullptr,
                          base::BindOnce(deleted, written, done));
+      continue;
     }
+    std::vector<uint8_t> value = ardia::Encode(*change.value);
+    area->data->Put(canonical, value, std::nullopt, nullptr,
+                    base::BindOnce(put, area, written, done, std::move(stray), canonical, value));
   }
 }
 

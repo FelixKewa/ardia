@@ -19,6 +19,7 @@
 #include "extensions/common/api/alarms.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/manifest_handlers/incognito_info.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 
 extern void (*g_ardia_extension_alarm_fired)(content::BrowserContext* context,
@@ -32,6 +33,14 @@ namespace alarms = extensions::api::alarms;
 using extensions::AlarmManager;
 
 constexpr size_t kMaximumNameLength = 1024;
+constexpr char kSplitModePrivate[] =
+    "alarms of an extension in split mode aren't shared with private windows";
+
+bool SplitModePrivate(const Call& call,
+                      const extensions::Extension* extension) {
+  return mirror::ForPrivateSession(call) &&
+         extensions::IncognitoInfo::IsSplitMode(extension);
+}
 
 class AlarmsWatched : public mirror::Watched {
  public:
@@ -84,6 +93,10 @@ std::optional<Alarms> AlarmsFor(Call& call, Reply& reply) {
   scoped_refptr<const extensions::Extension> extension = mirror::ExtensionFor(
       call, reply, extensions::mojom::APIPermissionID::kAlarms, "alarms");
   if (!extension) {
+    return std::nullopt;
+  }
+  if (SplitModePrivate(call, extension.get())) {
+    reply.Error(kSplitModePrivate);
     return std::nullopt;
   }
   AlarmManager* manager = AlarmManager::Get(mirror::PrimaryProfile(call));
@@ -246,6 +259,12 @@ AC_PROFILE_CALL(ac_extension_alarms_watch, ardia::OffTheRecord::kAllow) {
   const std::string id = call.String("id");
   if (id.empty()) {
     reply.Error("id is missing");
+    return;
+  }
+  scoped_refptr<const extensions::Extension> extension =
+      ardia::mirror::EnabledExtension(ardia::mirror::PrimaryProfile(call), id);
+  if (extension && ardia::SplitModePrivate(call, extension.get())) {
+    reply.Error(ardia::kSplitModePrivate);
     return;
   }
   ardia::InstallHook();
