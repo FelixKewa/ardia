@@ -1,4 +1,4 @@
-import { LIGHTS_CENTER, lightsOffWindow } from "../../browser/src/state/windows/dockMotion";
+import { LIGHTS_CENTER, lightsPlaceOffWindow } from "../../browser/src/state/windows/dockMotion";
 import { WINDOW_CONTROLS, windowControlsWidth } from "../../browser/src/lib/windowChrome";
 
 export type LinuxControlsState = { pageFullScreen: boolean; hidden: boolean; utility: boolean; windowMenu: boolean; shown?: boolean };
@@ -10,10 +10,9 @@ export const trafficLightsShown = ({ style, pageFullScreen, windowFullScreen }: 
 
 export type LeadingPlace = { center: readonly [number, number]; trailing: boolean };
 
-export const leadingPlaceOffWindow = ({ center, trailing }: LeadingPlace): boolean => lightsOffWindow(trailing ? [center[0], center[1], "right"] : [center[0], center[1]]);
 
 export const leadingButtonsShown = ({ count, pageFullScreen, windowFullScreen, place }: { count: number; pageFullScreen: boolean; windowFullScreen: boolean; place: LeadingPlace }): boolean =>
-  count > 0 && !pageFullScreen && !windowFullScreen && !leadingPlaceOffWindow(place);
+  count > 0 && !pageFullScreen && !windowFullScreen && !lightsPlaceOffWindow(place);
 
 const LIGHTS_PAST_START = LIGHTS_CENTER[0] - WINDOW_CONTROLS.edge;
 
