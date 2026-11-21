@@ -204,7 +204,7 @@ final class OfficialPluginsTests: XCTestCase {
     let folder = try XCTUnwrap(PluginFiles.openFolder(made.copy.path))
     defer { folder.close() }
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: folder.id)
-    _ = try PluginPrograms.install(
+    let linked = try PluginPrograms.install(
       plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: [PluginProgram(name: "tool", path: "bin/tool")], places: places, expectedDigest: made.copy.payloadDigest
     ).get()
     XCTAssertEqual(linked.linked, ["tool"])
@@ -443,7 +443,7 @@ final class OfficialPluginsTests: XCTestCase {
     defer { folder.close() }
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: folder.id)
     let programs = [PluginProgram(name: "tool", path: "bin/tool")]
-    let linked = try PluginPrograms.install(plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: programs, places: places, expectedDigest: made.copy.payloadDigest).get()
+    _ = try PluginPrograms.install(plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: programs, places: places, expectedDigest: made.copy.payloadDigest).get()
     XCTAssertTrue(PluginPrograms.currentHolds(plugin: "tool", places: places, digest: made.copy.payloadDigest))
     let staged = "\(places.store)/tool/\(try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current")))"
     XCTAssertTrue(PluginPrograms.holdsApproved(staged, folderId: folder.id, approved: approved, programs: programs, expectedDigest: made.copy.payloadDigest))
