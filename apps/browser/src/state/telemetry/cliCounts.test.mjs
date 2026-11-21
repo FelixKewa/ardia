@@ -84,3 +84,17 @@ test("the first sample of a consent period counts nothing from before it, and a 
   counts = takeCliCounts();
   assert.deepEqual([counts.cli_cdp_commands_dom, counts.cli_plugin_credentials_minted], [0, 0]);
 });
+
+test("a family missing from a period's first sample takes its baseline when it first shows up", () => {
+  takeCliCounts();
+  noteCliEngineTotals({ commandsByDomain: { dom: 1000 } }, "gap-1");
+  noteCliEngineTotals({ commandsByDomain: { dom: 1002 } }, "gap-1");
+  takeCliCounts();
+  noteCliEngineTotals({ pluginCredentials: { minted: 1 } }, "gap-2");
+  noteCliEngineTotals({ commandsByDomain: { dom: 1021 }, pluginCredentials: { minted: 1 } }, "gap-2");
+  let counts = takeCliCounts();
+  assert.equal(counts.cli_cdp_commands_dom, 0);
+  noteCliEngineTotals({ commandsByDomain: { dom: 1023 }, pluginCredentials: { minted: 1 } }, "gap-2");
+  counts = takeCliCounts();
+  assert.equal(counts.cli_cdp_commands_dom, 2);
+});

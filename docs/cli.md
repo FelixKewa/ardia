@@ -106,11 +106,11 @@ policy. Nothing in the app calls them yet. `packages/shell/ios/PluginProcess.swi
 (`ARDIA_PLUGIN_FD=3`), and no plugin activity mints or revokes a credential, so until the app side lands a plugin
 browse can't connect as `plugin` at all. The app side belongs to the AI plugin work (`PluginBrowse.swift` and the
 TypeScript browse client), not to #2808. It must:
-- mint with `mintCliPluginCredential(tabId)` (`apps/browser/src/platform/cli.ts`, which calls `engine.cliPluginCredential
+- mint with `mintPluginCredential(tabId)` (`apps/browser/src/platform/control.ts`, which calls `engine.cliPluginCredential
   {tabId}`) when a plugin activity starts, with a tab in the activity's window;
 - hand the `credential` to each CLI child it spawns for that activity on an inherited pipe fd, and `endpoint` in
   `ARDIA_PLUGIN_ENDPOINT`, as described below;
-- revoke with `revokeCliPluginCredential(id)` (same file, `engine.cliPluginCredential {revoke}`) when the activity ends,
+- revoke with `revokePluginCredential(id)` (same file, `engine.cliPluginCredential {revoke}`) when the activity ends,
   is cancelled or its plugin is turned off, and mint again after control is turned back on (a restart clears them).
 
 - **Mint.** The app calls `engine.cliPluginCredential {tabId}` (engine call `ac_cli_plugin_credential`, args

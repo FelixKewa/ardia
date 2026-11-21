@@ -1,4 +1,4 @@
-import { consentEpoch, onConsentPeriodChange, type ConsentToken } from "./choice";
+import type { ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 import { SOCKET_FAMILIES, type SocketFamily } from "../automation/socketCatalog";
 
@@ -79,77 +79,84 @@ export const noteSocketPasswordManagerRefused = (consent: ConsentToken | null) =
   countFor(consentOrNow(consent), () => void counts.cli_socket_password_manager_refusals++);
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
-let windowlessBaselineStale = false;
-onConsentPeriodChange(() => (windowlessBaselineStale = true));
+type TotalsFamily = "windowless" | "cdp" | "plugin" | "act" | "picker";
+const baselined = new Set<TotalsFamily>();
+let baselinePeriod: ConsentToken | null | undefined;
 
-export function noteWindowlessPages(totals: { given: number; missed: number } | undefined) {
+function counting(family: TotalsFamily, consent: ConsentToken | null | undefined): boolean {
+  const period = consentOrNow(consent);
+  if (period === null) return true;
+  if (period !== baselinePeriod) {
+    baselinePeriod = period;
+    baselined.clear();
+  }
+  if (baselined.has(family)) return true;
+  baselined.add(family);
+  return false;
+}
+
+export function noteWindowlessPages(totals: { given: number; missed: number } | undefined, consent?: ConsentToken | null) {
+  if (consent === null) return;
   if (!totals) return;
   const given = Number(totals.given) || 0, missed = Number(totals.missed) || 0;
-  if (windowlessBaselineStale) {
-    windowlessBaselineStale = false;
-    windowlessSeen = { given: Math.max(given, windowlessSeen.given), missed: Math.max(missed, windowlessSeen.missed) };
-    return;
+  if (counting("windowless", consent)) {
+    counts.windowless_pages_given_geometry += Math.max(0, given - windowlessSeen.given);
+    counts.windowless_pages_missing_geometry += Math.max(0, missed - windowlessSeen.missed);
   }
-  counts.windowless_pages_given_geometry += Math.max(0, given - windowlessSeen.given);
-  counts.windowless_pages_missing_geometry += Math.max(0, missed - windowlessSeen.missed);
   windowlessSeen = { given: Math.max(given, windowlessSeen.given), missed: Math.max(missed, windowlessSeen.missed) };
 }
 
-export function noteCdpCommands(totals: CdpCommandsByDomain | undefined) {
+export function noteCdpCommands(totals: CdpCommandsByDomain | undefined, consent?: ConsentToken | null) {
+  if (consent === null) return;
   if (!totals) return;
+  const count = counting("cdp", consent);
   for (const domain of CDP_COMMAND_DOMAINS) {
     const total = Number(totals[domain]) || 0;
-    counts[`cli_cdp_commands_${domain}`] += Math.max(0, total - cdpCommandsSeen[domain]);
+    if (count) counts[`cli_cdp_commands_${domain}`] += Math.max(0, total - cdpCommandsSeen[domain]);
     cdpCommandsSeen[domain] = Math.max(total, cdpCommandsSeen[domain]);
   }
 }
 
-export function notePluginTotals(totals: Partial<Record<keyof typeof PLUGIN_TOTALS, number>> | undefined) {
+export function notePluginTotals(totals: Partial<Record<keyof typeof PLUGIN_TOTALS, number>> | undefined, consent?: ConsentToken | null) {
+  if (consent === null) return;
   if (!totals) return;
+  const count = counting("plugin", consent);
   for (const key of Object.keys(PLUGIN_TOTALS) as (keyof typeof PLUGIN_TOTALS)[]) {
     const total = Number(totals[key]) || 0;
-    counts[PLUGIN_TOTALS[key]] += Math.max(0, total - pluginSeen[key]);
+    if (count) counts[PLUGIN_TOTALS[key]] += Math.max(0, total - pluginSeen[key]);
     pluginSeen[key] = Math.max(total, pluginSeen[key]);
   }
 }
 
-export function noteActLeaseTotals(totals: ActLeaseTotals | undefined) {
+export function noteActLeaseTotals(totals: ActLeaseTotals | undefined, consent?: ConsentToken | null) {
+  if (consent === null) return;
   if (!totals) return;
+  const count = counting("act", consent);
   for (const key of Object.keys(ACT_TOTALS) as (keyof typeof ACT_TOTALS)[]) {
     const total = Number(totals[key]) || 0;
-    counts[ACT_TOTALS[key]] += Math.max(0, total - actSeen[key]);
+    if (count) counts[ACT_TOTALS[key]] += Math.max(0, total - actSeen[key]);
     actSeen[key] = Math.max(total, actSeen[key]);
   }
 }
 
-export function notePickerAnswers(totals: { armed?: number; used?: number } | undefined) {
+export function notePickerAnswers(totals: { armed?: number; used?: number } | undefined, consent?: ConsentToken | null) {
+  if (consent === null) return;
   if (!totals) return;
   const armed = Number(totals.armed) || 0, used = Number(totals.used) || 0;
-  counts.cli_file_picker_answers_armed += Math.max(0, armed - pickerSeen.armed);
-  counts.cli_file_picker_answers_used += Math.max(0, used - pickerSeen.used);
+  if (counting("picker", consent)) {
+    counts.cli_file_picker_answers_armed += Math.max(0, armed - pickerSeen.armed);
+    counts.cli_file_picker_answers_used += Math.max(0, used - pickerSeen.used);
+  }
   pickerSeen = { armed: Math.max(armed, pickerSeen.armed), used: Math.max(used, pickerSeen.used) };
 }
 
 type EngineTotals = { windowlessPages?: { given: number; missed: number }; commandsByDomain?: CdpCommandsByDomain; pluginCredentials?: Partial<Record<keyof typeof PLUGIN_TOTALS, number>>; filePickerAnswers?: { armed?: number; used?: number }; actLeases?: ActLeaseTotals };
-let baselineEpoch: string | null = null;
-
-export function noteCliEngineTotals(status: EngineTotals, epoch: string = consentEpoch()) {
-  if (epoch !== baselineEpoch) {
-    baselineEpoch = epoch;
-    const counted = { ...counts };
-    noteWindowlessPages(status.windowlessPages);
-    noteCdpCommands(status.commandsByDomain);
-    notePluginTotals(status.pluginCredentials);
-    notePickerAnswers(status.filePickerAnswers);
-    noteActLeaseTotals(status.actLeases);
-    counts = counted;
-    return;
-  }
-  noteWindowlessPages(status.windowlessPages);
-  noteCdpCommands(status.commandsByDomain);
-  notePluginTotals(status.pluginCredentials);
-  notePickerAnswers(status.filePickerAnswers);
-  noteActLeaseTotals(status.actLeases);
+export function noteCliEngineTotals(status: EngineTotals, consent: ConsentToken | null) {
+  noteWindowlessPages(status.windowlessPages, consent);
+  noteCdpCommands(status.commandsByDomain, consent);
+  notePluginTotals(status.pluginCredentials, consent);
+  notePickerAnswers(status.filePickerAnswers, consent);
+  noteActLeaseTotals(status.actLeases, consent);
 }
 
 export function takeCliCounts() {
