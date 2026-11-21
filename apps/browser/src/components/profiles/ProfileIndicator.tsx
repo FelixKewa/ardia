@@ -33,6 +33,12 @@ function useIndicator(room: number, profileShown: boolean) {
 
 export const useProfileIndicatorWidth = (room: number, profileShown = true) => useIndicator(room, profileShown).width;
 
+export const useAppMenuInHeader = (): boolean => false;
+
+export function HeaderAppMenu(_: { size: number }): null {
+  return null;
+}
+
 export function ProfileIndicator({ room, profileShown = true }: { room: number; profileShown?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();

@@ -62,7 +62,7 @@ test("with the window buttons hidden every layout keeps the header's hamburger a
   }
 });
 
-test("with the traffic lights or the buttons hidden a hamburger is drawn even where Minimalism or the theme hides the profile; the native buttons keep it beside them", async () => {
+test("with the traffic lights or the buttons hidden a hamburger is drawn even where Minimalism or the theme hides the profile, and in Little Ardia's bar; the native buttons keep it beside them", async () => {
   const { readFileSync } = await import("node:fs");
   const { registerHooks } = await import("node:module");
   const indicatorUrl = new URL("./ProfileIndicator.tsx", import.meta.url).href;
@@ -78,7 +78,7 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
   const { WindowContext } = await import("../../browser/src/state/browser/hooks.ts");
   const { WINDOW_CHROME } = await import("../../browser/src/lib/windowChrome.ts");
   const { TRAFFIC_LIGHTS_CHROME, HIDDEN_BUTTONS_CHROME } = await import("../../browser/src/lib/platformChrome.linux.ts");
-  const { ProfileIndicator } = await import("./ProfileIndicator.tsx");
+  const { HeaderAppMenu, ProfileIndicator } = await import("./ProfileIndicator.tsx");
   const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const sidebar = source("../../browser/src/components/sidebar/Sidebar.tsx");
   const strip = source("../../browser/src/components/tabstrip/TopTabStrip.tsx");
@@ -87,6 +87,9 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
   assert.match(strip, /<ProfileIndicator room=\{PROFILE_ROOM\} profileShown=\{!minimal\} \/>/, "the top strip mounts it under Minimalism too");
   assert.match(strip, /useProfileIndicatorWidth\(PROFILE_ROOM, !minimal\)/);
   assert.match(strip, /const controls = minimal \? profileChip :/);
+  const little = source("../../browser/src/components/littleArdia/LittleArdiaWindow.tsx");
+  assert.match(little, /const appMenu = useAppMenuInHeader\(\);/);
+  assert.match(little, /\.\.\.\(appMenu \? \[<HeaderAppMenu key="menu" size=\{SMALL_BAR_BUTTON\} \/>\] : \[\]\)/, "Little Ardia's bar holds the hamburger");
   const S = () => useBrowser.getState();
   S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
   const windowId = S().createWindow({ url: "https://menu.ardia.test/" });
@@ -112,6 +115,21 @@ test("with the traffic lights or the buttons hidden a hamburger is drawn even wh
       Object.assign(WINDOW_CHROME, windowsChrome);
       assert.equal(menus(false), 0, `native: ${JSON.stringify(settings)}`);
     }
+    const little = S().createWindow({ kind: "small", url: "https://little.ardia.test/" });
+    const barMenus = () => {
+      const mounted = mount(() => HeaderAppMenu({ size: 28 }), { contexts: [[WindowContext, little]] });
+      try {
+        return menuButtons(mounted.value);
+      } finally {
+        mounted.unmount();
+      }
+    };
+    for (const [name, chrome] of [["trafficLights", TRAFFIC_LIGHTS_CHROME], ["hidden", HIDDEN_BUTTONS_CHROME]]) {
+      Object.assign(WINDOW_CHROME, chrome);
+      assert.equal(barMenus(), 1, `Little Ardia: ${name}`);
+    }
+    Object.assign(WINDOW_CHROME, windowsChrome);
+    assert.equal(barMenus(), 0, "Little Ardia: native keeps the menu beside its buttons");
   } finally {
     Object.assign(WINDOW_CHROME, saved);
   }

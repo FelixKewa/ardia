@@ -61,7 +61,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
     ["components/window/PageOverlays.tsx", "PageOverlays.tsx", ["BesidePeekPopovers", "PageOverlays", "PeekPage"]],
     ["components/window/WindowOverlays.tsx", "WindowOverlays.tsx", ["windowOverlays"]],
     ["components/downloads/Downloads.tsx", "DownloadsPopover.tsx", ["DownloadMagnet", "DownloadsPopover"]],
-    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["profileIndicatorX", "ProfileIndicator", "useProfileIndicatorWidth"]],
+    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["HeaderAppMenu", "profileIndicatorX", "ProfileIndicator", "useAppMenuInHeader", "useProfileIndicatorWidth"]],
     ["components/sidebar/AddressBar.tsx", "SidebarAddressBar.tsx", ["SidebarAddressRow", "SidebarHeaderTools"]],
     ["components/sidebar/TileFace.tsx", "TileFace.tsx", ["FolderDropRing", "RestingTile", "TileFace", "useSlotPosition"]],
     ["state/settings/settingsWindows.ts", "settingsWindows.ts", ["goToSettingsPane", "openImport", "openSettings", "useSettingsNav"]],

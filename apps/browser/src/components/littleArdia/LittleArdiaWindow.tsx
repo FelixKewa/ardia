@@ -17,6 +17,7 @@ import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { copyPageUrl } from "../../state/site/selection";
 import { ProfileBadge } from "../profiles/ProfileIcons";
 import { useProfileDotsShown } from "../profiles/ProfileDots";
+import { HeaderAppMenu, useAppMenuInHeader } from "../profiles/ProfileIndicator";
 import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
 import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
@@ -163,6 +164,7 @@ function LittleArdiaBar() {
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
   const switcherShown = useProfileDotsShown();
+  const appMenu = useAppMenuInHeader();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const bar = useBarLayout();
@@ -189,7 +191,10 @@ function LittleArdiaBar() {
         { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
         { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
       ]}
-      trailing={switcherShown ? <ProfileButton windowId={windowId} /> : undefined}
+      trailing={[
+        ...(switcherShown ? [<ProfileButton key="profile" windowId={windowId} />] : []),
+        ...(appMenu ? [<HeaderAppMenu key="menu" size={SMALL_BAR_BUTTON} />] : []),
+      ]}
     >
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} bar={bar} /> : null}
