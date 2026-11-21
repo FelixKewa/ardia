@@ -59,14 +59,16 @@ test("Linux with the window buttons hidden draws no caption buttons and keeps no
   assert.deepEqual(linux.WINDOW_CHROME, windows);
 });
 
-test("the Mac and Windows offer no choice of window buttons", async () => {
+test("the Mac, Windows and the web demo offer no choice of window buttons", async () => {
   const mac = await import("./platformChrome.ts");
   const win = await import("./platformChrome.windows.ts");
-  for (const platform of [mac, win]) {
+  const web = await import("./platformChrome.web.ts");
+  for (const platform of [mac, win, web]) {
     assert.deepEqual(platform.WINDOW_BUTTON_STYLES, []);
     assert.equal(platform.applyWindowButtonStyle("trafficLights"), false);
     assert.equal(platform.applyWindowButtonStyle("native"), false);
   }
   assert.deepEqual(mac.WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0 });
   assert.deepEqual(win.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+  assert.deepEqual(web.WINDOW_CHROME, mac.WINDOW_CHROME);
 });
