@@ -490,8 +490,12 @@ Ardia never runs a plugin's program itself, with one exception for built-in plug
   no input and output to nowhere. One Ardia at a time claims the version (`.after-update-claim`, holding its process
   id; a claim from a process that's gone is taken over) and leases it while the commands run. Each command is started
   under the plugin's store lock and only while that version is still `current` and the request that made it the
-  latest, in a process group of its own, which is ended when its time is up and when Ardia quits. Only when every
-  command exited 0 is `.after-update` written; otherwise the next launch runs them again. The `cli` plugin runs `skills install --auto`, `skills refresh` and `computer refresh`, as
+  latest, in a process group of its own, which is ended when its time is up and when Ardia quits. Quitting holds new
+  commands back from the moment it starts (a cancelled quit picks the list up again at the command it held back or cut
+  short, if the version is still current), and before the quit finishes each
+  running group gets TERM, then KILL after 1 s, and is reaped; quit gives them one 2.5 s deadline, and Chromium's final shutdown only waits out what's left of it. A
+  command that exits on its own has whatever it left in its group sent TERM, then KILL after 3 s, before it counts. Only
+  when every command exited 0 is `.after-update` written; otherwise the next launch runs them again. The `cli` plugin runs `skills install --auto`, `skills refresh` and `computer refresh`, as
   `install.sh` did after an upgrade.
 
 - **Turning on** copies the approved folder into a store Ardia owns,
@@ -892,7 +896,11 @@ in the local copy. Hourly `usage_counts`:
 - v1: `plugin_enables`, `plugin_disables`, `plugin_process_starts`, `plugin_process_crashes`, `plugin_commands_run`,
   `plugin_tool_calls`, `plugin_tool_failures`, `plugin_page_opens`, `plugin_split_opens`, `program_links`,
   `program_link_failures` (a link refused, a name taken or the copy failed), `program_unlinks`, `program_adoptions`
-  (an old `ardia` install's home taken over), `plugin_adoptions`, `plugin_adoptions_waiting`.
+  (an old `ardia` install's home taken over), `plugin_adoptions`, `plugin_adoptions_waiting`,
+  `program_after_update_quit_exits` and `program_after_update_quit_kills` (a built-in plugin's `afterUpdate` command
+  still running at quit whose whole process group left on TERM, or was killed after the 1 s grace; tallied natively
+  at quit, only while sharing is on and tagged with that sharing period, and counted at the next launch only in the
+  same period).
 - v2: `plugin_activations` (main started by an activation event), `plugin_activation_failures`,
   `plugin_surface_renders` (a native view committed), `plugin_panel_opens`, `plugin_toolbar_runs`,
   `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,
@@ -918,4 +926,5 @@ and each refusal's reason
 
 Dashboard: watch `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against
 `plugin_activations`, `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
-`plugin_net_refusals` against `plugin_net_fetches`, and `program_link_failures` against `program_links`.
+`plugin_net_refusals` against `plugin_net_fetches`, `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
+`program_after_update_quit_exits` (afterUpdate commands that ignore TERM at quit).

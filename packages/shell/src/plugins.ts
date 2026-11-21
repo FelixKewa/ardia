@@ -18,6 +18,7 @@ export type PluginProgramsSpec = {
   version: string | null;
   programs: { name: string; path: string; afterUpdate?: string[][] }[];
 };
+export type PluginAfterUpdateQuitStops = { consent: string; exitedOnTerm: number; killed: number };
 export type PluginProgramRegistry = { claims: Record<string, string>; failClosed: boolean; legacyOwners: string[] };
 export type PluginProgramsResult =
   | { ok: true; linked: string[]; refused: Record<string, string>; binDir: string; adopted: boolean; adoptBusy?: boolean }
@@ -58,6 +59,8 @@ export type PluginsNative = {
   linkPrograms(spec: PluginProgramsSpec): Promise<PluginProgramsResult>;
   unlinkPrograms(name: string, programs: string[], remove: boolean): Promise<{ ok: boolean }>;
   sweepPrograms(active: string[]): Promise<void>;
+  takeAfterUpdateQuitStops(): Promise<PluginAfterUpdateQuitStops>;
+  setAfterUpdateQuitConsent(consent: string): void;
   legacyProgramsInstalled(): Promise<string[]>;
   programRegistry(): Promise<PluginProgramRegistry>;
   revealLog(name: string): void;

@@ -1,8 +1,9 @@
-import { linkPluginPrograms, sweepPluginPrograms, unlinkPluginPrograms, type PluginProgramsResult } from "../../platform/plugins";
+import { linkPluginPrograms, setAfterUpdateQuitConsent, sweepPluginPrograms, takeAfterUpdateQuitStops, unlinkPluginPrograms, type PluginProgramsResult } from "../../platform/plugins";
 import { errorText } from "../../lib/errors";
 import { useBrowser } from "../browser/store";
-import { notePlugin } from "../telemetry/pluginCounts";
+import { notePlugin, notePluginTimes } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
+import { onConsentPeriodChange } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
 import { programControlOn, setProgramControl, userChoseControl, userTurnedControlOff } from "../app/programControlSetting";
 import { settleInstall } from "./installWaiters";
@@ -90,15 +91,33 @@ function withdraw(name: string, remove: boolean, consent?: ConsentToken | null):
   return unlinkPluginPrograms(name, programs, remove).catch((error: unknown) => warnFor(consent ?? null, `[plugins] couldn't take ${name}'s programs off PATH`, error));
 }
 
-function sweepAtLaunch() {
+function sweepAtLaunch(consent: ConsentToken | null) {
   const s = currentPlugins();
   if (sweptAtLaunch || !s.loaded) return;
   sweptAtLaunch = true;
   void sweepPluginPrograms(s.order.filter((name) => activeManifest(s, name)?.programs.length)).catch(() => {});
+  void countAfterUpdateQuitStops(consent);
+  tellQuitStopsConsent();
+  onConsentPeriodChange(tellQuitStopsConsent);
+}
+
+function tellQuitStopsConsent() {
+  try {
+    setAfterUpdateQuitConsent(consentToken() ?? "");
+  } catch {}
+}
+
+async function countAfterUpdateQuitStops(consent: ConsentToken | null) {
+  const stops = await Promise.resolve()
+    .then(takeAfterUpdateQuitStops)
+    .catch(() => null);
+  if (!stops || !consent || stops.consent !== consent) return;
+  notePluginTimes("program_after_update_quit_exits", stops.exitedOnTerm, consent);
+  notePluginTimes("program_after_update_quit_kills", stops.killed, consent);
 }
 
 export function reconcilePrograms(consent?: ConsentToken | null) {
-  sweepAtLaunch();
+  sweepAtLaunch(consent ?? null);
   const s = currentPlugins();
   for (const name of s.order) {
     const manifest = activeManifest(s, name);

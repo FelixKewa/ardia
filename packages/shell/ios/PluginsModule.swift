@@ -33,6 +33,10 @@ public class PluginsModule: Module {
 
     AsyncFunction("linkPrograms") { (spec: [String: Any], promise: Promise) in PluginProgramLinks.link(spec) { promise.resolve($0) } }
 
+    AsyncFunction("takeAfterUpdateQuitStops") { (promise: Promise) in PluginProgramLinks.takeQuitStops { promise.resolve($0) } }
+
+    Function("setAfterUpdateQuitConsent") { (consent: String) in PluginProgramLinks.setQuitStopsConsent(consent) }
+
     AsyncFunction("legacyProgramsInstalled") { (promise: Promise) in PluginProgramLinks.legacyInstalled { promise.resolve($0) } }
 
     AsyncFunction("programRegistry") { (promise: Promise) in PluginProgramLinks.registry { promise.resolve($0) } }

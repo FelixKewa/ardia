@@ -88,6 +88,8 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     linkPrograms: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
     unlinkPrograms: answer({ ok: true }),
     sweepPrograms: answer(undefined),
+    takeAfterUpdateQuitStops: answer({ consent: "", exitedOnTerm: 0, killed: 0 }),
+    setAfterUpdateQuitConsent: now(undefined),
     legacyProgramsInstalled: answer([]),
     programRegistry: answer({ claims: {}, failClosed: false, legacyOwners: [] }),
     revealLog: now(undefined),

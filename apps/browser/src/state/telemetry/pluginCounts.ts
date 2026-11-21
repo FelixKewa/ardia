@@ -17,6 +17,8 @@ const NONE = {
   program_link_failures: 0,
   program_unlinks: 0,
   program_adoptions: 0,
+  program_after_update_quit_exits: 0,
+  program_after_update_quit_kills: 0,
   plugin_adoptions: 0,
   plugin_adoptions_waiting: 0,
   plugin_removals: 0,
@@ -45,6 +47,10 @@ export type PluginCount = keyof typeof NONE;
 let counts = { ...NONE };
 
 export const notePlugin = (what: PluginCount, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts[what]++);
+
+export const notePluginTimes = (what: PluginCount, times: number, consent?: ConsentToken | null) => {
+  if (Number.isSafeInteger(times) && times > 0) countFor(consentOrNow(consent), () => void (counts[what] += times));
+};
 
 export function takePluginCounts() {
   const taken = counts;

@@ -501,6 +501,8 @@ export const pluginHost = {
   links: [] as { name: string; folderId: string; approved: string; version: string | null; programs: { name: string; path: string; afterUpdate?: string[][] }[] }[],
   unlinks: [] as { name: string; programs: string[]; remove: boolean }[],
   sweeps: [] as string[][],
+  afterUpdateQuitStops: null as null | { consent: string; exitedOnTerm: number; killed: number },
+  afterUpdateQuitConsent: null as null | string,
   legacyInstalled: [] as string[],
   registry: null as null | { claims: Record<string, string>; failClosed: boolean; legacyOwners: string[] },
   linkResult: null as null | { ok: false; reason?: string; stale?: true } | { ok: true; linked: string[]; refused: Record<string, string>; binDir: string; adopted: boolean },
@@ -557,6 +559,12 @@ const plugins: Modules["ArdiaPlugins"] = {
   },
   unlinkPrograms: async (name, programs, remove) => (pluginHost.unlinks.push({ name, programs: [...programs], remove }), { ok: true }),
   sweepPrograms: async (active) => void pluginHost.sweeps.push([...active]),
+  takeAfterUpdateQuitStops: async () => {
+    const stops = pluginHost.afterUpdateQuitStops ?? { consent: "", exitedOnTerm: 0, killed: 0 };
+    pluginHost.afterUpdateQuitStops = null;
+    return stops;
+  },
+  setAfterUpdateQuitConsent: (consent) => void (pluginHost.afterUpdateQuitConsent = consent),
   legacyProgramsInstalled: async () => [...pluginHost.legacyInstalled],
   programRegistry: async () => pluginHost.registry ?? derivedRegistry(),
   revealLog: () => {},

@@ -58,11 +58,19 @@ const { pluginSocketMethod } = await import("./socketMethods.ts");
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
 host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }];
+host.afterUpdateQuitStops = { consent: "test-epoch", exitedOnTerm: 2, killed: 1 };
 startPlugins();
 (await import("./consentSurface.ts")).presentSettingsConsent();
 await settle();
-const launch = { sweeps: host.sweeps.map((s) => [...s]), links: host.links.map((l) => ({ ...l })) };
+const launch = { sweeps: host.sweeps.map((s) => [...s]), links: host.links.map((l) => ({ ...l })), counts: takePluginCounts() };
 const hidden = () => false;
+
+test("afterUpdate commands stopped at the last quit are counted once at launch, exits on TERM apart from kills", () => {
+  assert.equal(launch.counts.program_after_update_quit_exits, 2);
+  assert.equal(launch.counts.program_after_update_quit_kills, 1);
+  assert.equal(host.afterUpdateQuitStops, null, "the native tally is taken, so the next launch doesn't count it again");
+  assert.equal(host.afterUpdateQuitConsent, "test-epoch", "native tags the next quit's tally with the period it happens in");
+});
 
 test("a profile that never installed the command line has it offered and nothing on PATH", () => {
   assert.equal(P().consent, null);

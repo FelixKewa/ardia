@@ -6,6 +6,7 @@ enum PluginProgramLinks {
   private static let queue = DispatchQueue(label: "ardia.plugin-programs", qos: .utility)
   private static let afterUpdateQueue = DispatchQueue(label: "ardia.plugin-programs.after-update", qos: .utility)
   private static let afterUpdateDeadline: TimeInterval = 300
+  private static let afterUpdateGrace: TimeInterval = 3
   private static let pathMarker = ".path-line"
   static let builtInDigestsKey = "ArdiaBuiltInPlugins"
 
@@ -122,94 +123,150 @@ enum PluginProgramLinks {
     }
   }
 
-  private static let runningLock = NSLock()
-  private static var runningGroups: Set<pid_t> = []
+  private static let runs = AfterUpdateRuns.shared
+  private static let quitStopsFile = "after-update-quit-stops.json"
   private static var quitObserver: NSObjectProtocol?
+  private static var quitCancelObserver: NSObjectProtocol?
+  private static let quitObserverLock = NSLock()
+  private static let quitStopsLock = NSLock()
+  private static let quitStopsConsentLock = NSLock()
+  private static var quitStopsConsent = ""
+
+  static var afterUpdatesRunning: Bool { !runs.running.isEmpty }
+
+  private static let quitStopsQueue = DispatchQueue(label: "ardia.plugin-programs.quit-stops", qos: .userInitiated)
+  private static let quitStopsWriteLimit: TimeInterval = 0.25
+  private static let quitHoldLimit = AfterUpdateRuns.quitGrace + AfterUpdateRuns.quitReapLimit + quitStopsWriteLimit + 0.75
+  static let quitCancelledNotification = Notification.Name("ArdiaHostQuitCancelled")
+
+  static func holdAfterUpdates() {
+    watchQuit()
+    runs.beginQuit()
+  }
+
+  static func resumeAfterUpdates() { runs.resume() }
+
+  static func stopAfterUpdates(done: @escaping () -> Void) {
+    var answered = false
+    let answer = {
+      guard !answered else { return }
+      answered = true
+      done()
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + quitHoldLimit, execute: answer)
+    runs.stopForQuit(limit: quitHoldLimit) { stops in
+      recordWithinLimit(stops)
+      DispatchQueue.main.async(execute: answer)
+    }
+  }
+
+  private static func finishAfterUpdates() {
+    guard let stops = runs.finishQuit() else { return }
+    recordWithinLimit(stops)
+  }
+
+  private static func recordWithinLimit(_ stops: AfterUpdateQuitStops) {
+    guard !stops.isEmpty else { return }
+    let consent = currentQuitStopsConsent()
+    let written = DispatchSemaphore(value: 0)
+    quitStopsQueue.async {
+      recordQuitStops(stops, consent: consent)
+      written.signal()
+    }
+    _ = written.wait(timeout: .now() + quitStopsWriteLimit)
+  }
 
   private static func runAfterUpdate(_ name: String, version: String, commands: [(String, [[String]])], places: ProgramPlaces, generation: Int) {
-    let folder = (places.pluginStore(name) as NSString).appendingPathComponent(version)
-    let environment = childEnvironment(places)
+    let steps = commands.flatMap { program, runList in runList.map { (program, $0) } }
     watchQuit()
+    runAfterUpdateSteps(name, version: version, steps: steps, from: 0, succeeded: true, places: places, generation: generation)
+  }
+
+  private static func runAfterUpdateSteps(
+    _ name: String, version: String, steps: [(String, [String])], from first: Int, succeeded earlier: Bool, places: ProgramPlaces, generation: Int
+  ) {
     afterUpdateQueue.async {
+      let retry = { (step: Int, succeeded: Bool) in
+        runs.whenOpen { runAfterUpdateSteps(name, version: version, steps: steps, from: step, succeeded: succeeded, places: places, generation: generation) }
+      }
+      guard !runs.isQuitting else { return retry(first, earlier) }
       guard PluginPrograms.claimAfterUpdate(plugin: name, version: version, places: places) else { return }
       defer { PluginPrograms.releaseAfterUpdate(plugin: name, version: version, places: places) }
       let leased = PluginPrograms.lease(plugin: name, version: version, places: places)
       defer { if let leased { Darwin.unlink(leased) } }
-      var succeeded = true
-      for (program, runs) in commands {
-        for arguments in runs {
-          guard isCurrent(name, generation) else { return }
-          let started = PluginPrograms.whileCurrent(plugin: name, version: version, places: places) {
-            spawnGroup((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
-          }
-          guard let started else { return }
-          guard let group = started else {
-            succeeded = false
-            continue
-          }
-          if wait(group: group) != 0 { succeeded = false }
+      let folder = (places.pluginStore(name) as NSString).appendingPathComponent(version)
+      let environment = childEnvironment(places)
+      var succeeded = earlier
+      for step in steps.indices where step >= first {
+        let (program, arguments) = steps[step]
+        guard isCurrent(name, generation) else { return }
+        let started = PluginPrograms.whileCurrent(plugin: name, version: version, places: places) {
+          runs.spawn((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
+        }
+        switch started {
+        case nil: return
+        case .quitting?: return retry(step, succeeded)
+        case .failed?: succeeded = false
+        case .started(let group)?:
+          let code = runs.wait(group: group, deadline: afterUpdateDeadline, grace: afterUpdateGrace)
+          if code == AfterUpdateRuns.interrupted { return retry(step, succeeded) }
+          if code != 0 { succeeded = false }
         }
       }
       if succeeded, isCurrent(name, generation) { PluginPrograms.markAfterUpdate(plugin: name, version: version, places: places) }
     }
   }
 
-  private static func spawnGroup(_ program: String, _ arguments: [String], environment: [String: String]) -> pid_t? {
-    var attributes: posix_spawnattr_t?
-    var actions: posix_spawn_file_actions_t?
-    guard posix_spawnattr_init(&attributes) == 0 else { return nil }
-    defer { posix_spawnattr_destroy(&attributes) }
-    guard posix_spawn_file_actions_init(&actions) == 0 else { return nil }
-    defer { posix_spawn_file_actions_destroy(&actions) }
-    guard posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT)) == 0, posix_spawnattr_setpgroup(&attributes, 0) == 0 else { return nil }
-    for fd: Int32 in [0, 1, 2] {
-      guard posix_spawn_file_actions_addopen(&actions, fd, "/dev/null", fd == 0 ? O_RDONLY : O_WRONLY, 0) == 0 else { return nil }
-    }
-    guard posix_spawn_file_actions_addchdir_np(&actions, NSTemporaryDirectory()) == 0 else { return nil }
-    let argv = ([program] + arguments).map { strdup($0) } + [nil]
-    let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
-    defer { (argv + envp).forEach { free($0) } }
-    var pid: pid_t = 0
-    guard posix_spawn(&pid, program, &actions, &attributes, argv, envp) == 0 else { return nil }
-    runningLock.lock()
-    runningGroups.insert(pid)
-    runningLock.unlock()
-    return pid
-  }
-
-  private static func wait(group: pid_t) -> Int32 {
-    let deadline = Date().addingTimeInterval(afterUpdateDeadline)
-    var exited = false
-    while Date() < deadline {
-      var info = siginfo_t()
-      if waitid(P_PID, id_t(group), &info, WEXITED | WNOHANG | WNOWAIT) == 0, info.si_pid == group {
-        exited = true
-        break
-      }
-      usleep(100_000)
-    }
-    kill(-group, SIGTERM)
-    if !exited {
-      usleep(3_000_000)
-      kill(-group, SIGKILL)
-    }
-    var status: Int32 = 0
-    while waitpid(group, &status, 0) < 0 && errno == EINTR {}
-    runningLock.lock()
-    runningGroups.remove(group)
-    runningLock.unlock()
-    return exited && (status & 0x7f) == 0 ? (status >> 8) & 0xff : -1
-  }
-
   private static func watchQuit() {
-    runningLock.lock()
-    defer { runningLock.unlock() }
+    quitObserverLock.lock()
+    defer { quitObserverLock.unlock() }
     guard quitObserver == nil else { return }
     quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
-      runningLock.lock()
-      let groups = runningGroups
-      runningLock.unlock()
-      for group in groups { kill(-group, SIGKILL) }
+      finishAfterUpdates()
+    }
+    quitCancelObserver = NotificationCenter.default.addObserver(forName: quitCancelledNotification, object: nil, queue: nil) { _ in
+      runs.resume()
+    }
+  }
+
+  static func setQuitStopsConsent(_ consent: String) {
+    quitStopsConsentLock.lock()
+    quitStopsConsent = consent
+    quitStopsConsentLock.unlock()
+  }
+
+  private static func currentQuitStopsConsent() -> String {
+    quitStopsConsentLock.lock()
+    defer { quitStopsConsentLock.unlock() }
+    return quitStopsConsent
+  }
+
+  private static func recordQuitStops(_ stops: AfterUpdateQuitStops, consent: String) {
+    quitStopsLock.lock()
+    defer { quitStopsLock.unlock() }
+    guard !consent.isEmpty, consent == currentQuitStopsConsent(), let url = try? DocumentStore.url(quitStopsFile) else { return }
+    let saved = readQuitStops(url)
+    let total = (saved.consent == consent ? saved.stops : AfterUpdateQuitStops()) + stops
+    let doc: [String: Any] = ["consent": consent, "exitedOnTerm": total.exitedOnTerm, "killed": total.killed]
+    guard let data = try? JSONSerialization.data(withJSONObject: doc) else { return }
+    try? data.write(to: url, options: .atomic)
+  }
+
+  private static func readQuitStops(_ url: URL) -> (consent: String, stops: AfterUpdateQuitStops) {
+    guard let data = try? Data(contentsOf: url), let saved = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let consent = saved["consent"] as? String else {
+      return ("", AfterUpdateQuitStops())
+    }
+    return (consent, AfterUpdateQuitStops(exitedOnTerm: max(0, saved["exitedOnTerm"] as? Int ?? 0), killed: max(0, saved["killed"] as? Int ?? 0)))
+  }
+
+  static func takeQuitStops(done: @escaping ([String: Any]) -> Void) {
+    queue.async {
+      guard let url = try? DocumentStore.url(quitStopsFile) else { return done(["consent": "", "exitedOnTerm": 0, "killed": 0]) }
+      quitStopsLock.lock()
+      let saved = readQuitStops(url)
+      try? FileManager.default.removeItem(at: url)
+      quitStopsLock.unlock()
+      done(["consent": saved.consent, "exitedOnTerm": saved.stops.exitedOnTerm, "killed": saved.stops.killed])
     }
   }
 

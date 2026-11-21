@@ -45,6 +45,8 @@ export const removePluginFiles = (name: string) => Plugins().remove(name);
 export const linkPluginPrograms = (spec: PluginProgramsSpec) => Plugins().linkPrograms(spec);
 export const unlinkPluginPrograms = (name: string, programs: string[], remove: boolean) => Plugins().unlinkPrograms(name, programs, remove);
 export const sweepPluginPrograms = (active: string[]) => Plugins().sweepPrograms(active);
+export const takeAfterUpdateQuitStops = () => Plugins().takeAfterUpdateQuitStops();
+export const setAfterUpdateQuitConsent = (consent: string) => Plugins().setAfterUpdateQuitConsent(consent);
 export const legacyProgramsInstalled = () => Plugins().legacyProgramsInstalled();
 export const programRegistry = () => Plugins().programRegistry();
 export const revealPluginLog = (name: string) => Plugins().revealLog(name);
