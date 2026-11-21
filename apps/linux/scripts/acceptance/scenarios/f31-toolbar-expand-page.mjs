@@ -83,6 +83,7 @@ export default {
         await t.evidence(`viewports-${trigger}`, record);
         await t.screenshot(shell, `expanded-${trigger}`);
         assert.deepEqual(record.modes.filter((mode) => mode !== "collapsed"), [opened, opened], `the toolbar must open as ${opened} twice: ${js(record.modes)}`);
+        if (opened === "shown") assert.ok(record.sent.length > 0, "the page moving down must reach the recorder as viewport requests");
         assert.ok(record.regionRequests > 0, "the shell's host requests must be read by the recorder");
         assert.ok(!record.sent.includes(false), `the page was hidden while the toolbar opened or folded: ${js(record.sent)}`);
         await shell.waitFor(PAGE_SHOWN, { timeout: 5000, label: "the page still shown after the expansions" });

@@ -135,7 +135,7 @@ async function start() {
     startHostTabLifecycle(ardiaHost, useBrowser);
     startShellAbove(ardiaHost);
     onPageCovered((tabId) => linuxTelemetryHooks.leading() && useToolbarAutoHide.getState().peek[tabId] && noteToolbarPeekPageHidden());
-    onPageCovered((tabId) => linuxTelemetryHooks.leading() && toolbarMoving(tabId) && noteToolbarMotionPageHidden());
+    onPageCovered((tabId) => linuxTelemetryHooks.leading() && !useToolbarAutoHide.getState().peek[tabId] && toolbarMoving(tabId) && noteToolbarMotionPageHidden());
     onPageCovered(() => peekShown(windowId) && noteSidebarPeekPageHidden());
     startPipPlayer(ardiaHost);
     watchTabSwitches(useBrowser);

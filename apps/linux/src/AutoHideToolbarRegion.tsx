@@ -22,16 +22,15 @@ export function AutoHideToolbar(props: React.ComponentProps<typeof BrowserAutoHi
 }
 
 function useFoldedAway(mode: ToolbarMode) {
-  const collapsed = mode === "collapsed";
-  const [fold, setFold] = useState({ collapsed, done: collapsed });
-  const current = fold.collapsed === collapsed ? fold : { collapsed, done: false };
+  const [fold, setFold] = useState({ mode, done: mode === "collapsed" });
+  const current = fold.mode === mode ? fold : { mode, done: mode === "collapsed" && fold.mode !== "peek" };
   if (current !== fold) setFold(current);
   useEffect(() => {
-    if (!current.collapsed || current.done) return;
-    const timer = setTimeout(() => setFold({ collapsed: true, done: true }), TOOLBAR_MOTION.hide);
+    if (current.mode !== "collapsed" || current.done) return;
+    const timer = setTimeout(() => setFold({ mode: "collapsed", done: true }), TOOLBAR_MOTION.hide);
     return () => clearTimeout(timer);
-  }, [current.collapsed, current.done]);
-  return current.collapsed && current.done;
+  }, [current.mode, current.done]);
+  return current.mode === "collapsed" && current.done;
 }
 
 function useMotionWindow(tabId: string, mode: ToolbarMode) {
