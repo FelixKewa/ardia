@@ -122,7 +122,7 @@ enum PluginProgramLinks {
     if !clean, let copy,
       PluginPrograms.currentIsDamaged(plugin: name, places: places, version: spec["version"] as? String, approved: approved, digest: copy.payloadDigest)
     {
-      PluginPrograms.withdraw(plugin: name, programs: programs.map(\.name), places: places, keepCopy: true)
+      PluginPrograms.dropDamaged(plugin: name, programs: programs.map(\.name), places: places)
     }
     switch result {
     case .failure(let refusal):

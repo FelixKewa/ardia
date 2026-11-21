@@ -91,6 +91,13 @@ extension PluginPrograms {
     return !currentHolds(plugin: plugin, places: places, digest: digest)
   }
 
+  static func dropDamaged(plugin: String, programs: [String], places: ProgramPlaces) {
+    withdraw(plugin: plugin, programs: programs, places: places, keepCopy: true)
+    guard let lock = lock(plugin, places) else { return }
+    defer { close(lock) }
+    unlink((places.pluginStore(plugin) as NSString).appendingPathComponent(currentName))
+  }
+
   static func currentHolds(plugin: String, places: ProgramPlaces, digest: String) -> Bool {
     let pluginStore = places.pluginStore(plugin)
     guard let version = linkTarget((pluginStore as NSString).appendingPathComponent(currentName)), !version.contains("/") else { return false }

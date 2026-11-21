@@ -50,7 +50,7 @@ struct OfficialStore {
   func copy(_ name: String, sha: String, fresh: Bool = false) -> OfficialCopy? {
     guard PluginPrograms.isName(name), OfficialPin.isSha(sha) else { return nil }
     let path = copyPath(name, sha)
-    guard PluginPrograms.isRealFolder(path), isArchive(archivePath(name, sha)),
+    guard PluginPrograms.isRealFolder(path), isArchive(archivePath(name, sha)), PluginPrograms.isSealed(path, keepingRootWritable: false),
       let digest = OfficialVerification.shared.digest(archive: archivePath(name, sha), sha: sha, copy: path, top: name, scratch: pluginFolder(name), fresh: fresh)
     else { return nil }
     return OfficialCopy(name: name, sha: sha, path: path, payloadDigest: digest)
@@ -75,7 +75,14 @@ struct OfficialStore {
       }
       if PluginPrograms.isRealFolder(copyPath(name, sha)) { PluginPrograms.discard(copyPath(name, sha)) }
       unlink(archivePath(name, sha))
-      if Self.hasQuarantine(archive) { removexattr(archive, Self.quarantineName, XATTR_NOFOLLOW) }
+      if Self.hasQuarantine(archive) && removexattr(archive, Self.quarantineName, XATTR_NOFOLLOW) != 0 {
+        PluginPrograms.discard(staged)
+        return .failure(FolderRefusal(reason: "its download couldn't be cleared for use"))
+      }
+      guard chmod(archive, 0o444) == 0, PluginPrograms.seal(staged, keepingRootWritable: false) else {
+        PluginPrograms.discard(staged)
+        return .failure(FolderRefusal(reason: "its copy couldn't be made read-only"))
+      }
       guard rename(archive, archivePath(name, sha)) == 0 else {
         PluginPrograms.discard(staged)
         return .failure(FolderRefusal(reason: "its download couldn't be kept (\(String(cString: strerror(errno))))"))
@@ -86,8 +93,6 @@ struct OfficialStore {
         PluginPrograms.discard(staged)
         return .failure(FolderRefusal(reason: "its copy couldn't be put in place (\(reason))"))
       }
-      PluginPrograms.seal(copyPath(name, sha), keepingRootWritable: false)
-      chmod(archivePath(name, sha), 0o444)
       guard let made = copy(name, sha: sha, fresh: true) else {
         PluginPrograms.discard(copyPath(name, sha))
         unlink(archivePath(name, sha))

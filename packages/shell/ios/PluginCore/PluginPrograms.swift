@@ -362,7 +362,10 @@ enum PluginPrograms {
       discard(staged)
       return .failure(FolderRefusal(reason: problem))
     }
-    seal(staged, keepingRootWritable: true)
+    guard seal(staged, keepingRootWritable: true) else {
+      discard(staged)
+      return .failure(FolderRefusal(reason: "its programs couldn't be made read-only"))
+    }
     guard mkdir((staged as NSString).appendingPathComponent(leasesName), 0o700) == 0 || errno == EEXIST else {
       discard(staged)
       return .failure(FolderRefusal(reason: "its programs' lease folder couldn't be made"))
@@ -500,7 +503,8 @@ enum PluginPrograms {
     defer { opened.close() }
     guard case .text(let text) = PluginFiles.readManifest(in: opened), PluginFiles.approvalHash(text: text, folderId: folderId) == approved else { return false }
     guard checkTree(opened.fd) == nil, programs.allSatisfy({ PluginFiles.localProgram($0.path, in: opened) != nil }) else { return false }
-    return expectedDigest.map { payloadDigest(folder, keepingCaches: true) == $0 } ?? true
+    guard let expectedDigest else { return true }
+    return isSealed(folder, keepingRootWritable: true) && payloadDigest(folder, keepingCaches: true) == expectedDigest
   }
 
   static func linkTarget(_ path: String) -> String? {
@@ -545,21 +549,45 @@ enum PluginPrograms {
     return Int(Date().timeIntervalSince1970) - info.st_mtimespec.tv_sec > seconds
   }
 
-  static func seal(_ root: String, keepingRootWritable: Bool) {
-    guard let walker = FileManager.default.enumerator(atPath: root) else { return }
+  static let runtimeNames: Set<String> = [leasesName, afterUpdateMarker, afterUpdateClaim]
+
+  @discardableResult
+  static func seal(_ root: String, keepingRootWritable: Bool) -> Bool {
+    guard let walker = FileManager.default.enumerator(atPath: root) else { return false }
     var folders: [String] = []
+    var sealed = true
     while let relative = walker.nextObject() as? String {
+      if keepingRootWritable && runtimeNames.contains(relative) {
+        walker.skipDescendants()
+        continue
+      }
       let path = (root as NSString).appendingPathComponent(relative)
       var info = stat()
-      guard lstat(path, &info) == 0 else { continue }
+      guard lstat(path, &info) == 0 else { return false }
       switch info.st_mode & S_IFMT {
-      case S_IFREG: chmod(path, info.st_mode & 0o111 != 0 ? 0o555 : 0o444)
+      case S_IFREG: if chmod(path, info.st_mode & 0o111 != 0 ? 0o555 : 0o444) != 0 { sealed = false }
       case S_IFDIR: folders.append(path)
-      default: break
+      default: return false
       }
     }
-    for folder in folders.reversed() { chmod(folder, 0o555) }
-    if !keepingRootWritable { chmod(root, 0o555) }
+    for folder in folders.reversed() where chmod(folder, 0o555) != 0 { sealed = false }
+    if !keepingRootWritable && chmod(root, 0o555) != 0 { sealed = false }
+    return sealed && isSealed(root, keepingRootWritable: keepingRootWritable)
+  }
+
+  static func isSealed(_ root: String, keepingRootWritable: Bool) -> Bool {
+    var info = stat()
+    guard lstat(root, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR else { return false }
+    if !keepingRootWritable && info.st_mode & 0o222 != 0 { return false }
+    guard let walker = FileManager.default.enumerator(atPath: root) else { return false }
+    while let relative = walker.nextObject() as? String {
+      if keepingRootWritable && runtimeNames.contains(relative) {
+        walker.skipDescendants()
+        continue
+      }
+      guard lstat((root as NSString).appendingPathComponent(relative), &info) == 0, info.st_mode & 0o222 == 0 else { return false }
+    }
+    return true
   }
 
   static func unseal(_ root: String) {
