@@ -62,6 +62,61 @@ test("with the window buttons hidden every layout keeps the header's hamburger a
   }
 });
 
+test("with the traffic lights or the buttons hidden a hamburger is drawn even where Minimalism or the theme hides the profile; the native buttons keep it beside them", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { registerHooks } = await import("node:module");
+  const indicatorUrl = new URL("./ProfileIndicator.tsx", import.meta.url).href;
+  const fakes = new Map([
+    ["@ardia/shell", "export const Symbol = () => null;"],
+    ["./AppMenuButton", "export function AppMenuButton() { return null; }"],
+  ]);
+  registerHooks({
+    resolve: (specifier, context, next) => context.parentURL === indicatorUrl && fakes.has(specifier) ? { url: `data:text/javascript,${encodeURIComponent(fakes.get(specifier))}`, shortCircuit: true } : next(specifier, context),
+  });
+  const { mount } = await import("../../browser/src/test-hooks.mjs");
+  const { useBrowser } = await import("../../browser/src/state/browser/store.ts");
+  const { WindowContext } = await import("../../browser/src/state/browser/hooks.ts");
+  const { WINDOW_CHROME } = await import("../../browser/src/lib/windowChrome.ts");
+  const { TRAFFIC_LIGHTS_CHROME, HIDDEN_BUTTONS_CHROME } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const { ProfileIndicator } = await import("./ProfileIndicator.tsx");
+  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const sidebar = source("../../browser/src/components/sidebar/Sidebar.tsx");
+  const strip = source("../../browser/src/components/tabstrip/TopTabStrip.tsx");
+  assert.match(sidebar, /\n\s*<ProfileIndicator room=\{[^\n]*\} profileShown=\{profileShown\} \/>/, "the sidebar header always mounts the indicator");
+  assert.doesNotMatch(sidebar, /profileShown \? <ProfileIndicator/);
+  assert.match(strip, /<ProfileIndicator room=\{PROFILE_ROOM\} profileShown=\{!minimal\} \/>/, "the top strip mounts it under Minimalism too");
+  assert.match(strip, /useProfileIndicatorWidth\(PROFILE_ROOM, !minimal\)/);
+  assert.match(strip, /const controls = minimal \? profileChip :/);
+  const S = () => useBrowser.getState();
+  S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
+  const windowId = S().createWindow({ url: "https://menu.ardia.test/" });
+  const saved = { ...WINDOW_CHROME };
+  const menuButtons = (node) => !node || typeof node !== "object" ? 0 : Array.isArray(node) ? node.reduce((sum, child) => sum + menuButtons(child), 0) : (node.type?.name === "AppMenuButton" ? 1 : 0) + menuButtons(node.props?.children);
+  const menus = (profileShown) => {
+    const mounted = mount(() => ProfileIndicator({ room: 160, profileShown }), { contexts: [[WindowContext, windowId]] });
+    try {
+      return menuButtons(mounted.value);
+    } finally {
+      mounted.unmount();
+    }
+  };
+  try {
+    for (const settings of [{ tabLayout: "top", minimalismMode: true }, { tabLayout: "sidebar", minimalismMode: false }, { tabLayout: "sidebar", sidebarSide: "right", minimalismMode: false }]) {
+      S().updateSettings(settings);
+      for (const [name, chrome] of [["trafficLights", TRAFFIC_LIGHTS_CHROME], ["hidden", HIDDEN_BUTTONS_CHROME]]) {
+        Object.assign(WINDOW_CHROME, chrome);
+        const label = JSON.stringify([settings, name]);
+        assert.equal(menus(false), 1, `profile hidden: ${label}`);
+        assert.equal(menus(true), 1, `profile shown: ${label}`);
+      }
+      Object.assign(WINDOW_CHROME, windowsChrome);
+      assert.equal(menus(false), 0, `native: ${JSON.stringify(settings)}`);
+    }
+  } finally {
+    Object.assign(WINDOW_CHROME, saved);
+  }
+});
+
 test("the header's empty room beside the hamburger drags the window: the profile controls pass presses through except on their buttons", async () => {
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");

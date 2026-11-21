@@ -51,9 +51,9 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
   const windowId = useWindowId();
   const current = useWindowProfileId();
   const { pages } = usePagerPages(windowId);
-  const profileChip = useProfileIndicatorWidth(PROFILE_ROOM);
   const minimal = useMinimalism();
-  const controls = minimal ? 0 : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
+  const profileChip = useProfileIndicatorWidth(PROFILE_ROOM, !minimal);
+  const controls = minimal ? profileChip : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
   const fullScreen = useWindowFullScreen(windowId);
   const left = floating || fullScreen ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
   const room = stripCaptionRoom(floating, fullScreen);
@@ -78,14 +78,14 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
             ))}
           </ClipView>
         </ContextMenuArea>
-        {minimal ? null : (
+        {controls ? (
           <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8 + room, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
             <TintInk>
-              <ProfileIndicator room={PROFILE_ROOM} />
-              <DownloadsButton windowId={windowId} />
+              <ProfileIndicator room={PROFILE_ROOM} profileShown={!minimal} />
+              {minimal ? null : <DownloadsButton windowId={windowId} />}
             </TintInk>
           </View>
-        )}
+        ) : null}
         {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
         {!floating && <StripDropHighlight left={left} right={right} />}
       </StripDropArea>

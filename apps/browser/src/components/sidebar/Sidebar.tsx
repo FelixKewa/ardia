@@ -154,7 +154,7 @@ export function Sidebar({ width }: { width: number }) {
                   </>
                 ) : collapsed ? null : (
                   <View pointerEvents="box-none" style={{ height: header, flexDirection: "row", alignItems: "flex-start", paddingLeft: indicatorX, paddingRight: HEADER_RIGHT + captionRoom, paddingTop: lightsY - 17 }}>
-                    {profileShown ? <ProfileIndicator room={width - indicatorX - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} /> : null}
+                    <ProfileIndicator room={width - indicatorX - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} profileShown={profileShown} />
                     <View pointerEvents="none" style={{ flex: 1 }} />
                     {hasDownloads && !footerDownloads ? <DownloadsButton windowId={windowId} /> : null}
                   </View>
