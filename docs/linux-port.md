@@ -900,8 +900,9 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   (`TOOLBAR_MOTION.show`) drops it at once, so the fading buttons don't take clicks over the page. The window
   buttons (`WindowControls.tsx`) are an input region while they take input: when the toolbar opens they appear at full
   size before the page has moved down, and their bottom edge reached a top sample. `toolbar_motion_page_hides` counts a
-  page that stopped drawing within two motion lengths of the toolbar opening or folding, outside a peek (a hide during
-  a peek counts in `toolbar_peek_page_hides` only); it should stay near 0 against `toolbar_scroll_hides`.
+  page that stopped drawing within two motion lengths of the toolbar opening or folding, while no peek is set (a hide
+  while a peek is set, even one a menu or the address field holds open, counts in `toolbar_peek_page_hides` only); it
+  should stay near 0 against `toolbar_scroll_hides`.
 - **Sidebar peek.** The peeking sidebar is a page overlay region (`SidebarPeekMark.tsx`), reaching past the panel's
   edge over the half of the resize handle that sticks out. Its dock's outer box takes no hits itself (`box-none`): on a
   peek's first frame that box already sits over the page's edge while the panel is still off screen, and

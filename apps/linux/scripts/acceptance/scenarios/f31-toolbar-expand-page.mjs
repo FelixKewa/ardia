@@ -56,7 +56,6 @@ export default {
       },
       async click() {
         const point = await strip();
-        await move(point);
         await shell.session.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", clickCount: 1 });
         await shell.session.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", clickCount: 1 });
         await pause(900);
