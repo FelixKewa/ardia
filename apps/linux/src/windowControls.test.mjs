@@ -457,12 +457,25 @@ test("without a frame, as on Wayland, the shell's outer size is compared with th
 
 test("the Linux wrapper hides the buttons over a full-screen page, makes the hidden copy inert, and offers the window menu only in browser windows", async () => {
   const { linuxControlsBehaviour } = await import("./windowControlsRules.ts");
-  const base = { pageFullScreen: false, hidden: false, utility: false, windowMenu: true };
-  assert.deepEqual(linuxControlsBehaviour(base), { rendered: true, inert: false, windowMenuOnRightClick: true });
+  const base = { pageFullScreen: false, hidden: false, utility: false, windowMenu: true, shown: true };
+  assert.deepEqual(linuxControlsBehaviour(base), { rendered: true, inert: false, takesInput: true, windowMenuOnRightClick: true });
   assert.equal(linuxControlsBehaviour({ ...base, pageFullScreen: true }).rendered, false);
   assert.equal(linuxControlsBehaviour({ ...base, hidden: true }).inert, true);
   assert.equal(linuxControlsBehaviour({ ...base, utility: true }).windowMenuOnRightClick, false, "Settings and Import");
   assert.equal(linuxControlsBehaviour({ ...base, windowMenu: false }).windowMenuOnRightClick, false);
+});
+
+test("the wrapper's input region follows the live window-button style, so buttons drawn by a live switch to Native take input and none is left behind by a switch away", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { linuxControlsBehaviour } = await import("./windowControlsRules.ts");
+  const base = { pageFullScreen: false, hidden: false, utility: false, windowMenu: true, shown: true };
+  assert.equal(linuxControlsBehaviour(base).takesInput, true);
+  assert.equal(linuxControlsBehaviour({ ...base, shown: false }).takesInput, false, "Traffic lights and Hidden draw no buttons");
+  assert.equal(linuxControlsBehaviour({ ...base, hidden: true }).takesInput, false);
+  assert.equal(linuxControlsBehaviour({ ...base, pageFullScreen: true }).takesInput, false);
+  const wrapper = readFileSync(new URL("./WindowControls.tsx", import.meta.url), "utf8");
+  assert.match(wrapper, /shown: useControlsShown\(\)/);
+  assert.match(wrapper, /\}, \[behaviour\.takesInput\]\);/);
 });
 
 test("a primary-button press on a window button leaves focus where it was; other buttons and other targets are untouched", async () => {

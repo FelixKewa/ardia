@@ -10,13 +10,12 @@ import { linuxControlsBehaviour, pressKeepsFocusWhereItWas } from "./windowContr
 export { controlsShown, useControlsShown, type WindowControlsProps };
 
 export const WindowControls = memo(function WindowControls(props: WindowControlsProps) {
-  const behaviour = linuxControlsBehaviour({ pageFullScreen: !!useFullscreenTab(props.windowId), hidden: !!props.hidden, utility: isLinuxUtility(props.windowId), windowMenu: !!linuxWindowMenu });
+  const behaviour = linuxControlsBehaviour({ pageFullScreen: !!useFullscreenTab(props.windowId), hidden: !!props.hidden, utility: isLinuxUtility(props.windowId), windowMenu: !!linuxWindowMenu, shown: useControlsShown() });
   const wrapper = useRef<HTMLDivElement>(null);
-  const takesInput = behaviour.rendered && !behaviour.inert;
   useLayoutEffect(() => {
     const controls = wrapper.current?.firstElementChild;
-    return takesInput && controls ? inputRegions()?.addOverlay(controls) : undefined;
-  }, [takesInput]);
+    return behaviour.takesInput && controls ? inputRegions()?.addOverlay(controls) : undefined;
+  }, [behaviour.takesInput]);
   if (!behaviour.rendered) return null;
   return (
     <div
