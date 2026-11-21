@@ -606,3 +606,27 @@ test("the header's tools sit as far past the left group as they sit past the Mac
   }
   for (const chrome of [NATIVE_BUTTONS_CHROME, nativeButtonsChrome(parseButtonLayout("appmenu:close"))]) assert.equal(headerToggleXFor(chrome), HEADER_TOOLS.fullScreenToggleX, "with nothing at the left the toggle takes the edge slot");
 });
+
+test("in a narrow right sidebar the header's toggle never lands on the right group, wherever the left buttons push it", async () => {
+  const { linuxSidebarCaptionRoom } = await import("./sidebarHeaderLayout.ts");
+  const { sidebarHeaderSplit, toggleRightEdge } = await import("./profileIndicatorLayout.ts");
+  const { headerToggleXFor, HEADER_TOOLS } = await import("../../browser/src/components/window/dockMotion.ts");
+  const { nativeButtonsChrome } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const { parseButtonLayout, WINDOW_CONTROLS, windowControlsWidth } = await import("../../browser/src/lib/windowButtonLayout.ts");
+  const slot = { edge: HEADER_TOOLS.edge, button: 30, pitch: HEADER_TOOLS.pitch };
+  for (const raw of ["close,minimize,maximize:", "close:minimize,maximize", ":minimize,maximize,close"]) {
+    const chrome = nativeButtonsChrome(parseButtonLayout(raw));
+    const controls = WINDOW_CONTROLS.edge + windowControlsWidth(chrome.trailingButtons.length);
+    const toggleX = headerToggleXFor(chrome);
+    for (const width of [160, 170, 185, 220, 260]) {
+      const s = state({ sidebarSide: "right", sidebarWidth: width, addressBar: "sidebar" });
+      const captionRoom = linuxSidebarCaptionRoom(s, "w", false, chrome);
+      assert.ok(captionRoom > 0, `${raw} ${width}: the right group is drawn in the header`);
+      const split = sidebarHeaderSplit({ width, captionRoom, controls, toggleOnly: toggleRightEdge(toggleX), menuInHeader: false, slot });
+      const groupLeft = width - controls;
+      if (split.tools) assert.ok(toggleRightEdge(toggleX) <= groupLeft, `${raw} ${width}: toggle ends at ${toggleRightEdge(toggleX)}, the right group starts at ${groupLeft}`);
+      if (width === 160 && raw !== ":minimize,maximize,close") assert.equal(split.tools, false, `${raw}: 160 px has no room for the toggle beside the buttons`);
+    }
+    assert.equal(sidebarHeaderSplit({ width: 260, captionRoom: chrome.trailingWidth, controls, toggleOnly: toggleRightEdge(toggleX), menuInHeader: false, slot }).tools, true, `${raw}: a wide sidebar keeps its tools`);
+  }
+});

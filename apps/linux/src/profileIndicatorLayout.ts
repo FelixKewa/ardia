@@ -22,6 +22,9 @@ export function headerIndicatorLayout({ room, textWidth, named, menuInHeader }: 
 export const HEADER_MENU = { width: MENU_WIDTH, height: 34 } as const;
 
 const CONTROLS_GAP = 3;
+const TOGGLE_PLATE = 32;
+
+export const toggleRightEdge = (toggleX: number) => toggleX + TOGGLE_PLATE / 2;
 
 export function sidebarHeaderSplit({ width, captionRoom, controls, toggleOnly, menuInHeader, slot }: { width: number; captionRoom: number; controls: number; toggleOnly: number; menuInHeader: boolean; slot: { edge: number; button: number; pitch: number } }) {
   if (menuInHeader) {
