@@ -19,6 +19,8 @@ export function trailingClearance(top: number, margin: number, controlsBottom: n
 
 export const windowButtonsChoosable = WINDOW_BUTTON_STYLES.length > 1;
 
+export const trafficLightsDrawn = (chrome: WindowChrome = WINDOW_CHROME): boolean => chrome.leadingWidth > 0 && !chrome.leadingButtons.length;
+
 export const windowControlsDrawn = (chrome: WindowChrome = WINDOW_CHROME): boolean => chrome.leadingButtons.length + chrome.trailingButtons.length > 0;
 
 let chromeVersion = 0;

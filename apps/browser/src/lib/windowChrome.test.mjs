@@ -96,3 +96,22 @@ test("Linux's native buttons take the desktop's layout: room at each top corner 
   assert.equal(linux.applyWindowButtonStyle("native"), true);
   assert.deepEqual(linux.WINDOW_CHROME, windows);
 });
+
+test("only the traffic lights count as traffic lights: the onboarding previews draw Mac dots for them, not for native buttons at the left", async () => {
+  const linux = await import("./platformChrome.linux.ts");
+  const { parseButtonLayout } = await import("./windowButtonLayout.ts");
+  const { trafficLightsDrawn } = await import("./windowChrome.ts");
+  const left = linux.nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:"));
+  assert.ok(left.leadingWidth > 0, "native buttons at the left keep room at the leading top, as the lights do");
+  assert.equal(trafficLightsDrawn(left), false);
+  assert.equal(trafficLightsDrawn(WINDOW_CHROME), true, "the Mac");
+  assert.equal(trafficLightsDrawn(linux.TRAFFIC_LIGHTS_CHROME), true);
+  assert.equal(trafficLightsDrawn(windows), false);
+  assert.equal(trafficLightsDrawn(linux.HIDDEN_BUTTONS_CHROME), false);
+  const { readFileSync } = await import("node:fs");
+  for (const file of ["../components/onboarding/previews/Kit.tsx", "../components/onboarding/PinnedTabsStep.tsx"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, /trafficLightsDrawn\(\)/, file);
+    assert.doesNotMatch(source, /WINDOW_CHROME\.leadingWidth/, file);
+  }
+});
