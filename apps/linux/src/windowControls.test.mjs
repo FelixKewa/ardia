@@ -584,10 +584,11 @@ test("whatever the desktop's layout, the … stays at the right, so the header's
 test("the left group shows wherever it has buttons, hides in full screen, and starts where the Mac's lights start, mirrored in a right sidebar", async () => {
   const { leadingButtonsShown, leadingControlsInset } = await import("./windowControlsRules.ts");
   const { WINDOW_CONTROLS, windowControlsWidth } = await import("../../browser/src/lib/windowChrome.ts");
-  assert.equal(leadingButtonsShown({ count: 1, pageFullScreen: false, windowFullScreen: false }), true);
-  assert.equal(leadingButtonsShown({ count: 0, pageFullScreen: false, windowFullScreen: false }), false);
-  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: true, windowFullScreen: false }), false);
-  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: false, windowFullScreen: true }), false);
+  const home = { center: [25, 27], trailing: false };
+  assert.equal(leadingButtonsShown({ count: 1, pageFullScreen: false, windowFullScreen: false, place: home }), true);
+  assert.equal(leadingButtonsShown({ count: 0, pageFullScreen: false, windowFullScreen: false, place: home }), false);
+  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: true, windowFullScreen: false, place: home }), false);
+  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: false, windowFullScreen: true, place: home }), false);
   assert.equal(leadingControlsInset({ center: [25, 27], trailing: false }, 3), WINDOW_CONTROLS.edge, "at the lights' default place the group starts at the Windows build's edge");
   assert.equal(leadingControlsInset({ center: [25 - 190, 27], trailing: false }, 3), WINDOW_CONTROLS.edge - 190, "it slides off with the sidebar, as the lights do");
   const inRightSidebar = leadingControlsInset({ center: [190 - 25, 27], trailing: true }, 2);
@@ -629,4 +630,28 @@ test("in a narrow right sidebar the header's toggle never lands on the right gro
     }
     assert.equal(sidebarHeaderSplit({ width: 260, captionRoom: chrome.trailingWidth, controls, toggleOnly: toggleRightEdge(toggleX), menuInHeader: false, slot }).tools, true, `${raw}: a wide sidebar keeps its tools`);
   }
+});
+
+test("sliding away with the sidebar the left group is never left as a live sliver where the lights stop being moved", async () => {
+  const { leadingButtonsShown, leadingControlsInset } = await import("./windowControlsRules.ts");
+  const { stillOffWindow } = await import("../../browser/src/state/windows/dockMotion.ts");
+  const { windowControlsWidth } = await import("../../browser/src/lib/windowChrome.ts");
+  const slides = [
+    { trailing: false, steps: [-79, -80, -81, -100, -165] },
+    { trailing: true, steps: [-19, -20, -21, -40, -165] },
+  ];
+  for (const { trailing, steps } of slides) {
+    let sent;
+    for (const x of steps) {
+      const next = trailing ? [x, 24, "right"] : [x, 24];
+      if (!(sent && stillOffWindow(sent, next))) sent = next;
+      const place = { center: [sent[0], sent[1]], trailing };
+      const shown = leadingButtonsShown({ count: 3, pageFullScreen: false, windowFullScreen: false, place });
+      const label = `${trailing ? "right" : "left"} sidebar sliding to ${x}, its place last moved to ${sent[0]}`;
+      assert.equal(shown, x === steps[0], label);
+    }
+  }
+  const lastMoved = { center: [-80, 24], trailing: false };
+  assert.ok(leadingControlsInset(lastMoved, 3) + windowControlsWidth(3) > 0, "three buttons at the place where the lights stop would still reach onto the window");
+  assert.equal(leadingButtonsShown({ count: 3, pageFullScreen: false, windowFullScreen: false, place: lastMoved }), false, "so they aren't drawn there");
 });

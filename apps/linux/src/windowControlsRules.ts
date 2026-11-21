@@ -1,4 +1,4 @@
-import { LIGHTS_CENTER } from "../../browser/src/state/windows/dockMotion";
+import { LIGHTS_CENTER, lightsOffWindow } from "../../browser/src/state/windows/dockMotion";
 import { WINDOW_CONTROLS, windowControlsWidth } from "../../browser/src/lib/windowChrome";
 
 export type LinuxControlsState = { pageFullScreen: boolean; hidden: boolean; utility: boolean; windowMenu: boolean; shown?: boolean };
@@ -8,12 +8,16 @@ export const windowButtonsRendered = ({ placed, pageFullScreen }: { placed: bool
 export const trafficLightsShown = ({ style, pageFullScreen, windowFullScreen }: { style: string; pageFullScreen: boolean; windowFullScreen: boolean }): boolean =>
   style === "trafficLights" && !pageFullScreen && !windowFullScreen;
 
-export const leadingButtonsShown = ({ count, pageFullScreen, windowFullScreen }: { count: number; pageFullScreen: boolean; windowFullScreen: boolean }): boolean =>
-  count > 0 && !pageFullScreen && !windowFullScreen;
+export type LeadingPlace = { center: readonly [number, number]; trailing: boolean };
+
+export const leadingPlaceOffWindow = ({ center, trailing }: LeadingPlace): boolean => lightsOffWindow(trailing ? [center[0], center[1], "right"] : [center[0], center[1]]);
+
+export const leadingButtonsShown = ({ count, pageFullScreen, windowFullScreen, place }: { count: number; pageFullScreen: boolean; windowFullScreen: boolean; place: LeadingPlace }): boolean =>
+  count > 0 && !pageFullScreen && !windowFullScreen && !leadingPlaceOffWindow(place);
 
 const LIGHTS_PAST_START = LIGHTS_CENTER[0] - WINDOW_CONTROLS.edge;
 
-export const leadingControlsInset = ({ center, trailing }: { center: readonly [number, number]; trailing: boolean }, count: number): number =>
+export const leadingControlsInset = ({ center, trailing }: LeadingPlace, count: number): number =>
   trailing ? center[0] + LIGHTS_PAST_START - windowControlsWidth(count) : center[0] - LIGHTS_PAST_START;
 
 export const linuxControlsBehaviour = ({ pageFullScreen, hidden, utility, windowMenu, shown = true }: LinuxControlsState) => {

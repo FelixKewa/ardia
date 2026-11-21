@@ -15,7 +15,7 @@ export function LeadingWindowControls({ windowId, size, centerY, maximizable = t
   const pageFullScreen = !!useFullscreenTab(windowId);
   const windowFullScreen = useWindowFullScreen(windowId);
   const buttons = windowButtonsFor(chrome.leadingButtons, { menu: false, maximizable });
-  if (!leadingButtonsShown({ count: buttons.length, pageFullScreen, windowFullScreen })) return null;
+  if (!leadingButtonsShown({ count: buttons.length, pageFullScreen, windowFullScreen, place })) return null;
   return (
     <TintInk>
       <WindowControls
