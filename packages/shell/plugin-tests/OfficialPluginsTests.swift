@@ -153,7 +153,9 @@ final class OfficialPluginsTests: XCTestCase {
     let escape = ("tool/../escaped", UInt8(ascii: "0"), Data("x".utf8), 0o644, "")
     let stray = ("other/file", UInt8(ascii: "0"), Data("x".utf8), 0o644, "")
     let device = ("tool/dev", UInt8(ascii: "3"), Data(), 0o644, "")
-    for bad in [link, hard, escape, stray, device] {
+    let absolute = ("/tool/abs", UInt8(ascii: "0"), Data("x".utf8), 0o644, "")
+    let twice = ("tool/plugin.json", UInt8(ascii: "0"), Data("{}".utf8), 0o644, "")
+    for bad in [link, hard, escape, stray, device, absolute, twice] {
       let archive = try pluginArchive(manifest(), extra: [bad])
       let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
       guard case .failure(let failure) = publish(archive, entry: entry(sha: sha)) else { return XCTFail("\(bad.0) was accepted") }
@@ -174,6 +176,12 @@ final class OfficialPluginsTests: XCTestCase {
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let registry = ProgramRegistry(claims: ["tool": "tool"], legacy: [], failClosed: false)
     XCTAssertNoThrow(try publish(archive, entry: entry(sha: sha, reserved: ["tool"]), registry: registry).get(), "a claim the pin and registry both give it is fine")
+  }
+
+  func tamper(_ path: String, _ text: String) throws {
+    XCTAssertEqual(chmod((path as NSString).deletingLastPathComponent, 0o755), 0)
+    chmod(path, 0o755)
+    try text.write(toFile: path, atomically: false, encoding: .utf8)
   }
 
   func adHocTrue() throws -> Data {
@@ -225,7 +233,7 @@ final class OfficialPluginsTests: XCTestCase {
     let folder = try XCTUnwrap(PluginFiles.openFolder(made.copy.path))
     defer { folder.close() }
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: folder.id)
-    try "#!/bin/sh\necho swapped\n".write(toFile: "\(made.copy.path)/bin/tool", atomically: false, encoding: .utf8)
+    try tamper("\(made.copy.path)/bin/tool", "#!/bin/sh\necho swapped\n")
     guard case .failure(let refusal) = PluginPrograms.install(
       plugin: "tool", from: folder, approved: approved, version: "1.2.0", programs: [PluginProgram(name: "tool", path: "bin/tool")], places: places, expectedDigest: made.copy.payloadDigest)
     else { return XCTFail("linked a copy that isn't the verified download") }
@@ -331,7 +339,7 @@ final class OfficialPluginsTests: XCTestCase {
     let archive = try pluginArchive(manifest())
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let made = try publish(archive, entry: entry(sha: sha)).get()
-    try "#!/bin/sh\necho swapped\n".write(toFile: "\(made.copy.path)/bin/tool", atomically: false, encoding: .utf8)
+    try tamper("\(made.copy.path)/bin/tool", "#!/bin/sh\necho swapped\n")
     let approved = PluginFiles.approvalHash(text: made.manifest, folderId: made.copy.folderId)
     XCTAssertNil(store.copy("tool", sha: sha), "an edit inside a copy already checked this launch is still noticed")
     XCTAssertNotNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: approved, store: store, pin: OfficialPin(entries: [entry(sha: sha)])), "promotion re-verifies against the download")
@@ -348,7 +356,7 @@ final class OfficialPluginsTests: XCTestCase {
     _ = try install(old, version: "0.4.0", identity: OfficialPin.legacyFolderId)
     XCTAssertFalse(PluginPrograms.currentIsDamaged(plugin: "tool", places: places, version: "0.5.0", approved: String(repeating: "b", count: 64), digest: String(repeating: "c", count: 64)), "a failed update leaves the earlier copy's ardia on PATH")
     let version = try XCTUnwrap(PluginPrograms.linkTarget("\(places.store)/tool/current"))
-    try "#!/bin/sh\necho swapped\n".write(toFile: "\(places.store)/tool/\(version)/bin/tool", atomically: false, encoding: .utf8)
+    try tamper("\(places.store)/tool/\(version)/bin/tool", "#!/bin/sh\necho swapped\n")
     guard case .text(let text) = PluginFiles.readManifest(in: OpenedFolder(fd: old.fd, path: old.path, id: OfficialPin.legacyFolderId)) else { return XCTFail("no manifest") }
     XCTAssertTrue(PluginPrograms.currentIsDamaged(plugin: "tool", places: places, version: "0.4.0", approved: PluginFiles.approvalHash(text: text, folderId: OfficialPin.legacyFolderId), digest: String(repeating: "c", count: 64)))
   }
@@ -377,6 +385,7 @@ final class OfficialPluginsTests: XCTestCase {
     let archive = try pluginArchive(manifest())
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let made = try publish(archive, entry: entry(sha: sha)).get()
+    XCTAssertEqual(chmod("\(made.copy.path)/bin", 0o755), 0)
     try FileManager.default.createDirectory(atPath: "\(made.copy.path)/bin/__pycache__", withIntermediateDirectories: true)
     try "x".write(toFile: "\(made.copy.path)/bin/__pycache__/planted.pyc", atomically: true, encoding: .utf8)
     XCTAssertNil(store.copy("tool", sha: sha), "a planted cache file isn't skipped by an official copy's digest")
@@ -391,7 +400,7 @@ final class OfficialPluginsTests: XCTestCase {
     let oldReceipt = PluginFiles.approvalHash(text: made.manifest, folderId: OfficialPin.legacyFolderId)
     XCTAssertNotNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: oldReceipt, store: store, pin: newer), "the old receipt vouches only for the pinned bytes")
     XCTAssertNil(OfficialInstaller.promote("tool", folderId: made.copy.folderId, approved: PluginFiles.approvalHash(text: made.manifest, folderId: made.copy.folderId), store: store, pin: newer), "its own exact approval still holds")
-    try "#!/bin/sh\necho damaged\n".write(toFile: "\(made.copy.path)/bin/tool", atomically: false, encoding: .utf8)
+    try tamper("\(made.copy.path)/bin/tool", "#!/bin/sh\necho damaged\n")
     XCTAssertNil(store.active("tool"))
     let repaired = try publish(archive, entry: entry(sha: sha)).get()
     XCTAssertEqual(store.active("tool"), repaired.copy, "a clean download of the same pinned file replaces a damaged active copy")
@@ -402,9 +411,39 @@ final class OfficialPluginsTests: XCTestCase {
     let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
     let made = try publish(archive, entry: entry(sha: sha)).get()
     XCTAssertNotNil(store.copy("tool", sha: sha))
-    try "#!/bin/sh\necho swapped\n".write(toFile: "\(made.copy.path)/bin/tool", atomically: false, encoding: .utf8)
+    try tamper("\(made.copy.path)/bin/tool", "#!/bin/sh\necho swapped\n")
     XCTAssertNil(store.copy("tool", sha: sha, fresh: true))
     XCTAssertNil(store.copy("tool", sha: sha), "a mismatch found by a fresh check isn't hidden by the recent good one")
+  }
+
+  func testAPublishedCopyIsReadOnlyInAPrivateFolder() throws {
+    let archive = try pluginArchive(manifest())
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    let made = try publish(archive, entry: entry(sha: sha)).get()
+    var info = stat()
+    XCTAssertEqual(lstat(made.copy.path, &info), 0)
+    XCTAssertEqual(info.st_mode & 0o777, 0o555)
+    XCTAssertEqual(lstat("\(made.copy.path)/bin/tool", &info), 0)
+    XCTAssertEqual(info.st_mode & 0o777, 0o555)
+    XCTAssertEqual(lstat("\(made.copy.path)/plugin.json", &info), 0)
+    XCTAssertEqual(info.st_mode & 0o777, 0o444)
+    XCTAssertEqual(lstat(store.archivePath("tool", sha), &info), 0)
+    XCTAssertEqual(info.st_mode & 0o777, 0o444)
+    let scratch = try XCTUnwrap(store.makeScratch("tool", prefix: ".stage-"))
+    XCTAssertEqual(lstat(scratch, &info), 0)
+    XCTAssertEqual(info.st_mode & 0o777, 0o700, "unpacking happens in a folder only Ardia's user can enter")
+    XCTAssertTrue(store.remove("tool"), "removal unseals what it deletes")
+  }
+
+  func testAQuarantineFlagStaysOnADownloadThatDoesntMatch() throws {
+    let archive = try pluginArchive(manifest())
+    XCTAssertEqual(setxattr(archive, OfficialStore.quarantineName, "0081;0;Test;", 12, 0, XATTR_NOFOLLOW), 0)
+    let scratch = try XCTUnwrap(store.makeScratch("tool", prefix: ".fetch-"))
+    let result = OfficialInstaller.verifyAndPublish(entry(sha: String(repeating: "1", count: 64)), archive: archive, scratch: scratch, store: store, registry: .empty)
+    guard case .failure(let failure) = result else { return XCTFail("a mismatch was published") }
+    XCTAssertEqual(failure.code, "verify")
+    XCTAssertTrue(OfficialStore.hasQuarantine(archive), "nothing is cleared before the SHA-256 matches")
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch), [], "nothing was unpacked")
   }
 
   func testAQuarantinedArchiveIsClearedToo() throws {

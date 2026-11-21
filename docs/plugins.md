@@ -128,8 +128,11 @@ is the only source of which version may be fetched.
     required, so ad hoc and linker-signed programs run as published, and signed ones run too. The files are written by
     Ardia itself and carry no quarantine flag (one found on the download is cleared only after the SHA-256 matches),
     so Gatekeeper never asks to notarize them.
-  - publishes the result with a same-volume rename under a per-plugin lock as `OfficialPlugins/<name>/<sha256>/`, and
-    keeps the download beside it as `<sha256>.tar.gz`.
+  - unpacks only after the SHA-256 matched, into a private folder (`.stage-*`, mode 0700) inside Ardia's data folder,
+    then publishes it with a same-volume rename under a per-plugin lock as `OfficialPlugins/<name>/<sha256>/`, sealed
+    read-only (folders 0555, files 0555 or 0444), and keeps the download beside it as `<sha256>.tar.gz` (0444). Program
+    copies in `Programs/<name>/<version>/` are sealed the same way once they verify, except their top folder, where
+    Ardia keeps its leases and after-update marks; removing either unseals it first.
 - **What makes a copy official.** A copy counts only while its download still has the pinned SHA-256 and the payload
   digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that download's tar
   (`OfficialArchive.payloadDigest`, `OfficialVerification`).

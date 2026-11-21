@@ -86,7 +86,9 @@ struct OfficialStore {
         PluginPrograms.discard(staged)
         return .failure(FolderRefusal(reason: "its copy couldn't be put in place (\(reason))"))
       }
-      guard let made = copy(name, sha: sha) else {
+      PluginPrograms.seal(copyPath(name, sha), keepingRootWritable: false)
+      chmod(archivePath(name, sha), 0o444)
+      guard let made = copy(name, sha: sha, fresh: true) else {
         PluginPrograms.discard(copyPath(name, sha))
         unlink(archivePath(name, sha))
         return .failure(FolderRefusal(reason: "its copy doesn't match its download"))

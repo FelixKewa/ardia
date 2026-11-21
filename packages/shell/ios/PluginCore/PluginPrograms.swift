@@ -362,6 +362,7 @@ enum PluginPrograms {
       discard(staged)
       return .failure(FolderRefusal(reason: problem))
     }
+    seal(staged, keepingRootWritable: true)
     guard mkdir((staged as NSString).appendingPathComponent(leasesName), 0o700) == 0 || errno == EEXIST else {
       discard(staged)
       return .failure(FolderRefusal(reason: "its programs' lease folder couldn't be made"))
@@ -487,7 +488,7 @@ enum PluginPrograms {
       case S_IFDIR: listing.append(Data("d \(relative)\n".utf8))
       case S_IFREG:
         guard let digest = OfficialArchive.sha256(file: path) else { return nil }
-        listing.append(Data("f \(String(info.st_mode & 0o755, radix: 8)) \(digest) \(relative)\n".utf8))
+        listing.append(Data("f \(info.st_mode & 0o111 != 0 ? "755" : "644") \(digest) \(relative)\n".utf8))
       default: return nil
       }
     }
@@ -544,9 +545,38 @@ enum PluginPrograms {
     return Int(Date().timeIntervalSince1970) - info.st_mtimespec.tv_sec > seconds
   }
 
+  static func seal(_ root: String, keepingRootWritable: Bool) {
+    guard let walker = FileManager.default.enumerator(atPath: root) else { return }
+    var folders: [String] = []
+    while let relative = walker.nextObject() as? String {
+      let path = (root as NSString).appendingPathComponent(relative)
+      var info = stat()
+      guard lstat(path, &info) == 0 else { continue }
+      switch info.st_mode & S_IFMT {
+      case S_IFREG: chmod(path, info.st_mode & 0o111 != 0 ? 0o555 : 0o444)
+      case S_IFDIR: folders.append(path)
+      default: break
+      }
+    }
+    for folder in folders.reversed() { chmod(folder, 0o555) }
+    if !keepingRootWritable { chmod(root, 0o555) }
+  }
+
+  static func unseal(_ root: String) {
+    var info = stat()
+    guard lstat(root, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR, info.st_uid == geteuid() else { return }
+    chmod(root, 0o700)
+    guard let walker = FileManager.default.enumerator(atPath: root) else { return }
+    while let relative = walker.nextObject() as? String {
+      let path = (root as NSString).appendingPathComponent(relative)
+      if lstat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR { chmod(path, 0o700) }
+    }
+  }
+
   static func discard(_ path: String) {
     var info = stat()
     guard lstat(path, &info) == 0 else { return }
+    unseal(path)
     let parent = (path as NSString).deletingLastPathComponent
     let trash = (parent as NSString).appendingPathComponent(".trash-\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
     let doomed = rename(path, trash) == 0 ? trash : path
