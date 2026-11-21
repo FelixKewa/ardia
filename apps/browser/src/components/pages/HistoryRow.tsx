@@ -5,10 +5,10 @@ import { modifiersOf } from "../../lib/keys";
 import type { HistoryEntry } from "../../state/browser/types";
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import { Favicon } from "../favicon/Favicon";
-import { Button, Checkbox, ContextMenuArea, Divider, HoverSlot, MouseArea, radius, space, Text, useTheme } from "../ui";
+import { Checkbox, ContextMenuArea, Divider, HoverSlot, MouseArea, radius, space, Text, useTheme } from "../ui";
 import { historyScroll } from "./historyLayout";
 import { openHistoryRowMenu } from "../../state/history/historyMenus";
-import { hostLabel, timeLabel } from "./PageLayout";
+import { hostLabel, RowMenuSlot, timeLabel } from "./PageLayout";
 import { historyRow, pagesColors, pageType } from "./tokens";
 
 const DAY_HEADER = { position: "absolute", left: 0, right: 0, height: historyRow.header, justifyContent: "flex-end", paddingBottom: space.m, paddingHorizontal: historyRow.headerInset } as const;
@@ -147,7 +147,7 @@ export const HistoryRow = memo(function HistoryRow({
               </Text>
             </Pressable>
           </MouseArea>
-          <HoverSlot hovered={showControls} width={historyRow.menuBox} hover={<Button variant="icon" icon="ellipsis" size="l" onPress={() => void menu()} tooltip="More actions" />} />
+          <RowMenuSlot shown={showControls} onPress={() => void menu()} />
         </View>
       </ContextMenuArea>
       {!last && <Divider thick style={SEPARATOR} />}

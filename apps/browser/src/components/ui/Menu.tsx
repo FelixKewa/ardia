@@ -18,6 +18,7 @@ export function MenuRow({
   iconColor,
   title,
   detail,
+  detailColor,
   accessory,
   onPress,
   disabled,
@@ -32,6 +33,7 @@ export function MenuRow({
   iconColor?: string;
   title: string;
   detail?: string;
+  detailColor?: string;
   accessory?: ReactNode;
   onPress?: (event: GestureResponderEvent) => void;
   disabled?: boolean;
@@ -75,7 +77,7 @@ export function MenuRow({
             {title}
           </Text>
           {detail ? (
-            <Text numberOfLines={2} style={{ fontSize: PANEL.subtitleSize, color: theme.textSecondary, ...typeFace() }}>
+            <Text numberOfLines={2} style={{ fontSize: PANEL.subtitleSize, color: detailColor ?? theme.textSecondary, ...typeFace() }}>
               {detail}
             </Text>
           ) : null}

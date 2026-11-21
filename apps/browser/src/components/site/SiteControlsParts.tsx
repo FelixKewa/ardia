@@ -45,7 +45,7 @@ export function Tile({
   const site = useSiteTokens();
   const glass = useGlass();
   const lit = pressed || open;
-  const fill = shape === "row" || quiet ? (lit || hovered ? menuRowFill(theme, lit) : undefined) : lit ? site.tilePressed : hovered ? site.tileHover : site.tile;
+  const fill = shape === "row" || quiet ? (lit || hovered ? menuRowFill(theme, lit) : undefined) : lit ? theme.promptFillPressed : hovered ? theme.promptFillHover : theme.promptFill;
   const corner = shape === "tile" ? radius.tile : shape === "row" ? PANEL.rowRadius : capsule(height);
   return (
     <Animated.View
@@ -177,14 +177,13 @@ export function SettingRow({
   onPress?: () => void;
 }) {
   const theme = useTheme();
-  const site = useSiteTokens();
   const { hovered, hoverProps } = useHover();
   const iconPress = usePressScaleMotion(!!onPress, buttonMotion.iconPressScale);
   const iconScaleStyle = iconPress.scale ? { transform: [{ scale: iconPress.scale }] } : undefined;
   const content = (pressed: boolean) => (
     <Tile shape="row" height={SITE_PANEL.settingHeight} hovered={!!onPress && hovered} pressed={!!onPress && pressed} style={SETTING_ROW}>
       <Animated.View pointerEvents="none" style={iconScaleStyle}>
-        <Dot size={SITE_PANEL.settingBadge} color={on ? theme.accent : site.tileHover}>
+        <Dot size={SITE_PANEL.settingBadge} color={on ? theme.accent : theme.promptFill}>
           <Symbol name={icon} size={12} weight="medium" color={on ? theme.onAccent : theme.icon} style={{ width: 18, height: 18 }} />
         </Dot>
       </Animated.View>

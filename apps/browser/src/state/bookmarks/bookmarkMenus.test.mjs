@@ -13,11 +13,11 @@ const OPEN_ONE = ["Open in New Tab [plus.app]", "Open in New Window [macwindow.b
 const COPY_ONE = ["Copy Link [link]", "Copy Link as Markdown [link] (alt)"];
 const OPEN_ALL = ["Open All in New Tabs [plus.app]", "Open All in New Window [macwindow.badge.plus]", "Open All in Incognito Window [eyeglasses]"];
 
-test("a bookmarks bar link: opens, Copy Link, Edit…, and Delete last, with no bar settings mixed in", () => {
-  assert.deepEqual(render(barMenuItems({ kind: "url" }, { barShown: true })), [...OPEN_ONE, "---", ...COPY_ONE, "---", "Edit… [pencil]", "---", "Delete [trash]"]);
+test("a bookmarks bar link: opens, Copy Link, Edit…, and Remove Bookmark last, with no bar settings mixed in", () => {
+  assert.deepEqual(render(barMenuItems({ kind: "url" }, { barShown: true })), [...OPEN_ONE, "---", ...COPY_ONE, "---", "Edit… [pencil]", "---", "Remove Bookmark [trash]"]);
 });
 
-test("a bookmarks bar folder: Open All in each place, group, Rename… and New Folder…, Delete Folder last", () => {
+test("a bookmarks bar folder: Open All in each place, group, Rename… and New Folder…, Remove Folder last", () => {
   assert.deepEqual(render(barMenuItems({ kind: "folder", links: 2, makesGroup: true, restoresArc: false }, { barShown: true })), [
     ...OPEN_ALL,
     "---",
@@ -26,7 +26,7 @@ test("a bookmarks bar folder: Open All in each place, group, Rename… and New F
     "Rename… [pencil]",
     "New Folder… [folder.badge.plus]",
     "---",
-    "Delete Folder [trash]",
+    "Remove Folder [trash]",
   ]);
   const empty = render(barMenuItems({ kind: "folder", links: 0, makesGroup: false, restoresArc: true }, { barShown: true }));
   assert.deepEqual(empty.slice(0, 6), [...OPEN_ALL.map((t) => `${t} (off)`), "---", "Add to Sidebar as Group [sidebar.left] (off)", "Restore Arc Folders as Groups"]);
@@ -44,7 +44,7 @@ test("the bookmarks bar background: Add Page…, New Folder…, then Manage Book
 });
 
 test("a Bookmarks page row matches the bar, adds Show in Folder for a search result, and a selection acts on all of it", () => {
-  assert.deepEqual(render(bookmarkRowMenuItems({ kind: "url", showPath: true })), [...OPEN_ONE, "Show in Folder [folder]", "---", ...COPY_ONE, "---", "Edit… [pencil]", "---", "Delete [trash]"]);
+  assert.deepEqual(render(bookmarkRowMenuItems({ kind: "url", showPath: true })), [...OPEN_ONE, "Show in Folder [folder]", "---", ...COPY_ONE, "---", "Edit… [pencil]", "---", "Remove Bookmark [trash]"]);
   assert.deepEqual(render(bookmarkRowMenuItems({ kind: "folder", links: 3, makesGroup: false, restoresArc: false, showPath: false })), [
     ...OPEN_ALL,
     "---",
@@ -53,7 +53,7 @@ test("a Bookmarks page row matches the bar, adds Show in Folder for a search res
     "Rename… [pencil]",
     "New Folder… [folder.badge.plus]",
     "---",
-    "Delete Folder [trash]",
+    "Remove Folder [trash]",
   ]);
   assert.deepEqual(render(bookmarkRowMenuItems({ kind: "several", links: 3, items: 2, noun: "Items" })), [
     "Open 3 in New Tabs [plus.app]",
@@ -63,7 +63,7 @@ test("a Bookmarks page row matches the bar, adds Show in Folder for a search res
     "Copy 3 Links [link]",
     "Copy 3 Links as Markdown [link] (alt)",
     "---",
-    "Delete 2 Items [trash]",
+    "Remove 2 Items [trash]",
   ]);
 });
 

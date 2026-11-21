@@ -13,7 +13,6 @@ const dark = {
   badge: "#FFFFFF14",
   badgeGlyph: "#FFFFFFCC",
   postcardTooltip: "rgba(255,255,255,0.18)",
-  releaseNotesScrim: "rgba(10,10,10,0.35)",
 };
 
 export type NtpColors = typeof dark;
@@ -28,7 +27,6 @@ const light: NtpColors = {
   badge: "#0000000A",
   badgeGlyph: "#000000B3",
   postcardTooltip: "rgba(0,0,0,0.8)",
-  releaseNotesScrim: "rgba(255,255,255,0.35)",
 };
 
 export function useNtpColors(): NtpColors {

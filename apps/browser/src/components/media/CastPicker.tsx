@@ -1,12 +1,11 @@
 import { CastMode, preferredCastMode, startCasting, stopCasting, type CastSink, closeCastPicker, useCast } from "../../state/media/cast";
 import { openExternalURL, showMenu } from "../../state/app/system";
-import { Symbol, Button, IconTile, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, useHover } from "../ui";
-import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { ActivitySpinner, Symbol, Button, MenuRow, PANEL, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_WIDTH, PopoverValue, Text, useHover } from "../ui";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { ink, space } from "../ui/tokens";
-import { useMediaTokens } from "./tokens";
+import { space } from "../ui/tokens";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const FLEX = { flex: 1 } as const;
 const UNDERLINE = { textDecorationLine: "underline" } as const;
@@ -40,21 +39,21 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
 
         {dialog.permissionRejected ? (
           <Message
-            text="Ardia needs Local Network access to find Cast devices."
-            link="Open Local Network Settings"
-            onLink={() => void openExternalURL("x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")}
+            text={PLATFORM_TERMS.localNetworkSettingsUrl ? "Ardia needs Local Network access to find Cast devices." : "Ardia can't reach the local network to find Cast devices."}
+            link={PLATFORM_TERMS.localNetworkSettingsUrl ? "Open Local Network Settings" : null}
+            onLink={() => void openExternalURL(PLATFORM_TERMS.localNetworkSettingsUrl)}
           />
         ) : available.length ? (
-          <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset, gap: space.xxs }}>
+          <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ gap: space.xxs }}>
             {available.map((sink) => (
               <SinkRow key={sink.id} sink={sink} onCast={() => cast(sink)} onStop={() => void stopCasting(dialog.id, sink.routeId)} />
             ))}
           </ScrollView>
         ) : (
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: PANEL.inset, paddingTop: space.xs, paddingBottom: space.xs }}>
-            <ActivityIndicator size="small" style={{ transform: [{ scale: 0.6 }], width: 14, height: 14 }} />
+            <ActivitySpinner style={SPINNER} />
             <Text size="small" tone="textSecondary" style={FLEX}>
-              Looking for devices… Cast devices need to be on the same Wi‑Fi network as this Mac.
+              {`Looking for devices… Cast devices need to be on the same Wi‑Fi network as this ${PLATFORM_TERMS.computer}.`}
             </Text>
           </View>
         )}
@@ -67,36 +66,22 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
   );
 }
 
+const SPINNER = { width: 14, height: 14 } as const;
+
 function SinkRow({ sink, onCast, onStop }: { sink: CastSink; onCast(): void; onStop(): void }) {
   const theme = useTheme();
-  const tokens = useMediaTokens();
-  const { hovered, hoverProps } = useHover();
   const active = sink.state === "connected" && !!sink.routeId;
   const busy = sink.state === "connecting" || sink.state === "disconnecting";
-  const iconPress = usePressScaleMotion(!active && !busy, buttonMotion.controlPressScale);
-  const iconMotionStyle = iconPress.scale ? { transform: [{ scale: iconPress.scale }] } : undefined;
   return (
-    <View {...hoverProps}>
-      <Pressable onPress={active || busy ? undefined : onCast} onPressIn={iconPress.onPressIn} onPressOut={iconPress.onPressOut}>
-        <View style={{ minHeight: 42, borderRadius: PANEL.rowRadius, flexDirection: "row", alignItems: "center", gap: PANEL.iconGap, paddingHorizontal: PANEL.rowPadding, paddingVertical: space.xs, backgroundColor: hovered && !active ? theme.rowHover : undefined }}>
-          <Animated.View pointerEvents="none" style={iconMotionStyle}>
-            <IconTile symbol={SINK_ICON[sink.icon] ?? "tv"} size="m" fill={active ? theme.accent : tokens.iconTile} glyph={active ? ink.white : theme.icon} />
-          </Animated.View>
-          <View style={{ flex: 1 }}>
-            <Text lines={1}>
-              {sink.name}
-            </Text>
-            {sink.issue || sink.status ? (
-              <Text lines={1} size="caption" tone={sink.issue ? "destructive" : "textSecondary"}>
-                {sink.issue || sink.status}
-              </Text>
-            ) : null}
-          </View>
-          {busy ? <ActivityIndicator size="small" style={{ transform: [{ scale: 0.6 }], width: 16, height: 16 }} /> : null}
-          {active ? <Button variant="pill" title="Stop" onPress={onStop} /> : null}
-        </View>
-      </Pressable>
-    </View>
+    <MenuRow
+      icon={SINK_ICON[sink.icon] ?? "tv"}
+      iconColor={active ? theme.accent : undefined}
+      title={sink.name}
+      detail={sink.issue || sink.status || undefined}
+      detailColor={sink.issue ? theme.destructive : undefined}
+      onPress={active || busy ? undefined : onCast}
+      accessory={busy ? <ActivitySpinner style={SPINNER} /> : active ? <Button variant="pill" title="Stop" onPress={onStop} /> : null}
+    />
   );
 }
 
@@ -111,16 +96,18 @@ function SourceButton({ screen, onChange }: { screen: boolean; onChange: (screen
   return <PopoverValue title="Sources" chevron="chevron.down" tooltip="Source" onPress={() => void pick()} />;
 }
 
-function Message({ text, link, onLink }: { text: string; link: string; onLink: () => void }) {
+function Message({ text, link, onLink }: { text: string; link: string | null; onLink: () => void }) {
   const { hovered, hoverProps } = useHover();
   return (
     <View style={{ paddingHorizontal: PANEL.inset, paddingTop: space.xs, gap: space.xs }}>
       <Text size="small" tone="textSecondary">{text}</Text>
-      <View {...hoverProps}>
-        <Pressable onPress={onLink}>
-          <Text size="small" weight="medium" tone="accent" style={hovered ? UNDERLINE : NO_UNDERLINE}>{link}</Text>
-        </Pressable>
-      </View>
+      {link ? (
+        <View {...hoverProps}>
+          <Pressable onPress={onLink}>
+            <Text size="small" weight="medium" tone="accent" style={hovered ? UNDERLINE : NO_UNDERLINE}>{link}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }

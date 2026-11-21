@@ -78,7 +78,7 @@ function CreateProfileSheet({ windowId, preset, onDone }: { windowId: string | n
                     {i ? <Divider thick /> : null}
                     <Box row gap="ml" padX="ml" style={SHARE_ROW}>
                       <Radio on={g === selectedGroup} look="compact" />
-                      <ColorStack colors={g.profileIds.map((id) => PROFILE_COLORS[profiles[id]!.color]?.swatch ?? profileColors.unknownSwatch)} />
+                      <ColorStack colors={g.profileIds.map((id) => PROFILE_COLORS[profiles[id]!.color]?.swatch ?? PROFILE_COLORS.neutral.swatch)} />
                       <Text numberOfLines={1} style={FLEX}>
                         {profileNames(g.profileIds.map((id) => profiles[id]!.name))}
                       </Text>

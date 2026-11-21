@@ -8,7 +8,6 @@ const DARK = {
   draft: "#8B949E",
   conflict: "#DB6D28",
   ciTrack: "rgba(255,255,255,0.1)",
-  chip: "rgba(255,255,255,0.1)",
   badgeRing: "rgba(0,0,0,0.35)",
   avatarFill: "#4A4A4F",
 };
@@ -19,7 +18,6 @@ const LIGHT: typeof DARK = {
   draft: "#6E7781",
   conflict: "#BC4C00",
   ciTrack: "rgba(0,0,0,0.08)",
-  chip: "rgba(0,0,0,0.06)",
   badgeRing: "rgba(255,255,255,0.8)",
   avatarFill: "#D5D5DA",
 };

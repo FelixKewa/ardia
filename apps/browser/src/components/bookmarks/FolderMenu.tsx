@@ -18,7 +18,7 @@ import { ContextMenuArea, menuRowFill, MenuSeparator, MouseArea, opacity, PANEL,
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
-import { bookmarksBar, folderMenu, type BarSize } from "./tokens";
+import { bookmarkDrag, bookmarksBar, folderMenu, type BarSize } from "./tokens";
 
 const PAD = PANEL.rowInset;
 const FAVICON_LEFT = PANEL.rowInset + PANEL.rowPadding;
@@ -197,9 +197,9 @@ function MenuLine({ y }: { y: number | null }) {
         position: "absolute",
         left: FAVICON_LEFT,
         right: PANEL.inset,
-        top: -bookmarksBar.dropLine / 2,
-        height: bookmarksBar.dropLine,
-        borderRadius: bookmarksBar.dropLineRadius,
+        top: -bookmarkDrag.line / 2,
+        height: bookmarkDrag.line,
+        borderRadius: bookmarkDrag.lineRadius,
         backgroundColor: theme.accent,
         opacity: shown,
         transform: [{ translateY: top }],

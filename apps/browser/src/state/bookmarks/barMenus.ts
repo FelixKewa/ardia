@@ -27,7 +27,7 @@ export function barMenuItems(
   target: BarMenuTarget,
   { barShown, keys = menuShortcut }: { barShown: boolean; keys?: (command: string) => MenuKey },
 ): MenuItem[] {
-  if (target?.kind === "url") return menuSections(openLinkItems(), copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Delete", symbol: "trash" }]);
+  if (target?.kind === "url") return menuSections(openLinkItems(), copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Remove Bookmark", symbol: "trash" }]);
   if (target?.kind === "folder")
     return menuSections(
       openAllItems(target.links),
@@ -39,7 +39,7 @@ export function barMenuItems(
         { id: "rename", title: "Rename…", symbol: "pencil" },
         { id: "addFolder", title: "New Folder…", symbol: "folder.badge.plus" },
       ],
-      [{ id: "delete", title: "Delete Folder", symbol: "trash" }],
+      [{ id: "delete", title: "Remove Folder", symbol: "trash" }],
     );
   return menuSections(
     [

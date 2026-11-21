@@ -68,6 +68,13 @@ export function usePopoverPresence(open: boolean) {
   return { shown: open || shown, closing: !open, onClosed: () => setShown(false) };
 }
 
+export function usePopoverPresenceOf<T>(value: T | null) {
+  const held = useRef(value);
+  if (value !== null) held.current = value;
+  const { shown, closing, onClosed } = usePopoverPresence(value !== null);
+  return { shown: shown ? held.current : null, closing, onClosed };
+}
+
 export type PanelPresence = { closing: boolean; onClosed: () => void };
 
 export function usePanelsPresence<K extends string>(open: string | null, kinds: readonly K[]): (kind: K) => PanelPresence | null {

@@ -9,14 +9,13 @@ export const folderPicker = { height: 180, row: 24 } as const;
 
 export const bookmarkDialog = { belowField: space.xs, belowToolbar: space.xxs, rightInset: space.ml } as const;
 
+export const bookmarkDrag = { start: 4, line: 2, lineRadius: capsule(2) } as const;
+
 export const bookmarksBar = {
   overflowWidth: 28,
   dividerHeight: 14,
-  dropLine: 2,
-  dropLineRadius: capsule(2),
   dropLineInset: space.xs,
   dropRing: 1.5,
-  dragStart: 4,
   springOpenMs: 550,
   ghostOpacity: 0.92,
   hoverIn: duration.fast,

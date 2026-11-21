@@ -6,13 +6,13 @@ import { siteLine, useSiteTokens } from "./tokens";
 import { perLook } from "../ui/tokens";
 
 export function PromptIcon({ icon }: { icon: string }) {
-  return <IconTile symbol={icon} fill={useSiteTokens().iconTile} />;
+  return <IconTile symbol={icon} />;
 }
 
-export function Well({ list = false, gap, fill, children }: { list?: boolean; gap?: Space; fill?: string; children: ReactNode }) {
+export function Well({ list = false, gap, children }: { list?: boolean; gap?: Space; children: ReactNode }) {
   const { well } = useSiteTokens();
   return (
-    <Box radius="tile" padX={list ? undefined : "ml"} padY={list ? "xs" : "m"} gap={gap} style={{ backgroundColor: fill ?? well }}>
+    <Box radius="tile" padX={list ? undefined : "ml"} padY={list ? "xs" : "m"} gap={gap} style={{ backgroundColor: well }}>
       {children}
     </Box>
   );

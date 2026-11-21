@@ -5,7 +5,7 @@ import { currentTab } from "../../state/browser/current";
 import { ink, space } from "../ui/tokens";
 import { pageOf } from "../../state/tabs/pageState";
 import { dismissShareBar, shareInstead, stopSharing, useShareFor } from "../../state/media/screenShare";
-import { mediaMotion, useMediaTokens } from "./tokens";
+import { mediaMotion } from "./tokens";
 import { hostOrOrigin } from "../../lib/url";
 import { curve } from "../ui/motion";
 
@@ -14,7 +14,6 @@ const FLEX = { flex: 1 } as const;
 
 export function ShareBar({ tabId }: { tabId: string }) {
   const theme = useTheme();
-  const tokens = useMediaTokens();
   const found = useShareFor(tabId);
   const height = useRef(new Animated.Value(0)).current;
   const visible = !!found;
@@ -39,7 +38,7 @@ export function ShareBar({ tabId }: { tabId: string }) {
           paddingLeft: space.l,
           paddingRight: space.m,
           borderBottomWidth: 0.5,
-          borderBottomColor: tokens.shareBarBorder,
+          borderBottomColor: theme.divider,
         }}
       >
         <Dot size={20} color={theme.destructive}>

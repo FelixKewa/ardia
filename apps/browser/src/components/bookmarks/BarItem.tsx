@@ -11,7 +11,7 @@ import { useSidebarWidth } from "../../state/sidebar/hooks";
 import type { SidebarEdge } from "../../state/bookmarks/sidebarEdge";
 import { ContextMenuArea, MouseArea, Symbol, Text, useHover, useTheme } from "../ui";
 import { openBarMenu, openImportButtonMenu, type ClickMods } from "../../state/bookmarks/barMenus";
-import { bookmarksBar, type BarSize } from "./tokens";
+import { bookmarkDrag, bookmarksBar, type BarSize } from "./tokens";
 import { chipFrame } from "./chipFrame";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -27,7 +27,7 @@ export function useBookmarkDragResponder(
     let pressing = false;
     let last: [number, number] = [0, 0];
     return PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > bookmarksBar.dragStart,
+      onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > bookmarkDrag.start,
       onPanResponderGrant: (_, g) => {
         pressing = true;
         last = [g.moveX || g.x0, g.moveY || g.y0];

@@ -12,6 +12,7 @@ import {
   layout,
   MenuSeparator,
   menuRowFill,
+  opacity,
   PANEL,
   ProgressTrack,
   Text,
@@ -220,28 +221,29 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                 }}
               >
                 <DownloadsRowGlass fill={rowFill(theme, hovered, pressed && done)} pressed={pressed && done} />
-                <View style={{ opacity: exists ? 1 : L.missingOpacity }}>
+                <View style={{ opacity: exists ? 1 : opacity.disabled }}>
                   <FileIcon path={d.path || d.filename} size={L.fileIcon} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text
                     lines={1}
+                    weight="medium"
                     tone={exists ? "textPrimary" : "textSecondary"}
-                    style={{ lineHeight: PANEL.titleLine, textDecorationLine: exists ? "none" : "line-through" }}
+                    style={{ lineHeight: L.nameLine, textDecorationLine: exists ? "none" : "line-through" }}
                   >
                     {d.filename || "Preparing…"}
                   </Text>
                   {d.state === "downloading" && !blocked ? (
-                    <ProgressTrack value={Math.max(progress, L.progressMin)} height={L.progressHeight} tone={d.paused ? "textTertiary" : "accent"} style={PROGRESS_GAP} />
+                    <ProgressTrack value={Math.max(progress, L.progressMin)} tone={d.paused ? "textTertiary" : "accent"} style={PROGRESS_GAP} />
                   ) : null}
-                  <Text lines={1} size="caption" tone={blocked ? "destructive" : "textSecondary"} style={{ lineHeight: PANEL.subtitleLine }}>
+                  <Text lines={1} size="caption" tone={blocked ? "destructive" : "textSecondary"} style={{ lineHeight: L.statusLine }}>
                     {blocked ? dangerWarning(d, true) : downloadStatus(d, exists)}
                   </Text>
                 </View>
                 {blocked ? (
                   <View style={{ flexDirection: "row", marginRight: -L.textButtonPad }}>
                     <Button variant="text" look="panel" title="Keep" onPress={() => void keepDownload(d.id)} />
-                    <Button variant="text" look="panel" title="Discard" onPress={() => void cancelDownload(d.id)} />
+                    <Button variant="text" look="panel" title="Discard" tone="destructive" onPress={() => void cancelDownload(d.id)} />
                   </View>
                 ) : d.state === "downloading" ? (
                   <View style={{ flexDirection: "row", marginRight: -L.rowButtonBearing }}>

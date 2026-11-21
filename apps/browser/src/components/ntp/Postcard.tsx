@@ -1,4 +1,4 @@
-import { WindowBackdrop, Box, Button, curve, duration, ink, Panel, proseLineHeight, radius as radii, reduceMotionKnown, space, Text, useHover, VisualEffect } from "../ui";
+import { WindowBackdrop, Box, Button, curve, duration, ink, Panel, proseLineHeight, radius as radii, reduceMotionKnown, space, Text, useHover, useTheme, VisualEffect } from "../ui";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { profileAccent } from "../ui/theme";
@@ -145,7 +145,7 @@ function Artwork({ notes, radius, titleSize, hidden }: { notes: ReleaseNotes; ra
 }
 
 export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes; size: { width: number; height: number }; onClose: () => void }) {
-  const colors = useNtpColors();
+  const theme = useTheme();
   const t = useRef(new Animated.Value(0)).current;
   const [closing, setClosing] = useState(false);
   useEffect(() => {
@@ -167,7 +167,7 @@ export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes
     <Animated.View style={StyleSheet.absoluteFill} pointerEvents={closing ? "none" : "auto"}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }) }]}>
         <VisualEffect material="hudWindow" blendingMode="withinWindow" style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.releaseNotesScrim }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close release notes" />
       </Animated.View>
       <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]} pointerEvents="box-none">

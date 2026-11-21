@@ -2,7 +2,7 @@ import { appUrlOrigin, urlForDisplay } from "@ardia/core";
 import { displayHostOf } from "../../lib/url";
 import type { ReactNode, Ref } from "react";
 import { StyleSheet, View, type TextInput } from "react-native";
-import { Box, display, SearchField, space, Text, useTheme, WindowDragRegion } from "../ui";
+import { Box, Button, display, HoverSlot, iconButton, SearchField, space, Text, useTheme, WindowDragRegion } from "../ui";
 import { pageHeader, pageToolbar } from "./tokens";
 import { perLook } from "../ui/tokens";
 
@@ -57,7 +57,11 @@ const HEADER_ACTIONS = { width: pageHeader.sideWidth, justifyContent: "flex-end"
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export const dayStart = (ms: number) => {
+export function RowMenuSlot({ shown, onPress }: { shown: boolean; onPress: () => void }) {
+  return <HoverSlot hovered={shown} width={iconButton.l.box} hover={<Button variant="icon" icon="ellipsis" size="l" onPress={onPress} tooltip="More actions" />} />;
+}
+
+export const dayStart =(ms: number) => {
   const d = new Date(ms);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 };

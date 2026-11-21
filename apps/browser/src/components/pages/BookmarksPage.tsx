@@ -8,6 +8,7 @@ import { plural } from "../../state/browser/model";
 import { moveBookmarks, openFolder, removeBookmarks, restoreBookmarks } from "../../state/bookmarks/actions";
 import { clickSelection, NO_SELECTION, rowWindow, selectAll, selectedInOrder, type ListSelection } from "../../state/bookmarks/bookmarkList";
 import { FolderTree } from "../bookmarks/FolderTree";
+import { bookmarkDrag } from "../bookmarks/tokens";
 import { Box, Button, Divider, EmptyState, radius, space, Text, Toast, useTheme } from "../ui";
 import { openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
 import { BookmarkRow } from "./BookmarkRow";
@@ -109,7 +110,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     selected.length > 0 ? (
       <>
         <Text size="small" tone="textSecondary">{`${selected.length} selected`}</Text>
-        <Button title="Delete" kind="primary" onPress={() => remove(selected)} />
+        <Button title="Remove" kind="primary" onPress={() => remove(selected)} />
       </>
     ) : (
       <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip="Organize" />
@@ -153,7 +154,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
           {ids.length === 0 ? (
             <EmptyState
               symbol={searching ? "magnifyingglass" : "bookmark"}
-              title={searching ? "No search results found" : "This folder is empty"}
+              title={searching ? "No results" : "This folder is empty"}
             />
           ) : (
             <View
@@ -196,7 +197,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
                       />
                     );
                   })}
-                  {indicator !== null && <DropLine top={indicator * bookmarkList.row} color={theme.formAccent} />}
+                  {indicator !== null && <DropLine top={indicator * bookmarkList.row} color={theme.accent} />}
                 </View>
               </ScrollView>
             </View>
@@ -205,7 +206,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
       </View>
       {undo && (
         <Toast
-          title={`${plural(undo.count, "item")} deleted`}
+          title={`${plural(undo.count, "item")} removed`}
           action="Undo"
           onAction={undoRemove}
           closing={undoClosing}
@@ -217,7 +218,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
 }
 
 function DropLine({ top, color }: { top: number; color: string }) {
-  return <View style={[DROP_LINE, { top: top - bookmarkList.dropLine / 2, backgroundColor: color }]} />;
+  return <View style={[DROP_LINE, { top: top - bookmarkDrag.line / 2, backgroundColor: color }]} />;
 }
 
 const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
@@ -230,4 +231,4 @@ const LIST_HEADER = { height: bookmarkList.headerHeight, alignItems: "center" } 
 const LIST_TITLE = { flex: 1 } as const;
 const LIST_KEYS_VIEW = { flex: 1 } as const;
 const LIST_CONTENT = { padding: space.s } as const;
-const DROP_LINE = { position: "absolute", left: space.m, right: space.m, height: bookmarkList.dropLine, borderRadius: bookmarkList.dropLineRadius, zIndex: 5 } as const;
+const DROP_LINE = { position: "absolute", left: space.m, right: space.m, height: bookmarkDrag.line, borderRadius: bookmarkDrag.lineRadius, zIndex: 5 } as const;

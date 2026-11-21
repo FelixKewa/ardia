@@ -5,7 +5,7 @@ import { cancelChooser, chooseDevice, openChooserBluetoothSettings, rescanDevice
 import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text } from "../ui";
 import { usePromptInputGuard } from "./PromptParts";
 import { PromptBody } from "./Prompts";
-import { noticeType, UNAVAILABLE_OPACITY } from "./tokens";
+import { noticeType } from "./tokens";
 
 const SIGNAL_BAR = 2.5;
 
@@ -127,9 +127,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
       >
         <PromptBody icons={[chooser.showSignal || scanning ? "dot.radiowaves.left.and.right" : "cable.connector"]} title={chooser.title} detail={body}>
           <Button variant="pill" title={chooser.cancelLabel || "Cancel"} onPress={cancel} />
-          <View pointerEvents={valid && !blocked ? "auto" : "none"} style={{ opacity: valid && !blocked ? 1 : UNAVAILABLE_OPACITY }}>
-            <Button variant="pill" title={chooser.okLabel || "Connect"} primary onPress={() => choose()} />
-          </View>
+          <Button variant="pill" title={chooser.okLabel || "Connect"} primary disabled={!valid || blocked} onPress={() => choose()} />
         </PromptBody>
       </View>
     </Popover>

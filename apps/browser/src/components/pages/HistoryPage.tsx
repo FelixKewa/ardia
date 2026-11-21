@@ -107,8 +107,8 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
       <PageHeader title="History" query={query} onQuery={setQuery} actions={actions} searchRef={search} onArrow={enterList} />
       {layout.rows.length === 0 ? (
         <EmptyState
-          symbol="clock"
-          title={query ? "No search results found" : "Your browsing history appears here"}
+          symbol={query ? "magnifyingglass" : "clock"}
+          title={query ? "No results" : "Your browsing history appears here"}
         />
       ) : (
         <View ref={list} focusable enableFocusRing={false} keyDownEvents={selected.size ? LIST_KEYS_WITH_ESCAPE : LIST_KEYS} onKeyDown={onListKey} style={LIST_KEYS_VIEW}>
