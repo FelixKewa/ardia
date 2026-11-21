@@ -868,8 +868,8 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     Omarchy (`menu:close`) would otherwise hide the menu with the sidebar, and browsers keep it at the toolbar's right. An engine without the call, or a desktop that reports none, keeps
     `:minimize,maximize,close`, today's buttons. `desktopButtonLayout.ts` feature-detects the call, follows the event
     and remembers the last layout in `localStorage`, so a new window draws it at once. The layout is part of the
-    native chrome (`nativeButtonsChrome`: `leadingButtons`, `trailingButtons` and widths from their counts, a title bar
-    band only while the right has buttons), so the right group sits where the Windows build puts its buttons, with
+    native chrome (`nativeButtonsChrome`: `leadingButtons`, `trailingButtons` and widths from their counts, and the
+    Windows title bar band, since the right always holds the `…`), so the right group sits where the Windows build puts its buttons, with
     room for its own count, and the left group (`LeadingWindowControls.tsx`, swapped in for the shared no-op) sits
     where the traffic lights would, 13 px before their first light's center (12 px from the edge at the default
     place), mirrored in a right sidebar, with the Mac's room after it (the sidebar header's tools, the top strip, Little

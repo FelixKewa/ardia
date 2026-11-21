@@ -8,8 +8,8 @@ const WINDOWS_CAPTION_SPARE = WINDOWS_CHROME.trailingWidth - windowControlsWidth
 
 export const nativeButtonsChrome = ({ leading, trailing }: WindowButtonLayout): WindowChrome => ({
   leadingWidth: leading.length ? WINDOW_CONTROLS.edge + windowControlsWidth(leading.length) : 0,
-  trailingWidth: trailing.length ? WINDOWS_CAPTION_SPARE + windowControlsWidth(trailing.length) : 0,
-  titleBarHeight: trailing.length ? WINDOWS_CHROME.titleBarHeight : 0,
+  trailingWidth: WINDOWS_CAPTION_SPARE + windowControlsWidth(trailing.length),
+  titleBarHeight: WINDOWS_CHROME.titleBarHeight,
   leadingButtons: leading,
   trailingButtons: trailing,
 });
