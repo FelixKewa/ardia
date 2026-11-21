@@ -716,9 +716,11 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   called the helper started (another instance already replaced it, so this one's version check is stale). PATH is its own and the prefix comes from its own
   location, never from the caller. The last line on stdout is `installed <V>` or `failed <reason>` (`usage`,
   `missing`, `manifest`, `signature`, `notNewer`, `kind`, `checksum`, `install`, `busy`, `timeout`).
-- **polkit action `dev.ardia.linux.update`.** `allow_active` is `yes` with no password, `allow_any` and
-  `allow_inactive` are `no`, and `org.freedesktop.policykit.exec.path` limits it to the helper, which only installs
-  a release signed with Ardia's key that is newer than the installed one.
+- **polkit action `dev.ardia.linux.update`.** `allow_active` is `yes`, so the active local session installs with
+  no password. `allow_any` and `allow_inactive` are `auth_self`: polkit counts a remote desktop (xrdp, VNC) as a
+  remote session, so there the session's polkit agent asks for the user's password, and where no agent runs (SSH)
+  pkexec fails and Ardia offers the release page. `org.freedesktop.policykit.exec.path` limits it to the helper,
+  which only installs a release signed with Ardia's key that is newer than the installed one.
 - **Signed manifest.** Each release carries `Ardia-<V>-linux-update.txt` (`ardia-linux-update 1`, `version <V>`, then
   `deb`, `tarball` and `appimage` lines with file name, sha256 and size, for the formats on the release) and
   `Ardia-<V>-linux-update.txt.sig`, the raw Ed25519 signature.

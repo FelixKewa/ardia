@@ -354,6 +354,10 @@ class PackagingTests(unittest.TestCase):
                 self.assertIn('<action id="dev.ardia.linux.reauthenticate">', policy)
                 self.assertIn('<allow_active>auth_self</allow_active>', policy)
                 self.assertIn('<allow_any>no</allow_any>', policy)
+                update = policy[policy.index('<action id="dev.ardia.linux.update">'):]
+                self.assertIn('<allow_active>yes</allow_active>', update)
+                self.assertIn('<allow_inactive>auth_self</allow_inactive>', update)
+                self.assertIn('<allow_any>auth_self</allow_any>', update)
                 self.assertNotIn('auth_self_keep', policy)
                 self.assertNotIn('<!--', policy)
             with self.assertRaises(ValueError):
