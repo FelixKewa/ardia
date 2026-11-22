@@ -1,13 +1,13 @@
 import { confirm } from "../../platform/dialogs";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { webviews } from "../../platform/webviews";
-import { clearSiteData, type ClearSiteDataResult } from "../../platform/siteSettings";
+import type { ClearSiteDataResult } from "../../platform/siteSettings";
+import { clearSiteDataEverywhere } from "../engines/siteData";
 import { getContentBlocker, isContentBlockerAllowed, setContentBlockerAllowed } from "../../platform/contentBlocker";
 import { menuSections } from "../app/menuSections";
 import { currentTab } from "../browser/current";
 import { engineProfile } from "../browser/model";
 import type { Tab } from "../browser/types";
-import { tabEngine } from "../engines/engines";
 import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
 import { showToast } from "../app/toasts";
@@ -48,7 +48,6 @@ export function siteDataOutcome(cleared: ClearSiteDataResult | "failed"): string
 
 export async function confirmAndClearSiteData(profileId: string, origin: string, windowId?: string, tabId?: string): Promise<SiteDataCleared> {
   const host = new URL(origin).hostname;
-  const engine = tabId ? tabEngine(useBrowser.getState(), tabId) : "chromium";
   const { confirmed } = await confirm({
     title: `Clear cookies and site data for ${host}?`,
     message: "You'll be signed out of this site, and its offline data will be deleted.",
@@ -58,7 +57,7 @@ export async function confirmAndClearSiteData(profileId: string, origin: string,
   });
   if (!confirmed) return null;
   const profile = engineProfile(useBrowser.getState(), profileId);
-  const result = await clearSiteData(profile, origin, engine).then(
+  const result = await clearSiteDataEverywhere(profile, origin).then(
     (cleared): ClearSiteDataResult => cleared ?? { cookies: false, storage: false },
     () => "failed" as const,
   );

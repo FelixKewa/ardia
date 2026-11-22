@@ -51,6 +51,13 @@ test("an installed row says so beside its title, with the version when the seam 
   assert.equal(installedLabel({ ...plugin("installed"), version: null }), "Installed");
 });
 
+test("a failed update stays on the row with Update to try again, while the old command keeps working", () => {
+  const ready = officialView({ ...plugin("installed"), update: "0.6.0" }, LINKED, null);
+  assert.deepEqual([ready.action, ready.failed], ["update", false]);
+  const failed = officialView({ ...plugin("installed"), update: "0.6.0" }, LINKED, { state: "failed", reason: "The download didn't match." });
+  assert.deepEqual([failed.action, failed.failed, failed.status], ["update", true, "The download didn't match."]);
+});
+
 test("an installed plugin whose command isn't on PATH says why and offers Retry", () => {
   const linking = officialView(plugin("installed"), { state: "linking", hash: "h", request: 1 }, null);
   assert.deepEqual([linking.busy, linking.action, linking.firstCommand], [true, null, null]);
@@ -68,12 +75,14 @@ test("only a plugin that can still be chosen counts as offered", () => {
 
 const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
 useBrowser.getState().hydrate({});
-stub.pluginHost.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", bundled: true }];
+stub.pluginHost.folders = [];
+stub.pluginHost.officialArtifacts = { cli: CLI };
 startPlugins();
 for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 
 test("closing the consent is no error: the seam marks it cancelled, and nothing else counts as cancelled", async () => {
   const asked = installOfficialPlugin("cli", { showSheet: false });
+  for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(usePlugins.getState().consent.name, "cli");
   lifecycle.dismissPluginConsent("cli");
   const result = await asked;
@@ -135,7 +144,7 @@ test("the Settings row and the consent sheet say Install for every official plug
   const sheet = readFileSync(new URL("../../components/plugins/PluginConsentSheet.tsx", import.meta.url), "utf8");
   assert.match(row, /<Button title="Install…"/);
   assert.doesNotMatch(row, /Turn On|<Toggle/);
-  assert.match(sheet, /const install = isAlwaysOn\(listing\) \|\| !!m\?\.official;/);
+  assert.match(sheet, /const install = !!m\?\.official;/);
 });
 
 

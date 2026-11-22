@@ -26,6 +26,21 @@ test("one build setting turns on the entitlement and the Info.plist key together
   assert.equal(granted.replace(new RegExp(`\\s*<key>${WEB_BROWSER}</key>\\s*<true/>`), ""), entitlements("Ardia.entitlements"), "the two files differ only by the web-browser entitlement");
 });
 
+test("the app asks for nothing Apple refuses in a default browser", () => {
+  const refused = [
+    "NSPhotoLibraryUsageDescription",
+    "NSLocationAlwaysUsageDescription",
+    "NSLocationAlwaysAndWhenInUseUsageDescription",
+    "NSHomeKitUsageDescription",
+    "NSBluetoothAlwaysUsageDescription",
+    "NSBluetoothPeripheralUsageDescription",
+    "NSHealthShareUsageDescription",
+    "NSHealthUpdateUsageDescription",
+  ];
+  assert.deepEqual(refused.filter((key) => info.includes(`<key>${key}</key>`)), []);
+  assert.match(info, /<key>NSPhotoLibraryAddUsageDescription<\/key>/, "saving images keeps its add-only access");
+});
+
 test("the app already declares http and https, which iOS requires of a default browser", () => {
   assert.match(info, /<array>\s*<string>http<\/string>\s*<string>https<\/string>\s*<\/array>/);
 });
