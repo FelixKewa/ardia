@@ -118,8 +118,19 @@ function warnedAt(events) {
   return latestTime(botMarkerTimes(events, WARNED_MARKER));
 }
 
+function timelineProtected(events) {
+  const active = new Set();
+  for (const event of events) {
+    const name = event.label && event.label.name;
+    if (!name || !PROTECTED_LABELS.includes(name)) continue;
+    if (event.event === "labeled") active.add(name);
+    else if (event.event === "unlabeled") active.delete(name);
+  }
+  return active.size > 0;
+}
+
 function decide({ pr, events, now, team }) {
-  if (isProtected(pr, team)) return { action: "skip" };
+  if (isProtected(pr, team) || timelineProtected(events)) return { action: "skip" };
   const marked = labelNames(pr).includes(STALE);
   if (!isEligible(pr, team)) return { action: marked ? "unstale" : "skip" };
   const active = lastActivity(pr, events);
@@ -277,8 +288,8 @@ async function act(session, pr, events, decision) {
       await write(session, () => github.rest.issues.createComment({ ...repo, issue_number, body: closeBody(pr) }));
     }
     if (session.wrote) await session.pace();
-    const live = await livePull(session, issue_number);
     const liveEvents = await timelineOf(session, issue_number);
+    const live = await livePull(session, issue_number);
     const recheck = decide({ pr: live, events: liveEvents, now: session.now(), team: session.team });
     if (recheck.action !== "close" || !labelNames(live).includes(STALE)) return "held";
     await write(session, () => github.rest.pulls.update({ ...repo, pull_number: issue_number, state: "closed" }), { paced: false });

@@ -160,6 +160,11 @@ test("a subshell's exit never moves the outer shell", () => {
   assert.equal(verdict(`(cd ${worktree} || exit 1); git stash`, worktree), "allowed");
   assert.equal(verdict(`(cd ${worktree} || exit 1) && git stash`, clone), "allowed");
   assert.equal(verdict(`cd ${worktree} || exit 1; (git stash)`), "allowed");
+  assert.equal(verdict("exit 1 | cat; git stash"), "blocked");
+  assert.equal(verdict("cat | exit 1; git stash"), "blocked");
+  assert.equal(verdict("exit 1 & git stash"), "blocked");
+  assert.equal(verdict(`cd ${worktree} || exit 1 & git stash`), "blocked");
+  assert.equal(verdict(`cat | cd ${worktree} && git stash`), "blocked");
 });
 
 test("a fresh clone made in the same command may switch at once", () => {

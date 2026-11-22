@@ -363,8 +363,33 @@ test("what changes during the wait before the close keeps the pull request open"
     assert.deepEqual(report.close, [], why);
     assert.equal(writes(github).some((call) => call.name === "pulls.update"), false, why);
     const lastCalls = github.calls.slice(-2).map((call) => call.name);
-    assert.deepEqual(lastCalls, ["pulls.get", "issues.listEventsForTimeline"], why);
+    assert.deepEqual(lastCalls, ["issues.listEventsForTimeline", "pulls.get"], why);
   }
+});
+
+test("a protection label arriving during the final timeline read stops the close", async () => {
+  const before = pr(2, "marked", { labels: ["needs-rebase", "stale"], updated: ago(9) });
+  const quiet = [commented(20, human("marked")), warned(9), labeled(9, "stale")];
+  let timelineReads = 0;
+  let protectedNow = false;
+  const github = fakeGithub({
+    pulls: [before],
+    current: { 2: () => (protectedNow ? pr(2, "marked", { labels: ["needs-rebase", "stale", "keep-open"], updated: ago(9) }) : before) },
+    timelines: {
+      2: () => {
+        timelineReads += 1;
+        if (timelineReads === 3) {
+          protectedNow = true;
+          return [...quiet, { event: "labeled", created_at: new Date(NOW).toISOString(), label: { name: "keep-open" } }];
+        }
+        return quiet;
+      },
+    },
+  });
+  const report = await runWith(github, "schedule");
+  assert.deepEqual(report.close, []);
+  assert.deepEqual(report.changed, [2]);
+  assert.equal(writes(github).some((call) => call.name === "pulls.update"), false);
 });
 
 test("the close lands right after its final check, with no wait between them", async () => {
@@ -374,7 +399,7 @@ test("the close lands right after its final check, with no wait between them", a
   await runWith(github, "schedule", {}, { pace });
   const names = github.calls.map((call) => call.name);
   const update = names.lastIndexOf("pulls.update");
-  assert.deepEqual(names.slice(update - 2, update + 1), ["pulls.get", "issues.listEventsForTimeline", "pulls.update"]);
+  assert.deepEqual(names.slice(update - 2, update + 1), ["issues.listEventsForTimeline", "pulls.get", "pulls.update"]);
   assert.equal(order.length, 1);
 });
 
