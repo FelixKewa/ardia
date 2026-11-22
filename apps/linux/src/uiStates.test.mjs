@@ -46,6 +46,7 @@ registerHooks({
   },
 });
 
+await import("../../browser/src/state/telemetry/windowPlacementCounts.ts");
 await import("@ardia/shell");
 const { createElement: h } = await import("react");
 const { renderToStaticMarkup } = await import("react-dom/server");
