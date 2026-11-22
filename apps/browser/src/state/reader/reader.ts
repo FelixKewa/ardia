@@ -66,7 +66,15 @@ async function callPage(tabId: string, code: string): Promise<ReaderReport | nul
 }
 
 let lookPushes = 0;
-const openedByUser = new Set<string>();
+const grants = new Map<string, number>();
+const documents = new Map<string, number>();
+let nextDocument = 0;
+const documentOf = (tabId: string) => documents.get(tabId) ?? 0;
+
+function replaceDocument(tabId: string) {
+  documents.set(tabId, ++nextDocument);
+  grants.delete(tabId);
+}
 
 function pushLook(s: BrowserState) {
   lookPushes++;
@@ -74,13 +82,16 @@ function pushLook(s: BrowserState) {
   for (const [tabId, state] of Object.entries(useReader.getState())) if (state?.active) void callPage(tabId, readerCall("setLook", look));
 }
 
-function settle(tabId: string, url: string, report: ReaderReport, available: boolean | undefined, pushesBefore: number, write: boolean) {
+type Settling = { pushesBefore: number; documentBefore: number; write: boolean; grant?: boolean };
+
+function settle(tabId: string, url: string, report: ReaderReport, available: boolean | undefined, { pushesBefore, documentBefore, write, grant = false }: Settling) {
   const tab = useBrowser.getState().tabs[tabId];
-  if (!tab || tab.url !== url) return;
+  if (!tab || tab.url !== url || documentOf(tabId) !== documentBefore) return;
   const before = readerState(tabId);
   set(tabId, { url, available: available ?? before.available, active: report.active });
   if ((report.active || before.active) && pushesBefore === lookPushes && write) keepLook(report.look);
-  if (!report.active) openedByUser.delete(tabId);
+  if (!report.active) grants.delete(tabId);
+  else if (grant && write) grants.set(tabId, documentBefore);
 }
 
 const counted = new Map<string, string>();
@@ -90,6 +101,7 @@ async function check(tabId: string) {
   if (!tab || !readable(tab.url)) return;
   const url = tab.url;
   const pushes = lookPushes;
+  const documentBefore = documentOf(tabId);
   const consent = consentToken();
   const report = await callPage(tabId, readerCheckCall());
   if (!report) return;
@@ -99,7 +111,7 @@ async function check(tabId: string) {
     counted.set(tabId, url);
     noteReaderCheck(available, consent);
   }
-  settle(tabId, url, report, available, pushes, false);
+  settle(tabId, url, report, available, { pushesBefore: pushes, documentBefore, write: false });
   if (first && !available && useBrowser.getState().tabs[tabId]?.url === url) later(tabId, url);
 }
 
@@ -128,27 +140,27 @@ export async function toggleReader(tabId: string, mayWrite?: () => boolean) {
   if (!tab || !readable(tab.url)) return;
   const url = tab.url;
   const pushes = lookPushes;
+  const documentBefore = documentOf(tabId);
   const consent = consentToken();
   const report = await callPage(tabId, readerToggleCall(lookFrom(s)));
   if (!report) return;
   if (report.noArticle) {
     noteReaderNoArticle(consent);
-    settle(tabId, url, report, false, pushes, !mayWrite || mayWrite());
+    settle(tabId, url, report, false, { pushesBefore: pushes, documentBefore, write: !mayWrite || mayWrite() });
     showToast(tab.windowId, "No article found on this page", undefined, { icon: "doc.plaintext" });
     return;
   }
-  const write = !mayWrite || mayWrite();
   if (report.active) noteReaderOpened(consent);
-  if (report.active && write) openedByUser.add(tabId);
-  settle(tabId, url, report, true, pushes, write);
+  settle(tabId, url, report, true, { pushesBefore: pushes, documentBefore, write: !mayWrite || mayWrite(), grant: true });
 }
 
 export async function closeReader(tabId: string, mayWrite?: () => boolean) {
   const url = useBrowser.getState().tabs[tabId]?.url;
   if (!url || !readerState(tabId).active) return;
   const pushes = lookPushes;
+  const documentBefore = documentOf(tabId);
   const report = await callPage(tabId, readerCall("hide"));
-  if (report) settle(tabId, url, report, undefined, pushes, !mayWrite || mayWrite());
+  if (report) settle(tabId, url, report, undefined, { pushesBefore: pushes, documentBefore, write: !mayWrite || mayWrite() });
 }
 
 function shownTabIds(s: BrowserState): Set<string> {
@@ -183,7 +195,8 @@ function forget(tabId: string) {
     timers.delete(tabId);
   }
   counted.delete(tabId);
-  openedByUser.delete(tabId);
+  grants.delete(tabId);
+  documents.delete(tabId);
 }
 
 function navigated(tabId: string, from: string, to: string) {
@@ -191,7 +204,7 @@ function navigated(tabId: string, from: string, to: string) {
   if (before === NONE) return;
   if (before.active && withoutHash(from) === withoutHash(to)) return set(tabId, { ...before, url: to });
   if (before.active) void callPage(tabId, readerCall("hide"));
-  openedByUser.delete(tabId);
+  replaceDocument(tabId);
   set(tabId, NONE);
 }
 
@@ -201,8 +214,9 @@ async function sync() {
   for (const [tabId, state] of Object.entries(useReader.getState())) {
     if (!state?.active || !shown.has(tabId)) continue;
     const pushes = lookPushes;
+    const documentBefore = documentOf(tabId);
     const report = await callPage(tabId, readerCall("state"));
-    if (report) settle(tabId, state.url, report, undefined, pushes, openedByUser.has(tabId));
+    if (report) settle(tabId, state.url, report, undefined, { pushesBefore: pushes, documentBefore, write: grants.get(tabId) === documentBefore });
   }
 }
 
@@ -230,6 +244,7 @@ export function startReader() {
   };
   const stopLive = onLiveChange((id, live, prev) => {
     if (live.isLoading === prev.isLoading) return;
+    if (live.isLoading) replaceDocument(id);
     const s = useBrowser.getState();
     if (!live.isLoading && s.tabs[id] && readerState(id).url) set(id, { ...readerState(id), url: "" });
     scheduleShown(s);

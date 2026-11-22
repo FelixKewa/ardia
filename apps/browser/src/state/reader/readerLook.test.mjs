@@ -6,6 +6,7 @@ await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { webviews } = await import("../../platform/webviews.ts");
+const { setLive, drainLive } = await import("../tabs/tabLive.ts");
 const { startReader, toggleReader, readerState } = await import("./reader.ts");
 const { DEFAULT_SETTINGS } = await import("../settings/settings.ts");
 
@@ -96,4 +97,41 @@ test("updateSettings keeps only known settings with values their spec accepts, f
   assert.equal(takeSettingsWriteCounts().settings_writes_rejected, 5);
   client.setSharing(false, "settings");
   useBrowser.setState({ settings: DEFAULT_SETTINGS, settingsMeta: { chosen: [], inferred: [] } });
+});
+
+const reload = (tab) => {
+  setLive(tab, { isLoading: true });
+  drainLive();
+  setLive(tab, { isLoading: false });
+  drainLive();
+};
+
+test("reloading the page ends the reader's right to keep the look it reports", async () => {
+  let reported = { active: false, readerable: true };
+  const { tab } = openPlanted(() => reported);
+  await wait(300);
+  reported = { active: true, readerable: true, look: { dark: false, size: 3, font: "sans" } };
+  await toggleReader(tab);
+  assert.deepEqual(look(), ["larger", "sans"]);
+  reload(tab);
+  reported = { active: true, readerable: true, look: { dark: false, size: 0, font: "serif" } };
+  await wait(1700);
+  assert.deepEqual(look(), ["larger", "sans"]);
+});
+
+test("a toggle whose page is replaced while it runs keeps nothing", async () => {
+  let reported = { active: false, readerable: true };
+  let tabId;
+  const { tab } = openPlanted((code) => {
+    if (code.includes(".toggle(")) reload(tabId);
+    return reported;
+  });
+  tabId = tab;
+  await wait(300);
+  reported = { active: true, readerable: true, look: { dark: false, size: 4, font: "sans" } };
+  await toggleReader(tab);
+  assert.deepEqual(look(), ["medium", "serif"]);
+  reported = { active: true, readerable: true, look: { dark: false, size: 0, font: "sans" } };
+  await wait(1700);
+  assert.deepEqual(look(), ["medium", "serif"]);
 });
