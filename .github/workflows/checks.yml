@@ -10,10 +10,7 @@ on:
       - "apps/ios/**"
       - "apps/cli/**"
       - "packages/**"
-      - "engine/ardiacore/src/**"
-      - "engine/chromium/src/**"
-      - "engine/ardiacore-linux/content-blocker/**"
-      - "engine/patches/**"
+      - "engine/**"
       - "scripts/**"
       - "extras/**"
       - "tests/**"
@@ -124,6 +121,14 @@ jobs:
               - "apps/browser/official-plugins-history.json"
               - "packages/ardiacore/ios/ArdiaLaunchConfig.mm"
               - "packages/sync/ios/Core/LegacyMigration.swift"
+              - "packages/ardiacore/ios/page_script.js"
+              - "packages/ardiacore/prebuilt-engines.tsv"
+              - "packages/ardiacore/prebuilt-engines-linux.tsv"
+              - "packages/ardiacore/scripts/**"
+              - "packages/shaders/scripts/meadow.mjs"
+              - "apps/browser/assets/offline-game/**"
+              - "apps/browser/assets/offline-game-pipeline/**"
+              - "engine/**"
               - "docs/release-notes/**"
               - "infra/site/**"
               - ".claude/**"
@@ -188,7 +193,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24

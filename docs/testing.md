@@ -73,11 +73,12 @@ holds the rest.
   simulator and the Mac bundle, Metro then Hermes) for the workspace code; the browser's tests in three shares
   (`--test-shard=I/3`) for what those tests read, which reaches past `apps/browser` into every package, the engine
   sources, `apps/linux/src`, `scripts/{lib,security,windows}`, `tests/` and two docs; and `repository, vouch and
-  stale tests` (`test:root`, no install) for `scripts/`, `.github/`, `.claude/`, the site and the release notes. A
+  stale tests` (`test:root`, no install) for `scripts/`, `engine/`, `.github/`, `.claude/`, the site and the release
+  notes. A
   docs-only, phone-app, dashboard or videos change starts none of them. When the filter can't tell (an API error, a
   force push it can't diff, a pull request of 3,000 files or more) or the `which checks run` job fails, every job
-  runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the filters in step, and follows the meadow
-  check's site imports. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to
+  runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the filters in step, follows the meadow
+  check's site imports, and fails when a Linux fixture or a root test names a file its job doesn't start on. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to
   `main` save it, so pull requests add no caches. A newer push cancels the run before it, on `main` too.
 - `linux.yml` starts on what the Linux build and its fixture suites read (`apps/linux`, the shared UI and the desktop
   packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,

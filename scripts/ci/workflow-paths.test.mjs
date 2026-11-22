@@ -154,6 +154,23 @@ test("Linux starts on every repository file its fixture suites read", () => {
   assert.match(workflow("linux.yml"), /^  push:\n    branches: \[main\]\n    paths: \*linux$/m);
 });
 
+test("the repository job starts on every test test:root runs and every repository file those tests name", () => {
+  const script = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8")).scripts["test:root"];
+  const globs = script.split("--test")[1].trim().split(/\s+/).map((token) => token.replace(/^"|"$/g, ""));
+  const repo = changeFilters(workflow("checks.yml")).repo;
+  const runs = globs.flatMap((glob) => {
+    const fixed = glob.split("/").findIndex((part) => part.includes("*"));
+    const dir = fixed < 0 ? posix.dirname(glob) : glob.split("/").slice(0, fixed).join("/");
+    return filesUnder(dir, () => true).filter((path) => globPattern(glob).test(path));
+  });
+  assert.ok(runs.length > 10, "test:root still finds its tests");
+  for (const path of runs) assert.ok(matched(repo, path), `a change to ${path} runs the repository job`);
+  for (const path of repoPathsNamedIn(runs)) {
+    const probe = path.endsWith("/") ? `${path}any` : path;
+    assert.ok(matched(repo, probe), `a change to ${path}, which a root test names, runs the repository job`);
+  }
+});
+
 test("Deploy starts on main only for the paths one of its services deploys from", () => {
   const text = workflow("deploy.yml");
   assertTriggersMatchFilters(triggerPaths(text, "push"), changeFilters(text), ".github/workflows/deploy.yml");

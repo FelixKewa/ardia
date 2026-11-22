@@ -43,7 +43,7 @@ on:
       - "engine/ardiacore/src/**"
       - "engine/chromium/**"
       - "engine/patches/**"
-      - "engine/engine-key.sh"
+      - "engine/engine-key.*"
       - "scripts/linux/**"
       - "scripts/lib/**"
       - "scripts/agent/locked"
