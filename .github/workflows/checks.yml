@@ -2,7 +2,9 @@ name: Checks
 
 on:
   pull_request:
-    paths: &code
+  push:
+    branches: [main]
+    paths:
       - "apps/**"
       - "packages/**"
       - "extras/**"
@@ -20,9 +22,6 @@ on:
       - ".nvmrc"
       - "patches/**"
       - ".github/workflows/checks.yml"
-  push:
-    branches: [main]
-    paths: *code
 
 permissions:
   contents: read
@@ -110,3 +109,17 @@ jobs:
           echo "compiling with $hermesc"
           "$hermesc" -emit-binary -O -out "$RUNNER_TEMP/main.hbc" "$RUNNER_TEMP/main.jsbundle"
           ls -l "$RUNNER_TEMP/main.hbc"
+
+  required:
+    name: Check
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Typecheck, every share of the tests and the Mac bundle passed
+        env:
+          RESULT: ${{ needs.check.result }}
+        run: |
+          echo "typecheck, tests and Mac bundle: $RESULT"
+          [ "$RESULT" = success ]
