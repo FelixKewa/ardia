@@ -111,7 +111,7 @@ export function MenuRow({
         disabled={!active}
         {...(choosable
           ? { ...radioA11y(!!checked), onKeyDown: active ? live(spaceActivates((e) => onPress(e as unknown as GestureResponderEvent))) : undefined }
-          : { accessibilityRole: "button" as const, accessibilityState: { disabled: !!disabled }, "aria-selected": selected === undefined ? undefined : !!selected })}
+          : { accessibilityRole: "button" as const, accessibilityState: selected === undefined ? { disabled: !!disabled } : { disabled: !!disabled, selected: !!selected } })}
       >
         {({ pressed }) => content(pressed)}
       </Pressable>

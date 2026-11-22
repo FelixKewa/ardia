@@ -66,11 +66,18 @@ test("a checked menu row is a radio that publishes aria-checked, and an unchecke
   assert.deepEqual([off.length, off[0]["aria-checked"]], [1, "false"]);
 });
 
-test("a menu row with a cursor highlight stays a button and publishes the selection, not a check", () => {
+test("a menu row with a cursor highlight stays a button with no selected or checked state in the DOM", () => {
   const html = render(h(ui.MenuRow, { title: "Tab", selected: true, onPress: noop }));
   const [button] = withRole(html, "button");
-  assert.equal(button["aria-selected"], "true", html);
+  assert.equal(button["aria-selected"], undefined, html);
   assert.equal(button["aria-checked"], undefined, html);
+});
+
+test("a button that shows a chosen state publishes aria-pressed, never aria-selected", () => {
+  const html = render(h(ui.Segmented, { value: "a", onChange: noop, options: [{ value: "a", title: "Left" }, { value: "b", title: "Right" }] }));
+  const buttons = withRole(html, "button");
+  assert.deepEqual(buttons.map((b) => [b["aria-pressed"], b["aria-selected"]]), [["true", undefined], ["false", undefined]], html);
+  assert.deepEqual(ui.chosenButtonA11y(true, "Left"), { accessibilityRole: "button", accessibilityLabel: "Left", accessibilityState: { selected: true }, "aria-pressed": true });
 });
 
 test("the radio, checkbox and switch mappings give every platform its state", () => {

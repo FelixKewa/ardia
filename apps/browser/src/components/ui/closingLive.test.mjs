@@ -58,6 +58,7 @@ const CLOSING_PANELS = [
   "ui/Switch.tsx",
   "ui/Toast.tsx",
   "window/HistoryPopover.tsx",
+  "window/NewTabNotice.tsx",
   "window/PageOverlays.tsx",
 ];
 
@@ -116,7 +117,7 @@ const STOPS_PROPAGATION_ONLY = new Set(["keepActivationKeys"]);
 const routed = (value) => value === "undefined" || STOPS_PROPAGATION_ONLY.has(value) || /\blive\(/.test(value);
 
 test("every file that reads a closing state or renders a closing panel is pinned here", () => {
-  const files = readdirSync(components, { recursive: true }).filter((name) => /\.tsx$/.test(name) && !name.includes("fixtures"));
+  const files = readdirSync(components, { recursive: true }).map((name) => name.replaceAll("\\", "/")).filter((name) => /\.tsx$/.test(name) && !name.includes("fixtures"));
   const reading = files.filter((name) => READS_CLOSING.test(source(name)));
   assert.deepEqual(reading.filter((name) => !CLOSING_PANELS.includes(name)), [], "a new closing panel or piece joins CLOSING_PANELS so its handlers are checked");
   for (const name of CLOSING_PANELS) assert.ok(files.includes(name), `${name} still exists`);

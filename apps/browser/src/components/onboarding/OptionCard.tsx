@@ -54,6 +54,7 @@ export function OptionCard({
       <View {...hoverProps} style={{ opacity: disabled ? DISABLED_OPACITY : 1 }}>
         <Pressable
           disabled={disabled || closing}
+          focusable={!disabled && !closing}
           onPress={live(onPress)} onAccessibilityTap={disabled || closing ? undefined : tapActivates(live(onPress))}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
@@ -91,7 +92,7 @@ export function OptionCard({
   if (preview)
     return (
       <View {...hoverProps} style={{ flex: 1 }}>
-        <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
+        <Pressable disabled={closing} focusable={!closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
           <Animated.View style={scaleStyle}>
             <ChoiceCard mouseDownCanMoveWindow={false} radius={radius.panel} selected={selected} hovered={hovered} style={{ padding: space.ml, gap: space.ml }}>
               {preview}
@@ -116,7 +117,7 @@ export function OptionCard({
 
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
+      <Pressable disabled={closing} focusable={!closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         <Animated.View style={scaleStyle}>
           <ChoiceCard
             mouseDownCanMoveWindow={false}

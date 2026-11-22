@@ -9,6 +9,15 @@ export function radioA11y(checked: boolean, label?: string) {
   } as const;
 }
 
+export function chosenButtonA11y(chosen: boolean, label?: string) {
+  return {
+    accessibilityRole: "button",
+    accessibilityLabel: label,
+    accessibilityState: { selected: chosen },
+    "aria-pressed": chosen,
+  } as const;
+}
+
 export function checkboxA11y(checked: boolean | "mixed", disabled?: boolean, label?: string) {
   return {
     accessibilityRole: "checkbox",

@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useEffect, useRef, type ComponentPropsWithRef, type ReactNode, type Ref } from "react";
+import { createContext, use, useCallback, useEffect, useLayoutEffect, useRef, type ComponentPropsWithRef, type ReactNode, type Ref } from "react";
 import { Animated, type TextInput } from "react-native";
 
 const ClosingContext = createContext(false);
@@ -48,7 +48,9 @@ export function guardedLive(latest: Latest, guards: WeakMap<Action, Action>): Li
 
 export function useLiveWhile(closing: boolean): Live {
   const latest = useRef(closing);
-  latest.current = closing;
+  useLayoutEffect(() => {
+    latest.current = closing;
+  }, [closing]);
   const kept = useRef<Live | null>(null);
   kept.current ??= guardedLive(latest, new WeakMap());
   return closing ? DROPPED : kept.current;
@@ -70,23 +72,25 @@ export const whileOpen =
 
 export function useStillOpen(open: boolean) {
   const latest = useRef(open);
-  latest.current = open;
+  useLayoutEffect(() => {
+    latest.current = open;
+  }, [open]);
   return useCallback(() => latest.current, []);
 }
 
 export function useClosingField(inputRef?: Ref<TextInput>) {
   const closing = useClosing();
   const field = useRef<TextInput | null>(null);
-  const outer = useRef(inputRef);
-  outer.current = inputRef;
   useEffect(() => {
     if (closing) field.current?.blur();
   }, [closing]);
-  const ref = useCallback((node: TextInput | null) => {
-    field.current = node;
-    const target = outer.current;
-    if (typeof target === "function") target(node);
-    else if (target) target.current = node;
-  }, []);
+  const ref = useCallback(
+    (node: TextInput | null) => {
+      field.current = node;
+      if (typeof inputRef === "function") inputRef(node);
+      else if (inputRef) inputRef.current = node;
+    },
+    [inputRef],
+  );
   return { closing, ref };
 }

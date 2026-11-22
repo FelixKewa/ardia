@@ -19,6 +19,7 @@ import {
   Text,
   useGlass,
   useGlassLook,
+  tapActivates,
   useClosing,
   useHover,
   useLiveAction,
@@ -244,7 +245,7 @@ export function DownloadRow({ d, windowId }: { d: Download; windowId: string }) 
     <View {...hoverProps} {...focusProps}>
       <MouseArea path={done && !closing ? d.path : null}>
         <ContextMenuArea onContextMenu={live(() => void downloadMenu(d, windowId))}>
-          <Pressable disabled={closing} focusable={done && !closing} onPress={live(() => done && void openDownload(d.path))}>
+          <Pressable disabled={closing} focusable={done && !closing} onPress={live(() => done && void openDownload(d.path))} onAccessibilityTap={done ? tapActivates(live(() => void openDownload(d.path))) : undefined}>
             {({ pressed }) => (
               <View
                 style={{

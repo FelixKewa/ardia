@@ -1,4 +1,4 @@
-export { checkboxA11y, radioA11y, spaceActivates, switchA11y, tapActivates } from "./a11y";
+export { checkboxA11y, chosenButtonA11y, radioA11y, spaceActivates, switchA11y, tapActivates } from "./a11y";
 export { Box, type BoxProps } from "./Box";
 export { Button, type ButtonHit, type ButtonProps, type IconPalette } from "./Button";
 export { Badge, type BadgeTone } from "./Badge";

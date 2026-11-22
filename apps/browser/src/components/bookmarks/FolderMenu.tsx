@@ -97,7 +97,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
 
   return (
     <ClosingView
-      closing={closing}
+      closing={closing || !!panel.retained}
       pointerEvents={panel.retained ? "none" : "auto"}
       onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
       style={{ position: "absolute", left: place.x - layer.x, top: place.y - layer.y, width: place.width, ...motion, ...(panel.retained ? HIDDEN : null) }}

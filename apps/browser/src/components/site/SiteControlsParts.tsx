@@ -1,7 +1,7 @@
 import { Children, forwardRef, type ReactNode } from "react";
 import { Animated, Image, Pressable, View, type AccessibilityActionEvent, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { capsule, ContextMenuArea, Dot, GlassFill, hairline, HoverFill, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useClosing, useGlass, useHover, useLiveAction, tapActivates } from "../ui";
+import { capsule, ContextMenuArea, Dot, GlassFill, hairline, HoverFill, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useClosing, useGlass, useHover, useLiveAction, tapActivates, chosenButtonA11y } from "../ui";
 import { useSiteTokens } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
@@ -111,9 +111,7 @@ export const ActionTile = forwardRef<
         onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))}
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        aria-selected={active}
+        {...chosenButtonA11y(!!active, label)}
         accessibilityActions={ACTIVATE}
         onAccessibilityAction={live((event: AccessibilityActionEvent) => event.nativeEvent.actionName === "activate" && onPress(event))}
       >

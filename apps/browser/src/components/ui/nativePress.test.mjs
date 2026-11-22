@@ -31,7 +31,7 @@ function spreadDefinitions(text, tag) {
 }
 
 test("every pressable that announces a button, radio, checkbox or switch has the native accessibility press", () => {
-  const files = readdirSync(components, { recursive: true }).filter((name) => /\.tsx$/.test(name) && !name.includes("fixtures"));
+  const files = readdirSync(components, { recursive: true }).map((name) => name.replaceAll("\\", "/")).filter((name) => /\.tsx$/.test(name) && !name.includes("fixtures"));
   const missing = files.flatMap((file) => {
     const text = source(file);
     return pressables(text)

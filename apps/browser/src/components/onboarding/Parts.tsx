@@ -171,7 +171,7 @@ function Segment({ title, image, selected, onPress }: { title: string; image?: s
   const live = useLiveAction();
   return (
     <View {...hoverProps} tooltip={image ? title : undefined}>
-      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
+      <Pressable disabled={closing} focusable={!closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
@@ -237,7 +237,7 @@ export function SelectTile({
   const live = useLiveAction();
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...a11y}>
+      <Pressable disabled={closing} focusable={!closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...a11y}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
