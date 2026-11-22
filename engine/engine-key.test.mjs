@@ -538,3 +538,21 @@ test(
     }
   }),
 )
+
+test(
+  'a layer copy of a foreign GN unit stays in --paths for that platform',
+  withFixture(({ root, key, pathspecs, dirty, git }) => {
+    const borrowed = `${ardia}/ac_external_apps.mm`
+    appendFileSync(join(root, 'engine/ardiacore-linux/copies.tsv'), `${borrowed}\tborrowed/ac_external_apps.mm\n`)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'copy foreign unit')
+    const before = key('linux')
+    const linuxPaths = pathspecs('linux')
+    assert.ok(!linuxPaths.includes(`:(exclude)${borrowed}`), linuxPaths.join('\n'))
+    appendFileSync(join(root, borrowed), 'edit\n')
+    assert.match(dirty('linux'), /ac_external_apps\.mm/)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'edit borrowed unit')
+    assert.notEqual(key('linux'), before)
+  }),
+)

@@ -51,15 +51,21 @@ def built_key(table, key):
     return None
 
 
+def valid_tag(tag, built):
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', tag):
+        return False
+    return not tag.startswith('engine-') or tag == release_tag(built)
+
+
 def fetched_built_key(directory, key):
     complete = directory / '.complete'
     if directory.name != key[:12] or not complete.is_file():
         return None
     lines = complete.read_text().split('\n')
-    if len(lines) < 2:
+    if len(lines) < 2 or not HEX64.match(lines[0]):
         return None
     fields = lines[1].split('\t')
-    if len(fields) != 4 or fields[0] != key or fields[2] != lines[0] or not HEX40.match(fields[3]) or fields[1] != release_tag(fields[3]):
+    if len(fields) != 4 or fields[0] != key or fields[2] != lines[0] or not HEX40.match(fields[3]) or not valid_tag(fields[1], fields[3]):
         return None
     return fields[3]
 

@@ -295,7 +295,7 @@ def paths(platform):
     specs += [f':(exclude){path}' for path in sorted(plan.skipped_patches)]
     for layer in sorted(plan.skipped_layers):
         specs += [f':(exclude){path}' for path in layer_excludes(tree, layer, plan.lent)]
-    specs += [f':(exclude){path}' for path in sorted(plan.foreign_units)]
+    specs += [f':(exclude){path}' for path in sorted(plan.foreign_units - plan.lent)]
     return specs
 
 

@@ -129,6 +129,7 @@ if [ -z "${tag:-}" ] && [ -z "${sha:-}" ] && [ -f "$dest/.complete" ]; then
   exit 0
 fi
 [[ "${tag:-}" =~ ^[A-Za-z0-9._-]+$ ]] || die "bad release tag in the engine table row: $found"
+[[ "$tag" != engine-* || "$tag" = "engine-${built:0:12}" ]] || die "bad release tag in the engine table row: $found"
 [[ "${sha:-}" =~ ^[0-9a-f]{64}$ ]] || die "bad SHA-256 in the engine table row: $found"
 if [ -f "$dest/.complete" ] && [ "$(head -n 1 "$dest/.complete")" = "$sha" ] && cached_key "$selected" "$built"; then
   echo "using the cached Linux engine $short" >&2
