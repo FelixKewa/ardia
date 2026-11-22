@@ -86,7 +86,7 @@ enum PluginProgramLinks {
     if legacy && folders.legacyFolder(name, pin: pin) == nil { return ["ok": false, "reason": "its earlier copy is gone"] }
     let unverified = { (reason: String) -> [String: Any] in
       if case .success(let places) = folders.programPlaces(),
-        PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: []) == .stuck
+        PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [], bundledDigests: pin?.entry(name)?.bundledDigests ?? []) == .stuck
       {
         return ["ok": false, "reason": "\(reason), and the programs it left on PATH couldn't be taken off"]
       }
@@ -130,7 +130,7 @@ enum PluginProgramLinks {
     var check = CurrentCheck.trusted
     if !clean, let copy {
       let source = TrustedProgramCopy(version: spec["version"] as? String, approved: approved, digest: copy.payloadDigest)
-      check = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [source])
+      check = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [source], bundledDigests: pin?.entry(name)?.bundledDigests ?? [])
       if check == .stuck { return ["ok": false, "reason": "its programs on PATH don't match the copy Ardia checked, and couldn't be taken off PATH"] }
     }
     switch result {

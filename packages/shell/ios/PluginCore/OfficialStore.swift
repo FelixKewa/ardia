@@ -185,7 +185,7 @@ final class OfficialVerification {
     return [Int64(info.st_dev), Int64(info.st_ino), Int64(info.st_size), Int64(info.st_mtimespec.tv_sec), Int64(info.st_mtimespec.tv_nsec), Int64(info.st_ctimespec.tv_sec), Int64(info.st_ctimespec.tv_nsec)]
   }
 
-  private static func treeStamp(_ root: String) -> [[Int64]]? {
+  static func treeStamp(_ root: String) -> [[Int64]]? {
     guard let top = stamp(root), let walker = FileManager.default.enumerator(atPath: root) else { return nil }
     var stamps = [top]
     var names: [String] = []

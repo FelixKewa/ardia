@@ -91,6 +91,40 @@ final class OfficialPluginsTests: XCTestCase {
     return OfficialInstaller.verifyAndPublish(entry, archive: download, scratch: scratch, store: store, registry: registry)
   }
 
+  func testAPlantedActiveCopyThatNoSignedPinNamesIsNotOfficialWhateverPluginsJsonSays() throws {
+    let planted = try pluginArchive(manifest(), tool: Data("#!/bin/sh\necho planted\n".utf8))
+    let plantedSha = try XCTUnwrap(OfficialArchive.sha256(file: planted))
+    let made = try publish(planted, entry: entry(sha: plantedSha)).get()
+    XCTAssertTrue(store.activate("tool", sha: plantedSha), "the copy is internally consistent: its download matches its own SHA-256")
+    XCTAssertNotNil(store.active("tool"))
+    let pin = OfficialPin(entries: [entry(sha: String(repeating: "6", count: 64))])
+    let signed = try XCTUnwrap(pin.entry("tool"))
+    XCTAssertNil(OfficialTrust.trustedActive(store, signed), "active only selects among copies a signed pin vouches for")
+    XCTAssertNil(OfficialTrust.copy(store, name: "tool", folderId: made.copy.folderId, pin: pin), "no record, forged or not, makes it official")
+    XCTAssertNil(OfficialTrust.copy(store, name: "tool", folderId: made.copy.folderId, pin: nil))
+    var earlier = signed
+    earlier.trustedArtifacts = [plantedSha]
+    let history = OfficialPin(entries: [earlier])
+    XCTAssertEqual(OfficialTrust.copy(store, name: "tool", folderId: made.copy.folderId, pin: history)?.sha, plantedSha, "an earlier pinned artifact the signed history lists stays official")
+    XCTAssertEqual(OfficialTrust.trustedActive(store, earlier)?.sha, plantedSha)
+  }
+
+  func testThe0247CopyCountsOnlyWhileItIsTheOneAReleaseShipped() throws {
+    let old = try makeFolder("0.4.0", say: "old")
+    defer { old.close() }
+    _ = try install(old, version: "0.4.0", identity: OfficialPin.legacyFolderId)
+    let kept = try XCTUnwrap(PluginPrograms.legacyCopy(plugin: "tool", places: places))
+    let shipped = try XCTUnwrap(PluginPrograms.payloadDigest(kept))
+    XCTAssertTrue(OfficialTrust.bundledCopyHolds(kept, digests: [shipped]), "0.2.47's kept copy is official because its bytes are the ones 0.2.47 shipped")
+    XCTAssertFalse(OfficialTrust.bundledCopyHolds(kept, digests: []), "with no shipped digest nothing counts")
+    XCTAssertFalse(OfficialTrust.bundledCopyHolds(kept, digests: [String(repeating: "7", count: 64)]))
+    try tamper("\(kept)/bin/tool", "#!/bin/sh\necho planted\n")
+    XCTAssertFalse(OfficialTrust.bundledCopyHolds(kept, digests: [shipped]), "a copy under the old identity whose bytes changed isn't official")
+    XCTAssertEqual(
+      PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", programs: toolPrograms, places: places, trusted: [], bundledDigests: [shipped]), .dropped,
+      "and it comes off PATH")
+  }
+
   func testThePinIsReadFromOfficialPluginsJsonAsIs() throws {
     let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../apps/browser/official-plugins.json")
     let doc = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
@@ -108,6 +142,20 @@ final class OfficialPluginsTests: XCTestCase {
     var clash = bare
     clash["plugins"] = ["a", "b"].map { ["name": $0, "version": "1.0.0", "release": "https://example.invalid/r", "reservedPrograms": ["same"], "artifacts": ["macos-arm64": ["file": "\($0).tar.gz", "sha256": String(repeating: "a", count: 64)]]] }
     XCTAssertNil(OfficialPin.parse(clash), "two plugins can't reserve one program")
+    var trusted = bare
+    let a = String(repeating: "a", count: 64)
+    let b = String(repeating: "b", count: 64)
+    trusted["plugins"] = [["name": "x", "version": "1.0.0", "release": "https://example.invalid/r", "artifacts": ["macos-arm64": ["file": "x.tar.gz", "sha256": a]], "trusted": ["artifacts": [b], "bundledDigests": [a]]]]
+    let read = try XCTUnwrap(OfficialPin.parse(trusted)?.entry("x"))
+    XCTAssertEqual([read.trustedArtifacts, read.bundledDigests], [[b], [a]])
+    XCTAssertTrue(read.trusts(a) && read.trusts(b))
+    XCTAssertFalse(read.trusts(String(repeating: "c", count: 64)))
+    var bad = trusted
+    bad["plugins"] = [["name": "x", "version": "1.0.0", "release": "https://example.invalid/r", "artifacts": ["macos-arm64": ["file": "x.tar.gz", "sha256": a]], "trusted": ["artifacts": ["not-a-sha"]]]]
+    XCTAssertNil(OfficialPin.parse(bad), "a malformed trusted list refuses the whole pin")
+    let signedURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../apps/browser/official-plugins-history.json")
+    let history = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: signedURL)) as? [String: Any])
+    XCTAssertEqual(history["version"] as? Int, 1)
   }
 
   func testAVerifiedDownloadIsPublishedByDigestAndStaysOutOfTheActiveCopyUntilPromoted() throws {
@@ -406,7 +454,11 @@ final class OfficialPluginsTests: XCTestCase {
     let old = try makeFolder("0.4.0", say: "old")
     defer { old.close() }
     _ = try install(old, version: "0.4.0", identity: OfficialPin.legacyFolderId)
-    XCTAssertEqual(PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", programs: toolPrograms, places: places, trusted: []), .trusted, "a failed update leaves 0.2.47's ardia on PATH")
+    let kept = try XCTUnwrap(PluginPrograms.legacyCopy(plugin: "tool", places: places))
+    let bundled = try XCTUnwrap(PluginPrograms.payloadDigest(kept))
+    XCTAssertEqual(
+      PluginPrograms.dropCurrentUnlessTrusted(plugin: "tool", programs: toolPrograms, places: places, trusted: [], bundledDigests: [bundled]), .trusted,
+      "a failed update leaves 0.2.47's ardia on PATH when its copy is the one 0.2.47 shipped")
     XCTAssertNotNil(PluginPrograms.linkTarget("\(places.binDir)/tool"))
 
     let first = try pluginArchive(manifest())
