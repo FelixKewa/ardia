@@ -85,6 +85,7 @@ onIos("Settings' primary actions share one role: Default Browser and Sync's conn
     expect(modifier(button, "buttonBorderShape")).toMatchObject({ shape: "roundedRectangle", cornerRadius: actionLayout.radius.regular });
     expect(modifier(button, "controlSize")).toMatchObject({ size: "large" });
     expect(modifier(button, "buttonStyle")).toMatchObject({ style: "borderedProminent" });
+    expect(modifier(button, "font")).toMatchObject({ weight: "semibold" });
   }
   unmount(browser);
   unmount(sync);
@@ -95,6 +96,7 @@ onIos("Settings' primary actions share one role: Default Browser and Sync's conn
     expect(step.props.size).toBe("compact");
     const button = within(step, (props) => Array.isArray(props.modifiers))[0]!;
     expect(modifier(button, "buttonBorderShape")).toMatchObject({ cornerRadius: actionLayout.radius.compact });
+    expect(modifier(button, "font")).toMatchObject({ weight: "semibold" });
   }
   unmount(connect);
 });

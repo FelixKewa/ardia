@@ -4,7 +4,7 @@ import { PlatformColor } from "react-native";
 import { Button, HStack, Image, ProgressView, Section, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import { accessibilityAddTraits, accessibilityHidden, accessibilityValue, buttonBorderShape, buttonStyle, controlSize, disabled, fixedSize, font, foregroundStyle, frame, labelStyle, listRowBackground, listRowInsets, tint } from "@expo/ui/swift-ui/modifiers";
 import { listWords } from "../../lib/sharedWords";
-import { primaryActionRoles, type PrimaryActionRole } from "../ui/tokens";
+import { actionLayout, primaryActionRoles, type PrimaryActionRole } from "../ui/tokens";
 import { CheckmarkLabel, space, SettingsHeroContent, settingsUIAvailable, SetupStepRow, useTheme, type SettingsTintName, type SetupProgress } from "../ui";
 
 const PAGE_INSET = 16;
@@ -60,7 +60,7 @@ export function useSettingsActionModifiers(size: SettingsActionSize, emphasis: S
   const shape = buttonBorderShape("roundedRectangle", role.radius);
   const fill = emphasis === "primary" ? [buttonStyle("borderedProminent"), tint(theme[role.fill]), foregroundStyle(theme[role.ink])] : [buttonStyle("bordered")];
   const sizing = [controlSize(role.nativeControlSize), ...(size === "compact" ? [labelStyle("titleAndIcon")] : []), fixedSize({ horizontal: false, vertical: role.wraps })];
-  return [...fill, shape, ...sizing];
+  return [...fill, shape, ...sizing, font({ weight: actionLayout.nativeLabelWeight })];
 }
 
 type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; systemImage?: string; isDisabled?: boolean; busy?: boolean; busyValue?: string; focusRequest?: number };

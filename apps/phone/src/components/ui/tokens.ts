@@ -814,6 +814,7 @@ export const actionLayout = {
   verticalPadding: space.m,
   label: { hero: font.body, regular: font.body, compact: font.subheadline },
   labelWeight: "600",
+  nativeLabelWeight: "semibold",
   icon: { hero: 19, regular: 19, compact: 17 },
   iconGap: space.s,
   edge: 1,
