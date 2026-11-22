@@ -72,7 +72,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   const lineY = slotHere === null ? null : menuLineY(ids, offsets, draggedHere, slotHere, row);
 
   const openChild = (id: string, sprung = false) =>
-    void measureRect(views.current.get(id) ?? null).then((anchor) => anchor && openFolderMenu(windowId, { parentId: id, fromIndex: 0, anchor, level: level + 1 }, { sprung }));
+    void measureRect(views.current.get(id) ?? null).then((anchor) => anchor && !latest.current.closing && !latest.current.retained && openFolderMenu(windowId, { parentId: id, fromIndex: 0, anchor, level: level + 1 }, { sprung }));
 
   const latest = useRef({ ids, place, closing, retained: panel.retained, openChild, row });
   latest.current = { ids, place, closing, retained: panel.retained, openChild, row };
