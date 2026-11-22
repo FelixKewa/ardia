@@ -63,7 +63,7 @@ inline constexpr base::TimeDelta kSeedWait = base::Seconds(2);
 inline constexpr int kMostPerProfile = 4;
 inline constexpr int kMostRetries = 6;
 inline constexpr base::TimeDelta kRetryAfter = base::Milliseconds(150);
-inline constexpr base::TimeDelta kNoFormAfterLoad = base::Seconds(8);
+inline constexpr base::TimeDelta kNoFormAfterLoad = base::Seconds(3);
 inline constexpr base::TimeDelta kSettleAfterLoad = base::Milliseconds(750);
 inline constexpr base::TimeDelta kNextStepAfterLoad = base::Seconds(3);
 inline constexpr base::TimeDelta kSettleWithoutNavigation = base::Seconds(6);
@@ -121,6 +121,8 @@ class VaultSignIn : public content::WebContentsObserver,
   void RequestRefused();
   void MaybePasskeyOnly();
   void NoForm();
+  void MaybeNoForm();
+  void NoFormTimedOut();
   void OnFetchCompleted() override;
   void FormsChanged(content::RenderFrameHost* frame);
   std::optional<LoginForm> Pick(
@@ -187,6 +189,7 @@ class VaultSignIn : public content::WebContentsObserver,
   bool navigated_since_submit_ = false;
   bool passkey_requested_ = false;
   bool page_loaded_ = false;
+  bool page_ready_ = false;
   bool profile_gone_ = false;
   bool settled_ = false;
   int steps_ = 0;

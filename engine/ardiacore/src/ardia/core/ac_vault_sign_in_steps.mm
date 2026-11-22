@@ -29,6 +29,37 @@ void VaultSignIn::NoForm() {
   Conclude(passkey_requested_ ? "needs_passkey" : "no_form");
 }
 
+void VaultSignIn::MaybeNoForm() {
+  if (phase_ != Phase::kStart || submitted_ || filling_ || awaiting_code_ ||
+      !credential_ready_ || !page_ready_) {
+    return;
+  }
+  const std::vector<LoginForm> forms = Usable();
+  if (std::ranges::any_of(forms, [](const LoginForm& f) {
+        return !f.password.is_null() ||
+               (!f.username.is_null() && f.code.is_null());
+      })) {
+    no_form_.Stop();
+    return;
+  }
+  if (SignUpOnly()) {
+    Conclude("no_form");
+    return;
+  }
+  if (!no_form_.IsRunning()) {
+    no_form_.Start(FROM_HERE, kNoFormAfterLoad,
+                   base::BindOnce(&VaultSignIn::NoFormTimedOut,
+                                  base::Unretained(this)));
+  }
+}
+
+void VaultSignIn::NoFormTimedOut() {
+  if (phase_ != Phase::kStart || submitted_ || filling_ || awaiting_code_) {
+    return;
+  }
+  NoForm();
+}
+
 void VaultSignIn::OnFetchCompleted() {
   if (phase_ == Phase::kDone || credential_ready_) {
     return;
@@ -55,14 +86,15 @@ void VaultSignIn::OnFetchCompleted() {
     return;
   }
   Advance();
+  MaybeNoForm();
 }
 
 void VaultSignIn::FormsChanged(content::RenderFrameHost* frame) {
   if (phase_ == Phase::kDone) {
     return;
   }
-  no_form_.Stop();
   Advance();
+  MaybeNoForm();
 }
 
 std::optional<LoginForm> VaultSignIn::Pick(
@@ -349,6 +381,11 @@ bool VaultSignIn::SignUpOnly() {
 }
 
 void VaultSignIn::DOMContentLoaded(content::RenderFrameHost* frame) {
+  if (phase_ != Phase::kDone && !submitted_ && frame->IsInPrimaryMainFrame()) {
+    page_ready_ = true;
+    MaybeNoForm();
+    return;
+  }
   if (phase_ == Phase::kDone || !submitted_ || !navigated_since_submit_ ||
       filling_ || awaiting_code_ || !IsDecidingFrame(frame) ||
       (phase_ != Phase::kPasswordSent && phase_ != Phase::kCodeSent) ||
@@ -394,10 +431,16 @@ void VaultSignIn::DidFinishNavigation(content::NavigationHandle* navigation) {
   if (main_frame) {
     page_loaded_ = false;
     passkey_requested_ = false;
+    if (!submitted_) {
+      page_ready_ = false;
+      no_form_.Stop();
+    }
   }
   if (submitted_) {
     navigated_since_submit_ = true;
-    settle_.Stop();
+    settle_.Start(FROM_HERE, kSettleWithoutNavigation,
+                  base::BindOnce(&VaultSignIn::Judge,
+                                 base::Unretained(this)));
   }
 }
 
@@ -431,6 +474,7 @@ void VaultSignIn::DidStopLoading() {
   if (phase_ == Phase::kDone) {
     return;
   }
+  const bool first_load = !page_loaded_;
   page_loaded_ = true;
   if (load_ms_.is_zero() && !load_started_.is_null()) {
     load_ms_ = base::TimeTicks::Now() - load_started_;
@@ -449,14 +493,12 @@ void VaultSignIn::DidStopLoading() {
                                  base::Unretained(this)));
     return;
   }
-  if (!submitted_ && Usable().empty()) {
-    if (SignUpOnly()) {
-      Conclude("no_form");
-      return;
+  if (!submitted_) {
+    page_ready_ = true;
+    if (first_load) {
+      no_form_.Stop();
     }
-    no_form_.Start(FROM_HERE, kNoFormAfterLoad,
-                   base::BindOnce(&VaultSignIn::NoForm,
-                                  base::Unretained(this)));
+    MaybeNoForm();
   }
 }
 
