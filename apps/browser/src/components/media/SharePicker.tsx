@@ -10,8 +10,7 @@ import {
   shareTab,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, radioA11y, spaceActivates, Text, useLiveWhile, useClosing, useHover, useLiveAction, usePopoverPresenceOf, useStillOpen, whileOpen, tapActivates } from "../ui";
-import { PromptHeader } from "../site/PromptParts";
+import { Symbol, Button, Checkbox, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Text, useHover } from "../ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -36,8 +35,9 @@ const audioOffered = (kind: SourceKind | null, audio: DisplayMediaAudio | null) 
   !!audio && (kind === "tab" ? audio.tab : kind === "screen" ? audio.screen : kind === "window" ? !!audio.window : false);
 
 export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
-  const { shown: request, closing, onClosed } = usePopoverPresenceOf(useMedia((m) => m.displayRequests[tabId]) ?? null);
-  const stillOpen = useStillOpen(!closing);
+  const theme = useTheme();
+  const tokens = useMediaTokens();
+  const request = useMedia((m) => m.displayRequests[tabId]);
   const [sources, setSources] = useState<DisplayMediaSource[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [shareAudio, setShareAudio] = useState(AUDIO_SHARED_BY_DEFAULT);
@@ -46,7 +46,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const list = useRef<ScrollView>(null);
 
   useEffect(() => {
-    if (!request || closing) return;
+    if (!request) return;
     setSources(request.sources);
     setSelected(null);
     setShareAudio(AUDIO_SHARED_BY_DEFAULT);
@@ -67,7 +67,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
       clearInterval(t);
       clearTimeout(focusList);
     };
-  }, [request?.id, closing]);
+  }, [request?.id]);
 
   useEffect(() => {
     const missing = [...new Set(sources.map((s) => s.pid).filter((pid): pid is number => pid !== undefined && !(pid in icons)))];
@@ -77,7 +77,6 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     );
   }, [sources]);
 
-  const live = useLiveWhile(closing);
   if (!request) return null;
   const tabs = shareableTabs(tabId);
   const screens = screenAccess ? sources.filter((s) => s.kind === "screen") : [];
@@ -88,43 +87,45 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const valid = !!kindOf(selected);
   const selectedKind = kindOf(selected);
   const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
-  const act = whileOpen(closing, stillOpen);
-  const share = act((id: string | null = selected) => {
+  const share = (id: string | null = selected) => {
     const kind = kindOf(id);
     if (!id || !kind) return;
     if (kind === "tab") return void shareTab(tabId, id.slice(TAB.length), audioFor(kind));
     answerDisplayMedia(tabId, id, audioFor(kind));
-  });
-  const cancel = act(() => answerDisplayMedia(tabId, null));
-  const select = act(setSelected);
+  };
+  const cancel = () => answerDisplayMedia(tabId, null);
   const frameHost = request.frameOrigin ? originForSecurityDisplay(request.frameOrigin) : "";
   const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : "The site";
   const width = Math.min(WIDTH, paneWidth - 24);
 
   return (
-    <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel} closing={closing} onClosed={onClosed}>
+    <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
       <View style={{ paddingBottom: PANEL.inset }}>
-        <View style={HEADER}>
-          <PromptHeader
-            icons={["rectangle.inset.filled.and.person.filled"]}
-            title={`Share your screen with ${originForSecurityDisplay(request.origin)}`}
-            message={
-              audioFor(selectedKind)
-                ? `${receiver} will see and hear what you choose.`
-                : request.audio && !request.audio.screen && !request.audio.window && selectedKind !== "tab"
-                  ? `${receiver} will see what you choose. Only tabs share their audio.`
-                  : `${receiver} will see what you choose.`
-            }
-          />
-        </View>
+        <PanelHeader
+          large
+          icon={
+            <View style={{ width: 32, height: 32, borderRadius: radius.tile, alignItems: "center", justifyContent: "center", backgroundColor: tokens.iconTile }}>
+              <Symbol name="rectangle.inset.filled.and.person.filled" size={15} color={theme.icon} style={{ width: 22, height: 22 }} />
+            </View>
+          }
+          title={`Share your screen with ${originForSecurityDisplay(request.origin)}`}
+          subtitle={
+            audioFor(selectedKind)
+              ? `${receiver} will see and hear what you choose.`
+              : request.audio && !request.audio.screen && !request.audio.window && selectedKind !== "tab"
+                ? `${receiver} will see what you choose. Only tabs share their audio.`
+                : `${receiver} will see what you choose.`
+          }
+        />
 
         <ScrollView
           ref={list}
           focusable
           enableFocusRing={false}
           keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
-          onKeyDown={live((e) => (e.nativeEvent.key === "Escape" ? cancel() : share()))}
+          onKeyDown={(e) => (e.nativeEvent.key === "Escape" ? cancel() : share())}
           style={{ maxHeight: 340, marginTop: space.xs }}
+          contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}
         >
           {tabs.length ? (
             <>
@@ -132,11 +133,15 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
               {tabs.map((t) => (
                 <SourceRow
                   key={t.id}
-                  leading={<Favicon url={t.url} />}
+                  leading={
+                    <View style={{ width: PANEL.iconSlot, alignItems: "center" }}>
+                      <Favicon url={t.url} />
+                    </View>
+                  }
                   title={t.title || t.url}
                   detail={t.id === tabId ? "This Tab" : null}
                   selected={TAB + t.id === selected}
-                  onSelect={() => select(TAB + t.id)}
+                  onSelect={() => setSelected(TAB + t.id)}
                   onShare={() => share(TAB + t.id)}
                 />
               ))}
@@ -145,9 +150,9 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           {screens.length ? (
             <>
               <SectionTitle title={screens.length === 1 ? "Screen" : "Screens"} />
-              <View style={SCREEN_GRID}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }}>
                 {screens.map((s) => (
-                  <ScreenTile key={s.id} source={s} width={(width - 2 * PANEL.rowInset - space.m) / 2} selected={s.id === selected} onSelect={() => select(s.id)} onShare={() => share(s.id)} />
+                  <ScreenTile key={s.id} source={s} width={(width - 2 * PANEL.rowInset - space.m) / 2} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
                 ))}
               </View>
             </>
@@ -156,14 +161,14 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
             <>
               <SectionTitle title="Windows" />
               {windows.map((s) => (
-                <WindowRow key={s.id} source={s} icon={s.pid !== undefined ? icons[s.pid] : null} selected={s.id === selected} onSelect={() => select(s.id)} onShare={() => share(s.id)} />
+                <WindowRow key={s.id} source={s} icon={s.pid !== undefined ? icons[s.pid] : null} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
               ))}
             </>
           ) : null}
           {screenAccess === false ? (
             <>
               <SectionTitle title="Screens and Windows" />
-              <ScreenRecordingNeeded onOpen={act(() => void askForScreenRecording())} />
+              <ScreenRecordingNeeded />
             </>
           ) : null}
           {screenAccess !== false && !screens.length && !windows.length && !tabs.length ? <Text size="small" tone="textSecondary" style={EMPTY}>Nothing can be shared right now.</Text> : null}
@@ -173,13 +178,15 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           {selectedKind && request.audio && audioOffered(selectedKind, request.audio) ? (
             <Checkbox
               value={shareAudio[selectedKind]}
-              onChange={act((on: boolean) => setShareAudio((current) => ({ ...current, [selectedKind]: on })))}
+              onChange={(on) => setShareAudio((current) => ({ ...current, [selectedKind]: on }))}
               label={audioLabel(selectedKind, request.audio)}
             />
           ) : null}
           <View style={{ flex: 1 }} />
           <Button variant="pill" title="Cancel" onPress={cancel} />
-          <Button variant="pill" title="Share" primary disabled={!valid} onPress={() => share()} />
+          <View pointerEvents={valid ? "auto" : "none"} style={{ opacity: valid ? 1 : 0.4 }}>
+            <Button variant="pill" title="Share" primary onPress={() => share()} />
+          </View>
         </View>
       </View>
     </Popover>
@@ -187,21 +194,19 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
 }
 
 const EMPTY = { padding: space.l, textAlign: "center" } as const;
-const SCREEN_GRID = { flexDirection: "row", flexWrap: "wrap", gap: space.m, paddingHorizontal: PANEL.rowInset } as const;
-const HEADER = { paddingHorizontal: PANEL.inset, paddingTop: PANEL.inset } as const;
-const NOTICE = { paddingHorizontal: PANEL.inset, paddingBottom: space.s, gap: space.xs, alignItems: "flex-start" } as const;
+const NOTICE = { paddingHorizontal: PANEL.rowPadding, paddingBottom: space.s, gap: space.m, alignItems: "flex-start" } as const;
 
-function ScreenRecordingNeeded({ onOpen }: { onOpen: () => void }) {
+function ScreenRecordingNeeded() {
   return (
     <View style={NOTICE}>
       <Text size="small" tone="textSecondary">
         To share a window or your entire screen, turn on Ardia in System Settings › Privacy & Security › Screen Recording, then quit and reopen Ardia.
       </Text>
-      <Button variant="text" look="link" tone="textPrimary" title="Open System Settings" onPress={onOpen} />
+      <Button variant="pill" title="Open System Settings" onPress={() => void askForScreenRecording()} />
     </View>
   );
 }
-const SECTION_TITLE = { paddingHorizontal: PANEL.inset, marginTop: space.s, marginBottom: space.s } as const;
+const SECTION_TITLE = { paddingHorizontal: PANEL.rowPadding, marginTop: space.s, marginBottom: space.s } as const;
 
 function SectionTitle({ title }: { title: string }) {
   return (
@@ -219,19 +224,17 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
   const iconScaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const aspect = source.width && source.height ? source.height / source.width : 10 / 16;
   const previewWidth = width - 2 * space.m;
-  const closing = useClosing();
-  const live = useLiveAction();
   return (
-    <View {...hoverProps} onDoubleClick={live(onShare)}>
-      <Pressable disabled={closing} onPress={live(onSelect)} onAccessibilityTap={tapActivates(live(onSelect))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onSelect))} {...radioA11y(selected, source.name)}>
-        <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? theme.rowSelected : hovered ? theme.rowHover : undefined }}>
+    <View {...hoverProps} onDoubleClick={onShare}>
+      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+        <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? tokens.pickerSelected : hovered ? theme.rowHover : undefined }}>
           <View
             style={{
               width: previewWidth,
               height: Math.min(previewWidth * aspect, 80),
               borderRadius: concentric(radius.panel, space.m),
               borderWidth: selected ? 2 : 1,
-              borderColor: selected ? theme.accent : theme.chipBorder,
+              borderColor: selected ? theme.accent : tokens.previewBorder,
               backgroundColor: tokens.previewFill,
               alignItems: "center",
               justifyContent: "center",
@@ -257,7 +260,8 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
 
 const TILE_NAME = { marginTop: space.s } as const;
 const TILE_RESOLUTION: TextStyle = { fontVariant: ["tabular-nums"] };
-const ROW_DETAIL = { flexShrink: 1 } as const;
+const ROW_TITLE = { flexShrink: 1 } as const;
+const ROW_DETAIL = { flexShrink: 2 } as const;
 
 function WindowRow({ source, icon, selected, onSelect, onShare }: { source: DisplayMediaSource; icon: string | null | undefined; selected: boolean; onSelect(): void; onShare(): void }) {
   const theme = useTheme();
@@ -293,22 +297,28 @@ function SourceRow({
   onSelect(): void;
   onShare(): void;
 }) {
-  const live = useLiveAction();
+  const theme = useTheme();
+  const tokens = useMediaTokens();
+  const { hovered, hoverProps } = useHover();
+  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
+  const iconScaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   return (
-    <View onDoubleClick={live(onShare)}>
-      <MenuRow
-        checked={selected}
-        leading={leading}
-        title={title}
-        onPress={onSelect}
-        accessory={
-          detail ? (
-            <Text lines={1} size="caption" tone="textSecondary" style={detailShrinks ? ROW_DETAIL : undefined}>
+    <View {...hoverProps} onDoubleClick={onShare}>
+      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+        <View style={{ height: 34, borderRadius: PANEL.rowRadius, flexDirection: "row", alignItems: "center", gap: PANEL.iconGap, paddingHorizontal: PANEL.rowPadding, backgroundColor: selected ? tokens.pickerSelected : hovered ? theme.rowHover : undefined }}>
+          <Animated.View pointerEvents="none" style={iconScaleStyle}>{leading}</Animated.View>
+          <Text lines={1} style={ROW_TITLE}>
+            {title}
+          </Text>
+          {detail ? (
+            <Text lines={1} size="small" tone="textSecondary" style={detailShrinks ? ROW_DETAIL : undefined}>
               {detail}
             </Text>
-          ) : null
-        }
-      />
+          ) : null}
+          <View style={{ flex: 1 }} />
+          {selected ? <Symbol name="checkmark" size={11} weight="semibold" color={theme.accent} style={{ width: 16, height: 16 }} /> : null}
+        </View>
+      </Pressable>
     </View>
   );
 }

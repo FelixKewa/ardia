@@ -17,7 +17,6 @@ const CLOSING_PANELS = [
   "iconPicker/IconGrid.tsx",
   "iconPicker/IconPickerPanel.tsx",
   "media/CastPicker.tsx",
-  "media/SharePicker.tsx",
   "ntp/Personalize.tsx",
   "onboarding/OptionCard.tsx",
   "onboarding/Parts.tsx",

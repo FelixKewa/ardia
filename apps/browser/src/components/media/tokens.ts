@@ -8,6 +8,9 @@ const light = {
   track: "rgba(0,0,0,0.1)",
   fill: "rgba(0,0,0,0.35)",
   hoverFill: "rgba(0,0,0,0.6)",
+  iconTile: "rgba(0,0,0,0.05)",
+  pickerSelected: "rgba(0,0,0,0.08)",
+  previewBorder: "rgba(0,0,0,0.12)",
   previewFill: "rgba(0,0,0,0.03)",
 };
 
@@ -15,6 +18,9 @@ const dark: typeof light = {
   track: "rgba(255,255,255,0.2)",
   fill: "rgba(255,255,255,0.5)",
   hoverFill: "rgba(255,255,255,0.8)",
+  iconTile: "rgba(255,255,255,0.08)",
+  pickerSelected: "rgba(255,255,255,0.14)",
+  previewBorder: "rgba(255,255,255,0.15)",
   previewFill: "rgba(255,255,255,0.05)",
 };
 
