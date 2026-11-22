@@ -77,6 +77,7 @@ test("1,000 logins save in parallel without the JS side costing more than a few 
   const ms = performance.now() - started;
   assert.equal(result.saved, 1000);
   assert.equal(logins().size, 1000);
+  assert.equal(exchangeSummary(result), "Imported 1,000 passwords from Passwords.");
   assert.ok(ms < 2000, `took ${ms} ms`);
 });
 
@@ -95,6 +96,14 @@ test("the engine's batch save takes every row in one call per 500 when it exists
     assert.deepEqual(batches, [500, 500, 200]);
     assert.equal(result.saved, 1197);
     assert.equal(result.existing, 3);
+    assert.deepEqual(exchangeResultLines({ ...result, codes: 1200, failed: 1000, codesFailed: 500, skipped: 2500, passkeys: 1001 }), [
+      "1,200 verification codes saved with their logins.",
+      "3 passwords were already saved.",
+      "1,500 couldn't be saved.",
+      "2,500 items skipped: no website, or not a password or code.",
+      "1,001 passkeys stayed in Passwords: Ardia can't store imported passkeys yet.",
+    ]);
+    assert.equal(exchangeSummary({ ...result, existing: 1000, failed: 0, skipped: 500 }), "Imported 1,197 passwords from Passwords. 1,500 skipped.");
   } finally {
     delete globalThis.acTestNativeModules.ArdiaPasswords;
   }

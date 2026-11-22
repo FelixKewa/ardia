@@ -151,7 +151,7 @@ export async function saveExchangedCredentials(profile: string, data: ExchangedC
 export function exchangeSummary(result: ExchangeResult): string {
   const skipped = result.existing + result.failed + result.skipped;
   const codes = result.codes ? ` and ${plural(result.codes, "verification code")}` : "";
-  return `Imported ${plural(result.saved, "password")}${codes} from ${result.exporter || "your password manager"}.${skipped ? ` ${skipped} skipped.` : ""}`;
+  return `Imported ${plural(result.saved, "password")}${codes} from ${result.exporter || "your password manager"}.${skipped ? ` ${skipped.toLocaleString("en-US")} skipped.` : ""}`;
 }
 
 export function exchangeResultLines(result: ExchangeResult): string[] {
@@ -159,7 +159,7 @@ export function exchangeResultLines(result: ExchangeResult): string[] {
   if (result.codes) lines.push(`${plural(result.codes, "verification code")} saved with ${result.codes === 1 ? "its login" : "their logins"}.`);
   if (result.existing) lines.push(`${plural(result.existing, "password")} ${result.existing === 1 ? "was" : "were"} already saved.`);
   const failed = result.failed + result.codesFailed;
-  if (failed) lines.push(`${failed} couldn't be saved.`);
+  if (failed) lines.push(`${failed.toLocaleString("en-US")} couldn't be saved.`);
   if (result.skipped) lines.push(`${plural(result.skipped, "item")} skipped: no website, or not a password or code.`);
   if (result.passkeys) lines.push(`${plural(result.passkeys, "passkey")} stayed in ${result.exporter || "the other app"}: Ardia can't store imported passkeys yet.`);
   return lines;
