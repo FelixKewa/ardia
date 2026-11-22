@@ -770,14 +770,14 @@ export function captureCurrentCover() {
   void captureSnapshot(id);
 }
 
-export async function captureSnapshot(id: string, pageTop: number | null = null) {
-  if (!snapshotAllowed(id)) return;
+export async function captureSnapshot(id: string, pageTop: number | null = null): Promise<boolean> {
+  if (!snapshotAllowed(id)) return false;
   const countable = pictureCountable(id);
   const taken = await snapshotPage(id);
   const counts = countable && pictureCountable(id);
   if (taken && isRefusedSnapshot(taken)) {
     pictureRefused(id, taken.refused, counts);
-    return;
+    return false;
   }
   const snapshot = taken;
   if (snapshot) pictureSaved(id, snapshot.route, counts);
@@ -785,20 +785,20 @@ export async function captureSnapshot(id: string, pageTop: number | null = null)
   if (snapshot && top !== null) noteSnapshotPageTop(snapshot.uri, top);
   else if (snapshot?.frame) noteSnapshotPageTop(snapshot.uri, snapshot.frame.y);
   const tab = snapshot ? findTab(currentTabs(), id) : null;
-  if (!snapshot || !tab) return;
+  if (!snapshot || !tab) return false;
   const step = pictureCaptured(tab, snapshot.uri, snapshot.durable !== false, snapshot.generation);
   if (step && tab.snapshotFileName !== step.show) {
     updateTabById(id, { snapshotFileName: step.show });
     showFadingDeckThePicture(id);
   }
+  return step !== null;
 }
 
 function pictureScrolledPage(id: string) {
   if (Platform.OS !== "android" || loading.get(id) !== true || !coverIsCapturable(true, pageCovered())) return;
   const counts = pictureCountable(id);
-  const before = findTab(currentTabs(), id)?.snapshotFileName ?? null;
-  void captureSnapshot(id).then(() => {
-    if (counts && (findTab(currentTabs(), id)?.snapshotFileName ?? null) !== before) countUsage("page_pictures_scrolled");
+  void captureSnapshot(id).then((published) => {
+    if (published && counts) countUsage("page_pictures_scrolled");
   });
 }
 

@@ -1,10 +1,11 @@
 import { Platform } from "react-native";
 import { act } from "react-test-renderer";
 import { pages } from "../platform/pages";
+import { saveTabPosition } from "../state/browse/positions";
 import * as browse from "../state/browse/store";
 import { useOnboarding } from "../state/onboarding/store";
 import { dismissSearch } from "../state/search/store";
-import { currentTabs } from "../state/tabs/store";
+import { closeTabById, currentTabs, updateTabById } from "../state/tabs/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { withTabs } from "../../test/render/harness";
 
@@ -121,4 +122,48 @@ test("no picture is taken while something covers the page, such as the search tr
   scrollY = 3000;
   await scrollWatchTicks(2);
   expect(snapshot).not.toHaveBeenCalled();
+});
+
+test("a scroll saved by another path before the watch sees it, such as the save after a typed visit, still gets its picture", async () => {
+  const id = front();
+  pageIs(id, true);
+  await scrollWatchTicks(2);
+  snapshot.mockClear();
+  scrollY = 1500;
+  await act(async () => {
+    await saveTabPosition(id);
+  });
+  await scrollWatchTicks(2);
+  expect(snapshot).toHaveBeenCalledTimes(Platform.OS === "android" ? 1 : 0);
+});
+
+test("a capture whose tab closes before it lands publishes nothing and isn't counted", async () => {
+  const id = front();
+  act(() => updateTabById(id, { snapshotFileName: "file:///p/old.jpg" }));
+  pageIs(id, true);
+  await scrollWatchTicks(2);
+  counted.mockClear();
+  jest.spyOn(pages, "close").mockImplementation(async () => undefined);
+  jest.spyOn(pages, "deleteSnapshots").mockImplementation(async () => undefined);
+  snapshot.mockImplementation(async () => {
+    closeTabById(id);
+    return null as never;
+  });
+  scrollY = 2100;
+  await scrollWatchTicks(2);
+  expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
+});
+
+test("a refused capture isn't counted even when another capture changes the tab's picture meanwhile", async () => {
+  const id = front();
+  pageIs(id, true);
+  await scrollWatchTicks(2);
+  counted.mockClear();
+  snapshot.mockImplementation(async () => {
+    updateTabById(id, { snapshotFileName: "file:///p/from-another-capture.jpg" });
+    return { refused: "blank" } as never;
+  });
+  scrollY = 2700;
+  await scrollWatchTicks(2);
+  expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
 });

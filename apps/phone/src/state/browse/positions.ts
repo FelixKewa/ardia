@@ -6,6 +6,7 @@ import { scrollSaveDecision, type ScrollWatch } from "../../lib/scrollSettle";
 const SCROLL_CHECK_MS = 2000;
 
 const watches = new Map<string, ScrollWatch>();
+const rests = new Map<string, ScrollWatch>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let checking = false;
 
@@ -26,9 +27,10 @@ async function checkFront(frontId: () => string | null, cameToRest: (id: string)
     if (!at || frontId() !== id) return;
     const step = scrollSaveDecision(watches.get(id) ?? { lastSeen: null, lastSaved: null }, at.y);
     watches.set(id, step.next);
-    if (!step.save) return;
-    await saveTabPosition(id);
-    if (frontId() === id) cameToRest(id);
+    const rest = scrollSaveDecision(rests.get(id) ?? { lastSeen: null, lastSaved: null }, at.y);
+    rests.set(id, rest.next);
+    if (step.save) await saveTabPosition(id);
+    if (rest.save && frontId() === id) cameToRest(id);
   } finally {
     checking = false;
   }
@@ -41,4 +43,5 @@ export function watchFrontScroll(frontId: () => string | null, cameToRest: (id: 
 
 export function forgetPosition(id: string) {
   watches.delete(id);
+  rests.delete(id);
 }
