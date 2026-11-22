@@ -117,6 +117,12 @@ export function needsReview(s: Pick<PluginsStore, "listings" | "records">, name:
 
 export const currentPlugins = () => usePlugins.getState();
 
+export const UNSAVED = "plugins.json couldn't be saved. Try again.";
+
+export const clearUnsaved = (name: string) => {
+  if (currentPlugins().unsaved === name) usePlugins.setState({ unsaved: null });
+};
+
 export type PluginsCommit = Pick<PluginsStore, "listings" | "records">;
 const committing = new Set<(next: PluginsCommit, before: PluginsCommit) => void>();
 

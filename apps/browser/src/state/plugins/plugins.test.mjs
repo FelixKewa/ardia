@@ -526,6 +526,28 @@ test("when plugins.json can't be saved, turning a plugin on or off changes no se
   assert.deepEqual(S().settings.commandBarStart, original);
 });
 
+test("a plugin turned on after a failed save no longer shows the save failure", async () => {
+  S().hydrate({});
+  startPlugins();
+  for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
+  await install();
+  assert.ok(lifecycle.requestPluginConsent("example"));
+  const { hash } = P().consent;
+  assert.ok(lifecycle.enablePlugin("example", hash));
+  assert.ok(lifecycle.disablePlugin("example"));
+  assert.ok(lifecycle.requestPluginConsent("example"));
+  stub.refusedWrites.on = true;
+  try {
+    assert.equal(lifecycle.enablePlugin("example", hash), false);
+  } finally {
+    stub.refusedWrites.on = false;
+  }
+  assert.equal(P().unsaved, "example");
+  assert.ok(lifecycle.turnOnApprovedPlugin("example"));
+  assert.equal(P().unsaved, null, "turning it on without a sheet clears the failure");
+  lifecycle.disablePlugin("example");
+});
+
 test("approving a plugin's changed manifest takes its old default out of the stack", async () => {
   S().hydrate({});
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);

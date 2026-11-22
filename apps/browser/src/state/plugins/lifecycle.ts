@@ -12,7 +12,7 @@ import { programControlOn, userTurnedControlOff } from "../app/programControlSet
 import { applySettingsPatch, planDisable, planEnable, spliceApplied } from "./defaults";
 import { pluginRecordsSaved, writePluginRecords } from "./savedState";
 import { settleInstall } from "./installWaiters";
-import { abandonWithdrawal, activeManifest, approvalMatches, setOfficialFetch, commitPlugins, consentListing, currentPlugins, withdrawalsFor, type PluginsCommit, keepsInstalledFlag, NO_RECORD, recordApproves, recordOf, usePlugins, type PluginListing, type PluginRecord } from "./store";
+import { abandonWithdrawal, activeManifest, approvalMatches, setOfficialFetch, clearUnsaved, UNSAVED, commitPlugins, consentListing, currentPlugins, withdrawalsFor, type PluginsCommit, keepsInstalledFlag, NO_RECORD, recordApproves, recordOf, usePlugins, type PluginListing, type PluginRecord } from "./store";
 import { officialPluginsPinned, promoteOfficialPlugin } from "../../platform/plugins";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { pluginsScanned } from "./scanListeners";
@@ -192,8 +192,6 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
 
 let lastConsentId = 0;
 
-export const UNSAVED = "plugins.json couldn't be saved. Try again.";
-
 export const ALREADY_ASKING = "Ardia is already asking about a plugin. Answer that first, then try again.";
 
 function closeChangedConsent() {
@@ -264,6 +262,7 @@ export function enablePlugin(name: string, hash: string): boolean {
   const asksControl = manifest.permissions.control;
   applySettingsPatch(kept || !asksControl || programControlOn(useBrowser.getState()) || userTurnedControlOff() ? plan.patch : { ...plan.patch, cliControl: true });
   usePlugins.setState({ consent: null });
+  clearUnsaved(name);
   notePlugin("plugin_enables", consent);
   reconcilePlugins(consent);
   settleInstall(name, { ok: true });
@@ -305,6 +304,7 @@ export function turnOnApprovedPlugin(name: string): boolean {
   const plan = planEnable(listing.manifest, s.records, name, before.applied);
   const installed = keepsInstalledFlag(listing) ? { installed: true } : {};
   if (!saveRecords({ ...s.records, [name]: { ...before, enabled: true, applied: plan.applied, ...installed } }, consent)) return false;
+  clearUnsaved(name);
   applySettingsPatch(plan.patch);
   notePlugin("plugin_enables", consent);
   reconcilePlugins(consent);
