@@ -56,7 +56,7 @@ export class TextTones {
   ) {
     this.title = hero.querySelector<HTMLElement>(".hero-title");
     this.copy = () =>
-      [...hero.querySelectorAll<HTMLElement>(".yc-yet, .lede, .welcome, .cta-row, [data-send-panel], .note, .pc-note")].filter(visible);
+      [...hero.querySelectorAll<HTMLElement>(".lede, .welcome, .cta-row, [data-send-panel], .note, .pc-note")].filter(visible);
     if (this.title?.dataset.tone === "dark") this.tone = "dark";
   }
 
