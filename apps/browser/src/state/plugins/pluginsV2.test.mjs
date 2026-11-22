@@ -1408,6 +1408,7 @@ test("an omnibox query cancelled while its lazy plugin starts never goes out, an
 const ARRANGER = { manifest: 2, name: "arranger", title: "Arranger", main: "index.js", permissions: { tabs: "write", fullUrls: true, workspace: true } };
 const NOT_WEB = ["file:///etc/hosts", "chrome://settings/", "ardia://history", "javascript:alert(1)", "data:text/html,hi", "https://user:pw@ok.example/"];
 const tabCount = () => Object.keys(S().tabs).length;
+const groupCount = () => Object.keys(S().groups).length;
 
 test("a plugin's apply opens only http and https addresses, and a batch with one other address is refused whole", async () => {
   await enable(TABBER);
@@ -1432,9 +1433,11 @@ test("a plugin's group.create takes only http and https addresses", async () => 
   takePluginCounts();
   for (const url of NOT_WEB) {
     const before = tabCount();
+    const groups = groupCount();
     const refused = await ask("arranger", "apply", { ops: [{ op: "group.create", urls: [url], window: w, name: "G" }] }, run);
     assert.equal(refused.error?.code, "refused", url);
     assert.equal(tabCount(), before, url);
+    assert.equal(groupCount(), groups, `${url}: no group was made`);
   }
   assert.equal(takePluginCounts().plugin_url_refusals_group_create, NOT_WEB.length);
   const made = await ask("arranger", "apply", { ops: [{ op: "group.create", urls: ["https://ok.example/"], window: w, name: "G" }] }, run);
