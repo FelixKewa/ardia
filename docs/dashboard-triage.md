@@ -128,6 +128,9 @@ Performance › Freezes reads `app_freeze` over the last 7 days, grouped by `sig
 freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and job, the latest version, and the top
 three frames from Ardia's own images (hover the place). Offsets symbolicate with the engine's uploaded symbols
 (`scripts/symbolicate-crash.sh`) and Hermes's with the release framework's local symbols.
+A freeze whose `samples_waiting` equals `samples` spent every sample waiting on the Mac (paging or blocking I/O), not
+running Ardia's code: read its frames as where the thread happened to stop, and check `memory_pressure` before
+blaming that function.
 
 Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
 
