@@ -98,3 +98,17 @@ test("a malformed event heard before the first read answers doesn't drop that re
   await settle();
   assert.deepEqual(seen, ["close:maximize"]);
 });
+
+test("a follower stopped before the first read answers neither applies nor remembers that read", async () => {
+  const seen = [];
+  let answer;
+  const remembered = memory();
+  const { host } = fakeHost([WINDOW_BUTTON_LAYOUT_METHOD], () => new Promise((resolve) => (answer = resolve)));
+  const stop = followDesktopButtonLayout(host, remembered, (layout) => seen.push(layout));
+  await settle();
+  stop();
+  answer({ layout: "close:maximize" });
+  await settle();
+  assert.deepEqual(seen, []);
+  assert.equal(remembered.items.has("ardia.desktopButtonLayout"), false);
+});
