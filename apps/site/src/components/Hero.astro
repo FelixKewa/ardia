@@ -441,8 +441,27 @@ const dawnPosters = HERO_POSTERS.filter((poster) => !poster.fallback && !poster.
 
 <script is:inline>
   (() => {
-    const image = document.querySelector("[data-meadow] .hero-poster[data-js-poster] img");
+    const hero = document.querySelector("[data-meadow]");
+    const image = hero?.querySelector(".hero-poster[data-js-poster] img");
     if (image?.complete && image.naturalWidth && image.currentSrc && !image.currentSrc.startsWith("data:")) image.dataset.loaded = "";
+    if (!hero) return;
+    const showPoster = () => {
+      if (hero.dataset.meadow === "ready") return;
+      const template = hero.querySelector("template[data-poster-sources]");
+      if (image?.dataset.fallbackSrc) {
+        if (template) image.parentElement.prepend(template.content.cloneNode(true));
+        if (image.dataset.fallbackSizes) image.sizes = image.dataset.fallbackSizes;
+        if (image.dataset.fallbackSrcset) image.srcset = image.dataset.fallbackSrcset;
+        image.src = image.dataset.fallbackSrc;
+        delete image.dataset.fallbackSrc;
+        delete image.dataset.fallbackSrcset;
+        delete image.dataset.fallbackSizes;
+      }
+      template?.remove();
+      hero.dataset.meadow = "failed";
+    };
+    hero.addEventListener("meadow:failed", showPoster);
+    setTimeout(() => hero.dataset.meadow || showPoster(), 4000);
   })();
 </script>
 

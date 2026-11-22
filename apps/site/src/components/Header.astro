@@ -695,6 +695,7 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
     for (const el of document.querySelectorAll<HTMLElement>("main, footer")) el.inert = open;
   };
   btn.addEventListener("click", () => setOpen(menu.hidden));
+  bar.addEventListener("click", (e) => !menu.hidden && (e.target as Element).closest("[data-download]") && setOpen(false), true);
   backdrop.addEventListener("click", () => setOpen(false));
   mark.addEventListener("click", () => !menu.hidden && setOpen(false));
   menu.addEventListener("click", (e) => {
