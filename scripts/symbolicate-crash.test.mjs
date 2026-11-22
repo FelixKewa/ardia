@@ -50,7 +50,8 @@ echo "UUID: $(echo "$id" | tr 'a-f' 'A-F') (arm64) $2"
 `,
   atos: `#!/usr/bin/env bash
 echo "atos $*" >>"$STUB_LOG"
-shift 6
+[ "$1 $3 $5" = "-arch -o -offset" ] || { echo "expected atos -arch <arch> -o <dwarf> -offset <offset>..." >&2; exit 2; }
+shift 5
 for address in "$@"; do
   case "$address" in
     0x0) echo "$address" ;;
@@ -208,7 +209,7 @@ test("a crash's image UUID and offsets resolve through the engine release that h
   );
   assert.match(result.stderr, new RegExp(`DWARF/Chromium Framework \\(${FRAMEWORK_UUID}, arm64\\) from engine-aaaaaaaaaaaa`));
   const log = readFileSync(env.STUB_LOG, "utf8");
-  assert.ok(log.includes(`atos -arch arm64 -o ${join(cache, "engine-aaaaaaaaaaaa/symbols", FRAMEWORK_DWARF)} -l 0x0 0x2e2334 0x3cae9d8\n`), log);
+  assert.ok(log.includes(`atos -arch arm64 -o ${join(cache, "engine-aaaaaaaaaaaa/symbols", FRAMEWORK_DWARF)} -offset 0x2e2334 0x3cae9d8\n`), log);
   assert.equal(downloads("-symbols.tar.xz").length, 1);
   assert.deepEqual(downloads("-uuids.txt").map((line) => line.split(" ")[3]), ["engine-bbbbbbbbbbbb", "engine-aaaaaaaaaaaa"]);
   assert.deepEqual(readFileSync(env.STUB_LOG, "utf8").match(/&page=\d+/g), ["&page=1", "&page=2", "&page=3"]);
@@ -378,7 +379,7 @@ test("an Ardia image's UUID and offsets resolve through the app release that lis
   );
   assert.match(result.stderr, new RegExp(`${APP_DWARF.replaceAll(".", "\\.")} \\(${APP_UUID}, arm64\\) from v0\\.2\\.47-nightly\\.5`));
   const log = readFileSync(env.STUB_LOG, "utf8");
-  assert.ok(log.includes(`atos -arch arm64 -o ${join(cache, "v0.2.47-nightly.5/symbols", APP_DWARF)} -l 0x0 0x75564 0x16420 0x18828\n`), log);
+  assert.ok(log.includes(`atos -arch arm64 -o ${join(cache, "v0.2.47-nightly.5/symbols", APP_DWARF)} -offset 0x75564 0x16420 0x18828\n`), log);
   assert.deepEqual(downloads("Ardia-0.2.47-nightly.5-symbols.tar.xz").map((line) => line.split(" ")[3]), ["v0.2.47-nightly.5"]);
 
   const older = run(symbolicate, ["--cache", cache, OLD_APP_UUID, "0x10"]);
@@ -415,17 +416,41 @@ test("the app's symbol names come from the version, with or without the tag's v"
   assert.deepEqual(names, ["Ardia-0.2.47-nightly.5-symbols.tar.xz", "Ardia-0.2.47-uuids.txt", "Ardia-0.2.47-symbols.tar.xz", "ArdiaCore-4f3a9c0d1e2b-uuids.txt"]);
 });
 
-test("release.sh packs the archive's dSYM from the exported app before packaging, and publish.sh uploads the pair", () => {
+test("release.sh packs the archive's dSYM from the exported app after verify.sh and before packaging", () => {
   const release = readFileSync(join(scripts, "release.sh"), "utf8");
   const verify = release.indexOf('"$stages/verify.sh" "$app" "$archive"');
   const pack = release.indexOf('pack-symbols.sh" --app "$app" "$archive/dSYMs" "$dist/$(app_symbols_name "$version")" "$dist/$(app_uuids_name "$version")"');
   const packaged = release.indexOf('"$stages/package.sh"');
   assert.ok(verify > 0 && pack > verify && packaged > pack, "pack-symbols.sh --app runs after verify.sh and before package.sh");
+});
 
-  const publishScript = readFileSync(join(scripts, "../.claude/skills/release/scripts/publish.sh"), "utf8");
-  assert.match(publishScript, /^app_symbols="\$dist\/\$\(app_symbols_name "\$version"\)"$/m);
-  assert.match(publishScript, /^app_uuids="\$dist\/\$\(app_uuids_name "\$version"\)"$/m);
-  assert.match(publishScript, /for file in "\$app_symbols" "\$app_uuids"; do\n\s+\[ -f "\$file" \] \|\| die [^\n]+\n\s+assets\+=\("\$file"\)/);
+test("publish.sh refuses a dist without both of the app's symbol files, dry run included", () => {
+  const publishScript = join(scripts, "../.claude/skills/release/scripts/publish.sh");
+  const version = "0.2.48-nightly.1";
+  const symbols = `Ardia-${version}-symbols.tar.xz`;
+  const uuids = `Ardia-${version}-uuids.txt`;
+  const distWith = (name, files) => {
+    const dist = join(work, `publish-${name}`);
+    mkdirSync(dist, { recursive: true });
+    for (const file of [`Ardia-${version}.dmg`, `Ardia-${version}.zip`, "appcast.xml", ...files]) writeFileSync(join(dist, file), "x");
+    return dist;
+  };
+  const publishFrom = (dist) => spawnSync(publishScript, [version, "--dry-run"], { encoding: "utf8", env: { ...env, RELEASE_DIST: dist } });
+
+  for (const [name, files, missing] of [["none", [], symbols], ["no-uuids", [symbols], uuids], ["no-symbols", [uuids], symbols]]) {
+    const result = publishFrom(distWith(name, files));
+    assert.notEqual(result.status, 0, `${name}: ${result.stdout}`);
+    assert.match(result.stderr, new RegExp(`no \\S+/${missing.replaceAll(".", "\\.")}: a release ships the app's symbols`), name);
+    assert.doesNotMatch(result.stdout, /^\+ /m, `${name} ran a command before refusing`);
+  }
+
+  const empty = distWith("empty-uuids", [symbols]);
+  writeFileSync(join(empty, uuids), "");
+  assert.match(publishFrom(empty).stderr, new RegExp(`no \\S+/${uuids.replaceAll(".", "\\.")}`));
+
+  const both = publishFrom(distWith("both", [symbols, uuids]));
+  assert.match(both.stdout, /PASS {2}the app's symbols join the release/);
+  assert.doesNotMatch(both.stderr, /a release ships the app's symbols/);
 });
 
 const workflowJobs = (text) => {
@@ -462,7 +487,22 @@ test("the Release workflow carries the app's dSYM from the build job's archive t
   for (const name of ["Ardia-${{ inputs.version }}-symbols.tar.xz", "Ardia-${{ inputs.version }}-uuids.txt"]) {
     assert.ok(release.includes(`${dist}/${name}`), `the release artifact doesn't list ${name}:\n${release.join("\n")}`);
   }
+  const signSteps = jobs.sign.split(/\n(?=      - )/);
+  const signGate = signSteps.findIndex((step) => step.includes("name: The app's symbols"));
+  const signUpload = signSteps.findIndex((step) => step.includes("actions/upload-artifact@") && /\n\s+name: release\n/.test(`${step}\n`));
+  assert.ok(signGate > 0 && signGate < signUpload, "sign checks the app's symbols before it uploads the release artifact");
+  assert.match(signSteps[signGate], /for file in "\$DIST\/Ardia-\$VERSION-symbols\.tar\.xz" "\$DIST\/Ardia-\$VERSION-uuids\.txt"; do\n\s+\[ -s "\$file" \] \|\| \{[^\n]*exit 1; \}/);
+  assert.doesNotMatch(signSteps[signGate], /\n\s+if:/);
+
   assert.deepEqual(artifactPaths(jobs.publish, "download", "release"), ["dist/${{ inputs.version }}"]);
+  const publishSteps = jobs.publish.split(/\n(?=      - )/);
+  const download = publishSteps.findIndex((step) => step.includes("actions/download-artifact@") && /\n\s+name: release\n/.test(`${step}\n`));
+  const publishGate = publishSteps.findIndex((step) => step.includes("name: The app's symbols"));
+  const tag = publishSteps.findIndex((step) => step.includes("name: Tag"));
+  const publishStep = publishSteps.findIndex((step) => step.includes("name: Publish"));
+  assert.ok(download > 0 && publishGate > download && publishGate < tag && tag < publishStep, "publish checks the app's symbols after the download and before it tags");
+  assert.match(publishSteps[publishGate], /for file in "dist\/\$VERSION\/Ardia-\$VERSION-symbols\.tar\.xz" "dist\/\$VERSION\/Ardia-\$VERSION-uuids\.txt"; do\n\s+\[ -s "\$file" \] \|\| \{[^\n]*exit 1; \}/);
+  assert.doesNotMatch(publishSteps[publishGate], /\n\s+if:/);
   assert.match(jobs.publish, /RELEASE_DIST="\$GITHUB_WORKSPACE\/dist\/\$VERSION"/);
 
   const releaseScript = readFileSync(join(scripts, "release.sh"), "utf8");
@@ -486,4 +526,74 @@ test("unpack-build.py keeps the archive's dSYMs, so the sign job packs the app's
   const result = spawnSync("python3", ["-I", join(scripts, "../.github/release/unpack-build.py"), tarball, unpacked, version], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.ok(existsSync(join(unpacked, "Ardia.xcarchive/dSYMs", APP_DWARF)));
+});
+
+const hasRealTools =
+  process.platform === "darwin" &&
+  ["clang", "dsymutil", "atos", "dwarfdump", "otool", "nm"].every((tool) => spawnSync("xcrun", ["--find", tool], { encoding: "utf8" }).status === 0);
+
+test("real atos names an executable's frames (__TEXT at 0x100000000) and a dylib's (__TEXT at 0) from their crash offsets", { skip: !hasRealTools && "needs macOS with clang, dsymutil and atos" }, () => {
+  const real = join(work, "real");
+  const realBin = join(real, "bin");
+  mkdirSync(realBin, { recursive: true });
+  writeFileSync(join(realBin, "gh"), stubs.gh);
+  chmodSync(join(realBin, "gh"), 0o755);
+  for (const tool of ["atos", "dwarfdump"]) {
+    symlinkSync(execFileSync("xcrun", ["--find", tool], { encoding: "utf8" }).trim(), join(realBin, tool));
+  }
+  const xcrun = (...args) => execFileSync("xcrun", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const textBase = (binary) => BigInt(xcrun("otool", "-l", binary).match(/segname __TEXT\n\s+vmaddr (0x[0-9a-f]+)/)[1]);
+  const symbolAt = (binary, name) => BigInt(`0x${xcrun("nm", binary).split("\n").find((line) => line.endsWith(` T _${name}`)).split(" ")[0]}`);
+  const crashOffset = (binary, name) => `0x${(symbolAt(binary, name) - textBase(binary) + 4n).toString(16)}`;
+  const uuidOf = (binary) => xcrun("dwarfdump", "--uuid", binary).match(/^UUID: (\S+) \(arm64\)/m)[1].toLowerCase();
+  const build = (source, output, extra) => {
+    const c = join(real, `${basename(output)}.c`);
+    writeFileSync(c, source);
+    const object = `${c}.o`;
+    xcrun("clang", "-g", "-arch", "arm64", "-c", c, "-o", object);
+    mkdirSync(join(output, ".."), { recursive: true });
+    xcrun("clang", "-arch", "arm64", ...extra, object, "-o", output);
+  };
+
+  const app = join(real, "Ardia.app");
+  const executable = join(app, "Contents/MacOS/Ardia");
+  build("int symbolication_probe(int x) { return x * 3 + 1; }\nint main(int argc, char **argv) { return symbolication_probe(argc); }\n", executable, []);
+  const appDsyms = join(real, "app-dsyms");
+  mkdirSync(appDsyms);
+  xcrun("dsymutil", executable, "-o", join(appDsyms, "Ardia.app.dSYM"));
+
+  const framework = join(real, "Chromium Framework.framework");
+  const library = join(framework, "Versions/A/Chromium Framework");
+  build("int framework_probe(int x) { return x * 5 + 2; }\n", library, ["-dynamiclib", "-install_name", "@rpath/Chromium Framework.framework/Chromium Framework"]);
+  symlinkSync("A", join(framework, "Versions/Current"));
+  const frameworkDsyms = join(real, "framework-dsyms");
+  mkdirSync(frameworkDsyms);
+  xcrun("dsymutil", library, "-o", join(frameworkDsyms, "Chromium Framework.dSYM"));
+  xcrun("strip", "-S", executable);
+  xcrun("strip", "-S", library);
+  assert.equal(textBase(executable), 0x100000000n);
+  assert.equal(textBase(library), 0n);
+
+  const realAssets = join(real, "assets");
+  const realEnv = { ...process.env, PATH: `${realBin}:${process.env.PATH}`, STUB_LOG: join(real, "stub.log"), STUB_ASSETS: realAssets };
+  const pack = (args) => {
+    const result = spawnSync(packSymbols, args, { encoding: "utf8", env: realEnv });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  mkdirSync(join(realAssets, "v9.9.9"), { recursive: true });
+  pack(["--app", app, appDsyms, join(realAssets, "v9.9.9/Ardia-9.9.9-symbols.tar.xz"), join(realAssets, "v9.9.9/Ardia-9.9.9-uuids.txt")]);
+  mkdirSync(join(realAssets, "engine-eeeeeeeeeeee"), { recursive: true });
+  pack([framework, frameworkDsyms, join(realAssets, "engine-eeeeeeeeeeee/ArdiaCore-eeeeeeeeeeee-symbols.tar.xz"), join(realAssets, "engine-eeeeeeeeeeee/ArdiaCore-eeeeeeeeeeee-uuids.txt")]);
+
+  const symbolicateReal = (tag, binary, name) => {
+    const offset = crashOffset(binary, name);
+    const result = spawnSync(symbolicate, ["--tag", tag, "--cache", join(real, "cache"), uuidOf(binary), `+${offset}`], { encoding: "utf8", env: realEnv });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /couldn't name/);
+    return { offset, line: result.stdout.trimEnd() };
+  };
+  const ardia = symbolicateReal("v9.9.9", executable, "symbolication_probe");
+  assert.match(ardia.line, new RegExp(`^${ardia.offset}\\tsymbolication_probe \\(in Ardia\\) \\(Ardia\\.c:1\\)$`));
+  const engine = symbolicateReal("engine-eeeeeeeeeeee", library, "framework_probe");
+  assert.match(engine.line, new RegExp(`^${engine.offset}\\tframework_probe \\(in Chromium Framework\\) \\(Chromium Framework\\.c:1\\)$`));
 });

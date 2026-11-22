@@ -107,7 +107,7 @@ if [ "$(image_uuid "$binary" "$arch" 2>/dev/null || true)" != "$uuid" ]; then
 fi
 
 echo "$rel ($uuid, $arch) from $tag" >&2
-frames="$(atos -arch "$arch" -o "$binary" -l 0x0 "${offsets[@]}")" || die "atos failed on $rel"
+frames="$(atos -arch "$arch" -o "$binary" -offset "${offsets[@]}")" || die "atos failed on $rel"
 paste <(printf '%s\n' "${offsets[@]}") <(printf '%s\n' "$frames")
 unnamed="$(grep -c -E '^0[xX][0-9a-fA-F]+$' <<<"$frames" || true)"
 [ "$unnamed" = 0 ] || echo "warning: atos couldn't name $unnamed of ${#offsets[@]} offsets in $rel" >&2
