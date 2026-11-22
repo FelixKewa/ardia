@@ -409,7 +409,7 @@ included, then the `.deb` installed and purged on Debian 13 and Ubuntu 24.04), a
 `Ardia-<version>-linux-x64.tar.xz`, `.deb` and `.AppImage`, `ardia-bin-<version>.src.tar.gz` (the Arch PKGBUILD),
 `ardia-cli-<version>-linux-x64.tar.gz` (the pinned `ardia` command, renamed for this version) and their `.sha256` files to the release, nightly or stable. A `.deb` that
 fails the install test is dropped (`deb dropped` in `provenance.txt`) and the rest still ships. That needs the Linux engine for the release commit's engine
-key (`engine/engine-key.sh`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
+key (`engine/engine-key.sh --platform linux`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
 still ships, and `publish` warns that Linux was skipped. After a stable release the `aur` job moves the AUR package
 `ardia-bin` to it (`scripts/linux/arch/publish-aur.sh`) when the `AUR_SSH_PRIVATE_KEY` secret is set; a dry run, or a
 missing secret, only shows the commit it would push.

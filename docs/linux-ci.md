@@ -12,7 +12,7 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 | [`.github/actions/linux-setup`](../.github/actions/linux-setup/action.yml) | Ubuntu packages for the fixtures (clang, dbus, NSS tools, gnome-keyring, PyGObject), Node 24, pnpm and `pnpm install --frozen-lockfile` |
 | [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks. `--part ui` runs the `apps/linux` and `scripts/linux` checks side by side; `--part engine --shard I/N` runs every Nth Python suite and `engine/ardiacore-linux/tests` module, those in parallel, because the suite takes well over five minutes serially. With no options it runs everything |
 | [`scripts/linux/publish-engine.sh`](../scripts/linux/publish-engine.sh) | Builder side: stages, strips and archives an engine from a Chromium out dir; `--upload` publishes it and adds its table row |
-| [`packages/ardiacore/prebuilt-engines-linux.tsv`](../packages/ardiacore/prebuilt-engines-linux.tsv) | `key<TAB>tag<TAB>sha256` for each Linux engine published in ardia-browser/ardia |
+| [`packages/ardiacore/prebuilt-engines-linux.tsv`](../packages/ardiacore/prebuilt-engines-linux.tsv) | `key<TAB>tag<TAB>sha256` for each Linux engine published in ardia-browser/ardia, and a fourth field, the key it was published under, when that engine's sources are this key's (rows carried over when the key changed) |
 | `packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64` | Dispatches to [`scripts/linux/fetch-engine.sh`](../scripts/linux/fetch-engine.sh); the Mac path is unchanged |
 | [`scripts/linux/runtime_files.py`](../scripts/linux/runtime_files.py) | The one runtime allowlist used by publishing, fetching and packaging, and the safe archive unpacker |
 | [`scripts/linux/smoke.mjs`](../scripts/linux/smoke.mjs) | Strict smoke gate for a packaged tarball |
@@ -23,13 +23,18 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 ## Engine archives
 
-- **Key.** The engine is keyed by `engine/engine-key.sh`, as on the Mac: one hash of `engine/`,
-  `apps/browser/assets/offline-game` and `apps/browser/assets/offline-game-pipeline`, because the Linux build packs
-  the offline game too (`game-resource.sh`). Uncommitted changes in any of those paths stop the fetcher and the
-  publisher.
-  The key doesn't cover `packages/ardiacore/ios/page_script.js`, which the Linux layer compiles into the engine
-  (`engine/ardiacore-linux/apply.sh`, `page_script.h`): a commit that changes only that file keeps its key while the
-  published engine still carries the old script. Check it after every upstream sync, and rebuild if it changed.
+- **Key.** The engine is keyed by `engine/engine-key.sh --platform linux`, the Mac by `--platform macos`: one hash of
+  every file the Linux build reads. That is `engine/` without the `mac` lines of `engine/patches/series` (their
+  patches, and `engine/ardiacore` but for the headers `engine/ardiacore-linux/apply.sh` copies), plus
+  `apps/browser/assets/offline-game` and its pipeline, because the Linux build packs the offline game too
+  (`game-resource.sh`), and `packages/ardiacore/ios/page_script.js`, which the Linux layer compiles in. A Mac-only
+  change keeps the Linux key. The series counts as its lines for Linux, so adding a `mac` line changes nothing here.
+  Uncommitted changes in any of those paths stop the fetcher and the publisher.
+- **Carried-over rows.** A row with a fourth field (`key<TAB>tag<TAB>sha256<TAB>built key`) serves an engine published
+  under the built key: the fetcher downloads `ArdiaCore-<built key:12>-linux-x64.tar.xz` and checks its manifest names
+  the built key, and `scripts/linux/runtime_files.py serves` (used by `release.sh` and the `package` job) counts it as
+  this key's exact engine. They map the engines published before the per-platform keys to the new keys of the commits
+  they were built from.
 - **Archive.** `ArdiaCore-<key12>-linux-x64.tar.xz` holds one directory, `ardiacore-linux-x64/`. It contains the
   allowlisted runtime files and a `manifest.json` (format 2): engine key, source commit, Chromium version, `args.gn` hash,
   chrome hash and build ID, and build and packaging times.
@@ -50,7 +55,7 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
   `scripts/linux/symbolize.py --symbols ArdiaCore-<key12>-linux-x64-symbols.tar.xz --build-id <id> <offset>...`
   (crashing frame first; the others are return addresses). The fetcher never downloads the symbols.
 - **Source commit.** The publisher doesn't trust `repo.commit` alone. It computes the engine key of the source copy the
-  way `engine/engine-key.sh` does (one tree per key path, then one hash) and records `source_commit` only when that
+  with `engine/engine-key.sh --platform linux` over a scratch tree of it and records `source_commit` only when that
   commit's key matches.
 - **Out dir.** The publisher copies from the out dir while holding the chromium lock and never writes there.
 

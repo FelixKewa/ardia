@@ -8,8 +8,8 @@ built, but **never build a Windows engine on the owner's Mac** (the owner's rule
 every core of the machine they work on). No Windows machine is needed, not even for the toolchain.
 
 The scripts are in `scripts/windows/engine/`, not next to the Mac ones: nothing for Windows may live under `engine/`,
-because `engine/engine-key.sh` hashes the whole `engine/` tree into the key the Mac app's prebuilt engine is fetched
-under, so a new file there would make every Mac build miss its prebuilt engine. Windows-only patches go in
+because `engine/engine-key.sh` hashes what is under `engine/` into the keys the Mac and Linux prebuilt engines are
+fetched under, so a new file there would make Mac or Linux builds miss their prebuilt engine. Windows-only patches go in
 `scripts/windows/engine/patches/` and their order in `scripts/windows/engine/series-win`. The scripts source the Mac's
 `engine/patches/build/env.sh` through their own `env.sh` and call its `step-guard.sh`, `gn_defines.sh`,
 `03-helium.py` and `game-resource.sh`; they change nothing the Mac scripts do. Everything lives in `~/chromium-build-win`

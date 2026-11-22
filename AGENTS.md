@@ -100,8 +100,9 @@ rules are for the owner's Mac.
   `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch` are its native layer. The engine is built from
   source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
   `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
-  The engine key (`engine/engine-key.sh`) covers all of `engine/`, so any change there needs a new Mac engine and a
-  new Linux engine. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
+  Each platform has its own engine key (`engine/engine-key.sh --platform macos|linux`): a change only Linux builds
+  (`engine/ardiacore-linux`, a `linux` line of `engine/patches/series` and its patch) needs a new Linux engine and
+  keeps the Mac's, and the reverse; a shared change needs both. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
 - **Windows** (`docs/windows.md`): `apps/browser/windows` (React Native Windows) and `packages/expo-windows` host
   Chromium's `chrome.dll`, renamed Ardia, with each tab's page in its own window under the app's. The engine is
   cross-built on a Mac in `~/chromium-build-win` (`docs/engine-build-windows.md`; never `~/chromium-build`), its

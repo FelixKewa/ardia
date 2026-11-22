@@ -33,6 +33,22 @@ def release_tag(key):
     return f'engine-{key[:12]}'
 
 
+def built_key(table, key):
+    lines = table.read_text().splitlines() if table.is_file() else []
+    for fields in (line.split('\t') for line in lines):
+        if fields[0] == key:
+            return fields[3] if len(fields) > 3 and fields[3] else key
+    return None
+
+
+def serves(directory, key, table):
+    path = directory / 'manifest.json'
+    if not path.is_file():
+        return False
+    engine_key = json.loads(path.read_text()).get('engine_key')
+    return bool(engine_key) and engine_key in (key, built_key(table, key))
+
+
 def missing(directory):
     return [name for name in REQUIRED if not (directory / name).exists()]
 
@@ -133,12 +149,18 @@ def main():
     unpacking.add_argument('--archive', type=pathlib.Path, required=True)
     unpacking.add_argument('--into', type=pathlib.Path, required=True)
     unpacking.add_argument('--key', required=True)
+    serving = commands.add_parser('serves', help='exit 0 when an engine dir is the published engine of an engine key: its manifest names the key, or the key\'s table row names the manifest\'s key as the one it was built under')
+    serving.add_argument('--engine', type=pathlib.Path, required=True)
+    serving.add_argument('--key', required=True)
+    serving.add_argument('--table', type=pathlib.Path, default=pathlib.Path(__file__).resolve().parents[2] / 'packages/ardiacore/prebuilt-engines-linux.tsv')
     args = parser.parse_args()
     try:
         if args.command == 'list':
             print('\n'.join(select(args.directory)))
         elif args.command == 'copy':
             copy(args.source, args.destination)
+        elif args.command == 'serves':
+            sys.exit(0 if serves(args.engine, args.key, args.table) else 1)
         else:
             print(unpack(args.archive, args.into, args.key))
     except (ValueError, OSError, tarfile.TarError, lzma.LZMAError, EOFError, json.JSONDecodeError) as error:

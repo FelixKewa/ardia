@@ -123,7 +123,7 @@ class Fixture:
         self.git('commit', '-q', '-m', content)
 
     def key(self, rev='HEAD'):
-        result = run([self.repo / 'engine/engine-key.sh', rev], cwd=self.repo, env=self.env)
+        result = run([self.repo / 'engine/engine-key.sh', '--platform', 'linux', rev], cwd=self.repo, env=self.env)
         if result.returncode != 0:
             raise AssertionError(result.stderr)
         return result.stdout.strip()
@@ -144,7 +144,7 @@ class ArchiveMaker:
         manifest.update(overrides)
         return json.dumps(manifest).encode()
 
-    def publish(self, key, members=None, manifest=None, sha=None, skip=()):
+    def publish(self, key, members=None, manifest=None, sha=None, skip=(), row_key=None):
         tag = runtime.release_tag(key)
         folder = self.assets / tag
         folder.mkdir(parents=True, exist_ok=True)
@@ -170,11 +170,31 @@ class ArchiveMaker:
                 add(**member)
         digest = sha or hashlib.sha256(archive.read_bytes()).hexdigest()
         with self.table.open('a') as handle:
-            handle.write(f'{key}\t{tag}\t{digest}\n')
+            handle.write(f'{row_key}\t{tag}\t{digest}\t{key}\n' if row_key else f'{key}\t{tag}\t{digest}\n')
         return archive
 
 
 class RuntimeSelectionTests(unittest.TestCase):
+    def test_an_engine_serves_its_own_key_and_the_keys_whose_rows_name_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            engine = root / 'engine'
+            engine.mkdir()
+            table = root / 'table.tsv'
+            built, alias, other = 'a' * 40, 'b' * 40, 'c' * 40
+            table.write_text(f'{built}\tengine-{built[:12]}\t{"0" * 64}\n{alias}\tengine-{built[:12]}\t{"0" * 64}\t{built}\n')
+            self.assertFalse(runtime.serves(engine, built, table))
+            (engine / 'manifest.json').write_text(json.dumps({'engine_key': built}))
+            self.assertTrue(runtime.serves(engine, built, table))
+            self.assertTrue(runtime.serves(engine, alias, table))
+            self.assertFalse(runtime.serves(engine, other, table))
+            self.assertEqual(runtime.built_key(table, alias), built)
+            self.assertEqual(runtime.built_key(table, built), built)
+            self.assertIsNone(runtime.built_key(table, other))
+            command = [sys.executable, '-I', LINUX / 'runtime_files.py', 'serves', '--engine', engine, '--table', table, '--key']
+            self.assertEqual(run([*command, alias]).returncode, 0)
+            self.assertEqual(run([*command, other]).returncode, 1)
+
     def test_allowlist_keeps_runtime_files_and_drops_build_files(self):
         with tempfile.TemporaryDirectory() as scratch:
             out = fake_runtime(pathlib.Path(scratch) / 'out')
@@ -433,6 +453,21 @@ class FetcherTests(unittest.TestCase):
         self.assertIn('cached', again.stderr)
         self.assertEqual(sorted(path.name for path in self.fixture.store.iterdir()), ['.lock', key[:12]])
         self.assertEqual((engine / '.complete').read_text().strip(), self.assets.table.read_text().split()[2])
+
+    def test_a_row_built_under_another_key_fetches_that_archive_for_this_key(self):
+        older = self.fixture.key()
+        key = self.fixture.commit_engine('two')
+        self.assets.publish(older, row_key=key)
+        result = self.fetch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        engine = self.fixture.store / key[:12]
+        self.assertEqual(result.stdout, f'{engine}\n')
+        self.assertEqual(json.loads((engine / 'manifest.json').read_text())['engine_key'], older)
+        again = self.fetch()
+        self.assertEqual(again.stdout, f'{engine}\n')
+        self.assertIn('cached', again.stderr)
+        serves = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', key, '--table', self.assets.table])
+        self.assertEqual(serves.returncode, 0, serves.stderr)
 
     def test_exact_miss_names_the_key_to_build(self):
         older = self.fixture.key()
