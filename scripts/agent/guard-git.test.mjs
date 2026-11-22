@@ -142,6 +142,26 @@ test("a cd that may fail keeps the old directory in play", () => {
   assert.equal(verdict(`pushd ${worktree}; git stash`), "blocked");
 });
 
+test("an && chain that stops early falls through to the next list in the old directory", () => {
+  const missing = join(root, "missing-directory");
+  assert.equal(verdict(`cd ${missing} && true; git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && true; git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && echo moved && git stash`), "allowed");
+  assert.equal(verdict(`cd ${worktree} && git stash`), "allowed");
+  assert.equal(verdict(`cd ${worktree} || exit 1; git stash`), "allowed");
+  assert.equal(verdict(`cd ${worktree} && true || exit 1; git stash`), "allowed");
+  assert.equal(verdict(`cd ${missing} && cd ${worktree}; git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && false; git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && { echo hi; } && git stash`), "allowed");
+});
+
+test("a subshell's exit never moves the outer shell", () => {
+  assert.equal(verdict(`(cd ${worktree} || exit 1); git stash`), "blocked");
+  assert.equal(verdict(`(cd ${worktree} || exit 1); git stash`, worktree), "allowed");
+  assert.equal(verdict(`(cd ${worktree} || exit 1) && git stash`, clone), "allowed");
+  assert.equal(verdict(`cd ${worktree} || exit 1; (git stash)`), "allowed");
+});
+
 test("a fresh clone made in the same command may switch at once", () => {
   const fresh = join(root, "fresh");
   assert.equal(verdict(`git clone --depth 1 x ${fresh} && cd ${fresh} && git switch -c topic`), "allowed");

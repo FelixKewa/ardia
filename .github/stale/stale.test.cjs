@@ -120,7 +120,10 @@ async function runWith(github, eventName, payload, options = {}) {
     team: TEAM,
     vouched: VOUCHED,
     now: () => NOW,
-    pace: async () => { paced += 1; },
+    pace: async () => {
+      paced += 1;
+      if (options.pace) await options.pace();
+    },
     limit: options.limit,
   });
   if (options.onPaced) options.onPaced(paced);
@@ -336,6 +339,45 @@ test("the live pull request is checked again right before it closes", async () =
   }
 });
 
+test("what changes during the wait before the close keeps the pull request open", async () => {
+  const before = { labels: ["needs-rebase", "stale"], updated: ago(9) };
+  const quiet = [commented(20, human("marked")), warned(9), labeled(9, "stale")];
+  const reviewed = { event: "reviewed", submitted_at: new Date(NOW).toISOString(), actor: human("marked"), user: human("marked") };
+  for (const [why, change] of [
+    ["keep-open", (state) => { state.pr = pr(2, "marked", { labels: [...before.labels, "keep-open"], updated: ago(9) }); }],
+    ["stale removed", (state) => { state.pr = pr(2, "marked", { labels: ["needs-rebase"], updated: ago(9) }); }],
+    ["review", (state) => { state.events = [...state.events, reviewed]; }],
+  ]) {
+    const state = { pr: pr(2, "marked", before), events: quiet };
+    const github = fakeGithub({ pulls: [state.pr], current: { 2: () => state.pr }, timelines: { 2: () => state.events } });
+    let changed = false;
+    const pace = async () => {
+      const noted = github.calls.some((call) => call.name === "issues.createComment" && call.params.body.includes(stale.CLOSED_MARKER));
+      if (noted && !changed) {
+        changed = true;
+        change(state);
+      }
+    };
+    const report = await runWith(github, "schedule", {}, { pace });
+    assert.equal(changed, true, why);
+    assert.deepEqual(report.close, [], why);
+    assert.equal(writes(github).some((call) => call.name === "pulls.update"), false, why);
+    const lastCalls = github.calls.slice(-2).map((call) => call.name);
+    assert.deepEqual(lastCalls, ["pulls.get", "issues.listEventsForTimeline"], why);
+  }
+});
+
+test("the close lands right after its final check, with no wait between them", async () => {
+  const github = sweepFixture({ pulls: [pr(2, "marked", { labels: ["needs-rebase", "stale"], updated: ago(9) })] });
+  const order = [];
+  const pace = async () => { order.push("pace"); };
+  await runWith(github, "schedule", {}, { pace });
+  const names = github.calls.map((call) => call.name);
+  const update = names.lastIndexOf("pulls.update");
+  assert.deepEqual(names.slice(update - 2, update + 1), ["pulls.get", "issues.listEventsForTimeline", "pulls.update"]);
+  assert.equal(order.length, 1);
+});
+
 test("a warning whose label never landed still gets the label before the close", async () => {
   const unlabelled = pr(2, "marked", { labels: ["needs-rebase"], updated: ago(9) });
   const github = fakeGithub({
@@ -411,6 +453,24 @@ test("a comment handler reads the live pull request, not the webhook's copy", as
 });
 
 const vouchNote = (days) => commented(days, ACTIONS_BOT, "Closed for @someone.");
+
+test("reopening goes by timeline order, not by how close the timestamps are", async () => {
+  const at = (iso, event) => ({ ...event, created_at: iso });
+  const second = "2026-11-14T12:00:00Z";
+  const nextSecond = "2026-11-14T12:00:01Z";
+  const github = fakeGithub({
+    current: { 1: closedPull(1, "outsider"), 2: closedPull(2, "outsider"), 3: closedPull(3, "outsider") },
+    timelines: {
+      1: [warned(15), at(second, closed(8)), at(nextSecond, closeNote(8))],
+      2: [warned(15), at(second, closeNote(8)), { event: "reopened", created_at: second, actor: human("mantrakp04") }, at(second, closed(8))],
+      3: [warned(15), at(second, closeNote(8)), at(second, closed(8))],
+    },
+  });
+  const comment = (number) => runWith(github, "issue_comment", { issue: closedPull(number, "outsider"), comment: { user: human("outsider") } });
+  assert.equal(await comment(1), null);
+  assert.equal(await comment(2), null);
+  assert.equal(await comment(3), "reopen");
+});
 
 test("the author's comment reopens a pull request the sweep closed, and only that", async () => {
   const closedPulls = Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((number) => [number, closedPull(number, "outsider")]));

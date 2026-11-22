@@ -11,7 +11,6 @@ const CLOSED_MARKER = "<!-- ardia-stale:closed -->";
 const NUDGE_AFTER_DAYS = 7;
 const CLOSE_AFTER_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MARKER_WINDOW_MS = 10 * 60 * 1000;
 const UNEXPLAINED_UPDATE_SLACK_MS = 60 * 1000;
 const MAX_PRS_PER_RUN = 40;
 const TEAM_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
@@ -220,8 +219,8 @@ async function read(request) {
   }
 }
 
-async function write(session, request) {
-  if (session.wrote) await session.pace();
+async function write(session, request, { paced = true } = {}) {
+  if (paced && session.wrote) await session.pace();
   session.wrote = true;
   try {
     return await request();
@@ -277,9 +276,12 @@ async function act(session, pr, events, decision) {
     if (!closeNoted) {
       await write(session, () => github.rest.issues.createComment({ ...repo, issue_number, body: closeBody(pr) }));
     }
+    if (session.wrote) await session.pace();
     const live = await livePull(session, issue_number);
-    if (!isEligible(live, session.team) || !labelNames(live).includes(STALE)) return "held";
-    await write(session, () => github.rest.pulls.update({ ...repo, pull_number: issue_number, state: "closed" }));
+    const liveEvents = await timelineOf(session, issue_number);
+    const recheck = decide({ pr: live, events: liveEvents, now: session.now(), team: session.team });
+    if (recheck.action !== "close" || !labelNames(live).includes(STALE)) return "held";
+    await write(session, () => github.rest.pulls.update({ ...repo, pull_number: issue_number, state: "closed" }), { paced: false });
     return "done";
   }
   if (decision.action === "unstale") await removeStale(session, issue_number);
@@ -380,23 +382,23 @@ function isWorkflowBot(actor) {
   return sameLogin((actor || {}).login, WORKFLOW_BOT);
 }
 
+function isSweepNote(event, marker) {
+  return event.event === "commented" && isWorkflowBot(eventActor(event)) && String(event.body || "").includes(marker);
+}
+
+function interruptsClose(event) {
+  if (event.event === "reopened" || event.event === "closed") return true;
+  if (event.event !== "commented" || !isWorkflowBot(eventActor(event))) return false;
+  return !isSweepNote(event, CLOSED_MARKER) && !isSweepNote(event, WARNED_MARKER);
+}
+
 function closedBySweep(events) {
-  const closes = events.filter((event) => event.event === "closed");
-  const last = closes[closes.length - 1];
-  if (!last || !isWorkflowBot(eventActor(last))) return false;
-  const closedAt = eventTime(last);
-  const noted = latestTime(botMarkerTimes(events, CLOSED_MARKER).filter((time) => time <= closedAt + MARKER_WINDOW_MS));
-  if (noted === null) return false;
-  const between = events.filter((event) => {
-    const time = eventTime(event);
-    return event !== last && time > noted && time <= closedAt;
-  });
-  return !between.some((event) => {
-    if (event.event === "reopened" || event.event === "closed") return true;
-    if (event.event !== "commented" || !isWorkflowBot(eventActor(event))) return false;
-    const body = String(event.body || "");
-    return !body.includes(CLOSED_MARKER) && !body.includes(WARNED_MARKER);
-  });
+  const closeIndex = events.map((event) => event.event).lastIndexOf("closed");
+  if (closeIndex === -1 || !isWorkflowBot(eventActor(events[closeIndex]))) return false;
+  let noteIndex = closeIndex - 1;
+  while (noteIndex >= 0 && !isSweepNote(events[noteIndex], CLOSED_MARKER)) noteIndex -= 1;
+  if (noteIndex < 0) return false;
+  return !events.slice(noteIndex + 1, closeIndex).some(interruptsClose);
 }
 
 async function onComment(session) {
