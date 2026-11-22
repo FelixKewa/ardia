@@ -8,6 +8,7 @@ import { syncNowFeedback, connectMessage, deviceIcon, inboxNotice, shownProfile,
 import { popSettings, pushSettings } from "../../state/settings/nav";
 import { controlRadius, ConfirmSheet, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
 import { copy } from "../../lib/platformCopy";
+import { destinationWords, syncWords } from "../../lib/sharedWords";
 import { ButtonRow, Divider, Group, IconTile, NavRow, SettingsPage, ValueRow } from "../settings/SettingsKit";
 
 const NAME_SETTLE_MS = 600;
@@ -154,9 +155,9 @@ export function SyncPage() {
   };
   const confirmStop = (event?: GestureResponderEvent) => (copy().stopSyncAsActionSheet ? showActionSheet(stopConfirmation) : setConfirmation({ ...stopConfirmation, opener: event?.currentTarget }));
   return (
-    <SettingsPage title="Sync With Mac" onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
-      <SyncHero title="Sync With Mac" subtitle={hero.text} warning={hero.isWarning}>
-        {off ? <CapsuleButton title="Connect to Your Mac" prominent onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
+    <SettingsPage title={destinationWords.sync} onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
+      <SyncHero title={destinationWords.sync} subtitle={hero.text} warning={hero.isWarning}>
+        {off ? <CapsuleButton title={syncWords.connect} prominent onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
       </SyncHero>
       {off ? (
         <Group header="What You Get" footer={copy().syncFeatureFooter}>
@@ -181,13 +182,13 @@ export function SyncPage() {
       ) : null}
       {status.attention === "phrase" ? (
         <Group>
-          <NavRow title="Enter Recovery Phrase" onPress={() => pushSettings({ page: "syncConnect" })} />
+          <NavRow title={syncWords.enterRecoveryPhrase} onPress={() => pushSettings({ page: "syncConnect" })} />
         </Group>
       ) : null}
       {status.attention === "reset" ? (
         <Group footer={copy().syncTabsStay}>
           <NavRow
-            title="Connect Again"
+            title={syncWords.connectAgain}
             onPress={() => {
               void acknowledgeSyncReset().then(() => pushSettings({ page: "syncConnect" }));
             }}
@@ -197,7 +198,7 @@ export function SyncPage() {
       {isSyncConnected(status) ? (
         <>
           <Group>
-            <ButtonRow title={syncing ? "Syncing…" : "Sync Now"} enabled={!syncing} busy={syncing} onPress={() => void runSyncNow()} />
+            <ButtonRow title={syncing ? syncWords.syncing : syncWords.syncNow} enabled={!syncing} busy={syncing} onPress={() => void runSyncNow()} />
           </Group>
           {devices.length ? (
             <Group header="Devices" footer={noReceivers ? "Update Ardia on your Mac to send tabs to it." : null}>

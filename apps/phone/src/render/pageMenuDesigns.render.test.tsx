@@ -71,6 +71,11 @@ const ROW_IDS = /^(pageMenuRow:|menuToggle:|menuZoom$)/;
 const rowTitle = (testID: string) => (testID === "menuZoom" ? "Page Zoom" : testID.replace(/^(pageMenuRow|menuToggle):/, ""));
 const wordRows = (root: ReactTestRenderer) => hosts(root, (id) => ROW_IDS.test(id)).map((node) => rowTitle(node.props.testID));
 const symbolsIn = (node: { findAll: ReactTestRenderer["root"]["findAll"] }) => node.findAll((child) => (child.type as { name?: string })?.name === "Symbol");
+const rowAround = (node: ReactTestRenderer["root"]) => {
+  let at = node;
+  while (!symbolsIn(at).length && at.parent) at = at.parent;
+  return at;
+};
 const labelled = (root: ReactTestRenderer, label: string) => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0];
 const textSize = (scale: number) => Dimensions.set({ window: { ...realWindow, fontScale: scale }, screen: { ...realWindow, fontScale: scale } });
 
@@ -115,7 +120,7 @@ test("the redesign has main's word rows in main's order, each with its icon, in 
   const root = await openMenu("redesigned");
   expect(wordRows(root)).toEqual(["Block Ads and Trackers", "Night Shade", "Page Zoom", "Desktop Site", "Translate", "Print", "Site Settings", "History", "Bookmarks", "Downloads", "Open in Default Browser"]);
   expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(4);
-  for (const row of hosts(root, (id) => id.startsWith("pageMenuRow:") || id.startsWith("menuToggle:"))) expect(symbolsIn(row)).toHaveLength(1);
+  for (const row of hosts(root, (id) => id.startsWith("pageMenuRow:") || id.startsWith("menuToggle:"))) expect(symbolsIn(rowAround(row))).toHaveLength(1);
   unmount(root);
 });
 
@@ -148,7 +153,7 @@ test("the redesign puts Send above Block Ads and Trackers, in the first group", 
   unmount(root);
 });
 
-test("the redesign's Reader, Find on Page, Copy Link and Share are square rounded tiles with their label under them, in one row under a pill navigation bar, in the bottom sheet", async () => {
+test("the redesign's Reader, Find on Page, Copy Link and Share are square rounded tiles with their label under them, in one row under a rounded-rectangle navigation bar, in the bottom sheet", async () => {
   const root = await openMenu("redesigned");
   const capsules = hosts(root, (id) => id.startsWith("pageMenuAction:"));
   expect(capsules.map((node) => node.props.testID)).toEqual(["pageMenuAction:Reader", "pageMenuAction:Find on Page", "pageMenuAction:Copy Link", "pageMenuAction:Share"]);
@@ -160,7 +165,7 @@ test("the redesign's Reader, Find on Page, Copy Link and Share are square rounde
   for (const label of ["Back", "Forward", "Pin to Mac", "Reload"]) expect(nav.findAll((node) => node.props.accessibilityLabel === label).length).toBeGreaterThan(0);
   expect(textOf({ root: nav } as never)).toContain("Site 0");
   expect(host(root, "pageMenuCapsuleRow")!.findAll((node) => node.props.testID === "pageMenuTitle" && typeof node.type === "string")).toHaveLength(1);
-  expect(StyleSheet.flatten(nav.props.style).borderRadius).toBe(StyleSheet.flatten(host(root, "pageMenuCapsuleRow")!.props.style).minHeight / 2);
+  expect(StyleSheet.flatten(nav.props.style)).toMatchObject({ borderRadius: 16, borderCurve: "continuous" });
   expect(host(root, "pageMenuCard")).toBeUndefined();
   expect(StyleSheet.flatten(host(root, "sheetFill")!.props.style)).toMatchObject({ backgroundColor: "#F2F2F7" });
   unmount(root);
@@ -340,14 +345,61 @@ test("the redesign's Site Settings closes the menu and opens Settings at Site Se
   unmount(root);
 });
 
-test("at accessibility text sizes the redesign's title moves under the navigation buttons and the zoom controls stack, while the capsules stay icons", async () => {
+test("at accessibility text sizes the redesign's title moves under the navigation buttons, the zoom controls stack, and the four action tiles keep their captions in two rows of two", async () => {
   textSize(1.7);
   const root = await openMenu("redesigned");
   const titlesIn = (testID: string) => host(root, testID)!.findAll((node) => node.props.testID === "pageMenuTitle" && typeof node.type === "string").length;
   expect(titlesIn("pageMenuCapsule")).toBe(1);
   expect(titlesIn("pageMenuCapsuleRow")).toBe(0);
   expect(StyleSheet.flatten(host(root, "menuZoom")!.props.style).flexDirection).not.toBe("row");
-  expect(hosts(root, (id) => id.startsWith("pageMenuAction:"))).toHaveLength(4);
+  const nav = host(root, "pageMenuCapsule")!;
+  expect(StyleSheet.flatten(nav.props.style)).toMatchObject({ borderRadius: 16, borderCurve: "continuous" });
+  const rows = hosts(root, (id) => id === "pageMenuActionRow");
+  expect(rows.map((row) => row.findAll((node) => typeof node.type === "string" && String(node.props.testID).startsWith("pageMenuAction:")).map((node) => node.props.testID))).toEqual([
+    ["pageMenuAction:Reader", "pageMenuAction:Find on Page"],
+    ["pageMenuAction:Copy Link", "pageMenuAction:Share"],
+  ]);
+  for (const label of ["Reader", "Find on Page", "Copy Link", "Share"]) {
+    const caption = host(root, `pageMenuActionCaption:${label}`)!;
+    expect(caption.props.children).toBe(label);
+    expect(caption.props.numberOfLines).toBeUndefined();
+  }
+  unmount(root);
+});
+
+test("the redesign's switches that close the menu and reload say so in their hint, and Stop Loading names the in-flight button", async () => {
+  page("https://site0.example/", true);
+  const root = await openMenu("redesigned");
+  expect(host(root, "menuToggle:Block Ads and Trackers")!.props.accessibilityHint).toBe("Closes the menu and reloads the page.");
+  expect(host(root, "menuToggle:Desktop Site")!.props.accessibilityHint).toBe("Closes the menu and reloads the page.");
+  expect(host(root, "menuToggle:Night Shade")!.props.accessibilityHint).toBeUndefined();
+  expect(labelled(root, "Stop Loading")).toBeDefined();
+  expect(labelled(root, "Stop")).toBeUndefined();
+  unmount(root);
+});
+
+test("the redesign's switches are the shared switch: its grey off track, and no second switch inside the row", async () => {
+  const root = await openMenu("redesigned");
+  const toggle = host(root, "menuToggle:Night Shade")!;
+  expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Night Shade")).toHaveLength(1);
+  const track = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "toggleTrack");
+  expect(track.length).toBeGreaterThan(0);
+  expect(toggle.props.accessibilityState).toMatchObject({ checked: false });
+  unmount(root);
+});
+
+test("Copy Link in the redesign says Copied Link in the title, from the shared words", async () => {
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Copy Link");
+  expect(usePageUi.getState().titleFeedback).toBe("Copied Link");
+  unmount(root);
+});
+
+test("off a web page the redesign's zoom percentage takes the same disabled ink as the rest of the row", async () => {
+  page("about:blank");
+  const root = await openMenu("redesigned");
+  const percent = host(root, "menuZoomPercent")!;
+  expect(StyleSheet.flatten(percent.props.style).color).toBe("rgba(60,60,67,0.3)");
   unmount(root);
 });
 

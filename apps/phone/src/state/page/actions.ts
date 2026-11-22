@@ -31,7 +31,7 @@ import { pageSummariesEnabled, pageSummariesRevision, refreshPageSummariesEnable
 import { dismissArchiveCard } from "../browse/archiveCard";
 import { copy } from "../../lib/platformCopy";
 import { launchValues } from "../../platform/launch";
-import { COPIED_LINK } from "../browse/tabMenus";
+import { actionWords } from "../../lib/sharedWords";
 import { syncData } from "../sync/store";
 import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
@@ -39,7 +39,6 @@ import { syncOffered } from "../../platform/system";
 
 const TITLE_FEEDBACK_MS = 1000;
 const FIND_AFTER_MENU_MS = 350;
-const COPIED_URL = "Copied URL";
 const NO_APP_FOR_LINK = "No App Can Open This Link";
 
 const quietly = (call: () => Promise<unknown>) => void settled(call, undefined);
@@ -234,7 +233,7 @@ export function copyCurrentLink() {
   if (!tab || !isSyncableUrl(tab.url)) return;
   quietly(() => copyText(mobileClean(tab.url)));
   quietly(successHaptic);
-  showTitleFeedback(COPIED_URL);
+  showTitleFeedback(actionWords.copiedLink);
 }
 
 export function showTitleFeedback(text: string) {
@@ -382,7 +381,7 @@ export function pressAction(press: Press, action: PressAction) {
     case "copy":
       quietly(() => copyText(mobileClean(plan.url)));
       quietly(successHaptic);
-      showToast(COPIED_LINK, "link");
+      showToast(actionWords.copiedLinkWithoutTrackers, "link");
       return;
     case "share":
       quietly(() => shareLink(plan.url, ""));

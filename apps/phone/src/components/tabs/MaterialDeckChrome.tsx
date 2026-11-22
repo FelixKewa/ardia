@@ -1,3 +1,4 @@
+import { listWords } from "../../lib/sharedWords";
 import { useEffect, useRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -156,7 +157,7 @@ export function MaterialDeckEmpty({ centerY, showsArchive, onArchive, searching 
   const scheme = useDeckScheme(incognito);
   return (
     <View testID="materialDeckEmpty" pointerEvents="box-none" style={[styles.empty, { top: centerY - materialSize.listItemTwoLine }]}>
-      <Text style={[materialType.titleLarge, styles.centered, { color: scheme.onSurface }]}>{searching ? "No Matching Tabs" : "No Open Tabs"}</Text>
+      <Text style={[materialType.titleLarge, styles.centered, { color: scheme.onSurface }]}>{searching ? listWords.noResults : "No Open Tabs"}</Text>
       {searching ? null : <Text style={[materialType.bodyMedium, styles.centered, { color: scheme.onSurfaceVariant }]}>Tabs you open appear here. Inactive tabs move to the Archive.</Text>}
       {showsArchive && !searching ? (
         <Pressable accessibilityRole="button" android_ripple={ripple(scheme, scheme.primary)} onPress={onArchive} style={styles.textButton}>

@@ -18,6 +18,7 @@ import { useIncognito } from "../../state/tabs/hooks";
 import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, themeEditorLayout, useDesign, useProfileLook, useTheme, type ProfileColor } from "../ui";
 import { MaterialSettingsLeading } from "./MaterialSettingsKit";
 import { Divider, Group, IconTile, NavRow, SettingsPage, ToggleRow } from "./SettingsKit";
+import { actionWords } from "../../lib/sharedWords";
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
 
@@ -107,7 +108,7 @@ export function ColorRow({ labelled = true, plainIcon = false }: { labelled?: bo
       <View style={[styles.colorRow, labelled ? null : styles.colorRowPlain]}>
         <View style={[styles.colorLabel, plainIcon ? styles.plainColorLabel : null]}>
           {labelled ? plainIcon ? <MaterialSettingsLeading icon="paintpaletteFill" /> : <IconTile icon="paintpaletteFill" tint={look.swatch} /> : null}
-          <Text style={[font.body, { color: theme.label }]}>Color</Text>
+          <Text style={[font.body, { color: theme.label }]}>{actionWords.color}</Text>
         </View>
         <View style={[styles.swatches, material ? null : styles.swatchGrid]} accessibilityRole="radiogroup">
           {COLORS.map((color) => (

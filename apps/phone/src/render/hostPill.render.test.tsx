@@ -220,3 +220,24 @@ test("Android Remove animations snaps the collapse and Find state without the ba
   unmount(root);
   mockMotion.reduced = false;
 });
+
+test("the 30 point pill reaches the 44 point touch target without growing: a tap just above or below it still brings the bar back, and its press dims the host as other bar controls do", () => {
+  const root = page("redesigned");
+  scrolled("down");
+  settle();
+  const reach = host(root, "hostPillReach")!;
+  const box = StyleSheet.flatten(reach.props.style) as { top: number; bottom: number; position: string };
+  expect(box.position).toBe("absolute");
+  expect(30 - box.top - box.bottom).toBeGreaterThanOrEqual(44);
+  expect(StyleSheet.flatten(host(root, "hostPill")!.props.style)).toMatchObject({ height: 30 });
+  expect(reach.props.accessible).toBe(false);
+  const reachPress = root.root.findAll((node) => node.props.testID === "hostPillReach" && typeof node.props.onPressIn === "function")[0]!;
+  act(() => reachPress.props.onPressIn());
+  expect(StyleSheet.flatten(host(root, "hostPillButton")!.props.style).opacity).toBe(0.35);
+  act(() => reachPress.props.onPressOut());
+  expect(StyleSheet.flatten(host(root, "hostPillButton")!.props.style).opacity).toBeUndefined();
+  act(() => reachPress.props.onPress());
+  settle();
+  expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("box-none");
+  unmount(root);
+});

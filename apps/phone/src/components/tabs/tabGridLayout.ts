@@ -11,20 +11,16 @@ export const tabGridLayout = {
   sideExtra: 4,
   cellSpacing: 8,
   headerSpacing: 6,
-  closeCircle: 24,
+  closePlate: 24,
   closeHit: { width: 36, height: 30 },
   closeGlyph: 13.2,
   selectedEdge: 2.5,
-  edge: 0.5,
-  pressedScale: 0.94,
 } as const;
-
-export const tabGridInk = { shadow: "0px 3px 20px rgba(0,0,0,0.108)" } as const;
 
 const crossfade: MotionCurve = { type: "spring", response: 0.18, dampingFraction: 1 };
 const crossfadeReduced: MotionCurve = { type: "timing", durationMs: 150, curve: [0, 0, 0.58, 1] };
 
-export const tabGridMotion = { press: spring(0.16, 1), reflow: spring(0.22, 1), crossfade, crossfadeReduced } as const;
+export const tabGridMotion = { reflow: spring(0.22, 1), crossfade, crossfadeReduced } as const;
 
 export type TabGridInsets = { top: number; bottom: number; side: number };
 

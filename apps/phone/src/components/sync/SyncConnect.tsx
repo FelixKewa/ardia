@@ -12,6 +12,7 @@ import { SyncScan } from "./SyncScan";
 import { copy } from "../../lib/platformCopy";
 import type { ConnectResult } from "../../platform/sync";
 import { canScanCodes } from "../../state/sync/scan";
+import { dismissWords, syncWords } from "../../lib/sharedWords";
 
 type FlowProps = { onClose: () => void; onConnected: () => void; closes?: boolean };
 
@@ -113,18 +114,18 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <View style={StyleSheet.absoluteFill} importantForAccessibility={entering ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={entering}>
-        <SettingsPage title="Connect to Your Mac" onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title="Close" onPress={onClose} enabled={!busy} /> : undefined}>
-          <SyncHero title="Connect to Your Mac" subtitle="Two steps, and your Mac’s tabs are here." />
+        <SettingsPage title={syncWords.connect} onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title={dismissWords.cancel} onPress={onClose} enabled={!busy} /> : undefined}>
+          <SyncHero title={syncWords.connect} subtitle="Two steps, and your Mac’s tabs are here." />
           <Group header="Two Steps" footer={copy().phraseStays}>
             <Step number={1} title="Show the code on your Mac" detail={MAC_HINT} done={hasPhrase} current>
               {hasPhrase ? (
                 <Animated.View key="added" entering={STEP_IN} exiting={STEP_OUT}>
-                  <PhraseAdded onChange={() => setEntering(true)} />
+                  <PhraseAdded locked={busy} onChange={() => setEntering(true)} />
                 </Animated.View>
               ) : (
                 <Animated.View key="ways" entering={STEP_IN} exiting={STEP_OUT} style={styles.ways}>
-                  {scans ? <CapsuleButton title="Scan Code" icon="qrcodeViewfinder" prominent onPress={() => setScanning(true)} /> : null}
-                  <CapsuleButton title="Enter Words" icon="textCursor" prominent={!scans} onPress={() => setEntering(true)} />
+                  {scans ? <CapsuleButton title={syncWords.scanCode} icon="qrcodeViewfinder" prominent enabled={!busy} onPress={() => setScanning(true)} /> : null}
+                  <CapsuleButton title={syncWords.enterRecoveryPhrase} icon="textCursor" prominent={!scans} enabled={!busy} onPress={() => setEntering(true)} />
                 </Animated.View>
               )}
             </Step>
@@ -183,13 +184,13 @@ function Step({ number, title, detail, done, current, children }: { number: numb
   );
 }
 
-function PhraseAdded({ onChange }: { onChange: () => void }) {
+function PhraseAdded({ locked, onChange }: { locked: boolean; onChange: () => void }) {
   const theme = useTheme();
   return (
     <View style={styles.added}>
       <Symbol name="checkmarkCircle" size={18} color={theme.switchOn} />
       <Text style={[font.subheadline, styles.medium, styles.fill, { color: theme.switchOn }]}>Recovery phrase added</Text>
-      <BarButton title="Change" onPress={onChange} />
+      <BarButton title="Change" onPress={onChange} enabled={!locked} />
     </View>
   );
 }
@@ -244,7 +245,7 @@ function PhraseEntry({ initial, onUse, onBack }: { initial: string; onUse: (phra
     if (check.isValid) onUse(draft);
   };
   return (
-    <SettingsPage title="Enter Words" onBack={onBack} dismissesKeyboard={Platform.OS === "ios"} trailing={<BarButton title="Use Phrase" emphasized enabled={check.isValid} onPress={use} />}>
+    <SettingsPage title={syncWords.enterRecoveryPhrase} onBack={onBack} dismissesKeyboard={Platform.OS === "ios"} trailing={<BarButton title="Use Phrase" emphasized enabled={check.isValid} onPress={use} />}>
       <View style={styles.phrase}>
         <View style={styles.phraseHeader}>
           <Text style={[font.footnote, styles.fill, { color: theme.secondaryLabel }]}>Recovery Phrase</Text>

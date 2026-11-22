@@ -6,6 +6,7 @@ import { redesignedBarCenterFromBottom } from "../../lib/deckGeometry";
 import { linearGradientCss } from "../../lib/gradient";
 import { lookForApp, type ProfileLook } from "../../lib/profileLook";
 import { sfSymbol } from "../../lib/sfSymbols";
+import { actionWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { newTab } from "../../state/browse/store";
 import { usePreferences } from "../../state/settings/hooks";
@@ -170,8 +171,7 @@ export function StartMark({ incognito }: { incognito: boolean }) {
         <Pressable
           testID="startLogoButton"
           accessibilityRole="button"
-          accessibilityLabel="Search"
-          accessibilityHint="Opens Search."
+          accessibilityLabel={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
           onPressIn={() => {
             haptics.barPress();
             pressed.value = reduceMotion ? withTiming(1, { duration: startLogo.reducedSettleMs / 2 }) : withSpring(1, press);

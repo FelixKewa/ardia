@@ -1,3 +1,4 @@
+import { destinationWords } from "../../lib/sharedWords";
 import { useEffect, useRef, type ComponentProps } from "react";
 import { haptics } from "../../state/app/haptics";
 import { StyleSheet, View, type ViewInstance } from "react-native";
@@ -71,7 +72,7 @@ export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSetti
         </Plate>
       </PressScale>
       <View style={[styles.side, styles.end]}>
-        <PressScale label="Settings" onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
+        <PressScale label={destinationWords.settings} onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
           <Plate {...frost} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
             <View pointerEvents="none">
               <Symbol name="gearshape" size={sideSize("gearshape")} color={theme.secondaryLabel} />

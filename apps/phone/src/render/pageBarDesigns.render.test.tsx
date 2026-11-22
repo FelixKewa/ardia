@@ -3,7 +3,7 @@ import { act } from "react-test-renderer";
 import { BottomBar } from "../components/browsing/BottomBar";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { barAddress, FloatingBar } from "../components/browsing/FloatingBar";
-import { appDesign, chromeInk, DesignProvider, Symbol } from "../components/ui";
+import { appDesign, barGlyphLayout, chromeInk, DesignProvider, Symbol } from "../components/ui";
 import { storeFullscreen, storeNavigation, storeTone, usePages, type PageState } from "../state/pages/store";
 import { usePageUi } from "../state/page/store";
 import { setPreference } from "../state/settings/store";
@@ -194,7 +194,7 @@ test("the bar's glass and glyphs follow the page's sampled bottom colour, not th
   expect(StyleSheet.flatten(host(light, "floatingBarTabs")!.props.style).backgroundColor).toBe("#FFFFFF");
   const symbols = light.root.findAll((node) => node.type === Symbol);
   expect(symbols.find((node) => node.props.name === "ellipsis")!.props.size).toBeCloseTo(23.3);
-  expect(symbols.find((node) => node.props.name === "plus")!.props.size).toBeCloseTo(23.6);
+  expect(symbols.find((node) => node.props.name === "plus")!.props.size).toBeCloseTo(barGlyphLayout.plus.side);
   expect(symbols.find((node) => node.props.name === privateMark)!.props).toMatchObject({ size: 28, color: "rgba(0,0,0,0.5)" });
   unmount(light);
   act(() => storeTone(tab.id, { top: "#101418", bottom: "#101418" }));
@@ -220,5 +220,36 @@ test("the page view is given the profile's surface for what shows behind a swipe
   const screen = root.root.findAll((node) => (node.type as { name?: string })?.name === "BrowsingScreen")[0]!;
   const surface = StyleSheet.flatten(screen.findAll((node) => typeof node.type === "string")[0]!.props.style).backgroundColor;
   expect(view.props.surfaceColor).toBe(surface);
+  unmount(root);
+});
+
+test("the browsing + is spoken as New Tab, or New Incognito Tab in Incognito, and draws the bars' shared + glyph; the classic bar's + says the same", () => {
+  const { BarPlusGlyph } = require("../components/ui") as typeof import("../components/ui");
+  const spoken = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => typeof node.props.onPress === "function" && (node.props.accessibilityLabel === "New Tab" || node.props.accessibilityLabel === "New Incognito Tab" || node.props.accessibilityLabel === "New Search")).map((node) => node.props.accessibilityLabel as string);
+  const plain = page("redesigned");
+  expect(new Set(spoken(plain))).toEqual(new Set(["New Tab"]));
+  expect(host(plain, "floatingBarPlus")!.findAll((node) => node.type === BarPlusGlyph).length).toBeGreaterThan(0);
+  for (const plus of host(plain, "floatingBarPlus")!.findAll((node) => node.type === Symbol && node.props.name === "plus")) expect(plus.props.size).toBe(barGlyphLayout.plus.side);
+  unmount(plain);
+  const privateTab = { ...currentTabs().open[0]!, isPrivate: true };
+  const incognito = page("redesigned", privateTab);
+  expect(new Set(spoken(incognito))).toEqual(new Set(["New Incognito Tab"]));
+  unmount(incognito);
+  const classic = renderSurface(<BottomBar order={currentTabs().open} roles={require("../components/ui").rolesFor(false)} showsPlus incognito onTabs={() => undefined} onTabsMenu={() => undefined} onStep={() => undefined} onPlus={() => undefined} onMore={() => undefined} />);
+  expect(spoken(classic)).toContain("New Incognito Tab");
+  expect(classic.root.findAll((node) => node.type === BarPlusGlyph)).toHaveLength(1);
+  unmount(classic);
+});
+
+test("the address answers a press with the shared dim and the bar's tap haptic, as the page menu button beside it does", () => {
+  const haptics = require("../state/app/haptics") as typeof import("../state/app/haptics");
+  const tapped = jest.spyOn(haptics.haptics, "barPress").mockImplementation(() => undefined as never);
+  const root = page("redesigned");
+  const address = root.root.findAll((node) => node.props.accessibilityLabel === "Address" && typeof node.props.onPressIn === "function")[0]!;
+  act(() => address.props.onPressIn());
+  expect(tapped).toHaveBeenCalled();
+  const style = address.props.style as (state: { pressed: boolean }) => unknown;
+  expect(StyleSheet.flatten(style({ pressed: true }) as never)).toMatchObject({ opacity: 0.35 });
+  expect(StyleSheet.flatten(style({ pressed: false }) as never).opacity).toBeUndefined();
   unmount(root);
 });

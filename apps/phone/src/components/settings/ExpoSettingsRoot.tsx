@@ -22,6 +22,7 @@ import { syncOffered } from "../../state/sync/offer";
 import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
 import { pageSummariesSwitchable, refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { PAGE_SUMMARY_COPY } from "../../state/pageSummary/copy";
+import { destinationWords } from "../../lib/sharedWords";
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
 const APP_LINKS = [
@@ -185,7 +186,7 @@ function SyncRow() {
         <Image systemName="macbook.and.iphone" size={SYNC_TILE / 2} color={settingsTint.sync} />
       )}
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ textStyle: "headline" })]}>Sync With Mac</Text>
+        <Text modifiers={[font({ textStyle: "headline" })]}>{destinationWords.sync}</Text>
         <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(line.isWarning ? warningInk : { type: "hierarchical", style: "secondary" }), contentTransition("opacity")]}>{line.text}</Text>
       </VStack>
     </HStack>

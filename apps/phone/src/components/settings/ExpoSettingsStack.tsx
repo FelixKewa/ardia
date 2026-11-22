@@ -7,7 +7,8 @@ import { useSettingsNav } from "../../state/settings/hooks";
 import { closeSettings, followSettingsPath, settingsPath, settingsRouteFromKey, type SettingsRoute } from "../../state/settings/nav";
 import { nativeLookColors } from "../../lib/profileLook";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
-import { LookBackdrop, modifierList, profileLook, settingsUIAvailable, useProfileLook, usesGlass, useTheme } from "../ui";
+import { destinationWords, syncWords } from "../../lib/sharedWords";
+import { LookBackdrop, modifierList, profileLook, settingsChrome, settingsUIAvailable, useProfileLook, usesGlass, useTheme } from "../ui";
 import { useChromeStyle } from "../../state/settings/appearance";
 import { ExpoAppearancePage } from "./ExpoAppearancePage";
 import { ExpoSiteSettingsPage } from "./ExpoSiteSettingsPage";
@@ -57,11 +58,11 @@ const TITLES: Record<SettingsRoute["page"], string> = {
   myFilters: "My Filters",
   trustedSites: "Trusted Sites",
   clearData: "Clear Browsing Data",
-  sync: "Sync With Mac",
+  sync: destinationWords.sync,
   defaultBrowser: "Default Browser",
-  syncConnect: "Connect to Your Mac",
-  syncWords: "Enter Words",
-  syncScan: "Scan Code",
+  syncConnect: syncWords.connect,
+  syncWords: syncWords.enterRecoveryPhrase,
+  syncScan: syncWords.scanCode,
   about: "About Ardia",
   licenses: "Open Source Licenses",
   whatsSent: PHONE_SHARING_COPY.whatsSent,
@@ -120,9 +121,12 @@ function SettingsNavigation() {
   );
 }
 
+const BRINGS_OWN_DISMISS = new Set<SettingsRoute["page"]>(["syncConnect"]);
+
 function StackRoot({ route }: { route: SettingsRoute | undefined }) {
   const Converted = route && route.page !== "root" ? CONVERTED[route.page] : undefined;
   if (!route || !Converted) return <ExpoSettingsRoot />;
+  if (BRINGS_OWN_DISMISS.has(route.page)) return <Converted route={route} />;
   return (
     <ExpoSettingsDone>
       <Converted route={route} />
@@ -136,7 +140,7 @@ function Destination({ routeKey }: { routeKey: string }) {
   const Converted = CONVERTED[route.page];
   if (Converted) return <Converted route={route} />;
   return (
-    <VStack modifiers={[navigationTitle(TITLES[route.page]), navigationBarTitleDisplayMode("inline"), ignoreSafeArea({ edges: "bottom" })]}>
+    <VStack modifiers={modifierList(navigationTitle(TITLES[route.page]), navigationBarTitleDisplayMode("inline"), ignoreSafeArea({ edges: "bottom" }), settingsChrome())}>
       <RNHostView>
         <View style={styles.fill}>
           <SettingsHostedContext.Provider value>

@@ -8,11 +8,12 @@ import { useHeldPageTone } from "../../state/browse/deckHold";
 import { display } from "../../state/search/omnibox";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, FadeView, font, screenReaderActions, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor } from "../ui";
+import { barHeight, FadeView, font, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor } from "../ui";
 import { nativeMenus } from "../ui/MenuTrigger";
 import { isLabBuild } from "../../platform/lab";
 import { launchArguments } from "../../state/app/launchFlags";
-import { CardIcon, cardPose, deckCardMotion, deckHeaderTitle, DeckCard, DeckCardMenu, deckCardStyles, deckNow, ReceivedBadge, sameCard, type DeckMotion, type DeckNow } from "./DeckCard";
+import { tabCardTitle, tabCardTitleText } from "./tabCard";
+import { TabCardReach, CardIcon, cardPose, deckCardMotion, deckHeaderTitle, DeckCard, DeckCardMenu, deckCardStyles, deckNow, ReceivedBadge, sameCard, type DeckMotion, type DeckNow } from "./DeckCard";
 
 export const containedDeckScroll = (): boolean => Platform.OS === "android" && isLabBuild && launchArguments().oneContainerScroll;
 
@@ -225,7 +226,7 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: expanded.value && !underBars ? deckBarBand(g, 0, scaleProgress.value).grown : 0 }] }), [g, underBars]);
 
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tabCardTitle(tab, host);
   const cardContents = (
     <>
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
@@ -254,18 +255,13 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
           cardContents
         )}
       </Animated.View>
-      <Animated.View
+      <TabCardReach
         testID="deckCardReach"
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityValue={{ text: tab.isPrivate ? `Incognito, ${host}` : host }}
-        accessibilityHint="Opens the tab."
-        {...screenReaderActions([
-          { name: "activate", run: () => onOpen(index) },
-          { name: "close", label: "Close Tab", run: () => onCloseNow(index) },
-        ])}
-        pointerEvents="none"
+        tab={tab}
+        title={title}
+        host={host}
+        open={() => onOpen(index)}
+        close={() => onCloseNow(index)}
         style={[deckCardStyles.reach, { width: g.cardWidth, height: g.cardHeight }, overZ, reachStyle]}
       />
       <Animated.View testID="deckCardHeader" style={[deckCardStyles.header, { width: g.cardWidth }, overZ, headerStyle]} pointerEvents="none">
@@ -274,12 +270,11 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
             <CardIcon tab={tab} />
             <Animated.Text
               testID="deckHeaderTitle"
-              maxFontSizeMultiplier={DECK_HEADER.maxFontScale}
+              {...tabCardTitleText}
               onLayout={(event) => {
                 titleWidth.value = event.nativeEvent.layout.width;
               }}
               style={[font.caption, deckCardStyles.title, { color: theme.headerText }, titleStyle]}
-              numberOfLines={1}
             >
               {deckHeaderTitle(tab, title)}
             </Animated.Text>

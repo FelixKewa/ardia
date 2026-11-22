@@ -152,9 +152,10 @@ function RowContent({ row, typed, roles, interactive, onRefine }: { row: TrayRow
 
 const PANEL_TRAILING: Partial<Record<TrayRow["kind"], true>> = { calc: true, paste: true, browseForMe: true };
 
+export const panelTitleLines = (fontScale: number) => (fontScale > LARGE_TEXT ? 3 : 1);
+
 function PanelRowContent({ row, typed, roles }: { row: TrayRow; typed: string; roles: ColorRoles }) {
-  const large = useWindowDimensions().fontScale > LARGE_TEXT;
-  const lines = large ? 3 : 1;
+  const lines = panelTitleLines(useWindowDimensions().fontScale);
   const detail = row.kind === "query" ? row.detail : row.kind === "page" ? (row.switchesTab ? row.detail : null) : PANEL_TRAILING[row.kind] ? row.detail : null;
   const fromMac = row.kind === "page" && !row.switchesTab ? (row.fromMac ?? null) : null;
   return (
@@ -241,3 +242,5 @@ const styles = StyleSheet.create({
   materialRefine: { width: materialSize.iconButton, height: materialSize.iconButton, alignItems: "center", justifyContent: "center" },
   refineGlyph: { transform: [{ rotate: "-90deg" }] },
 });
+
+export const panelRowLayout = { row: styles.panelRow, leading: styles.panelLeading, title: styles.panelTitleText } as const;

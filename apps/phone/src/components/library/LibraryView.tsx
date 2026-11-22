@@ -35,7 +35,9 @@ import { useTabs } from "../../state/tabs/store";
 import { ClearDataPage } from "../settings/DataPages";
 import { EmptyState } from "../settings/SettingsKit";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
-import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName } from "../ui";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
+import { listSheetWords } from "./listSheetWords";
+import { ConfirmSheet, Favicon, iconRoles, LoadingState, NoResultsState, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName } from "../ui";
 
 const FOLDER = "folder:";
 const ROW_FAVICON = 20;
@@ -52,8 +54,8 @@ type RowMenu = { items: MenuItem[]; at: Point };
 const linkItems = (url: string, title: string): MenuItem[] =>
   shareable(url)
     ? [
-        { label: "Copy Link", icon: "link", onPress: () => copyLink(url) },
-        { label: "Share", icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
+        { label: actionWords.copyLink, icon: iconRoles.copyLink, onPress: () => copyLink(url) },
+        { label: actionWords.share, icon: iconRoles.share, onPress: () => shareUrl(url, title) },
       ]
     : [];
 
@@ -117,7 +119,7 @@ export function LibraryView() {
     const asked: Confirmation = {
       title: "Delete All Downloads?",
       message: "The files are removed from this phone.",
-      action: "Delete All",
+      action: listSheetWords.deleteAll,
       run: () => {
         haptics.warning();
         deleteAllDownloads();
@@ -126,7 +128,7 @@ export function LibraryView() {
     confirmInSheet(asked, () => setConfirmation(asked));
   };
   const items: MenuItem[] = [
-    ...(section === "downloads" ? ([{ label: "Delete All Downloads…", icon: "trash", destructive: true, disabled: !hasFiles, onPress: confirmDeleteAll }, "divider"] as MenuItem[]) : []),
+    ...(section === "downloads" ? ([{ label: listSheetWords.deleteAllEntry, icon: "trash", destructive: true, disabled: !hasFiles, onPress: confirmDeleteAll }, "divider"] as MenuItem[]) : []),
     {
       label: "Clear Browsing Data",
       icon: "eraserFill",
@@ -153,8 +155,8 @@ export function LibraryView() {
               <Symbol name="chevronLeft" size={20} color={theme.spaceAccentInk} />
             </Pressable>
           ) : (
-            <Pressable accessibilityRole="button" onPress={closeLibrary} style={styles.topButton}>
-              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={dismissWords.done} onPress={closeLibrary} style={styles.topButton}>
+              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>{dismissWords.done}</Text>
             </Pressable>
           )}
           <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.bold, styles.title, { color: theme.label }]}>
@@ -162,8 +164,8 @@ export function LibraryView() {
           </Text>
           <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
             {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel="More" onPress={onPress} style={[styles.topButton, styles.end]}>
-                <Symbol name="ellipsis" size={22} color={theme.spaceAccentInk} />
+              <Pressable accessibilityRole="button" accessibilityLabel={actionWords.more} onPress={onPress} style={[styles.topButton, styles.end]}>
+                <Symbol name={iconRoles.more} size={22} color={theme.spaceAccentInk} />
               </Pressable>
             )}
           </MenuTrigger>
@@ -227,7 +229,7 @@ function SearchField({ prompt, query, onChange }: { prompt: string; query: strin
   );
 }
 
-const noResults = (query: string) => <EmptyState title={`No Results for “${query.trim()}”`} message="Check the spelling or try a new search." icon="magnifyingglass" />;
+const noResults = (query: string) => <NoResultsState query={query.trim()} />;
 
 type MenuOpener = (items: MenuItem[], at: Point) => void;
 
@@ -254,7 +256,7 @@ function HistoryList({ query, bottom, onMenu }: { query: string; bottom: number;
   const now = Date.now();
   const sections = useMemo(() => historyDays(shown).map((day) => ({ key: String(day.day), title: historyDayTitle(day.day, now), data: day.entries })), [shown]);
   const iconSize = useRowIcon();
-  if (!loaded) return null;
+  if (!loaded) return <LoadingState testID="libraryLoading" />;
   if (!entries.length) return <EmptyState title="No History" message="Pages you visit here and on your Mac show up here." icon="clockArrow" />;
   if (!shown.length) return noResults(query);
   return (
@@ -403,7 +405,8 @@ function DownloadList({ bottom, onMenu }: { bottom: number; onMenu: MenuOpener }
     await loadDownloads();
     setRefreshing(false);
   };
-  if (loaded && !files.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
+  if (!loaded) return <LoadingState testID="libraryLoading" />;
+  if (!files.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
   return (
     <FlatList
       testID="libraryDownloads"
@@ -433,7 +436,7 @@ function DownloadRow({ file, onMenu }: { file: DownloadedFile; onMenu: MenuOpene
         onLongPress={(at) =>
           onMenu(
             [
-              { label: "Share", icon: "squareAndArrowUp", onPress: () => shareDownload(file) },
+              { label: actionWords.share, icon: iconRoles.share, onPress: () => shareDownload(file) },
               "divider",
               { label: "Delete", icon: "trash", destructive: true, onPress: remove },
             ],

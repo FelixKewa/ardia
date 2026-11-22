@@ -12,7 +12,7 @@ import { useSearchOpen } from "../../state/search/hooks";
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { currentTabs } from "../../state/tabs/store";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { LoadingLine, LookBackdrop, tabsCurve, usePresence, useReduceMotion, useTheme, type LoadWatch } from "../ui";
+import { LoadingLine, LookBackdrop, shadowCss, smoothCorners, tabsCurve, usePresence, useReduceMotion, useTheme, type LoadWatch } from "../ui";
 import { FindBar } from "../browsing/FindBar";
 import { PageCover } from "../browsing/PageCover";
 import { PageFailureView } from "../browsing/PageFailureView";
@@ -138,7 +138,7 @@ const noop = () => undefined;
 function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null; front: boolean }) {
   const theme = useTheme();
   return (
-    <View testID="duoCard" style={[styles.place, styles.card, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
+    <View testID="duoCard" style={[styles.place, styles.card, { boxShadow: shadowCss("control", theme.dark) }, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
       <View style={[styles.cardClip, { backgroundColor: tab ? theme.canvas : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
         {tab ? (
           <>
@@ -183,7 +183,7 @@ const frameStyle = (frame: DuoFrame) => ({ left: frame.x, top: frame.y, width: f
 
 const styles = StyleSheet.create({
   place: { position: "absolute" },
-  card: { borderRadius: DUO.cardRadius, borderCurve: "continuous", boxShadow: duoInk.cardShadow },
-  cardClip: { flex: 1, borderRadius: DUO.cardRadius, borderCurve: "continuous", overflow: "hidden" },
+  card: { borderRadius: DUO.cardRadius, ...smoothCorners },
+  cardClip: { flex: 1, borderRadius: DUO.cardRadius, ...smoothCorners, overflow: "hidden" },
   loading: { position: "absolute", top: 0, left: 0, right: 0 },
 });

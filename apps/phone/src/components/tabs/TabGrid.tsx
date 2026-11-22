@@ -9,11 +9,12 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { capsule, ChromeSurface, deckChromeLayout, FadeView, font, screenReaderActions, Symbol, TabFace, tabsLayout, tabsMotion, useTheme } from "../ui";
-import { CARD_MENU_ACTION, CardIcon, CardMenu, ReceivedBadge, type Reads } from "./DeckCard";
+import { ChromeSurface, controlRadius, controlSize, deckChromeLayout, FadeView, font, press, pressMotion, shadowCss, slopToReach, smoothCorners, stroke, Symbol, TabFace, Tappable, tabsLayout, tabsMotion, useReduceMotion, useTheme } from "../ui";
+import { CardIcon, CardMenu, deckHeaderTitle, ReceivedBadge, type Reads } from "./DeckCard";
+import { CLOSE_TAB, tabCardAccess, tabCardTitle, tabCardTitleText } from "./tabCard";
 import { nativeMenus } from "../ui/MenuTrigger";
 import { deckHeaderBottom } from "./DeckHeader";
-import { centredGridOffset, tabGridColumns, tabGridInk, tabGridInsets, tabGridLayout, tabGridMotion, tabGridRowHeight, tabGridStartOffset } from "./tabGridLayout";
+import { centredGridOffset, tabGridColumns, tabGridInsets, tabGridLayout, tabGridMotion, tabGridRowHeight, tabGridStartOffset } from "./tabGridLayout";
 
 export type GridFrame = { centerX: number; centerY: number; width: number; height: number };
 
@@ -32,7 +33,7 @@ type Props = {
 type CellLayout = { x: number; y: number; width: number; height: number };
 
 export function TabGrid({ tabs, selectedId, geometry: g, reduceMotion, shown = true, covering, onFocusFrame, onOpen, onClose }: Props) {
-  const insets = tabGridInsets(g.safeTop, deckHeaderBottom(), g.height, g.barCenterY, deckChromeLayout.barCircle, g.safeSide + deckChromeLayout.headerSide);
+  const insets = tabGridInsets(g.safeTop, deckHeaderBottom(), g.height, g.barCenterY, controlSize.bar, g.safeSide + deckChromeLayout.headerSide);
   const columns = tabGridColumns(g.width - insets.side * 2);
   const aspect = g.width / Math.max(g.height, 1);
   const viewportTop = insets.top - tabGridLayout.topFade;
@@ -110,59 +111,58 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   const theme = useTheme();
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tabCardTitle(tab, host);
   const open = () => onOpen(tab.id);
   const close = () => onClose(tab.id);
+  const reduceMotion = useReduceMotion();
   const scale = useSharedValue(1);
+  const dim = useSharedValue(1);
   const card = useRef<ViewInstance>(null);
   const id = tab.id;
-  const pressStyle = useAnimatedStyle(() => ({ opacity: covering && covering.value === id ? 0 : 1, transform: [{ scale: scale.value }] }), [covering, id]);
-  const press = (to: number) => {
-    scale.value = withSpring(to, tabGridMotion.press);
+  const pressStyle = useAnimatedStyle(() => ({ opacity: covering && covering.value === id ? 0 : dim.value, transform: [{ scale: scale.value }] }), [covering, id]);
+  const pressTo = (down: boolean) => {
+    if (reduceMotion) {
+      scale.value = 1;
+      dim.value = down ? press.iconOpacity : 1;
+      return;
+    }
+    scale.value = withSpring(down ? pressMotion.scale : 1, pressMotion.spring);
   };
   const fill = tone.top ?? theme.canvas;
   return (
     <View style={styles.cell}>
       <View testID="tabGridHeader" style={styles.header}>
         <CardIcon tab={tab} />
-        <Text testID="tabGridTitle" style={[font.footnote, styles.title, { color: theme.headerText }]} numberOfLines={1}>
-          {tab.isPrivate ? "Incognito" : title}
+        <Text testID="tabGridTitle" {...tabCardTitleText} style={[font.footnote, styles.title, { color: theme.headerText }]}>
+          {deckHeaderTitle(tab, title)}
         </Text>
-        <Pressable testID="tabGridClose" accessibilityRole="button" accessibilityLabel="Close Tab" onPress={close} style={styles.closeHit}>
-          <ChromeSurface shape="circle" cornerRadius={capsule(tabGridLayout.closeCircle)} dark={theme.dark} style={styles.closeCircle}>
+        <Tappable testID="tabGridClose" kind="icon" label={CLOSE_TAB} onPress={close} hitSlop={CLOSE_SLOP} style={styles.closeHit}>
+          <ChromeSurface testID="tabGridClosePlate" shape="rounded" cornerRadius={CLOSE_CORNER} dark={theme.dark} style={styles.closePlate}>
             <Symbol name="xmark" size={tabGridLayout.closeGlyph} color={theme.secondaryLabel} />
           </ChromeSurface>
-        </Pressable>
+        </Tappable>
       </View>
       <CardMenu testID="tabGridCardMenu" tab={tab} close={close} haptic={menuOpenedHaptic}>
         {({ onLongPress, openFor }) => (
           <Pressable
             ref={card}
             testID="tabGridCard"
-            accessibilityRole="button"
-            accessibilityLabel={title}
-            accessibilityValue={{ text: tab.isPrivate ? `Incognito, ${host}` : host }}
-            accessibilityState={{ selected }}
-            {...screenReaderActions([
-              { name: "activate", run: open },
-              { name: "close", label: "Close Tab", run: close },
-              ...(onLongPress && !nativeMenus() ? [{ name: "menu", label: CARD_MENU_ACTION, run: () => (openFor ? openFor(card.current) : onLongPress()) }] : []),
-            ])}
+            {...tabCardAccess({ tab, title, host, selected, open, close, menu: onLongPress && !nativeMenus() ? () => (openFor ? openFor(card.current) : onLongPress()) : undefined })}
             onPress={open}
             onLongPress={onLongPress}
             onPressIn={() => {
               haptics.barPress();
-              press(tabGridLayout.pressedScale);
+              pressTo(true);
             }}
-            onPressOut={() => press(1)}
+            onPressOut={() => pressTo(false)}
           >
-            <Animated.View testID="tabGridFace" style={[styles.card, { width, height: width / aspect, backgroundColor: fill }, pressStyle]}>
+            <Animated.View testID="tabGridFace" style={[styles.card, { width, height: width / aspect, backgroundColor: fill, boxShadow: shadowCss("card", theme.dark) }, pressStyle]}>
               <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
               {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
               <View
                 testID="tabGridEdge"
                 pointerEvents="none"
-                style={[styles.edge, selected ? { borderWidth: tabGridLayout.selectedEdge, borderColor: theme.spaceAccentGlyph } : { borderWidth: tabGridLayout.edge, borderColor: theme.cardEdge }]}
+                style={[styles.edge, selected ? { borderWidth: tabGridLayout.selectedEdge, borderColor: theme.spaceAccentGlyph } : { borderWidth: stroke.chrome, borderColor: theme.cardEdge }]}
               />
             </Animated.View>
           </Pressable>
@@ -172,6 +172,10 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   );
 });
 
+const CLOSE_SLOP = slopToReach(tabGridLayout.closeHit.width, tabGridLayout.closeHit.height);
+
+const CLOSE_CORNER = controlRadius(tabGridLayout.closePlate);
+
 const styles = StyleSheet.create({
   viewport: { position: "absolute", left: 0, right: 0, bottom: 0 },
   content: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", columnGap: tabGridLayout.columnSpacing, rowGap: tabGridLayout.rowSpacing },
@@ -179,7 +183,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: tabGridLayout.headerSpacing, height: tabGridLayout.closeHit.height },
   title: { flex: 1, fontWeight: "500" },
   closeHit: { width: tabGridLayout.closeHit.width, height: tabGridLayout.closeHit.height, alignItems: "center", justifyContent: "center" },
-  closeCircle: { width: tabGridLayout.closeCircle, height: tabGridLayout.closeCircle, alignItems: "center", justifyContent: "center" },
-  card: { borderRadius: tabsLayout.cardRadius, borderCurve: "continuous", overflow: "hidden", boxShadow: tabGridInk.shadow },
-  edge: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: tabsLayout.cardRadius, borderCurve: "continuous" },
+  closePlate: { width: tabGridLayout.closePlate, height: tabGridLayout.closePlate, alignItems: "center", justifyContent: "center", ...smoothCorners },
+  card: { borderRadius: tabsLayout.cardRadius, ...smoothCorners, overflow: "hidden" },
+  edge: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: tabsLayout.cardRadius, ...smoothCorners },
 });

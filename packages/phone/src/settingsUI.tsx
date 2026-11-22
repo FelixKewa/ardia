@@ -52,7 +52,7 @@ export const SettingsHeroContent = piece<SettingsPieceProps & { title: string; s
 
 export const SetupStepRow = piece<SettingsPieceProps & { number: number; title: string; detail: string; progress: SetupProgress }>("SetupStepRowView");
 
-export const ColorSwatch = piece<SettingsPieceProps & { preset: ProfilePresetName; isSelected: boolean }>("ColorSwatchView");
+export const ColorSwatch = piece<SettingsPieceProps & { preset: ProfilePresetName; isSelected: boolean; colors?: string[]; ring?: string }>("ColorSwatchView");
 
 export const CheckmarkLabel = piece<SettingsPieceProps & { title: string; isChecked: boolean }>("CheckmarkLabelView");
 

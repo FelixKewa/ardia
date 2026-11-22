@@ -6,7 +6,8 @@ import { idOf, resetNativeMenus, titles, type NativeItem } from "./nativeMenusMo
 jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusModule(jest.requireActual("@ardia/phone-native")));
 
 const { TabDeck } = require("../components/tabs/TabDeck") as typeof import("../components/tabs/TabDeck");
-const { DesignProvider, deckChromeLayout, FloatingMenu, PROFILE_COLORS, rolesFor } = require("../components/ui") as typeof import("../components/ui");
+const { DesignProvider, deckChromeLayout, FloatingMenu, PROFILE_COLORS, pressMotion, reachesTarget, rolesFor, shadowCss } = require("../components/ui") as typeof import("../components/ui");
+const { getAnimatedStyle } = require("react-native-reanimated") as typeof import("react-native-reanimated");
 type MenuItem = import("../components/ui").MenuItem;
 const { centredGridOffset, tabGridColumns, tabGridInsets, tabGridLayout, tabGridStartOffset, tabGridRowHeight } = require("../components/tabs/tabGridLayout") as typeof import("../components/tabs/tabGridLayout");
 const { deckHeaderBottom } = require("../components/tabs/DeckHeader") as typeof import("../components/tabs/DeckHeader");
@@ -166,7 +167,7 @@ test("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, rows 1
   expect(width).toBe(178);
   expect(face.width).toBe(178);
   expect(face.height).toBeCloseTo((178 * SCREEN.height) / SCREEN.width);
-  expect(face).toMatchObject({ borderRadius: 13, overflow: "hidden", boxShadow: "0px 3px 20px rgba(0,0,0,0.108)" });
+  expect(face).toMatchObject({ borderRadius: 13, borderCurve: "continuous", overflow: "hidden", boxShadow: shadowCss("card", false) });
   const header = flat(hosts(root, "tabGridHeader")[0]!);
   expect(header).toMatchObject({ flexDirection: "row", gap: 6, height: 30 });
   const close = hosts(root, "tabGridClose")[0]!;
@@ -175,6 +176,53 @@ test("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, rows 1
   const title = hosts(root, "tabGridTitle")[0]!;
   expect(title.props.numberOfLines).toBe(1);
   expect(flat(title)).toMatchObject({ fontWeight: "500" });
+  unmount(root);
+});
+
+test("the grid's Close is a 24-point rounded glass plate that reaches 44 points without moving the header, and dims on the press", () => {
+  const root = deck();
+  toggle();
+  const close = hosts(root, "tabGridClose")[0]!;
+  const { width, height } = flat(close) as { width: number; height: number };
+  expect({ width, height }).toEqual({ width: 36, height: 30 });
+  expect(reachesTarget(width, height, close.props.hitSlop)).toBe(true);
+  expect(flat(hosts(root, "tabGridClosePlate")[0]!)).toMatchObject({ width: 24, height: 24, borderRadius: 7, borderCurve: "continuous" });
+  expect(byTestId(root, "tabGridClosePlate").some((node) => node.props.shape === "rounded")).toBe(true);
+  const pressable = root.root.findAll((node) => node.props.testID === "tabGridClose" && typeof node.props.style === "function")[0]!;
+  expect(StyleSheet.flatten(pressable.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
+  expect(flat(hosts(root, "tabGridHeader")[0]!)).toMatchObject({ height: 30 });
+  unmount(root);
+});
+
+test("a grid card answers the press with the shared press scale and springs back on release", () => {
+  const root = deck();
+  toggle();
+  const card = byTestId(root, "tabGridCard").find((node) => typeof node.props.onPressIn === "function")!;
+  const face = hosts(root, "tabGridFace")[0]!;
+  const scaleOf = () => ((getAnimatedStyle(face).transform ?? []) as { scale?: number }[]).find((step) => step.scale !== undefined)?.scale;
+  act(() => card.props.onPressIn());
+  act(() => jest.advanceTimersByTime(600));
+  expect(scaleOf()).toBeCloseTo(pressMotion.scale);
+  act(() => card.props.onPressOut());
+  act(() => jest.advanceTimersByTime(600));
+  expect(scaleOf()).toBeCloseTo(1);
+  expect("pressedScale" in tabGridLayout).toBe(false);
+  unmount(root);
+});
+
+test("stack and grid cards speak one way: the same label, value, hint and actions, and the selected trait on the active tab", () => {
+  const root = deck();
+  const selected = tabStore.currentTabs().open.find((tab) => tab.id === tabStore.currentTabs().selectedId)!;
+  const spoken = (node: ReactTestInstance) => ({ label: node.props.accessibilityLabel, value: node.props.accessibilityValue, hint: node.props.accessibilityHint, actions: node.props.accessibilityActions, selected: node.props.accessibilityState?.selected });
+  const stack = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityHint === "Opens the tab.").map(spoken);
+  expect(stack.length).toBeGreaterThan(0);
+  expect(stack.filter((card) => card.selected)).toEqual([expect.objectContaining({ label: selected.title })]);
+  toggle();
+  const grid = cards(root).map(spoken);
+  expect(grid.filter((card) => card.selected)).toEqual([expect.objectContaining({ label: selected.title })]);
+  const stackSelected = stack.find((card) => card.selected)!;
+  const gridSelected = grid.find((card) => card.selected)!;
+  expect(gridSelected).toEqual(stackSelected);
   unmount(root);
 });
 

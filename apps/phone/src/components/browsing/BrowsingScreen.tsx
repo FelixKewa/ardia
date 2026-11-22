@@ -60,7 +60,7 @@ import { FindBar } from "./FindBar";
 import { MaterialFindBar } from "./MaterialFindBar";
 import { PageMenu } from "./PageMenu";
 import { PageRequestHost, PressMenu } from "./PageRequests";
-import { ReaderView } from "./ReaderView";
+import { ReaderView, useLeavingReader } from "./ReaderView";
 import { PageFailureView } from "./PageFailureView";
 import { PageCover } from "./PageCover";
 import { PageSurface } from "./PageSurface";
@@ -93,6 +93,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const menuDocked = useMenuDocked();
   const finding = useFindOpen();
   const readerId = useReaderTabId();
+  const reader = useLeavingReader(readerId === tab.id ? tab.id : null);
   const pressing = usePressOpen();
   const tone = usePageTone(tab.id);
   const order = useDeckOrder();
@@ -280,7 +281,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
               <>
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: barDark ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} />
                 <View style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, design) - browseLayout.hitTarget / 2, ...controlsSpan }]}>
-                  <BottomBar order={order} roles={rolesFor(barDark)} showsPlus={!searching} onTabs={showDeck} onTabsMenu={openTabsMenu} onStep={stepTab} onPlus={newTab} onMore={openPageMenu} />
+                  <BottomBar order={order} roles={rolesFor(barDark)} showsPlus={!searching} incognito={tab.isPrivate} onTabs={showDeck} onTabsMenu={openTabsMenu} onStep={stepTab} onPlus={newTab} onMore={openPageMenu} />
                 </View>
               </>
             )}
@@ -301,7 +302,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
       ) : null}
       <PressMenu width={width} height={height} />
       {materialBarHosted && siteSettingsSheet ? null : pageMenu}
-      {readerId === tab.id ? <ReaderView tabId={tab.id} /> : null}
+      {reader.shown ? <ReaderView tabId={reader.shown} closing={reader.closing} /> : null}
       <PageRequestHost tabId={tab.id} />
       {Platform.OS === "android" ? <TabSwipeHint pager={pager} toward={right ? 1 : left ? -1 : 0} tabId={tab.id} calm={!searching && !menuOpen && !finding && !tabsMenu && !fullscreen && readerId !== tab.id && !collapse.hidden && !pressing} /> : null}
     </View>

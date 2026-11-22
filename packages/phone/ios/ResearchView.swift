@@ -106,14 +106,14 @@ struct ResearchView: View {
     .padding(.vertical, Spacing.hairline)
     .background(alignment: .bottomLeading) {
       GeometryReader { proxy in
-        Capsule()
+        RoundedRectangle(cornerRadius: Radius.field, style: .continuous)
           .fill(.tint.opacity(0.18))
           .frame(width: proxy.size.width * talk.spokenFraction)
           .animation(reduceMotion ? nil : .linear(duration: 0.25), value: talk.spokenFraction)
       }
-      .clipShape(.capsule)
+      .clipShape(.rect(cornerRadius: Radius.field, style: .continuous))
     }
-    .glassEffect(.regular, in: .capsule)
+    .glassEffect(.regular, in: .rect(cornerRadius: Radius.field, style: .continuous))
     .accessibilityElement(children: .contain)
   }
 
@@ -348,7 +348,7 @@ struct ResearchView: View {
         .font(.subheadline.weight(.semibold))
         .padding(.horizontal, Spacing.medium)
         .padding(.vertical, Spacing.small)
-        .glassEffect(.regular, in: .capsule)
+        .glassEffect(.regular, in: .rect(cornerRadius: Radius.field, style: .continuous))
         .padding(.bottom, Spacing.section * 3)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityAddTraits(.updatesFrequently)

@@ -3,7 +3,7 @@ import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { StartScreen } from "../components/search/StartScreen";
 import { DeckBar } from "../components/tabs/DeckBar";
-import { AppIcon, ArdiaLogo, DesignProvider } from "../components/ui";
+import { AppIcon, ArdiaLogo, BarPlusGlyph, ChromeSurface, controlSize, DesignProvider, PressScale } from "../components/ui";
 import { redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import type { Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
@@ -110,6 +110,25 @@ test("the redesigned start page has no deck bar and only the Ardia mark in the m
   unmount(root);
 });
 
+test("the Start bar's circles and its wide plus take the bars' shared chrome surface, 48-point control size, plus glyph and press, with the shared names", () => {
+  const root = start();
+  for (const id of ["startBarTabs", "startBarSettings", "startBarPlus"]) {
+    const surface = root.root.findAll((node) => node.type === ChromeSurface && node.props.testID === id)[0]!;
+    expect(surface.props.shape).toBe(id === "startBarPlus" ? "capsule" : "circle");
+    expect(StyleSheet.flatten(surface.props.style)).toMatchObject({ height: controlSize.bar });
+  }
+  const plus = root.root.findAll((node) => node.type === PressScale && node.props.label === "New Tab")[0]!;
+  expect(plus.findAll((node) => node.type === BarPlusGlyph)).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === PressScale && node.props.label === "Settings")).toHaveLength(1);
+  unmount(root);
+  act(() => useTabs.setState({ incognito: true }));
+  const privately = start();
+  expect(privately.root.findAll((node) => node.type === PressScale && node.props.label === "New Incognito Tab")).toHaveLength(1);
+  expect(privately.root.findAll((node) => node.type === ChromeSurface && node.props.testID === "startBarPlus")[0]!.props.incognito).toBe(true);
+  unmount(privately);
+  act(() => useTabs.setState({ incognito: false }));
+});
+
 test("the plus's menu offers a private tab and reopening, and in a private tab a regular one too", () => {
   jest.spyOn(require("../state/tabs/hooks"), "useCanReopen").mockReturnValue(true);
   const root = start();
@@ -198,13 +217,14 @@ test("adjusting the spaces with a screen reader switches space, counted as a pic
   unmount(privately);
 });
 
-test("tapping the mark opens Search through New Tab with a bar tick on the press; it is announced as a Search button and counted only on Android, never while private", () => {
+test("tapping the mark opens Search through New Tab with a bar tick on the press; it is announced as New Tab with no hint that repeats it, and counted only on Android, never while private", () => {
   const opened = jest.spyOn(browseStore, "newTab").mockImplementation(() => undefined);
   const pressTick = jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
   const root = start();
   const button = host(root, "startLogoButton")!;
   expect(button.props.accessibilityRole).toBe("button");
-  expect(button.props.accessibilityLabel).toBe("Search");
+  expect(button.props.accessibilityLabel).toBe("New Tab");
+  expect(button.props.accessibilityHint).toBeUndefined();
   const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.onPress === "function")[0]!;
   act(() => logo.props.onPressIn());
   expect(pressTick).toHaveBeenCalledTimes(1);

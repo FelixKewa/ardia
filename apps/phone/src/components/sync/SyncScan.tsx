@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cameraErrorAccess, makeScanJudge, openCameraSettings, prepareCamera, type CameraAccess } from "../../state/sync/scan";
 import { haptics } from "../../state/app/haptics";
 import { SCAN_REJECTED } from "../../state/sync/syncRules";
 import { copy } from "../../lib/platformCopy";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
-import { controlRadius, CodeCamera, font, ink, Portal, scanInk, scanLayout, space, Symbol, tabsMotion, useTheme } from "../ui";
+import { ActionButton, CodeCamera, controlSize, font, ink, ModalOverlay, Portal, scanInk, scanLayout, smoothCorners, space, Symbol, tabsMotion } from "../ui";
+import { OverlayCancelButton, OverlayGlassButton } from "../ui/LookViews";
 
 const CAMERA_STOP_MS = 120;
 
@@ -47,8 +49,10 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
       setRejected(true);
     }
   };
+  const cancelButton = useRef<ViewInstance>(null);
+  const cancel = () => leave(onCancel);
   const screen = (
-      <View testID="syncScanner" style={styles.screen}>
+      <ModalOverlay open closing={leaving} onDismiss={cancel} focus={cancelButton} testID="syncScanner" style={styles.screen}>
         {access === "checking" ? <ActivityIndicator style={styles.center} color={ink.white} /> : null}
         {access === "granted" ? (
           <>
@@ -58,9 +62,9 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
               onError={(error) => setAccess(cameraErrorAccess(error))}
               active={!leaving}
             />
-            <View style={[styles.finder, { paddingTop: insets.top + 44, paddingBottom: insets.bottom + space.xl }]}>
+            <View style={[styles.finder, { paddingTop: insets.top + controlSize.hitTarget, paddingBottom: insets.bottom + space.xl }]}>
               <View style={styles.words}>
-                <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white]}>
+                <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white, styles.centered]}>
                   Scan the Code on Your Mac
                 </Text>
                 <Text style={[font.subheadline, styles.soft]}>In Ardia on your Mac, open Settings › Sync › Connect Another Device.</Text>
@@ -73,7 +77,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
               ) : (
                 <View />
               )}
-              <GlassButton title="Enter Words Instead" onPress={() => leave(onEnterWords)} />
+              <OverlayGlassButton title={ENTER_WORDS} onPress={() => leave(onEnterWords)} />
             </View>
           </>
         ) : null}
@@ -94,10 +98,8 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
             onEnterWords={onEnterWords}
           />
         ) : null}
-        <Pressable accessibilityRole="button" onPress={() => leave(onCancel)} style={[styles.cancel, { top: insets.top + space.xs }]}>
-          <Text style={[font.body, styles.white]}>Cancel</Text>
-        </Pressable>
-      </View>
+        <OverlayCancelButton testID="scanCancel" label={dismissWords.cancel} onPress={cancel} buttonRef={cancelButton} />
+      </ModalOverlay>
   );
   return inline ? screen : <Portal>{screen}</Portal>;
 }
@@ -124,32 +126,23 @@ function Unavailable({ icon, title, message, onSettings, onEnterWords }: { icon:
   return (
     <View style={styles.unavailable}>
       <Symbol name={icon} size={48} color={scanInk.unavailableIcon} />
-      <Text style={[font.title3, styles.bold, styles.white, styles.centered]}>{title}</Text>
+      <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white, styles.centered]}>{title}</Text>
       <Text style={[font.subheadline, styles.soft]}>{message}</Text>
-      {onSettings ? <GlassButton title="Open Settings" prominent onPress={onSettings} /> : null}
-      <GlassButton title="Enter Words Instead" onPress={onEnterWords} />
+      {onSettings ? <ActionButton testID="scanOpenSettings" title={actionWords.openSettings} tone="overlay" onPress={onSettings} stretch /> : null}
+      <OverlayGlassButton title={ENTER_WORDS} onPress={onEnterWords} />
     </View>
   );
 }
 
-function GlassButton({ title, onPress, prominent }: { title: string; onPress: () => void; prominent?: boolean }) {
-  const theme = useTheme();
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.glass, { backgroundColor: prominent ? ink.white : scanInk.glass }]}>
-      <Text style={[font.body, styles.bold, { color: prominent ? theme.label : ink.white }]}>{title}</Text>
-    </Pressable>
-  );
-}
+const ENTER_WORDS = "Enter Words Instead";
 
 const styles = StyleSheet.create({
   screen: { ...StyleSheet.absoluteFill, backgroundColor: ink.black },
   center: { ...StyleSheet.absoluteFill },
-  finder: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "space-between" },
-  words: { alignItems: "center", gap: space.xs, paddingHorizontal: space.xxl },
-  rejected: { backgroundColor: scanInk.note, borderRadius: scanLayout.noteRadius, paddingHorizontal: space.l, paddingVertical: space.s, overflow: "hidden" },
-  unavailable: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.m, paddingHorizontal: space.xxl },
-  glass: { minHeight: 50, borderRadius: controlRadius(50), borderCurve: "continuous", paddingHorizontal: space.xl, justifyContent: "center" },
-  cancel: { position: "absolute", left: space.s, minHeight: 44, justifyContent: "center", paddingHorizontal: space.s },
+  finder: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.xl },
+  words: { alignItems: "center", gap: space.xs },
+  rejected: { backgroundColor: scanInk.note, borderRadius: scanLayout.noteRadius, paddingHorizontal: space.l, paddingVertical: space.s, overflow: "hidden", textAlign: "center", ...smoothCorners },
+  unavailable: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.m, paddingHorizontal: space.xl },
   bold: { fontWeight: "600" },
   medium: { fontWeight: "500" },
   white: { color: ink.white },

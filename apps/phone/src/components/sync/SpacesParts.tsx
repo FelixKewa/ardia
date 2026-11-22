@@ -7,6 +7,7 @@ import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
 import { capsule, controlRadius, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
 import type { Point } from "../../lib/menuPlace";
+import { destinationWords } from "../../lib/sharedWords";
 
 const TILE_MIN_WIDTH = 72;
 const TILE_HEIGHT = 56;
@@ -125,7 +126,7 @@ export function Unavailable({ isOff }: { isOff: boolean }) {
       <Text style={[font.title2, styles.bold, styles.centered, { color: theme.label }]}>Your Mac’s Spaces</Text>
       <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{isOff ? "Every tab, anywhere." : "Waiting for your Mac."}</Text>
       <Pressable accessibilityRole="button" onPress={() => openSettings({ page: isOff ? "syncConnect" : "sync" })} style={[styles.primary, { backgroundColor: theme.label }]}>
-        <Text style={[font.body, styles.bold, { color: theme.groupFill }]}>{isOff ? "Sync With Mac" : "Sync Settings"}</Text>
+        <Text style={[font.body, styles.bold, { color: theme.groupFill }]}>{destinationWords.sync}</Text>
       </Pressable>
     </View>
   );

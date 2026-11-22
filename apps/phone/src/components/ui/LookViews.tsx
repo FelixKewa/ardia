@@ -9,8 +9,9 @@ import {
   type FrostVariant,
   type GlassShape,
 } from "@ardia/phone-native";
-import type { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import type { ReactNode, RefObject } from "react";
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   backdropStops,
   lookGlassTint,
@@ -20,10 +21,14 @@ import {
   type ProfileLook,
 } from "../../lib/profileLook";
 import { Backdrop } from "./Backdrop";
+import type { ChromeStyle } from "../../lib/appearance";
 import { useChromeStyle } from "../../state/settings/appearance";
 import { useReduceTransparency } from "./contrast";
 import { useProfileLook, useTheme } from "./theme";
-import { chromeInk, chromeLayout, shadowCss, startInk, tabsInk } from "./tokens";
+import { usePressStyle } from "./pressFeedback";
+import { Symbol } from "./Symbol";
+import type { SymbolName } from "./symbolPaths";
+import { actionLayout, chromeInk, chromeLayout, controlRadius, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
 
@@ -167,9 +172,18 @@ type FrostProps = {
   fill: string;
   dark?: boolean;
   incognito?: boolean;
+  solid?: boolean;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 };
+
+export const chromeIsSolid = (style: ChromeStyle, reduceTransparency: boolean, frostIsNative: boolean) => style === "classic" || reduceTransparency || !frostIsNative;
+
+export function useSolidChrome() {
+  const style = useChromeStyle();
+  const reduceTransparency = useReduceTransparency();
+  return chromeIsSolid(style, reduceTransparency, useNativeLook());
+}
 
 export function LookFrost({
   source,
@@ -178,6 +192,7 @@ export function LookFrost({
   fill,
   dark,
   incognito = false,
+  solid = false,
   style,
   children,
 }: FrostProps) {
@@ -185,10 +200,10 @@ export function LookFrost({
   const theme = useTheme();
   const reduceTransparency = useReduceTransparency();
   const nativeLook = useNativeLook();
-  if (!nativeLook)
+  if (!nativeLook || solid)
     return (
       <View
-        style={[style, { backgroundColor: fill, borderRadius: cornerRadius }]}
+        style={[style, { backgroundColor: fill, borderRadius: cornerRadius, ...smoothCorners }]}
       >
         {children}
       </View>
@@ -207,6 +222,10 @@ export function LookFrost({
       {children}
     </Frost>
   );
+}
+
+export function ChromeFrost(props: Omit<FrostProps, "solid">) {
+  return <LookFrost {...props} solid={useSolidChrome()} />;
 }
 
 export const usesGlass = () => glassIsNative();
@@ -291,3 +310,57 @@ export function LookGlass({
     </Glass>
   );
 }
+
+type OverlayFace = { frostSource?: string };
+
+function OverlayPlate({ frostSource, cornerRadius, style, children }: OverlayFace & { cornerRadius: number; style: StyleProp<ViewStyle>; children: ReactNode }) {
+  if (frostSource)
+    return (
+      <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={overlayInk.glass} style={style}>
+        {children}
+      </ChromeFrost>
+    );
+  return <View style={[style, overlayStyles.plate, { borderRadius: cornerRadius }]}>{children}</View>;
+}
+
+export function OverlayCancelButton({ label, onPress, frostSource, buttonRef, testID }: OverlayFace & { label: string; onPress: () => void; buttonRef?: RefObject<ViewInstance | null>; testID?: string }) {
+  const insets = useSafeAreaInsets();
+  const pressStyle = usePressStyle("icon", { style: [overlayStyles.cancel, { top: insets.top + space.s, right: insets.right + space.l }] });
+  return (
+    <Pressable ref={buttonRef} testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={pressStyle}>
+      <OverlayPlate frostSource={frostSource} cornerRadius={controlRadius(voiceLayout.cancel)} style={overlayStyles.cancelFace}>
+        <Symbol name="xmark" size={voiceLayout.icon} color={overlayInk.label} />
+      </OverlayPlate>
+    </Pressable>
+  );
+}
+
+export function OverlayGlassButton({ title, icon, onPress, frostSource, testID }: OverlayFace & { title: string; icon?: SymbolName; onPress: () => void; testID?: string }) {
+  const pressStyle = usePressStyle("filled", { style: overlayStyles.stretch });
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={pressStyle}>
+      <OverlayPlate frostSource={frostSource} cornerRadius={actionLayout.radius.regular} style={overlayStyles.glassFace}>
+        {icon ? <Symbol name={icon} size={actionLayout.icon.regular} color={overlayInk.label} /> : null}
+        <Text style={[actionLayout.label.regular, overlayStyles.glassLabel]}>{title}</Text>
+      </OverlayPlate>
+    </Pressable>
+  );
+}
+
+const overlayStyles = StyleSheet.create({
+  plate: { backgroundColor: overlayInk.glass, overflow: "hidden", ...smoothCorners },
+  cancel: { position: "absolute", width: voiceLayout.cancel, height: voiceLayout.cancel },
+  cancelFace: { flex: 1, alignItems: "center", justifyContent: "center", ...smoothCorners },
+  stretch: { alignSelf: "stretch" },
+  glassFace: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: actionLayout.iconGap,
+    minHeight: actionLayout.height.regular,
+    paddingHorizontal: actionLayout.sidePadding.regular,
+    paddingVertical: actionLayout.verticalPadding,
+    ...smoothCorners,
+  },
+  glassLabel: { color: overlayInk.label, fontWeight: actionLayout.labelWeight, textAlign: "center", flexShrink: 1 },
+});

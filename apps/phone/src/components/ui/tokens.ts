@@ -806,4 +806,4 @@ export const emptyStateLayout = { glyph: 40, maxWidth: tabsLayout.emptyWidth, ga
 
 export const glyphSlot = { field: 20, icon: 22 } as const;
 
-export const barGlyphLayout = { plus: { pointSize: 18, weight: "medium", side: startLayout.plusGlyph } } as const;
+export const barGlyphLayout = { plus: { pointSize: 18, weight: "medium", side: startLayout.plusGlyph }, circle: { pointSize: 16, weight: "medium", side: startLayout.circleGlyph } } as const;

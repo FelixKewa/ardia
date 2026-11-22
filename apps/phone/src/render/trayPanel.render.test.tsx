@@ -30,13 +30,13 @@ const host = (root: ReturnType<typeof renderSurface>, testID: string) => root.ro
 
 const departure = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.type === MotionView)[0]!;
 
-test("in the redesign search is Arc's panel: edge to edge, sitting on the keyboard and running on under it, 20-point smooth top corners, the field 16 in and 15 down", () => {
+test("in the redesign search is Arc's panel: edge to edge, sitting on the keyboard and running on under it, smooth top corners concentric with the field, 16 + 22 = 38 points, the field 16 in and 16 down", () => {
   const root = open("redesigned");
   const panel = StyleSheet.flatten(host(root, "trayPanel")!.props.style);
-  expect(panel).toMatchObject({ position: "absolute", left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderCurve: "continuous" });
+  expect(panel).toMatchObject({ position: "absolute", left: 0, right: 0, borderTopLeftRadius: 38, borderTopRightRadius: 38, borderCurve: "continuous" });
   expect(panel.bottom as number).toBeLessThan(0);
   expect(panel.boxShadow).toBe("0px 4px 36px rgba(0, 0, 0, 0.1)");
-  expect(StyleSheet.flatten(host(root, "searchPanelFieldRow")!.props.style)).toMatchObject({ paddingHorizontal: 16, paddingTop: 15 });
+  expect(StyleSheet.flatten(host(root, "searchPanelFieldRow")!.props.style)).toMatchObject({ paddingHorizontal: 16, paddingTop: 16 });
   expect(host(root, "searchPanelFace")).toBeDefined();
   unmount(root);
 });

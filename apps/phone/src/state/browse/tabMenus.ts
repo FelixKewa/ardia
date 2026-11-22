@@ -1,4 +1,6 @@
 import { copy } from "../../lib/platformCopy";
+import { actionWords } from "../../lib/sharedWords";
+import { iconRoles } from "../../components/ui/iconRoles";
 import { mobileClean } from "@ardia/core/src/mobile";
 import { hostOf } from "@ardia/core/src/omnibox";
 import { copyText, pressHaptic, shareLink, successHaptic } from "../../platform/system";
@@ -10,7 +12,7 @@ import { recentOtherTabs, tabMenuTitle } from "../tabs/tabsState";
 import { showToast } from "../toasts/store";
 import { openPage, openTab, reopenArchived } from "./store";
 
-export type RowAction = { label: string; icon: "eyes" | "squareOnSquare" | "link" | "squareAndArrowUp" | "docOnDoc"; run: () => void };
+export type RowAction = { label: string; icon: "eyes" | "squareOnSquare" | typeof iconRoles.copyLink | typeof iconRoles.share | typeof iconRoles.copyText; run: () => void };
 
 function openSwitchingMode(url: string, origin: "search" | "typed") {
   setIncognito(!useTabs.getState().incognito);
@@ -23,22 +25,22 @@ export function trayRowActions(row: TrayRow): RowAction[] {
   if (row.kind === "query") {
     return [{ label: incognito ? "Search in New Tab" : "Search in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "search") }];
   }
-  if (row.kind === "calc") return [{ label: "Copy", icon: "docOnDoc", run: () => quietly(() => copyText(row.value)) }];
+  if (row.kind === "calc") return [{ label: actionWords.copyText, icon: iconRoles.copyText, run: () => quietly(() => copyText(row.value)) }];
   if (row.kind === "paste" || row.kind === "browseForMe") return [];
   return [
     { label: incognito ? "Open in New Tab" : "Open in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "typed") },
-    { label: "Copy Link", icon: "link", run: () => copyLink(row.url) },
-    { label: "Share", icon: "squareAndArrowUp", run: () => quietly(() => shareLink(row.url, row.title)) },
+    { label: actionWords.copyLink, icon: iconRoles.copyLink, run: () => copyLink(row.url) },
+    { label: actionWords.share, icon: iconRoles.share, run: () => quietly(() => shareLink(row.url, row.title)) },
   ];
 }
 
 export function copyLink(url: string) {
   quietly(() => copyText(mobileClean(url)));
   quietly(successHaptic);
-  showToast(COPIED_LINK, "link");
+  showToast(COPIED_LINK, iconRoles.copyLink);
 }
 
-export const COPIED_LINK = "Copied URL Without Trackers";
+export const COPIED_LINK = actionWords.copiedLinkWithoutTrackers;
 
 const quietly = (call: () => Promise<unknown>) => void settled(call, undefined);
 

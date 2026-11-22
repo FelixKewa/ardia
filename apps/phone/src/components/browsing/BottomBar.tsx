@@ -3,12 +3,14 @@ import { TabsMenuTrigger } from "./tabsMenu";
 import { StyleSheet, View } from "react-native";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { display } from "../../state/search/omnibox";
-import { browseLayout, capsule, PressScale, shadowRadius, Symbol, TabFace, tabsInk, tabsLayout, type ColorRoles } from "../ui";
+import { BarPlusGlyph, browseLayout, capsule, PressScale, shadowRadius, Symbol, TabFace, tabsInk, tabsLayout, type ColorRoles } from "../ui";
+import { newTabLabel } from "./barWords";
 
 type Props = {
   order: BrowserTab[];
   roles: ColorRoles;
   showsPlus: boolean;
+  incognito?: boolean;
   onTabs: () => void;
   onTabsMenu: () => void;
   onStep: (delta: -1 | 1) => void;
@@ -16,7 +18,7 @@ type Props = {
   onMore: () => void;
 };
 
-export function BottomBar({ order, roles, showsPlus, onTabs, onTabsMenu, onStep, onPlus, onMore }: Props) {
+export function BottomBar({ order, roles, showsPlus, incognito = false, onTabs, onTabsMenu, onStep, onPlus, onMore }: Props) {
   const plus = browseLayout.plusCapsule;
   const count = order.length;
   return (
@@ -47,7 +49,7 @@ export function BottomBar({ order, roles, showsPlus, onTabs, onTabsMenu, onStep,
       <View style={{ width: plus.width, height: plus.height }}>
         {showsPlus ? (
           <PressScale
-            label="New Search"
+            label={newTabLabel(incognito)}
             onPress={onPlus}
             onPressIn={haptics.barPress}
             style={[
@@ -55,7 +57,7 @@ export function BottomBar({ order, roles, showsPlus, onTabs, onTabsMenu, onStep,
               { width: plus.width, height: plus.height, borderRadius: capsule(plus.height), backgroundColor: roles.plusFill, borderColor: roles.controlEdge },
             ]}
           >
-            <Symbol name="plus" size={17} color={roles.foregroundPrimary} />
+            <BarPlusGlyph color={roles.foregroundPrimary} />
           </PressScale>
         ) : null}
       </View>

@@ -36,6 +36,7 @@ import { copy } from "../../lib/platformCopy";
 
 const FILTER_SYNTAX_URL = "https://github.com/gorhill/uBlock/wiki/Static-filter-syntax";
 import { BarButton, ButtonRow, CrossfadeText, Divider, EmptyState, Group, IconTile, NavRow, SettingsPage, ToggleRow, ValueRow } from "./SettingsKit";
+import { TRUSTED_SITES_EMPTY } from "./ExpoBlockingPages";
 
 export function FilterListsPage() {
   const theme = useTheme();
@@ -381,7 +382,7 @@ export function TrustedSitesPage() {
       trailing={hosts.length ? <BarButton title={editingShown ? "Done" : "Edit"} emphasized={editingShown} onPress={() => setEditing(!editingShown)} /> : null}
     >
       {hosts.length === 0 ? (
-        <EmptyState title="No Trusted Sites" message="Sites you allow from the page menu show up here." icon="checkmarkShield" />
+        <EmptyState title={TRUSTED_SITES_EMPTY.title} message={TRUSTED_SITES_EMPTY.message} icon="checkmarkShield" />
       ) : (
         <Group>
           {hosts.map((host, index) => (

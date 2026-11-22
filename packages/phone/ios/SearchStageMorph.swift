@@ -489,6 +489,7 @@ final class StageMorphView: UIView {
       classicFill = .systemBackground
     }
     super.init(frame: .zero)
+    surface.layer.cornerCurve = .continuous
     isUserInteractionEnabled = false
     accessibilityElementsHidden = true
     contents.clipsToBounds = true

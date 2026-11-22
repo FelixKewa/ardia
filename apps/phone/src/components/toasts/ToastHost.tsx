@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,8 +7,10 @@ import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, useToast } from "../../state/toasts/hooks";
 import { pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace } from "../../state/toasts/placement";
+import { dismissesToast, toastDragReturn, toastSemantics } from "../../state/toasts/semantics";
 import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/toasts/store";
-import { font, space, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { font, space, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { toastActionLayout } from "./toastTokens";
 import { materialBottomBar } from "../ui/materialTokens";
 
 const ICONS: Record<ToastIcon, SymbolName> = {
@@ -59,9 +61,10 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const drag = useSharedValue(0);
+  const semantics = toastSemantics(Boolean(toast?.onTap), Platform.OS);
   useEffect(() => {
     drag.value = 0;
-    if (toast && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(toast.message);
+    if (toast && semantics.announcement === "announceForAccessibility") AccessibilityInfo.announceForAccessibility(toast.message);
   }, [toast?.id]);
   const gesture = useMemo(
     () =>
@@ -79,30 +82,39 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
             return;
           }
           runOnJS(holdToast)(false);
-          drag.value = withSpring(0, toastMotion.snappy);
+          drag.value = toastDragReturn(reduceMotion) === "snap" ? 0 : withSpring(0, toastMotion.snappy);
         }),
-    [],
+    [reduceMotion],
   );
   const dragged = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(drag.value, drag.value / 4) }] }));
+  const face = [styles.toast, { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: toastLayout.radius }];
+  const pressStyle = usePressStyle("filled", { style: face });
   if (!toast) return null;
+  const onAccessibilityAction = (event: AccessibilityActionEvent) => {
+    if (dismissesToast(event.nativeEvent.actionName)) dismissToast();
+  };
+  const content = (
+    <>
+      <Symbol name={ICONS[toast.icon]} size={toastLayout.iconSize} color={theme.toastLabel} />
+      <Text style={[font.subheadline, styles.text, { color: theme.toastLabel }]} numberOfLines={3}>
+        {toast.message}
+      </Text>
+      {semantics.pressable ? <Symbol name="chevronRight" size={toastActionLayout.chevron} color={theme.toastLabel} /> : null}
+    </>
+  );
   return (
     <View style={[styles.host, place]} pointerEvents="box-none">
       <GestureDetector gesture={gesture}>
         <Animated.View key={toast.id} entering={reduceMotion ? REDUCED_IN : toastIn} exiting={reduceMotion ? REDUCED_OUT : toastOut} style={[styles.origin, dragged]}>
-          <Pressable
-            accessibilityRole={toast.onTap ? "button" : "alert"}
-            accessibilityLiveRegion="polite"
-            onPress={tapToast}
-            style={[
-              styles.toast,
-              { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: toastLayout.radius },
-            ]}
-          >
-            <Symbol name={ICONS[toast.icon]} size={toastLayout.iconSize} color={theme.toastLabel} />
-            <Text style={[font.subheadline, styles.text, { color: theme.toastLabel }]} numberOfLines={3}>
-              {toast.message}
-            </Text>
-          </Pressable>
+          {semantics.pressable ? (
+            <Pressable testID="toast" accessibilityRole="button" accessibilityLabel={toast.message} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} onPress={tapToast} style={pressStyle}>
+              {content}
+            </Pressable>
+          ) : (
+            <View testID="toast" accessible accessibilityRole="alert" accessibilityLabel={toast.message} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} style={face}>
+              {content}
+            </View>
+          )}
         </Animated.View>
       </GestureDetector>
     </View>

@@ -123,6 +123,7 @@ export const motionAliases = {
   hostPillEase: tabsCurve.easeOut,
   loadingRevealEase: tabsCurve.easeOut,
   voiceTranscriptFadeMs: tabsMotion.surfaceFade,
+  voiceWaveEaseMs: duration.resultsIn,
   readerTextSize: snapSpring,
   settingsTitleFade: snapSpring,
   onboardingStep: { timing: { duration: 300, easing: WorkletEasing.bezier(...stepBezier) } } as Motion,

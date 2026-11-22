@@ -1,7 +1,8 @@
 import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { SettingsView } from "../components/settings/SettingsView";
-import { openSettings, settingsNav } from "../state/settings/nav";
+import { closeSettings, openSettings, openSettingsPage, pushSettings, settingsNav } from "../state/settings/nav";
+import { connectIsStackRoot, scannerPresentation } from "../components/settings/ExpoSyncConnectPage";
 import * as syncActions from "../state/sync/actions";
 import { setConnectPhrase } from "../state/sync/connectDraft";
 import * as scan from "../state/sync/scan";
@@ -45,7 +46,7 @@ onIos("on iPhone Connect to Your Mac is main's two steps on Expo UI; Enter Words
   const connect = () => destination(root, "syncConnect");
   expect(texts(connect())).toEqual(expect.arrayContaining(["Show the code on your Mac", "Choose the Ardia Sync folder"]));
   expect(byLabel(connect(), "Scan Code")).toBeTruthy();
-  await press(byLabel(connect(), "Enter Words"));
+  await press(byLabel(connect(), "Enter Recovery Phrase"));
   expect(settingsNav().stack.at(-1)).toEqual({ page: "syncWords" });
   const words = () => destination(root, "syncWords");
   expect(disabledOf(byLabel(words(), "Use Phrase"))).toBe(true);
@@ -68,4 +69,43 @@ onIos("on iPhone Scan Code presents the scanner as a full-screen cover over the 
   await press(byLabel(connect(), "Scan Code"));
   expect(settingsNav().stack.at(-1)).toEqual({ page: "syncConnect" });
   unmount(root);
+});
+
+const root = (rendered: Root) => rendered.root.findAll((node) => typeof node.type === "string" && node.props.name !== "destination" && within(node, (props) => props.title === "Show the code on your Mac" || props.text === "Show the code on your Mac").length > 0)[0]!;
+
+onIos("opened on its own, as onboarding opens it, the connect page is the stack's root with Cancel instead of Done; Cancel closes Settings", async () => {
+  openSettingsPage({ page: "syncConnect" });
+  const rendered = renderSurface(<SettingsView />);
+  await act(async () => undefined);
+  expect(connectIsStackRoot(settingsNav().stack)).toBe(true);
+  const page = root(rendered);
+  expect(within(page, (props) => props.label === "Cancel")).toHaveLength(1);
+  expect(within(rendered.root, (props) => props.text === "Done")).toHaveLength(0);
+  await press(byLabel(page, "Cancel"));
+  expect(settingsNav().open).toBe(false);
+  unmount(rendered);
+});
+
+onIos("while connecting, Cancel, Change and the step's actions are locked and the page cannot be swiped away, as they are in Settings", async () => {
+  jest.spyOn(syncActions, "connectSync").mockReturnValue(new Promise(() => undefined));
+  setConnectPhrase(WORDS);
+  openSettingsPage({ page: "syncConnect" });
+  const rendered = renderSurface(<SettingsView />);
+  await act(async () => undefined);
+  const page = () => root(rendered);
+  expect(disabledOf(byLabel(page(), "Change"))).toBe(false);
+  await press(byLabel(page(), "Choose Folder…"));
+  expect(disabledOf(byLabel(page(), "Cancel"))).toBe(true);
+  expect(disabledOf(byLabel(page(), "Change"))).toBe(true);
+  act(() => closeSettings());
+  unmount(rendered);
+});
+
+test("pushed from Sync With Mac the connect page keeps Back, not Cancel, and the scanner slides in only without Reduce Motion", () => {
+  openSettings({ page: "sync" });
+  pushSettings({ page: "syncConnect" });
+  expect(connectIsStackRoot(settingsNav().stack)).toBe(false);
+  expect(scannerPresentation(false)).toBe("slide");
+  expect(scannerPresentation(true)).toBe("fade");
+  closeSettings();
 });

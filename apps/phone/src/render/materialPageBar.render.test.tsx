@@ -238,7 +238,7 @@ onAndroid("the page menu capsule docks with the iOS history controls, page title
   settle();
   expect(pressable(root, "siteSettingsBack").props.disabled).toBe(true);
   expect(pressable(root, "siteSettingsForward").props.disabled).toBe(false);
-  expect(pressable(root, "dockedPageMenuReload").props.accessibilityLabel).toBe("Stop");
+  expect(pressable(root, "dockedPageMenuReload").props.accessibilityLabel).toBe("Stop Loading");
   act(() => pressable(root, "siteSettingsForward").props.onPress());
   expect(forward).toHaveBeenCalledTimes(1);
   settle();

@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
@@ -34,11 +34,11 @@ export function Toggle({ value, disabled, onChange, label, hint, testID }: Toggl
   );
 }
 
-type ToggleRowProps = ToggleProps & { press?: TogglePress; detail?: string; children?: ReactNode };
+type ToggleRowProps = ToggleProps & { press?: TogglePress; detail?: string; children?: ReactNode; style?: StyleProp<ViewStyle> };
 
-export function ToggleRow({ value, disabled = false, onChange, label, hint, detail, press: pressMode = "row", testID, children }: ToggleRowProps) {
+export function ToggleRow({ value, disabled = false, onChange, label, hint, detail, press: pressMode = "row", testID, children, style }: ToggleRowProps) {
   const theme = useTheme();
-  const rowStyle = usePressStyle("row", { style: styles.row });
+  const rowStyle = usePressStyle("row", { style: [styles.row, style] });
   const words = (
     <View style={styles.words} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
       {children ?? <Text style={[font.body, { color: disabled ? theme.disabled : theme.label }]}>{label}</Text>}
@@ -47,7 +47,7 @@ export function ToggleRow({ value, disabled = false, onChange, label, hint, deta
   );
   if (pressMode === "knob") {
     return (
-      <View style={styles.row}>
+      <View style={[styles.row, style]}>
         {words}
         <Toggle testID={testID} value={value} disabled={disabled} onChange={onChange} label={detail ? `${label}, ${detail}` : label} hint={hint} />
       </View>

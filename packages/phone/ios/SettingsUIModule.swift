@@ -102,6 +102,8 @@ struct SetupStepRowView: ExpoSwiftUI.View {
 
 final class ColorSwatchProps: UIBaseViewProps {
   @Field var preset: String = "plum"
+  @Field var colors: [String] = []
+  @Field var ring: String? = nil
   @Field var isSelected: Bool = false
 }
 
@@ -109,7 +111,13 @@ struct ColorSwatchView: ExpoSwiftUI.View {
   @ObservedObject var props: ColorSwatchProps
 
   var body: some View {
-    ColorSwatch(color: ProfileLook(preset: ProfileLook.Preset(rawValue: props.preset) ?? .plum).swatchColor, isSelected: props.isSelected)
+    let presetColor = ProfileLook(preset: ProfileLook.Preset(rawValue: props.preset) ?? .plum).swatchColor
+    let colors = props.colors.compactMap { Color(hexString: $0) }
+    if colors.isEmpty {
+      ColorSwatch(color: presetColor, isSelected: props.isSelected)
+    } else {
+      ColorSwatch(colors: colors, ring: props.ring.flatMap { Color(hexString: $0) } ?? presetColor, isSelected: props.isSelected)
+    }
   }
 }
 

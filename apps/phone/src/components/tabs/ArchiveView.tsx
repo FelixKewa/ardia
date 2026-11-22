@@ -13,7 +13,8 @@ import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, typ
 import { clearArchivedTabs, loadArchive, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { MaterialEmptyIcon, MaterialIconAction, MaterialSearchField, MaterialTopBar } from "../ui/MaterialTopBar";
-import { ConfirmSheet, Favicon, FloatingMenu, font, ink, LookBackdrop, radius, smoothCorners, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { actionWords } from "../../lib/sharedWords";
+import { ConfirmSheet, Favicon, FieldAccessory, FloatingMenu, iconRoles, font, ink, LookBackdrop, radius, smoothCorners, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
 import type { Point } from "../../lib/menuPlace";
 
 export function ArchiveView() {
@@ -137,9 +138,7 @@ export function ArchiveView() {
             autoCapitalize="none"
           />
           {query ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => setQuery("")}>
-              <Symbol name="xmarkCircleFill" size={18} color={theme.secondaryLabel} />
-            </Pressable>
+            <FieldAccessory icon={iconRoles.clearText} label={actionWords.clearText} color={theme.secondaryLabel} layout="slop" onPress={() => setQuery("")} />
           ) : null}
         </View>
           </>
@@ -200,8 +199,8 @@ export function ArchiveView() {
 function rowMenuItems(tab: BrowserTab): MenuItem[] {
   const sharing: MenuItem[] = canShareTab(tab)
     ? [
-        { label: "Copy Link", icon: "link", onPress: () => copyTabLink(tab) },
-        { label: "Share", icon: "squareAndArrowUp", onPress: () => shareTab(tab) },
+        { label: actionWords.copyLink, icon: iconRoles.copyLink, onPress: () => copyTabLink(tab) },
+        { label: actionWords.share, icon: iconRoles.share, onPress: () => shareTab(tab) },
       ]
     : [];
   return [

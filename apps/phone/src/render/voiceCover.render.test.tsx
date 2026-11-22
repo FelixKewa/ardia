@@ -1,0 +1,91 @@
+import { StyleSheet } from "react-native";
+import { getAnimatedStyle } from "react-native-reanimated";
+import { act, type ReactTestInstance } from "react-test-renderer";
+import { VoiceSearchView } from "../components/search/VoiceSearchView";
+import { ActionButton, overlayInk, press, voiceInk, voiceLayout } from "../components/ui";
+import { OverlayCancelButton, OverlayGlassButton } from "../components/ui/LookViews";
+import { DICTATION_IDLE, type Dictation } from "../state/voice/dictation";
+import { useVoice } from "../state/voice/store";
+import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+
+const mockMotion = { reduced: false };
+jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
+
+beforeEach(() => {
+  jest.useFakeTimers();
+  mockMotion.reduced = false;
+  withTabs(1);
+});
+
+afterEach(() => {
+  act(() => useVoice.setState({ presented: false, dictation: DICTATION_IDLE }));
+  act(() => jest.runOnlyPendingTimers());
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
+type Root = ReturnType<typeof renderSurface>;
+const host = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type === "string")[0];
+const flat = (node: ReactTestInstance | undefined, pressed = false) => StyleSheet.flatten(typeof node?.props.style === "function" ? node.props.style({ pressed }) : node?.props.style) ?? {};
+const show = (dictation: Partial<Dictation>, levels?: number[]) => {
+  act(() => useVoice.setState({ presented: true, dictation: { ...DICTATION_IDLE, ...dictation }, ...(levels ? { levels } : {}) }));
+  return renderSurface(<VoiceSearchView />);
+};
+const headers = (root: Root) => root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "header");
+
+test("voice search is a modal overlay: modal to the screen reader, Escape closes it, and its Cancel is the shared top-right overlay button", () => {
+  const root = show({ phase: "listening" });
+  const cover = host(root, "voiceCover")!;
+  expect(cover.props.accessibilityViewIsModal).toBe(true);
+  expect(cover.props.pointerEvents).toBe("auto");
+  const cancel = root.root.findAll((node) => node.type === OverlayCancelButton)[0]!;
+  expect(cancel.props.label).toBe("Cancel");
+  const face = host(root, "voiceCancel")!;
+  expect(flat(face)).toMatchObject({ width: voiceLayout.cancel, height: voiceLayout.cancel });
+  expect(flat(face).right).toBeDefined();
+  expect(flat(face).left).toBeUndefined();
+  act(() => cover.props.onAccessibilityEscape());
+  expect(useVoice.getState().presented).toBe(false);
+  unmount(root);
+});
+
+test("without permission the heading is a header and Open Settings is the shared overlay recovery action, black on white", () => {
+  const root = show({ phase: "denied" });
+  expect(headers(root).map((node) => node.props.children)).toContain("Speech and Mic permissions required.");
+  const settings = root.root.findAll((node) => node.type === ActionButton && node.props.title === "Open Settings")[0]!;
+  expect(settings.props.tone).toBe("overlay");
+  const label = host(root, "voiceOpenSettings")!.findAll((node) => typeof node.type === "string" && node.props.children === "Open Settings")[0]!;
+  expect(flat(label).color).toBe(overlayInk.onFill);
+  expect(flat(host(root, "voiceOpenSettings")).backgroundColor).toBe(overlayInk.fill);
+  unmount(root);
+});
+
+test("a problem's message is a header too, and Try Again is the overlay recovery action", () => {
+  const root = show({ phase: "unavailable", problem: "heardNothing" });
+  expect(headers(root)).toHaveLength(1);
+  const retry = root.root.findAll((node) => node.type === ActionButton && node.props.title === "Try Again")[0]!;
+  expect(retry.props.tone).toBe("overlay");
+  unmount(root);
+});
+
+test("the voice actions share the filled press and the transcript plate has the continuous curve", () => {
+  const root = show({ phase: "finished", transcript: "otters" });
+  const search = root.root.findAll((node) => node.type === OverlayGlassButton && node.props.title === "Search")[0]!;
+  const pressable = search.findAll((node) => typeof node.props.style === "function")[0]!;
+  expect(flat(pressable, true).opacity).toBe(press.filledOpacity);
+  const plate = root.root.findAll((node) => typeof node.type === "string" && flat(node).backgroundColor === voiceInk.transcript)[0]!;
+  expect(flat(plate).borderCurve).toBe("continuous");
+  unmount(root);
+});
+
+test("the waveform follows the level, and holds still at its resting height under Reduce Motion", () => {
+  const levels = [0, 0.5, 1];
+  const moving = show({ phase: "listening" }, levels);
+  const heights = (root: Root) => root.root.findAll((node) => node.props.testID === "voiceWaveBar" && typeof node.type === "string").map((node) => (getAnimatedStyle(node) as { height: number }).height);
+  expect(new Set(heights(moving)).size).toBeGreaterThan(1);
+  unmount(moving);
+  mockMotion.reduced = true;
+  const still = show({ phase: "listening" }, levels);
+  expect(heights(still)).toEqual(levels.map(() => voiceLayout.barMin));
+  unmount(still);
+});

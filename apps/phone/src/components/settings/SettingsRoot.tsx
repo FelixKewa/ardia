@@ -23,6 +23,7 @@ import { browseForMeRowValue } from "../../state/browseForMe/copy";
 import { pageSummaryChoiceOffered, refreshPageSummaryProvider, usePageSummaryProvider } from "../../state/pageSummary/store";
 import { pageSummaryRowValue } from "../../state/pageSummary/copy";
 import { refreshPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
+import { destinationWords } from "../../lib/sharedWords";
 
 const APP_LINKS = [
   { id: "ardia" as const, title: "Ardia" },
@@ -177,7 +178,7 @@ function SyncCard({ stacks }: { stacks: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Sync With Mac"
+      accessibilityLabel={destinationWords.sync}
       accessibilityValue={{ text: line.text }}
       onPress={() => pushSettings({ page: "sync" })}
       style={({ pressed }) => [styles.syncCard, pressed ? { backgroundColor: theme.rowHighlight } : null]}
@@ -185,7 +186,7 @@ function SyncCard({ stacks }: { stacks: boolean }) {
       <View testID="syncCardContent" style={[styles.fill, stacks ? styles.syncStacked : styles.syncBeside]}>
         <IconTile icon="macAndPhone" tint={settingsTint.sync} side={stacks ? settingsLayout.syncTileLarge : settingsLayout.syncTile} />
         <View style={styles.syncText}>
-          <Text style={[font.title3, styles.bold, { color: theme.label }]}>Sync With Mac</Text>
+          <Text style={[font.title3, styles.bold, { color: theme.label }]}>{destinationWords.sync}</Text>
           <LayoutAnimationConfig skipEntering>
             <Animated.Text
               key={line.text}

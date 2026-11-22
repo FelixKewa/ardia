@@ -3,7 +3,7 @@ import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 import { useTheme, type Theme } from "./theme";
-import { actionLayout, ink, overlayInk, smoothCorners, type ActionSize } from "./tokens";
+import { actionLayout, capsule as capsuleRadius, ink, overlayInk, smoothCorners, type ActionSize } from "./tokens";
 
 export type ActionVariant = "filled" | "outlined" | "plain";
 
@@ -32,15 +32,16 @@ export type ActionButtonProps = {
   disabled?: boolean;
   hint?: string;
   stretch?: boolean;
+  capsule?: boolean;
   testID?: string;
 };
 
-export function ActionButton({ title, onPress, variant = "filled", tone = "accent", size = "regular", icon, busy = false, disabled = false, hint, stretch = false, testID }: ActionButtonProps) {
+export function ActionButton({ title, onPress, variant = "filled", tone = "accent", size = "regular", icon, busy = false, disabled = false, hint, stretch = false, capsule = false, testID }: ActionButtonProps) {
   const theme = useTheme();
   const colors = actionInk(theme, variant, tone);
   const box = {
     minHeight: actionLayout.height[size],
-    borderRadius: actionLayout.radius[size],
+    borderRadius: capsule ? capsuleRadius(actionLayout.height[size]) : actionLayout.radius[size],
     paddingHorizontal: actionLayout.sidePadding[size],
     backgroundColor: colors.fill,
     borderColor: colors.edge,

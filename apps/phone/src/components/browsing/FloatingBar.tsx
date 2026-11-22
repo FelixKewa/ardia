@@ -7,7 +7,8 @@ import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { capsule, chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, PressScale, Symbol, type ColorRoles } from "../ui";
+import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, PressScale, Symbol, usePressStyle, type ColorRoles } from "../ui";
+import { newTabLabel } from "./barWords";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { TabStack } from "./BottomBar";
 import { barReturnedToPage } from "../../state/browse/deckPull";
@@ -88,6 +89,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
   const addressFade = useAnimatedStyle(() => (squeeze ? { opacity: 1 - shut(progress.value) } : { opacity: 1 }), [squeeze]);
   const dotsFade = useAnimatedStyle(() => (squeeze && address.insecure ? { opacity: 1 - shut(progress.value) } : { opacity: 1 }), [squeeze, address.insecure]);
   const lockFade = useAnimatedStyle(() => ({ opacity: shut(progress.value) }));
+  const addressPress = usePressStyle("text", { style: styles.addressHit });
   const leading = (
     <Animated.View testID="floatingBarLeading" collapsable={false} style={back.leading} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
       <FloatingTabsButton tab={tab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} ghost={!handed} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
@@ -113,7 +115,8 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
           accessibilityValue={{ text: spokenAddress(address) }}
           accessibilityHint="Opens search with this page’s address."
           onPress={onAddress}
-          style={styles.addressHit}
+          onPressIn={haptics.barPress}
+          style={addressPress}
         >
           {address.isPrivate ? <Symbol name={privateMark} size={floatingBarLayout.privateSymbol} color={ink.secondary} /> : null}
           {address.insecure ? (
@@ -206,11 +209,11 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
 export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, ghost = false, onPlus }: ButtonProps & { onPlus: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   return (
-    <PressScale label="New Search" onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
+    <PressScale label={newTabLabel(tab.isPrivate)} onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
       <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
         <PullGlyphs>
           <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
-            <Symbol name="plus" size={floatingBarLayout.plusSymbol} color={ink.foreground} />
+            <BarPlusGlyph testID={`${testID}Glyph`} color={ink.foreground} />
           </Animated.View>
         </PullGlyphs>
         {ghost ? (

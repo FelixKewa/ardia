@@ -2,7 +2,7 @@ import { Dimensions, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { DuoBrowsing } from "../components/duo/DuoBrowsing";
 import { useCommandBar, type CommandBarPlacement } from "../components/duo/CommandBar";
-import { DesignProvider } from "../components/ui";
+import { controlRadius, DesignProvider, iconRoles, shadowCss, Symbol } from "../components/ui";
 import { setRootSize } from "../state/app/rootSize";
 import { PHONE_LAYOUT, useScreenLayout, type ScreenLayout } from "../state/app/screenLayout";
 import * as browse from "../state/browse/store";
@@ -44,7 +44,7 @@ afterEach(() => {
 type Root = ReturnType<typeof renderSurface>;
 const hosts = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type === "string");
 const host = (root: Root, id: string) => hosts(root, id)[0]!;
-const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+const flat = (node: ReactTestInstance) => StyleSheet.flatten(typeof node.props.style === "function" ? node.props.style({ pressed: false }) : node.props.style) ?? {};
 const frame = (root: Root, id: string) => {
   const { left, top, width, height } = flat(host(root, id));
   return { left, top, width, height };
@@ -98,7 +98,7 @@ test("entering wide with the deck up browses the selected tab and opens the side
   expect(browse.useBrowse.getState()).toMatchObject({ surface: "browsing", deckEntrance: null, leaving: null });
   expect(sidebarShown(root)).toBe(true);
   expect(frame(root, "duoSidebarPlace")).toEqual({ left: 11, top: 11, width: 260, height: 926 });
-  expect(flat(host(root, "duoSidebarFill"))).toMatchObject({ borderRadius: 16, boxShadow: "0px 4px 36px rgba(0,0,0,0.18)" });
+  expect(flat(host(root, "duoSidebarFill"))).toMatchObject({ borderRadius: 16, boxShadow: shadowCss("floating", false) });
   expect(flat(host(root, "duoSidebarHeader"))).toMatchObject({ height: 50, marginTop: 25 });
   expect(host(root, "duoAddressSlot").props.pointerEvents).toBe("none");
   const dim = root.root.findAll((node) => node.props.accessibilityLabel === "Hide Sidebar" && typeof node.type === "string" && flat(node).backgroundColor === "rgba(0,0,0,0.12)");
@@ -118,6 +118,23 @@ test("the sidebar lists the space's tabs on 46-point rows 41 high, the selected 
   expect(hosts(root, "duoSidebarRowGlass")).toHaveLength(1);
   expect(flat(host(root, "duoSidebarRowClose"))).toMatchObject({ width: 44, height: 41 });
   expect(flat(host(root, "duoSidebarNewTab"))).toMatchObject({ height: 46, paddingLeft: 13, gap: 12 });
+  unmount(root);
+});
+
+test("the wide toolbar's address is a pill like the browsing address, the sidebar keeps its own rounded field, and both sidebar buttons draw the shared sidebar symbol", () => {
+  useShape(OPEN, { name: "wide" });
+  const root = redesigned();
+  expect(flat(host(root, "duoAddress"))).toMatchObject({ borderRadius: 22, borderCurve: "continuous" });
+  expect(root.root.findAll((node) => node.props.testID === "duoAddress" && node.props.shape === "capsule").length).toBeGreaterThan(0);
+  const sidebarSymbols = () => root.root.findAll((node) => node.type === Symbol && node.props.name === iconRoles.sidebar);
+  expect(sidebarSymbols()).toHaveLength(1);
+  press(button(root, "Show Sidebar"));
+  settle();
+  expect(flat(host(root, "duoSidebarAddress"))).toMatchObject({ height: 43, borderRadius: controlRadius(43), borderCurve: "continuous" });
+  expect(root.root.findAll((node) => node.props.testID === "duoSidebarAddress" && node.props.shape === "rounded").length).toBeGreaterThan(0);
+  expect(sidebarSymbols()).toHaveLength(2);
+  const more = root.root.findAll((node) => node.props.testID === "duoSidebarMore" && typeof node.props.style === "function")[0]!;
+  expect(StyleSheet.flatten(more.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
   unmount(root);
 });
 
