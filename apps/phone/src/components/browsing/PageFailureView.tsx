@@ -8,7 +8,7 @@ import { failureButton } from "./pageStateTokens";
 
 const ICONS: Record<FailureIcon, SymbolName> = { crashed: "exclamationmarkTriangle", offline: "wifiSlash", network: "globe" };
 
-export function PageFailureView({ tabId }: { tabId: string }) {
+export function PageFailureView({ tabId, background }: { tabId: string; background?: string }) {
   const theme = useTheme();
   const live = useNavigation(tabId, (n) => n?.failure ?? null);
   const isLoading = useNavigation(tabId, (n) => n?.isLoading ?? false);
@@ -19,7 +19,7 @@ export function PageFailureView({ tabId }: { tabId: string }) {
   useEffect(() => (waitsForNetwork ? retryWhenOnline(tabId) : undefined), [waitsForNetwork, tabId]);
   if (!failure) return null;
   return (
-    <View style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.surface }]}>
+    <View testID="pageFailure" style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: background ?? theme.surface }]}>
       <View testID="pageFailureIcon" style={styles.icon}>
         <Symbol name={ICONS[failureIcon(failure)]} size={failureButton.iconBox} color={theme.secondaryLabel} />
       </View>
