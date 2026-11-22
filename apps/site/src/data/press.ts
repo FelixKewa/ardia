@@ -6,7 +6,7 @@ export const MAKER = "Mantra Patel";
 
 export const SHORT =
   "Ardia is a free, open-source Mac browser with Arc’s sidebar and Dia’s look, built on Chromium.";
-export const LONG = `Ardia is a web browser for Mac with Arc’s sidebar and Dia’s look, built on Chromium and Chrome’s own framework, so sites, extensions and DevTools behave as they do in Chrome. The full uBlock Origin is built in, so ads, trackers and cookie banners stay out, and Google’s background services are compiled out. Profiles keep work and home apart, and Sync runs end-to-end encrypted through the user’s own iCloud Drive. Ardia is free and open source under GPL-3.0, notarized by Apple, and runs on Apple Silicon Macs with ${MIN_MACOS} or later. The first public build shipped on ${FIRST_RELEASE}.`;
+export const LONG = `Ardia is a web browser for Mac with Arc’s sidebar and Dia’s look, built on Chromium and Chrome’s own framework, so sites, extensions and DevTools behave as they do in Chrome. The full uBlock Origin is built in, so ads, trackers and cookie banners stay out, and Google’s background services are compiled out. Profiles keep work and home apart, and Sync runs end-to-end encrypted through a folder the user picks, iCloud Drive by default. Ardia is free and open source under GPL-3.0, notarized by Apple, and runs on Apple Silicon Macs with ${MIN_MACOS} or later, with builds for Linux and an early one for Windows. The first public build shipped on ${FIRST_RELEASE}.`;
 
 export const FACTS: { term: string; value: string; href?: string }[] = [
   { term: "Name", value: "Ardia" },

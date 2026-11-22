@@ -158,7 +158,7 @@ const pages: { page?: Page; href: string; section?: string; label: string; menuL
         <DownloadButton location="menu" platform="windows-x64" />
         <DownloadButton location="menu" platform="windows-arm64" />
         <DownloadButton location="menu" platform="linux" />
-        <p class="label menu-fine bits not-pc"><span>Apple Silicon</span><span>macOS {MIN_MACOS_MAJOR}+</span></p>
+        <p class="label menu-fine bits not-pc"><span class="phone-only">For your Mac</span><span>Apple Silicon</span><span>macOS {MIN_MACOS_MAJOR}+</span></p>
         <p class="label menu-fine bits windows-only"><span>Nightly</span><span>x64 and Arm</span></p>
         <p class="label menu-fine bits linux-only">{LINUX_NIGHTLY && <span>Nightly</span>}<span>x86-64</span><span>Wayland or X11</span></p>
       </div>

@@ -16,7 +16,7 @@ const description =
 const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(home, ["Moving from Arc", url])];
 
 const carried = [
-  { from: "Spaces", to: "Your first selected space fills the current profile. Each additional space becomes its own profile, keeping its name, color and theme." },
+  { from: "Spaces", to: "Your first selected space fills the current profile. Each additional space becomes its own profile with its name and color. Every space keeps its icon and theme." },
   { from: "Pinned tabs", to: "Pinned rows in that profile, with the names you gave them." },
   { from: "Pinned folders", to: "Pinned groups. Folders inside folders stay nested." },
   { from: "Favorites", to: "Tiles at the top of the sidebar." },
@@ -107,8 +107,8 @@ const timeline = [
         <h2 class="poster" id="missing-title">What doesn’t</h2>
         <ul class="plain">
           <li><strong>Boosts and Easels.</strong> Neither is built in.</li>
-          <li><strong>Arc Max.</strong> Ardia has no AI, on purpose.</li>
-          <li><strong>Intel Macs and stable Windows.</strong> Mac needs Apple Silicon and {MIN_MACOS}+; Windows is nightly-only.</li>
+          <li><strong>Arc Max.</strong> Ardia has no AI built in, on purpose.</li>
+          <li><strong>Intel Macs.</strong> Mac needs Apple Silicon and {MIN_MACOS}+. Windows has an early nightly, not signed yet.</li>
         </ul>
       </div>
     </section>
