@@ -104,7 +104,7 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     storageWrite: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
     readPluginFile: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
   },
-  ArdiaAutomation: { start: answer({ state: "off", generation: 0, path: "", reason: "the control socket is unavailable on Linux" }), stop: answer(undefined) },
+  ArdiaAutomation: { start: answer({ state: "off", generation: 0, path: "", reason: "the control socket is unavailable on Linux" }), stop: answer(undefined), peer: answer(null) },
   ArdiaSystemSignals: {
     watchIdle: () => undefined,
     holdsIncomingLinks: () => false,
