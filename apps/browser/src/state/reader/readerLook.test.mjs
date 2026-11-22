@@ -78,6 +78,8 @@ test("the periodic state read writes nothing for a reader the user didn't open",
 
 test("updateSettings keeps only known settings with values their spec accepts, for every caller", async () => {
   const { takeSettingsWriteCounts } = await import("../telemetry/settingsWriteCounts.ts");
+  const client = await import("../telemetry/client.ts");
+  client.setSharing(true, "settings");
   takeSettingsWriteCounts();
   useBrowser.setState({ settings: DEFAULT_SETTINGS, settingsMeta: { chosen: [], inferred: [] } });
   S().updateSettings({ readerTextSize: 5, readerFont: "comic", notASetting: true, showFullUrl: true });
@@ -91,7 +93,7 @@ test("updateSettings keeps only known settings with values their spec accepts, f
   assert.equal(S().settings.sidebarSide, "left");
   S().updateSettings({ readerTextSize: "largest" }, { fromSync: true });
   assert.equal(S().settings.readerTextSize, "largest");
-  const counts = takeSettingsWriteCounts();
-  assert.equal(typeof counts.settings_writes_rejected, "number");
+  assert.equal(takeSettingsWriteCounts().settings_writes_rejected, 5);
+  client.setSharing(false, "settings");
   useBrowser.setState({ settings: DEFAULT_SETTINGS, settingsMeta: { chosen: [], inferred: [] } });
 });
