@@ -41,6 +41,7 @@ export {
   ActivitySpinner,
   ClipView,
   ContextMenuArea,
+  WheelArea,
   DIA_SPECTRUM,
   DockSelection,
   drawnFadeLabel,

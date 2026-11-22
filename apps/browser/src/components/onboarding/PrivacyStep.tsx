@@ -7,9 +7,9 @@ import { SHARING_COPY } from "../../state/telemetry/copy";
 import { Text } from "../ui";
 import { monoFace, radius, space, tracking } from "../ui/tokens";
 import { SiteLogo } from "./SiteLogo";
-import { useMockFocus } from "./ChoiceList";
 import { Page } from "./LayoutSteps";
-import { MockPanel, useScreen } from "./Screen";
+import { useScreen } from "./Screen";
+import { useSection } from "./sectionContext";
 import { setOnboardingDraft, setOnboardingExtras, useOnboarding } from "../../state/onboarding/onboarding";
 import { keysOf, useQuestions } from "../../state/onboarding/questions";
 import { OptionCard } from "./OptionCard";
@@ -21,13 +21,12 @@ const KEYS = keysOf("searchPrivacy");
 const ENGINES = ["google", "duckduckgo", "bing", "kagi", "ecosia", "brave", "startpage"];
 
 export function SearchPrivacyStep() {
-  const sub = useOnboarding((s) => s.sub);
+  const { sub } = useSection();
   const id = useQuestions("searchPrivacy")[sub]?.id;
-  const focus = useMockFocus(id);
-  const { values, mock } = useScreen(KEYS);
+  const { values } = useScreen(KEYS);
   const setDraft = setOnboardingDraft;
   const redo = useOnboarding((s) => s.redo);
-  const share = useOnboarding((s) => s.extras.share) ?? isSharing();
+  const share = useOnboarding((s) => s.extras.share) ?? (redo ? isSharing() : true);
   const all = useSettings((st) => searchEngines(st));
   const engines = all.filter((e) => ENGINES.includes(e.id) || e.id === values.searchEngine);
 
@@ -36,13 +35,12 @@ export function SearchPrivacyStep() {
       <Page
         id={id}
         title={SHARING_COPY.onboarding.title}
-        subtitle={SHARING_COPY.onboarding.subtitle}
         patch={{}}
         picked={share ? ["Sharing crash reports"] : []}
         onConfirm={() => {
           if (share !== isSharing() || !redo) setSharing(share, redo ? "settings" : "onboarding");
         }}
-        preview={<MockPanel settings={mock} focus={null} overlay={<Receipt on={share} />} />}
+        preview={<Receipt on={share} />}
       >
         <OptionCard control="check" icon="stethoscope" title={SHARING_COPY.toggle} subtitle={SHARING_COPY.onboarding.row} selected={share} onPress={() => setOnboardingExtras({ share: !share })} />
       </Page>
@@ -55,7 +53,6 @@ export function SearchPrivacyStep() {
       subtitle="For anything that isn't a website."
       patch={{ searchEngine: values.searchEngine }}
       picked={[`Search with ${engine?.name ?? "your engine"}`]}
-      preview={<MockPanel settings={mock} focus={focus.focus} />}
     >
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }} accessibilityRole="radiogroup" accessibilityLabel="Search engine">
         {engines.map((e) => (

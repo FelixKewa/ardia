@@ -87,6 +87,11 @@ export type MagnifyAreaProps = ViewProps & {
 export type NativeMagnifyAreaProps = Omit<MagnifyAreaProps, "onMagnify"> & { onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
 
 const NativeMagnifyArea = requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea");
+export type WheelAreaNative = {
+  devWheel(windowId: string, x: number, y: number, steps: { phase?: string; dy: number; momentum?: boolean; precise?: boolean }[]): Promise<{ claimed?: boolean[]; error?: string }>;
+  glideScroll(tag: number, y: number, durationMs: number): Promise<void>;
+};
+
 export type MagnifyAreaNative = {
   devMagnify(windowId: string, x: number, y: number, steps: MagnifyUpdate[]): Promise<{ claimed?: boolean[]; hit?: string; error?: string }>;
 };

@@ -18,6 +18,7 @@
       "ContextMenuAreaModule",
       "OutsidePressAreaModule",
       "MagnifyAreaModule",
+      "WheelAreaModule",
       "PeekStageModule",
       "SurfaceModule",
       "FieldGlowModule",

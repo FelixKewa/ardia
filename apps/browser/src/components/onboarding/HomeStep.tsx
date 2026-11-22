@@ -15,9 +15,10 @@ import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
 import { confirmAnswer, confirmDefaultBrowserAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
 import { probeOnboardingSystem, type OnboardingSystem } from "../../state/onboarding/systemProbe";
-import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
+import { ChoiceList, type ChoiceOption } from "./ChoiceList";
 import { useOnboardingColors } from "./Parts";
-import { MockPanel, useScreen } from "./Screen";
+import { useScreen } from "./Screen";
+import { useSection, useSharedMockFocus } from "./sectionContext";
 import { StepActions, StepLayout } from "./StepLayout";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -31,7 +32,7 @@ const LINK_CHOICES: ChoiceOption<boolean>[] = [
 ];
 
 export function HomeStep() {
-  const sub = useOnboarding((s) => s.sub);
+  const { sub } = useSection();
   return sub === 0 ? <DefaultBrowserQuestion /> : <LinksQuestion />;
 }
 
@@ -79,7 +80,8 @@ function DefaultBrowserQuestion() {
           continueTitle={busy ? "Setting Up…" : "Continue"}
           disabled={!system || busy}
           onContinue={() => void apply()}
-          onSkip={() => skipStep()}
+          onSkip={() => skipStep("question")}
+          holdScroll
         />
       }
       preview={<SystemPreview isDefault={!!(defaultOn || trying)} dock={!!(system?.inDock || (dock && system?.dockAvailable !== false))} login={login} />}
@@ -107,8 +109,8 @@ function DefaultBrowserQuestion() {
 }
 
 function LinksQuestion() {
-  const { values, mock } = useScreen(["openLinksInLittleArdia"]);
-  const focus = useMockFocus("links");
+  const { values } = useScreen(["openLinksInLittleArdia"]);
+  const focus = useSharedMockFocus();
   const little = values.openLinksInLittleArdia;
   return (
     <StepLayout
@@ -120,10 +122,9 @@ function LinksQuestion() {
           onContinue={() =>
             confirmAnswer("links", { openLinksInLittleArdia: little }, [little ? "Links from other apps open in Little Ardia" : "Links from other apps open in a tab"])
           }
-          onSkip={() => skipStep()}
+          onSkip={() => skipStep("question")}
         />
       }
-      preview={<MockPanel settings={mock} focus={focus.focus} />}
     >
       <ChoiceList options={LINK_CHOICES} value={little} onChange={(v) => setOnboardingDraft({ openLinksInLittleArdia: v })} mock={focus} />
     </StepLayout>

@@ -2303,7 +2303,29 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    BOOL needsHitSubview = !(_pointerEvents == RCTPointerEventsNone || _pointerEvents == RCTPointerEventsBoxOnly);
    if (needsHitSubview && (![self clipsToBounds] || isPointInside)) {
      // Take z-index into account when calculating the touch target.
-@@ -784,16 +888,38 @@ - (void)viewDidMoveToWindow
+@@ -733,11 +837,20 @@ - (void)setShadowColor:(CGColorRef)shadowColor
+ {
+     if (_shadowColor != shadowColor)
+     {
+-        _shadowColor = shadowColor;
++        // [Ardia: the property is assign, so the color the prop converter handed over was freed before the next
++        // shadow update read it (LogBox crashed in didUpdateShadow). Hold it. Ardia]
++        CGColorRef previous = _shadowColor;
++        _shadowColor = shadowColor ? CGColorRetain(shadowColor) : NULL;
++        if (previous) CGColorRelease(previous);
+         [self didUpdateShadow];
+     }
+ }
+ 
++- (void)dealloc
++{
++    if (_shadowColor) CGColorRelease(_shadowColor);
++}
++
+ - (void)setShadowOffset:(CGSize)shadowOffset
+ {
+     if (!CGSizeEqualToSize(_shadowOffset, shadowOffset))
+@@ -784,16 +897,38 @@ - (void)viewDidMoveToWindow
    // scroll event occurs either due to trackpad/gesture based scrolling or a scrollwheel event
    // both of which would not cause the mouseExited to be invoked.
  
@@ -2346,7 +2368,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    }
  
    [self reactViewDidMoveToWindow]; // [macOS] Github#1412
-@@ -801,41 +927,69 @@ - (void)viewDidMoveToWindow
+@@ -801,41 +936,69 @@ - (void)viewDidMoveToWindow
    [super viewDidMoveToWindow];
  }
  
@@ -2445,7 +2467,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
      }
    }
  }
-@@ -943,28 +1097,63 @@ - (void)react_updateClippedSubviewsWithClipRect:(CGRect)clipRect relativeToView:
+@@ -943,28 +1106,63 @@ - (void)react_updateClippedSubviewsWithClipRect:(CGRect)clipRect relativeToView:
  
  - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
  {
@@ -2509,7 +2531,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  }
  
  - (void)layoutSubviews
-@@ -1196,11 +1385,41 @@ - (void)reactSetFrame:(CGRect)frame
+@@ -1196,12 +1394,42 @@ - (void)reactSetFrame:(CGRect)frame
    // be rendered as a stretchable image, we'll need to re-render.
    // TODO: detect up-front if re-rendering is necessary
    CGSize oldSize = self.bounds.size;
@@ -2534,8 +2556,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
 +  if ([ArdiaBorderImageViews() containsObject:self]) { // [Ardia: a border image follows the new backing density. Ardia]
 +    [self.layer setNeedsDisplay];
 +  }
-+}
-+
+ }
+ 
 +// [Ardia: displayLayer is the only place that copies clipsToBounds to the layer, and nothing asked for one when
 +// overflow changed. A view that stopped clipping at the same size (a group's rows once its fold animation ends)
 +// kept masking its children, which cut the selected row's glow. Ardia]
@@ -2546,12 +2568,13 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
 +  }
 +  [super setClipsToBounds:clipsToBounds];
 +  [self.layer setNeedsDisplay];
- }
++}
 +#endif
- 
++
  - (void)displayLayer:(CALayer *)layer
  {
-@@ -1248,17 +1467,8 @@ - (void)displayLayer:(CALayer *)layer
+   if (CGSizeEqualToSize(layer.bounds.size, CGSizeZero)) {
+@@ -1248,17 +1476,8 @@ - (void)displayLayer:(CALayer *)layer
    RCTUIColor *backgroundColor = _backgroundColor;
  #endif // macOS]
  
@@ -2571,7 +2594,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  
    if (useIOSBorderRendering) {
      layer.cornerRadius = cornerRadii.topLeftHorizontal;
-@@ -1293,9 +1503,10 @@ - (void)displayLayer:(CALayer *)layer
+@@ -1293,9 +1512,10 @@ - (void)displayLayer:(CALayer *)layer
    layer.contents = (id)image.CGImage;
    layer.contentsScale = image.scale;
  #else // [macOS
@@ -2583,7 +2606,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  #endif // macOS]
    layer.needsDisplayOnBoundsChange = YES;
    layer.magnificationFilter = kCAFilterNearest;
-@@ -1514,6 +1725,20 @@ - (BOOL)acceptsFirstResponder
+@@ -1514,6 +1734,20 @@ - (BOOL)acceptsFirstResponder
  	return [self focusable] || [super acceptsFirstResponder];
  }
  
@@ -2604,7 +2627,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  - (void)updateTrackingAreas
  {
    BOOL hasMouseHoverEvent = self.onMouseEnter || self.onMouseLeave;
-@@ -1522,22 +1747,295 @@ - (void)updateTrackingAreas
+@@ -1522,22 +1756,295 @@ - (void)updateTrackingAreas
    if (!wouldRecreateIdenticalTrackingArea) {
      if (_trackingArea) {
        [self removeTrackingArea:_trackingArea];
@@ -2901,7 +2924,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    _hasMouseOver = YES;
    [self sendMouseEventWithBlock:self.onMouseEnter
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1547,6 +2045,9 @@ - (void)mouseEntered:(NSEvent *)event
+@@ -1547,6 +2054,9 @@ - (void)mouseEntered:(NSEvent *)event
  
  - (void)mouseExited:(NSEvent *)event
  {
@@ -2911,7 +2934,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    _hasMouseOver = NO;
    [self sendMouseEventWithBlock:self.onMouseLeave
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1768,7 +2269,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
+@@ -1768,7 +2278,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];
@@ -2920,7 +2943,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
      [_eventDispatcher sendEvent:keyboardEvent];
      objc_setAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
    }
-@@ -1794,3 +2295,19 @@ - (void)keyUp:(NSEvent *)event {
+@@ -1794,3 +2304,19 @@ - (void)keyUp:(NSEvent *)event {
  #endif // macOS]
  
  @end

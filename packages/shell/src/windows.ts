@@ -29,7 +29,7 @@ export type OpenWindowOptions = {
   incognito?: boolean;
   title?: string;
   focus?: boolean;
-  kind?: "browser" | "small" | "settings" | "import" | "popup";
+  kind?: "browser" | "small" | "settings" | "import" | "popup" | "intro";
   profile?: string;
   size?: [number, number];
   behind?: string;
@@ -53,6 +53,7 @@ export type WindowsNative = {
   closeWindow(id: string): Promise<void>;
   animateWindowClose(id: string, after: string | null): Promise<void>;
   focusWindow(id: string): Promise<void>;
+  setWindowShown?(id: string, shown: boolean, burst?: boolean): Promise<void>;
   restoreFullScreen(ids: string[], focus: string | null): Promise<void>;
   setTrafficLightsCenter(id: string, center: [number, number] | null, trailing: boolean): Promise<void>;
   watchSidebarEdge(id: string, on: boolean, hold: number, right: boolean, whilePressed: boolean): Promise<void>;

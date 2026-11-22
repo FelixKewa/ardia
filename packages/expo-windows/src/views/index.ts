@@ -5,7 +5,7 @@ import { DockSelection } from "./DockSelection";
 import { EdgeFadeMask } from "./EdgeFadeMask";
 import { FadeLabel } from "./FadeLabel";
 import { FolderIcon } from "./FolderIcon";
-import { ContextMenuArea, FileDrop, MagnifyArea, MouseArea, OutsidePressArea, WindowProfile } from "./inputAreas";
+import { ContextMenuArea, FileDrop, MagnifyArea, MouseArea, OutsidePressArea, WheelArea, WindowProfile } from "./inputAreas";
 import { GlassEffect, GlassGroup, PopoverBubble, VisualEffect } from "./materials";
 import { PageCoverGate } from "./PageCoverGate";
 import { PeekStage } from "./PeekStage";
@@ -33,6 +33,7 @@ export const viewsDrawnInJs = new Map<string, ViewByName>([
   ["ArdiaOutsidePressArea", OutsidePressArea],
   ["ArdiaFileDrag", MouseArea],
   ["ArdiaMagnifyArea", MagnifyArea],
+  ["ArdiaWheelArea", WheelArea],
   ["ArdiaFileDrop", FileDrop],
   ["ArdiaThemeSwatch", ThemeSwatch],
   ["ArdiaDockSelection", DockSelection],

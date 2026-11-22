@@ -18,7 +18,7 @@ import type { ReportNative } from "./report";
 import type { ScriptingNative } from "./scripting";
 import type { SystemSignalsNative } from "./systemSignals";
 import type { TelemetryLocalNative } from "./telemetryLocal";
-import type { FileDropNative, MagnifyAreaNative, SystemNative } from "./system";
+import type { FileDropNative, MagnifyAreaNative, SystemNative, WheelAreaNative } from "./system";
 import type { TranslationModule } from "./translation";
 import type { UpdaterNative } from "./updater";
 import type { UserScriptsNative } from "./userScripts";
@@ -47,6 +47,7 @@ export type ShellNativeModules = {
   ArdiaInlineCompletion: InlineCompletionNative;
   ArdiaTranslate: TranslationModule;
   ArdiaMagnifyArea: MagnifyAreaNative;
+  ArdiaWheelArea: WheelAreaNative;
   ArdiaPeekStage: PeekStageNative;
   ArdiaFileDrop: FileDropNative;
   ArdiaCli: CliNative;

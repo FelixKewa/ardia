@@ -18,6 +18,8 @@ import { DownloadMagnet, DownloadsPopover } from "./components/downloads/Downloa
 import { UtilityWindow } from "./components/settings/UtilityWindow";
 import { isUtilityWindowId } from "./state/settings/settingsWindows";
 import { OnboardingOverlay } from "./components/onboarding";
+import { IntroWindow } from "./components/onboarding/IntroWindow";
+import { INTRO_WINDOW_ID } from "./state/onboarding/introWindow";
 import { CreateProfileHost } from "./components/profiles/CreateProfile";
 import { useFullscreenTab } from "./state/tabs/pageState";
 import { ProfileTint } from "./components/window/ProfileSwipe";
@@ -41,6 +43,12 @@ import { forgetWindowRootSize, setWindowRootSize } from "./state/windows/rootSiz
 provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
 
 export function WindowRoot({ windowId }: { windowId?: string }) {
+  if (windowId === INTRO_WINDOW_ID)
+    return (
+      <ThemeScope>
+        <IntroWindow />
+      </ThemeScope>
+    );
   if (isUtilityWindowId(windowId))
     return (
       <ThemeScope>

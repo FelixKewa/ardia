@@ -47,6 +47,7 @@ public class AppWindowsModule: Module {
     AsyncFunction("watchSidebarEdge") { (id: String, on: Bool, hold: Double, right: Bool, whilePressed: Bool) in
       SidebarEdgeWatcher.shared.watch(id: id, on: on, hold: CGFloat(hold), right: right, whilePressed: whilePressed)
     }.runOnQueue(.main)
+    AsyncFunction("setWindowShown") { (id: String, shown: Bool, burst: Bool?) in WindowManager.shared.setShown(id: id, shown: shown, burst: burst ?? false) }.runOnQueue(.main)
     AsyncFunction("focusWindow") { (id: String) in WindowManager.shared.focus(id: id) }.runOnQueue(.main)
     AsyncFunction("restoreFullScreen") { (ids: [String], focus: String?) in
       WindowManager.shared.fullScreen.restore(ids: ids, focus: focus)
