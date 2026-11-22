@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, posix, relative } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
-const workflow = (name) => readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const REPO = fileURLToPath(new URL("../../", import.meta.url));
+const workflow = (name) => readFileSync(join(REPO, ".github/workflows", name), "utf8").replace(/\r\n/g, "\n");
 
 function listAfter(lines, start) {
   const indent = lines[start + 1].match(/^ */)[0];
@@ -37,6 +40,17 @@ function changeFilters(text) {
 
 const covers = (outer, inner) => outer === inner || (outer.endsWith("/**") && inner.startsWith(outer.slice(0, -2)));
 
+const globPattern = (glob) =>
+  new RegExp(`^${glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\0/g, ".*")}$`);
+
+function matched(globs, path) {
+  let included = false;
+  for (const glob of globs) {
+    if (glob.startsWith("!") ? globPattern(glob.slice(1)).test(path) : globPattern(glob).test(path)) included = !glob.startsWith("!");
+  }
+  return included;
+}
+
 function assertTriggersMatchFilters(triggers, filters, own) {
   const globs = Object.values(filters).flat();
   for (const glob of globs) {
@@ -48,6 +62,46 @@ function assertTriggersMatchFilters(triggers, filters, own) {
   assert.equal(new Set(triggers).size, triggers.length, "no trigger path is listed twice");
 }
 
+function filesUnder(dir, pick) {
+  if (!existsSync(join(REPO, dir))) return [];
+  return readdirSync(join(REPO, dir), { withFileTypes: true }).flatMap((entry) => {
+    const path = posix.join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === "node_modules" || entry.name === "__pycache__" ? [] : filesUnder(path, pick);
+    return pick(entry.name) ? [path] : [];
+  });
+}
+
+const REPO_PATH = /['"`](?:\.\.\/)*((?:apps|packages|engine|docs|infra|\.claude)\/[A-Za-z0-9_.@/-]+)['"`]/g;
+
+function repoPathsNamedIn(files) {
+  const named = new Set();
+  for (const file of files) {
+    for (const [, path] of readFileSync(join(REPO, file), "utf8").matchAll(REPO_PATH)) {
+      const clean = path.replace(/\/+$/, "");
+      if (existsSync(join(REPO, clean))) named.add(statSync(join(REPO, clean)).isDirectory() ? `${clean}/` : clean);
+    }
+  }
+  return [...named].sort();
+}
+
+const IMPORT = /(?:from\s+|import\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
+
+function relativeImports(entries) {
+  const seen = new Set();
+  const visit = (path) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    for (const [, spec] of readFileSync(join(REPO, path), "utf8").matchAll(IMPORT)) {
+      const target = posix.normalize(posix.join(posix.dirname(path), spec));
+      const found = [target, `${target}.ts`, `${target}.mjs`, `${target}.js`, `${target}/index.ts`].find((candidate) => existsSync(join(REPO, candidate)) && statSync(join(REPO, candidate)).isFile());
+      if (found && /\.(?:[cm]?[jt]s)$/.test(found)) visit(found);
+      else if (found) seen.add(found);
+    }
+  };
+  entries.forEach(visit);
+  return [...seen].sort();
+}
+
 test("Checks starts on the paths its jobs read, the same on pull requests and on main", () => {
   const text = workflow("checks.yml");
   const filters = changeFilters(text);
@@ -56,17 +110,58 @@ test("Checks starts on the paths its jobs read, the same on pull requests and on
   assert.match(text, /^  push:\n    branches: \[main\]\n    paths: \*inputs$/m);
 });
 
-test("each Checks job runs when its filter matches, and every job runs when the filter can't tell", () => {
+test("every Checks job runs when its filter matches, when the filter can't tell and when the changes job fails", () => {
   const text = workflow("checks.yml");
   for (const name of ["code", "browser", "repo"]) {
     const fallback = `      ${name}: \${{ steps.filter.outcome != 'success' || steps.filter.outputs.${name} == 'true' }}`;
     assert.ok(text.includes(fallback), `${name} falls back to running`);
-    assert.ok(text.includes(`    if: needs.changes.outputs.${name} == 'true'`), `a job waits on ${name}`);
   }
-  assert.match(text, /- id: filter\n        continue-on-error: true\n/);
+  const jobs = text.split(/\n  (?=[a-z0-9-]+:\n)/).slice(1);
+  const downstream = jobs.filter((job) => /\n    needs: changes\n/.test(job));
+  assert.equal(downstream.length, 3, "three jobs wait on the changes job");
+  for (const job of downstream) {
+    const name = job.match(/^[a-z0-9-]+/)[0];
+    assert.match(
+      job,
+      /\n    if: \$\{\{ !cancelled\(\) && \(needs\.changes\.result != 'success' \|\| needs\.changes\.outputs\.(code|browser|repo) == 'true'\) \}\}\n/,
+      `${name} runs when the changes job failed or timed out`,
+    );
+  }
+  assert.match(text, /- id: filter\n        if: github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.changed_files < 3000\n        continue-on-error: true\n/);
+});
+
+test("Checks' code filter covers every site file the meadow check builds from", () => {
+  const meadow = readFileSync(join(REPO, "packages/shaders/scripts/meadow.mjs"), "utf8");
+  const entries = [...meadow.matchAll(/join\(site, "([^"]+\.(?:ts|mjs))"\)/g)].map(([, path]) => `apps/site/src/${path}`);
+  assert.ok(entries.length >= 2, "meadow.mjs still names its site entry points");
+  const code = changeFilters(workflow("checks.yml")).code;
+  for (const path of relativeImports(entries)) assert.ok(matched(code, path), `a change to ${path} runs the meadow check`);
+  for (const [, dir] of meadow.matchAll(/join\(site, "([^".]+)"\)/g)) {
+    assert.ok(matched(code, `apps/site/src/${dir}/any`), `a change under apps/site/src/${dir} runs the meadow check`);
+  }
+});
+
+test("Linux starts on every repository file its fixture suites read", () => {
+  const suites = ["engine/ardiacore-linux/tests", "engine/patches/build/tests", "engine/chromium/src/chrome/browser/ardia/tests", "scripts/linux", "apps/linux/scripts"];
+  const files = suites.flatMap((dir) => filesUnder(dir, (name) => /\.(?:py|mjs|sh)$/.test(name)));
+  const triggers = triggerPaths(workflow("linux.yml"), "pull_request");
+  const named = repoPathsNamedIn(files);
+  assert.ok(named.length > 20, "the suites still name the files they read");
+  for (const path of named) {
+    const probe = path.endsWith("/") ? `${path}any` : path;
+    assert.ok(matched(triggers, probe), `a change to ${path} starts linux.yml`);
+  }
+  assert.match(workflow("linux.yml"), /^  push:\n    branches: \[main\]\n    paths: \*linux$/m);
 });
 
 test("Deploy starts on main only for the paths one of its services deploys from", () => {
   const text = workflow("deploy.yml");
   assertTriggersMatchFilters(triggerPaths(text, "push"), changeFilters(text), ".github/workflows/deploy.yml");
+});
+
+test("the path globs these tests use read like GitHub's", () => {
+  assert.ok(matched(["packages/*/src/**", "!packages/phone/**"], "packages/core/src/a.ts"));
+  assert.ok(!matched(["packages/*/src/**", "!packages/phone/**"], "packages/phone/src/a.ts"));
+  assert.ok(!matched(["packages/*/package.json"], "packages/core/src/package.json"));
+  assert.equal(relative(REPO, dirname(fileURLToPath(import.meta.url))), "scripts/ci");
 });

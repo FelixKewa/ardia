@@ -75,11 +75,14 @@ holds the rest.
   sources, `apps/linux/src`, `scripts/{lib,security,windows}`, `tests/` and two docs; and `repository, vouch and
   stale tests` (`test:root`, no install) for `scripts/`, `.github/`, `.claude/`, the site and the release notes. A
   docs-only, phone-app, dashboard or videos change starts none of them. When the filter can't tell (an API error, a
-  force push it can't diff), every job runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the
-  filters in step. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to
+  force push it can't diff, a pull request of 3,000 files or more) or the `which checks run` job fails, every job
+  runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the filters in step, and follows the meadow
+  check's site imports. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to
   `main` save it, so pull requests add no caches. A newer push cancels the run before it, on `main` too.
-- `linux.yml` starts on what the Linux build reads (`apps/linux`, the shared UI and the desktop packages' sources, the
-  Linux and shared engine folders, its scripts), not on Mac, iPhone, Android or Windows native code; `windows.yml`
+- `linux.yml` starts on what the Linux build and its fixture suites read (`apps/linux`, the shared UI and the desktop
+  packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,
+  which `workflow-paths.test.mjs` finds in the suites and checks), not on the rest of the Mac, iPhone, Android or
+  Windows native code; `windows.yml`
   leaves out `packages/phone`; `windows-engine-inputs.yml` starts on the engine inputs `check_inputs.py` reads;
   `deploy.yml` starts on `main` only for paths one of its services deploys from.
 - `mac.yml` compiles the Mac app (Debug, unsigned, `xcode-27`) on pull requests and pushes that touch its native code:
