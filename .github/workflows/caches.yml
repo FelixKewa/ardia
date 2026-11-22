@@ -40,6 +40,14 @@ jobs:
         shell: bash
         run: >-
           node scripts/ci/prune-caches.mjs $DRY_RUN
+          --drop-prefix ardia-test-tsx-1-of-8-
+          --drop-prefix ardia-test-tsx-2-of-8-
+          --drop-prefix ardia-test-tsx-3-of-8-
+          --drop-prefix ardia-test-tsx-4-of-8-
+          --drop-prefix ardia-test-tsx-5-of-8-
+          --drop-prefix ardia-test-tsx-6-of-8-
+          --drop-prefix ardia-test-tsx-7-of-8-
+          --drop-prefix ardia-test-tsx-8-of-8-
           --newest-only xcode-cas-release-
           --newest-only xcode-cas-ios-
           --newest-only xcode-cas-phone-release-
