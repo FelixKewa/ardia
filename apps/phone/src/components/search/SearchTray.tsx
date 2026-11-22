@@ -1,7 +1,7 @@
 import { createContext, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { countRender } from "../../state/app/interactionPerf";
-import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import { SheetScrollContext, SheetScrollView, sheetPullTranslation, type SheetScroll } from "../ui/Sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, FadeIn, FadeOut, runOnJS, runOnUI, useAnimatedReaction, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -27,24 +27,24 @@ import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage, reportLaunchTray } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
-import { useSolidChrome } from "../ui/LookViews";
+import { browseLayout, capsule, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, stroke, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
+import { plateMaterial, SEARCH_PANEL_FACE, useSolidChrome, usesGlass, type PlateMaterial } from "../ui/LookViews";
 import { actionWords } from "../../lib/sharedWords";
 import { panelRowLayout, panelTitleLines, SuggestionRow } from "./SuggestionRow";
 import { MaterialSearchTray } from "./MaterialSearchView";
 import { TrayInput, type TrayInputHandle } from "./TrayInput";
-import { canSearchByVoice, presentVoiceSearch } from "../../state/voice/store";
+import { canSearchByVoice } from "../../state/voice/store";
+import { presentVoiceSearchFrom } from "./VoiceSearchView";
 import { commandBarMotion, commandPanelPlace, useCommandBar } from "../duo/CommandBar";
 
 const LARGE_FONT_SCALE = 1.5;
 import { useTrayKeyboard } from "./useTrayKeyboard";
 import { useKeyboardTopFromBottom } from "./useKeyboardHeight";
-import { searchFieldHeight, searchPanel, searchPanelFieldBlock, searchPanelFieldCenter, searchPanelHeight, searchPanelInk, searchPanelRadius } from "./searchPanelTokens";
+import { nativeClassicChrome } from "../ui/tokens";
+import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelPreferredHeight, searchPanelRadius, type SearchPanelCorners } from "./searchPanelTokens";
 import type { Point } from "../../lib/menuPlace";
 
 const SHEET_ABOVE_KEYBOARD = 274;
-
-export const NEW_TAB_FIELD = { gapAbove: 28 } as const;
 
 type TrayList = { drag: GestureType; scroll: SheetScroll };
 
@@ -58,15 +58,7 @@ const INCOGNITO_CAPTION_ROWS = 2;
 
 const ROWS_FALLBACK = 5;
 
-type PanelCorners = "top" | "all";
-
-const ARC_CARD = { cardInset: 0, cardGap: 0 } as const;
-
-const FLOATING_CARD = { cardInset: floatingPanelLayout.inset, cardGap: floatingPanelLayout.aboveKeyboard } as const;
-
-const FIELD_PLACE = { fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset } as const;
-
-export const panelCornerStyle = (panelRadius: number, corners: PanelCorners) =>
+export const panelCornerStyle = (panelRadius: number, corners: SearchPanelCorners) =>
   corners === "top" ? { borderTopLeftRadius: panelRadius, borderTopRightRadius: panelRadius, ...smoothCorners } : { borderRadius: panelRadius, ...smoothCorners };
 
 const panelFill = (incognito: boolean, dark: boolean, solid: boolean) => {
@@ -74,10 +66,10 @@ const panelFill = (incognito: boolean, dark: boolean, solid: boolean) => {
   return solid ? panelInk.solid : panelInk.tint;
 };
 
-export const searchPanelMorphLook = (incognito: boolean, dark: boolean, solid: boolean) => ({ usesGlass: false, panelTint: ink.clear, panelDark: incognito, classicPanel: panelFill(incognito, dark, solid), frosted: !solid });
+export const searchPanelMorphLook = (incognito: boolean, dark: boolean, material: PlateMaterial) => ({ usesGlass: material === "glass", panelTint: ink.clear, panelDark: incognito, classicPanel: panelFill(incognito, dark, material === "solid"), frosted: material === "frost", classicChrome: nativeClassicChrome });
 
-function SearchPanelFace({ incognito, dark, panelRadius, corners }: { incognito: boolean; dark: boolean; panelRadius: number; corners: PanelCorners }) {
-  const solid = useSolidChrome();
+function SearchPanelFace({ incognito, dark, panelRadius, corners }: { incognito: boolean; dark: boolean; panelRadius: number; corners: SearchPanelCorners }) {
+  const solid = plateMaterial(SEARCH_PANEL_FACE, useSolidChrome(), usesGlass()) === "solid";
   const fill = panelFill(incognito, dark, solid);
   const place = [StyleSheet.absoluteFill, panelCornerStyle(panelRadius, corners)];
   if (solid) return <View testID="searchPanelFace" pointerEvents="none" style={[place, { backgroundColor: fill }]} />;
@@ -170,20 +162,23 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   const safeBottom = insets.bottom;
   const preferred = SHEET_ABOVE_KEYBOARD + browseLayout.searchFieldHeight * (window.fontScale - 1);
   const panel = useDesign() === "redesigned";
-  const placement = useCommandBar(Math.max(keyboard.target, safeBottom));
-  const command = panel ? placement : null;
+  const commandPlacement = useCommandBar(Math.max(keyboard.target, safeBottom));
+  const command = panel ? commandPlacement : null;
   const arcPanel = panel && command === null;
   const fieldHeight = searchFieldHeight(window.fontScale);
   const panelRadius = searchPanelRadius(fieldHeight);
-  const corners: PanelCorners = arcPanel ? "top" : "all";
+  const resting = Math.max(keyboard.target, safeBottom);
+  const placement = searchPanelPlacement(arcPanel, command !== null);
+  const place = searchPanelPlace(placement, resting, false);
+  const corners = place.corners;
   useLayoutEffect(() => {
     if (arcPanel && !closing) clearPagePrefill();
   }, []);
   const trayHeight = command
     ? command.maxHeight
-    : arcPanel
-      ? trayMaxHeight(searchPanelHeight(fieldHeight, window.fontScale), window.height - insets.top - NEW_TAB_FIELD.gapAbove, Math.max(keyboard.target, safeBottom), 0)
-      : trayMaxHeight(preferred, window.height - insets.top, Math.max(keyboard.target, safeBottom), space.s + (panel ? floatingPanelLayout.aboveKeyboard : 0));
+    : panel
+      ? trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, window.fontScale, Number.POSITIVE_INFINITY), window.height - insets.top - place.gapAbove, resting, place.gapAboveKeyboard)
+      : trayMaxHeight(preferred, window.height - insets.top, resting, space.s);
   const extend = window.height;
   const closedOnPressIn = useRef(false);
   const closeFromTouch = () => {
@@ -414,7 +409,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
         <Animated.View
           testID="trayPanel"
           style={[
-            command ? commandPanelPlace(command, fieldHeight) : [styles.searchPanelSheet, { left: insets.left, right: insets.right, bottom: -extend, height: trayHeight + extend }],
+            command ? commandPanelPlace(command, fieldHeight) : [styles.searchPanelSheet, { left: insets.left + place.cardInset, right: insets.right + place.cardInset, bottom: -extend, height: trayHeight + extend }],
             panelCornerStyle(panelRadius, corners),
             { boxShadow: shadowCss("floating", incognito) },
             trayStyle,
@@ -537,13 +532,12 @@ function StagedTray() {
   const command = useCommandBar(resting);
   const editsPage = useSearchEditsPage();
   const arcPanel = mounted !== null && searchPanelShown(phoneLayout, command !== null);
-  const fieldBlock = searchPanelFieldBlock(fieldHeight);
   const panelRadius = searchPanelRadius(fieldHeight);
-  const corners: PanelCorners = arcPanel ? "top" : "all";
-  const preferred = arcPanel ? searchPanelHeight(fieldHeight, window.fontScale) : Math.min(SHEET_ABOVE_KEYBOARD + fieldHeight - searchPanel.fieldHeight, fieldBlock + rowsHeight);
-  const trayHeight = command ? command.maxHeight : arcPanel ? trayMaxHeight(preferred, window.height - insets.top - NEW_TAB_FIELD.gapAbove, resting, 0) : trayMaxHeight(preferred, window.height - insets.top, resting, space.s + floatingPanelLayout.aboveKeyboard);
-  const underKeyboard = arcPanel ? resting : 0;
-  const place = { ...(arcPanel ? (hinged ? { ...ARC_CARD, cardInset: floatingPanelLayout.inset } : ARC_CARD) : FLOATING_CARD), ...FIELD_PLACE };
+  const placement = searchPanelPlacement(arcPanel, command !== null);
+  const place = searchPanelPlace(placement, resting, hinged);
+  const corners = place.corners;
+  const trayHeight = command ? command.maxHeight : trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, window.fontScale, rowsHeight), window.height - insets.top - place.gapAbove, resting, place.gapAboveKeyboard);
+  const underKeyboard = place.underKeyboard;
   const newTabPanelNow = useRef(!editsPage && arcPanel);
   newTabPanelNow.current = !editsPage && arcPanel;
   const morphs = phoneLayout && !reduceMotion && command === null && pills > 0;
@@ -754,8 +748,9 @@ function StagedTray() {
 
   const dimStyle = useAnimatedStyle(() => ({ opacity: dim.value * (1 - clampedProgress(drag.value, travel.value)) }));
   const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drag.value }] }));
-  const morphLook = useMemo(() => searchPanelMorphLook(incognito, theme.dark, solid), [incognito, theme.dark, solid]);
-  const morphCorners = useMemo(() => ({ panel: panelRadius }), [panelRadius]);
+  const panelMaterial = plateMaterial(SEARCH_PANEL_FACE, solid, usesGlass());
+  const morphLook = useMemo(() => searchPanelMorphLook(incognito, theme.dark, panelMaterial), [incognito, theme.dark, panelMaterial]);
+  const morphCorners = useMemo(() => ({ panel: panelRadius, field: searchFieldRadius(fieldHeight) }), [panelRadius, fieldHeight]);
   const overPage = origin === "page";
   const dimTakesTouches = (arcPanel || lift.up) && !closing;
   const field = useMemo<StagedField>(() => ({ holdsScroll, presented, onFieldHeight: measuredField }), [holdsScroll, presented, measuredField]);
@@ -805,7 +800,7 @@ function StagedTray() {
           {mounted !== null ? (
             <View
               key={presentation}
-              style={command ? { marginLeft: command.left, width: command.width } : hinged ? [arcPanel ? null : styles.stageCard, { paddingLeft: insets.left + floatingPanelLayout.inset, paddingRight: insets.right + floatingPanelLayout.inset }] : arcPanel ? { paddingLeft: insets.left, paddingRight: insets.right } : styles.stageCard}
+              style={command ? { marginLeft: command.left, width: command.width } : { paddingLeft: insets.left + place.cardInset, paddingRight: insets.right + place.cardInset, paddingBottom: place.cardGap }}
               testID="trayStagedContent"
               {...closingGate(closing)}
             >
@@ -939,9 +934,9 @@ function FieldInput({ first, closing }: { first: boolean; closing: boolean }) {
   const arcInk = searchPanelInk(incognitoField, theme.dark);
   const areaStyle = panelField ? styles.searchPanelFieldArea : styles.fieldArea;
   const capsuleStyle = panelField
-    ? [styles.searchPanelField, { minHeight: fieldHeight, borderRadius: capsule(fieldHeight), backgroundColor: arcInk.field, borderColor: arcInk.fieldEdge }]
+    ? [styles.searchPanelField, { height: fieldHeight, borderRadius: searchFieldRadius(fieldHeight), backgroundColor: arcInk.field, borderColor: arcInk.fieldEdge }]
     : [styles.field, { backgroundColor: theme.fieldFill, borderColor: theme.fieldStroke }];
-  const inputHeight = fieldHeight - searchPanel.fieldEdge * 2;
+  const inputHeight = searchFieldInnerHeight(fieldHeight);
   const inputStyle = panelField ? [styles.searchPanelInput, { minHeight: inputHeight }] : styles.input;
 
   return (
@@ -1003,8 +998,9 @@ function VoiceButton() {
   const theme = useTrayTheme();
   const incognito = useIncognito();
   const { fontScale } = useWindowDimensions();
+  const button = useRef<ViewInstance>(null);
   if (incognito || fontScale > LARGE_FONT_SCALE || !canSearchByVoice()) return null;
-  return <FieldAccessory testID="trayVoice" icon={iconRoles.voice} label={VOICE_SEARCH} color={theme.foregroundTertiary} onPress={presentVoiceSearch} />;
+  return <FieldAccessory testID="trayVoice" buttonRef={button} icon={iconRoles.voice} label={VOICE_SEARCH} color={theme.foregroundTertiary} onPress={() => presentVoiceSearchFrom(() => button.current)} />;
 }
 
 const VOICE_SEARCH = "Voice Search";
@@ -1357,7 +1353,7 @@ const styles = StyleSheet.create({
   field: {
     minHeight: browseLayout.searchFieldHeight,
     borderRadius: capsule(browseLayout.searchFieldHeight),
-    borderWidth: 1,
+    borderWidth: stroke.field,
     flexDirection: "row",
     alignItems: "center",
     paddingLeft: browseLayout.fieldLeading,
@@ -1368,7 +1364,6 @@ const styles = StyleSheet.create({
   leavingText: { textAlignVertical: "center", lineHeight: browseLayout.searchFieldHeight },
   rows: { flex: 1 },
   stagePanel: { position: "absolute", left: 0, right: 0 },
-  stageCard: { paddingHorizontal: floatingPanelLayout.inset, paddingBottom: floatingPanelLayout.aboveKeyboard },
   incognitoNote: { alignItems: "center", justifyContent: "center", paddingHorizontal: space.l },
   semibold: { fontWeight: "600" },
   centered: { textAlign: "center" },

@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { haptics } from "../../state/app/haptics";
 import { Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View, type ViewInstance } from "react-native";
-import Animated, { FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { FadeOut, LinearTransition, useAnimatedStyle } from "react-native-reanimated";
 import type { DeckGeometry } from "../../lib/deckGeometry";
 import { shownTone } from "../../lib/pageTone";
 import { useHeldPageTone } from "../../state/browse/deckHold";
@@ -9,12 +9,12 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { ChromeSurface, controlRadius, controlSize, deckChromeLayout, FadeView, font, press, pressMotion, shadowCss, slopToReach, smoothCorners, stroke, Symbol, TabFace, Tappable, tabsLayout, tabsMotion, useReduceMotion, useTheme } from "../ui";
+import { ChromeSurface, controlRadius, controlSize, deckChromeLayout, FadeView, font, shadowCss, smoothCorners, stroke, Symbol, TabFace, Tappable, tabsLayout, tabsMotion, usePressStyle, useTheme } from "../ui";
 import { CardIcon, CardMenu, deckHeaderTitle, ReceivedBadge, type Reads } from "./DeckCard";
 import { CLOSE_TAB, tabCardAccess, tabCardTitle, tabCardTitleText } from "./tabCard";
 import { nativeMenus } from "../ui/MenuTrigger";
 import { deckHeaderBottom } from "./DeckHeader";
-import { centredGridOffset, tabGridColumns, tabGridInsets, tabGridLayout, tabGridMotion, tabGridRowHeight, tabGridStartOffset } from "./tabGridLayout";
+import { centredGridOffset, tabGridCloseSlot, tabGridColumns, tabGridInsets, tabGridLayout, tabGridMotion, tabGridRowHeight, tabGridStartOffset } from "./tabGridLayout";
 
 export type GridFrame = { centerX: number; centerY: number; width: number; height: number };
 
@@ -57,7 +57,7 @@ export function TabGrid({ tabs, selectedId, geometry: g, reduceMotion, shown = t
     }
     if (shown || !onFocusFrame) return;
     const height = cell.width / Math.max(aspect, 0.01);
-    onFocusFrame(focusId, { centerX: cell.x + cell.width / 2, centerY: viewportTop + cell.y + tabGridLayout.closeHit.height + tabGridLayout.cellSpacing + height / 2 - m.offset, width: cell.width, height });
+    onFocusFrame(focusId, { centerX: cell.x + cell.width / 2, centerY: viewportTop + cell.y + tabGridCloseSlot.side + tabGridCloseSlot.cellSpacing + height / 2 - m.offset, width: cell.width, height });
   };
   useEffect(() => {
     if (shown) return;
@@ -82,7 +82,7 @@ export function TabGrid({ tabs, selectedId, geometry: g, reduceMotion, shown = t
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingTop: tabGridLayout.topFade, paddingBottom: insets.bottom, paddingHorizontal: insets.side }]}
+        contentContainerStyle={[styles.content, { paddingTop: tabGridCloseSlot.topPadding, paddingBottom: insets.bottom, paddingHorizontal: insets.side }]}
       >
         {tabs.map((tab) => (
           <Animated.View
@@ -114,29 +114,19 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   const title = tabCardTitle(tab, host);
   const open = () => onOpen(tab.id);
   const close = () => onClose(tab.id);
-  const reduceMotion = useReduceMotion();
-  const scale = useSharedValue(1);
-  const dim = useSharedValue(1);
   const card = useRef<ViewInstance>(null);
   const id = tab.id;
-  const pressStyle = useAnimatedStyle(() => ({ opacity: covering && covering.value === id ? 0 : dim.value, transform: [{ scale: scale.value }] }), [covering, id]);
-  const pressTo = (down: boolean) => {
-    if (reduceMotion) {
-      scale.value = 1;
-      dim.value = down ? press.iconOpacity : 1;
-      return;
-    }
-    scale.value = withSpring(down ? pressMotion.scale : 1, pressMotion.spring);
-  };
+  const coverStyle = useAnimatedStyle(() => ({ opacity: covering && covering.value === id ? 0 : 1 }), [covering, id]);
+  const cardPress = usePressStyle("icon");
   const fill = tone.top ?? theme.canvas;
   return (
-    <View style={styles.cell}>
+    <View testID="tabGridCellStack" style={styles.cell}>
       <View testID="tabGridHeader" style={styles.header}>
         <CardIcon tab={tab} />
         <Text testID="tabGridTitle" {...tabCardTitleText} style={[font.footnote, styles.title, { color: theme.headerText }]}>
           {deckHeaderTitle(tab, title)}
         </Text>
-        <Tappable testID="tabGridClose" kind="icon" label={CLOSE_TAB} onPress={close} hitSlop={CLOSE_SLOP} style={styles.closeHit}>
+        <Tappable testID="tabGridClose" kind="icon" label={CLOSE_TAB} onPress={close} style={styles.closeSlot}>
           <ChromeSurface testID="tabGridClosePlate" shape="rounded" cornerRadius={CLOSE_CORNER} dark={theme.dark} style={styles.closePlate}>
             <Symbol name="xmark" size={tabGridLayout.closeGlyph} color={theme.secondaryLabel} />
           </ChromeSurface>
@@ -150,13 +140,10 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
             {...tabCardAccess({ tab, title, host, selected, open, close, menu: onLongPress && !nativeMenus() ? () => (openFor ? openFor(card.current) : onLongPress()) : undefined })}
             onPress={open}
             onLongPress={onLongPress}
-            onPressIn={() => {
-              haptics.barPress();
-              pressTo(true);
-            }}
-            onPressOut={() => pressTo(false)}
+            onPressIn={haptics.barPress}
+            style={cardPress}
           >
-            <Animated.View testID="tabGridFace" style={[styles.card, { width, height: width / aspect, backgroundColor: fill, boxShadow: shadowCss("card", theme.dark) }, pressStyle]}>
+            <Animated.View testID="tabGridFace" style={[styles.card, { width, height: width / aspect, backgroundColor: fill, boxShadow: shadowCss("card", theme.dark) }, coverStyle]}>
               <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
               {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
               <View
@@ -172,17 +159,15 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   );
 });
 
-const CLOSE_SLOP = slopToReach(tabGridLayout.closeHit.width, tabGridLayout.closeHit.height);
-
 const CLOSE_CORNER = controlRadius(tabGridLayout.closePlate);
 
 const styles = StyleSheet.create({
   viewport: { position: "absolute", left: 0, right: 0, bottom: 0 },
-  content: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", columnGap: tabGridLayout.columnSpacing, rowGap: tabGridLayout.rowSpacing },
-  cell: { gap: tabGridLayout.cellSpacing },
-  header: { flexDirection: "row", alignItems: "center", gap: tabGridLayout.headerSpacing, height: tabGridLayout.closeHit.height },
+  content: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", columnGap: tabGridLayout.columnSpacing, rowGap: tabGridCloseSlot.rowSpacing },
+  cell: { gap: tabGridCloseSlot.cellSpacing },
+  header: { flexDirection: "row", alignItems: "center", gap: tabGridLayout.headerSpacing, height: tabGridCloseSlot.side },
   title: { flex: 1, fontWeight: "500" },
-  closeHit: { width: tabGridLayout.closeHit.width, height: tabGridLayout.closeHit.height, alignItems: "center", justifyContent: "center" },
+  closeSlot: { width: tabGridCloseSlot.side, height: tabGridCloseSlot.side, marginLeft: tabGridCloseSlot.lead, alignItems: "center", justifyContent: "center" },
   closePlate: { width: tabGridLayout.closePlate, height: tabGridLayout.closePlate, alignItems: "center", justifyContent: "center", ...smoothCorners },
   card: { borderRadius: tabsLayout.cardRadius, ...smoothCorners, overflow: "hidden" },
   edge: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: tabsLayout.cardRadius, ...smoothCorners },

@@ -1,7 +1,7 @@
-import { Image, StyleSheet } from "react-native";
+import { Image, Platform, StyleSheet } from "react-native";
 import { FadeIn, getAnimatedStyle, SlideInDown } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { renderSurface, unmount, updateSurface, withTabs } from "../../test/render/harness";
 import { ReaderView, useLeavingReader } from "../components/browsing/ReaderView";
 import { DesignProvider, TextSizeGlyph } from "../components/ui";
 import * as pageActions from "../state/page/actions";
@@ -127,5 +127,50 @@ test("without Reduce Motion the Reader slides up and a text-size change springs 
   expect(sizeOf(root)).toBeLessThan(readerBodySize(4) - 0.01);
   for (let frame = 0; frame < 60; frame++) act(() => jest.advanceTimersByTime(16));
   expect(sizeOf(root)).toBeCloseTo(readerBodySize(4), 3);
+  unmount(root);
+});
+
+test("while the article loads the Reader shows the shared loading state, with its own words and the Reader's ink", async () => {
+  jest.spyOn(pageActions, "readableContent").mockReturnValue(new Promise(() => undefined) as never);
+  const root = await reader();
+  const loading = host(root, "readerLoading")!;
+  expect(loading.props.accessibilityRole).toBe("progressbar");
+  expect(loading.props.accessibilityLabel).toBe("Loading Article…");
+  expect(loading.props.accessibilityState).toEqual({ busy: true });
+  expect(root.root.findAll((node) => (node.type as { displayName?: string }).displayName === "ActivityIndicator" && node.props.accessibilityLabel === "Loading article")).toHaveLength(0);
+  unmount(root);
+});
+
+test("the bar's Page Menu button remembers itself as the opener, and the Reader opened from that menu hands focus back to it as it leaves", async () => {
+  const { AccessibilityInfo } = require("react-native") as typeof import("react-native");
+  const { BottomBar } = require("../components/browsing/BottomBar") as typeof import("../components/browsing/BottomBar");
+  const { pageMenuOpener } = require("../components/browsing/pageMenuOpener") as typeof import("../components/browsing/pageMenuOpener");
+  const { rolesFor } = require("../components/ui") as typeof import("../components/ui");
+  const onMore = jest.fn();
+  const bar = renderSurface(<BottomBar order={[]} roles={rolesFor(false)} showsPlus onTabs={() => undefined} onTabsMenu={() => undefined} onStep={() => undefined} onPlus={() => undefined} onMore={onMore} />);
+  act(() => bar.root.findAll((node) => node.props.accessibilityLabel === "Page Menu" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(onMore).toHaveBeenCalledTimes(1);
+  expect(pageMenuOpener()).not.toBeNull();
+  unmount(bar);
+  if (Platform.OS === "android") return;
+  const { openPageMenuFrom } = require("../components/browsing/pageMenuOpener") as typeof import("../components/browsing/pageMenuOpener");
+  const opener = 5151;
+  openPageMenuFrom(() => opener as never, () => undefined);
+  jest.spyOn(AccessibilityInfo, "isScreenReaderEnabled").mockResolvedValue(true);
+  const focused = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => undefined);
+  const view = (closing: boolean) => (
+    <DesignProvider design="redesigned">
+      <ReaderView tabId="t0" closing={closing} />
+    </DesignProvider>
+  );
+  const root = renderSurface(view(false));
+  await act(async () => undefined);
+  expect(focused).not.toHaveBeenCalledWith(opener);
+  updateSurface(root, view(true));
+  for (let step = 0; step < 4; step++) {
+    await act(async () => undefined);
+    act(() => jest.advanceTimersByTime(20));
+  }
+  expect(focused).toHaveBeenCalledWith(opener);
   unmount(root);
 });

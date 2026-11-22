@@ -20,7 +20,10 @@ test("a result's menu says Copy Link with the link glyph and Share with no ellip
   expect(trayRowActions(CALC)).toEqual([expect.objectContaining({ label: actionWords.copyText, icon: iconRoles.copyText })]);
 });
 
-test("Copy Link confirms with the shared Copied Link Without Trackers words and the link glyph", () => {
+test("Copy Link says Copied Link Without Trackers with the link glyph only when it removed a tracker", () => {
   act(() => copyLink(PAGE.url));
   expect(useToasts.getState().toast).toMatchObject({ message: "Copied Link Without Trackers", icon: iconRoles.copyLink });
+  act(() => dismissToast());
+  act(() => copyLink("https://example.com/a"));
+  expect(useToasts.getState().toast).toMatchObject({ message: "Copied Link", icon: iconRoles.copyLink });
 });

@@ -1,9 +1,9 @@
 import { copy } from "../../lib/platformCopy";
 import { actionWords } from "../../lib/sharedWords";
 import { iconRoleSymbols as iconRoles } from "../../lib/iconRoles";
-import { mobileClean } from "@ardia/core/src/mobile";
 import { hostOf } from "@ardia/core/src/omnibox";
 import { copyText, pressHaptic, shareLink, successHaptic } from "../../platform/system";
+import { linkToCopy } from "../page/linkCopy";
 import { settled } from "../pages/store";
 import type { TrayRow } from "../search/omnibox";
 import { closeTabById, currentTabs, deleteArchivedTabsById, setIncognito, useTabs } from "../tabs/store";
@@ -35,12 +35,11 @@ export function trayRowActions(row: TrayRow): RowAction[] {
 }
 
 export function copyLink(url: string) {
-  quietly(() => copyText(mobileClean(url)));
+  const link = linkToCopy(url);
+  quietly(() => copyText(link.text));
   quietly(successHaptic);
-  showToast(COPIED_LINK, iconRoles.copyLink);
+  showToast(link.acknowledgement, iconRoles.copyLink);
 }
-
-export const COPIED_LINK = actionWords.copiedLinkWithoutTrackers;
 
 const quietly = (call: () => Promise<unknown>) => void settled(call, undefined);
 

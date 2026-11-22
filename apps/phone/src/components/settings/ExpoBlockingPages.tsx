@@ -38,13 +38,11 @@ import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
 import { FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
 import { haptics } from "../../state/app/haptics";
 import { ExpoBusyButton, ExpoBusyToolbarAction, ExpoHero } from "./ExpoSettingsParts";
-import { actionWords, dismissWords } from "../../lib/sharedWords";
+import { actionWords, blockingWords, dismissWords } from "../../lib/sharedWords";
 
 const FILL = Number.MAX_SAFE_INTEGER;
 
-export const BLOCKING_TOGGLE_LABEL = "Block Ads and Trackers";
-
-export const TRUSTED_SITES_EMPTY = { title: "No Trusted Sites", message: `Sites where you turn off ${BLOCKING_TOGGLE_LABEL} in the page menu show up here.` } as const;
+export const TRUSTED_SITES_EMPTY = { title: "No Trusted Sites", message: `Sites where you turn off ${blockingWords.blockAdsAndTrackers} in the page menu show up here.` } as const;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const BLUE = PlatformColor("systemBlue");
 

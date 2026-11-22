@@ -24,7 +24,15 @@ export const PROFILE_PRESETS: PresetSpec[] = (Object.keys(PROFILE_COLORS) as Pro
 
 export const DEFAULT_PROFILE_COLOR: ProfileColor = "plum";
 
-const DEFAULT_LOOK = presetLook(PROFILE_PRESETS.find((preset) => preset.key === DEFAULT_PROFILE_COLOR)!);
+const presetLookFor = (key: ProfileColor) => presetLook(PROFILE_PRESETS.find((preset) => preset.key === key)!);
+
+const DEFAULT_LOOK = presetLookFor(DEFAULT_PROFILE_COLOR);
+
+export const PRIVATE_ACCENT: SpaceAccent = spaceAccentFor(presetLookFor("neutral"), true);
+
+const privateAccentRoles = { ...PRIVATE_ACCENT, accent: PRIVATE_ACCENT.spaceAccent, formAccent: PRIVATE_ACCENT.spaceAccentInk };
+
+export const incognitoTheme = (base: Theme): Theme => ({ ...base, ...rolesFor(true), ...privateAccentRoles });
 
 export const ProfileLookContext = createContext<ProfileLook>(DEFAULT_LOOK);
 
@@ -50,7 +58,7 @@ export function useTheme(): Theme {
     }
     const backdrop: [string, string] = incognitoLook ? [...tabsInk.incognitoBackdrop] : windowTintStops(look, dark);
     const start = { colors: backdropStops(look, dark, true), diagonal: showsTheme(look, dark, true) };
-    const space = spaceAccentFor(look, dark);
+    const space = incognitoLook ? PRIVATE_ACCENT : spaceAccentFor(look, dark);
     return { ...rolesFor(dark), ...space, accent: space.spaceAccent, formAccent: space.spaceAccentInk, backdrop, canvas: backdrop[0], start };
   }, [look, schemeDark, incognitoLook, material, scheme]);
 }

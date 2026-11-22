@@ -29,8 +29,10 @@ export function useModalOverlay({ open, closing = false, onDismiss, focus, retur
   const returnFocus = useFocusReturn();
   const wasLive = useRef(live);
   const target = useRef(returnFocusTo);
+  const returnFocusNow = useRef(returnFocus);
   const pendingReturn = useRef<(() => void) | null>(null);
   target.current = returnFocusTo;
+  returnFocusNow.current = returnFocus;
   useEffect(() => {
     const leaving = wasLive.current && !live;
     wasLive.current = live;
@@ -41,6 +43,12 @@ export function useModalOverlay({ open, closing = false, onDismiss, focus, retur
     }
     if (leaving && target.current) pendingReturn.current = returnFocus(target.current);
   }, [live, returnFocus]);
+  useEffect(
+    () => () => {
+      if (wasLive.current && target.current) pendingReturn.current = returnFocusNow.current(target.current);
+    },
+    [],
+  );
   return {
     ref: focus ? undefined : ownFocus,
     accessibilityViewIsModal: live,

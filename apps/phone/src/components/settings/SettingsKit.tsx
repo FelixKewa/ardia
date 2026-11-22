@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialNavRow, MaterialPickerRow, MaterialSettingsPage, MaterialToggleRow, MaterialValueRow } from "./MaterialSettingsKit";
-import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleTrack, useDesign, useTheme, type MenuItem, type SymbolName, Tappable, smoothCorners, slotAround, controlSize } from "../ui";
+import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, useDesign, useTheme, type MenuItem, type SymbolName, Tappable, smoothCorners, slotAround, controlSize } from "../ui";
 
 export const SettingsHostedContext = createContext(false);
 
@@ -173,23 +173,11 @@ function ClassicNavRow({ title, icon, tint, value, divider, onPress }: RowBase &
 }
 
 function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string }) {
-  const theme = useTheme();
   return (
     <View>
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityLabel={title}
-        accessibilityHint={detail}
-        accessibilityState={{ checked: value }}
-        onPress={() => onChange(!value)}
-        style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}
-      >
-        <View style={styles.fill} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-          <Label title={title} icon={icon} tint={tint} />
-          {detail ? <Text style={[font.footnote, { color: theme.secondaryLabel, marginLeft: icon ? settingsLayout.tile + settingsLayout.labelGap : 0 }]}>{detail}</Text> : null}
-        </View>
-        <ToggleTrack value={value} />
-      </Pressable>
+      <SharedToggleRow label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
+        <Label title={title} icon={icon} tint={tint} />
+      </SharedToggleRow>
       {divider ? <Divider /> : null}
     </View>
   );

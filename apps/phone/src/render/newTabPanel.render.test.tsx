@@ -92,7 +92,7 @@ onIPhone("the search panel has one fixed height, the field and four rows as in A
   const edit = tray();
   lift(300);
   expect(flat(host(edit, "traySurface")).height).toBe(PANEL_HEIGHT + 300);
-  expect(PANEL_HEIGHT).toBe(277);
+  expect(PANEL_HEIGHT).toBe(280.5);
   unmount(edit);
 });
 
@@ -149,7 +149,7 @@ onIPhone("the panel's field is a 44 point pill with the mic and Incognito's eyes
   act(() => presentSearch("start", ""));
   const root = tray();
   const capsule = host(root, "trayFieldCapsule")!;
-  expect(flat(capsule)).toMatchObject({ minHeight: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
+  expect(flat(capsule)).toMatchObject({ height: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
   expect(flat(host(root, "completingField")).fontSize).toBeUndefined();
   expect(capsule.findAll((node) => node.props.accessibilityLabel === "Incognito" && node.props.accessibilityRole === "switch" && node.props.accessibilityState?.checked === false)).not.toHaveLength(0);
   expect(capsule.findAll((node) => node.type === IncognitoEyes)).toHaveLength(1);

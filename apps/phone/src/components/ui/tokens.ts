@@ -11,11 +11,13 @@ export const smoothCorners = { borderCurve: "continuous" } as const;
 
 export const controlSize = { bar: FLOATING_BAR_PLACE.control, hitTarget: targetMinimum } as const;
 
-export const stroke = { chrome: 0.5, hairline: StyleSheet.hairlineWidth } as const;
+export const stroke = { chrome: 0.5, hairline: StyleSheet.hairlineWidth, field: 1 } as const;
 
 export const press = { textOpacity: 0.35, iconOpacity: 0.35, filledOpacity: 0.8, disabledOpacity: 0.4 } as const;
 
 const ANDROID_DARK_SURFACE = "#1E1B1D";
+
+const rowPress = { light: "rgba(0,0,0,0.06)", dark: "rgba(255,255,255,0.1)" };
 
 export const toggleLayout = { width: 51, height: 31, knob: 27, inset: 2 } as const;
 
@@ -30,7 +32,7 @@ const lightRoles = {
   fieldFill: "rgba(0,0,0,0.06)",
   fieldStroke: "rgba(0,0,0,0.06)",
   rowIcon: "rgba(0,0,0,0.42)",
-  rowHighlight: "rgba(0,0,0,0.06)",
+  rowHighlight: rowPress.light,
   plusFill: "rgba(118,118,128,0.16)",
   chevronFill: "rgba(118,118,128,0.12)",
   controlEdge: "rgba(0,0,0,0.06)",
@@ -66,7 +68,7 @@ const lightRoles = {
   appSurface: neutralFills.light.appSurface as string,
   groupedBackground: neutralFills.light.groupedBackground as string,
   groupedCell: neutralFills.light.groupedCell as string,
-  rowPressed: "rgba(0,0,0,0.06)",
+  rowPressed: rowPress.light,
   secondaryFill: "rgba(120,120,128,0.16)",
   switchOff: "rgba(120,120,128,0.16)",
 };
@@ -82,7 +84,7 @@ const darkRoles: ColorRoles = {
   fieldFill: "rgba(255,255,255,0.12)",
   fieldStroke: "rgba(255,255,255,0.08)",
   rowIcon: "rgba(255,255,255,0.5)",
-  rowHighlight: "rgba(255,255,255,0.1)",
+  rowHighlight: rowPress.dark,
   plusFill: "rgba(255,255,255,0.16)",
   chevronFill: "rgba(255,255,255,0.13)",
   controlEdge: "rgba(255,255,255,0.1)",
@@ -118,7 +120,7 @@ const darkRoles: ColorRoles = {
   appSurface: neutralFills.dark.appSurface,
   groupedBackground: neutralFills.dark.groupedBackground,
   groupedCell: neutralFills.dark.groupedCell,
-  rowPressed: "rgba(255,255,255,0.1)",
+  rowPressed: rowPress.dark,
   secondaryFill: "rgba(120,120,128,0.32)",
   switchOff: "rgba(120,120,128,0.32)",
 };
@@ -480,7 +482,6 @@ export const startLayout = {
   tileHeight: 52,
   tileRadius: shape.row,
   tileIcon: 20,
-  tilePressScale: 0.94,
   folderIconShare: 0.95,
   symbolIconShare: 0.9,
   folderInkOpacity: 0.55,
@@ -699,13 +700,21 @@ export const capsule = (height: number) => height / 2;
 
 export const controlRadius = (side: number) => Math.min(shape.control, Math.round(side * 0.3));
 
+type ShadowRole = { y: number; blur: number; light: string; dark: string };
+
+function cssShadowOf({ y, blur, light, dark: night }: ShadowRole, dark: boolean) {
+  return `0px ${y}px ${blur}px ${dark ? night : light}`;
+}
+
+const appIconElevation = { y: 4, blur: 20, light: "rgba(0,0,0,0.12)", dark: "rgba(0,0,0,0.12)" } as const;
+
 export const appIconLayout = {
   maxScale: 1.4,
   corner: 0.225,
   fill: "#FFFFFF",
   edge: stroke.chrome,
   edgeAlpha: 0.08,
-  shadow: "0px 4px 20px rgba(0, 0, 0, 0.12)",
+  shadow: cssShadowOf(appIconElevation, false),
   about: 72,
   welcome: 104,
   welcomeFrame: 5,
@@ -748,7 +757,6 @@ export const browseLayout = {
   hitTarget: controlSize.hitTarget,
   barHeight: 75,
   pageOverlap: 26,
-  barControlScale: 0.93,
   progressHeight: 2.5,
   hostPillHeight: 40,
   accessory: { width: 32, height: 40 },
@@ -766,16 +774,27 @@ export const elevation = {
   control: { y: chromeLayout.shadowY, blur: chromeLayout.shadowRadius * 2, light: chromeInk.light.shadow, dark: chromeInk.dark.shadow },
   card: { y: 3, blur: 20, light: "rgba(0,0,0,0.11)", dark: "rgba(0,0,0,0.4)" },
   floating: { y: 4, blur: 36, light: "rgba(0,0,0,0.1)", dark: "rgba(0,0,0,0.3)" },
+  stack: { y: 6, blur: 28, light: tabsInk.cardShadow, dark: tabsInk.cardShadow, android: 14 },
+  appIcon: appIconElevation,
 } as const;
 
 export type ElevationLevel = keyof typeof elevation;
 
-export const shadowCss = (level: ElevationLevel, dark: boolean) => {
-  const { y, blur, light, dark: night } = elevation[level];
-  return `0px ${y}px ${blur}px ${dark ? night : light}`;
-};
+export const shadowCss = (level: ElevationLevel, dark: boolean) => cssShadowOf(elevation[level], dark);
 
 export const nativeShadowRadius = (level: ElevationLevel) => elevation[level].blur / 2;
+
+const dynamicColor = (light: string, dark: string) => ({ dynamic: { light, dark } });
+
+export const nativeClassicChrome = {
+  edgeWidth: stroke.chrome,
+  edge: dynamicColor(chromeInk.light.edge, chromeInk.dark.edge),
+  shadowRadius: nativeShadowRadius("control"),
+  shadowY: elevation.control.y,
+  shadow: dynamicColor(elevation.control.light, elevation.control.dark),
+} as const;
+
+export const nativeGlassChrome = { classicChrome: nativeClassicChrome } as const;
 
 export const overlayInk = { fill: ink.white, onFill: ink.black, glass: "rgba(255,255,255,0.18)", label: ink.white, edge: "rgba(255,255,255,0.55)" } as const;
 
@@ -800,3 +819,11 @@ export const emptyStateLayout = { glyph: 40, maxWidth: tabsLayout.emptyWidth, ga
 export const glyphSlot = { field: 20, icon: 22 } as const;
 
 export const barGlyphLayout = { plus: { pointSize: 18, weight: "medium", side: startLayout.plusGlyph }, circle: { pointSize: 16, weight: "medium", side: startLayout.circleGlyph } } as const;
+
+export const primaryActionRoles = {
+  hero: { height: actionLayout.height.hero, radius: actionLayout.radius.hero, fill: "spaceAccent", ink: "onSpaceAccent", nativeControlSize: "extraLarge", wraps: true },
+  full: { height: actionLayout.height.regular, radius: actionLayout.radius.regular, fill: "spaceAccent", ink: "onSpaceAccent", nativeControlSize: "large", wraps: true },
+  compact: { height: actionLayout.height.compact, radius: actionLayout.radius.compact, fill: "spaceAccent", ink: "onSpaceAccent", nativeControlSize: "regular", wraps: true },
+} as const;
+
+export type PrimaryActionRole = keyof typeof primaryActionRoles;

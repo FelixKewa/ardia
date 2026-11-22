@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
+import { usePageBusy } from "../../state/page/hooks";
 import { chromeInk, Favicon, floatingBarLayout, Symbol, usePressStyle } from "../ui";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { spokenAddress, type BarAddress } from "./FloatingBar";
@@ -9,8 +10,9 @@ type Props = { address: BarAddress | null; dark: boolean; testIDPrefix: string; 
 export function AddressFace({ address, dark, testIDPrefix, style, onPress, onPressIn }: Props) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   const pressStyle = usePressStyle("text", { style });
+  const busy = usePageBusy(address?.tabId ?? null);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Address" accessibilityValue={{ text: spokenAddress(address) }} accessibilityHint="Opens search with this page’s address." onPress={onPress} onPressIn={onPressIn} style={pressStyle}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Address" accessibilityValue={{ text: spokenAddress(address) }} accessibilityState={{ busy }} accessibilityHint="Opens search with this page’s address." onPress={onPress} onPressIn={onPressIn} style={pressStyle}>
       {address?.isPrivate ? <Symbol name={privateMark} size={floatingBarLayout.privateSymbol} color={ink.secondary} /> : null}
       {address?.insecure ? (
         <NotSecureLock testID={`${testIDPrefix}NotSecure`} size={floatingBarLayout.siteIcon} color={ink.notSecure} />

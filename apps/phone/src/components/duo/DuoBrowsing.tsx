@@ -20,7 +20,7 @@ import { PageFailureView } from "../browsing/PageFailureView";
 import { PageSurface } from "../browsing/PageSurface";
 import { PageMenu } from "../browsing/PageMenu";
 import { PageRequestHost, PressMenu } from "../browsing/PageRequests";
-import { ReaderView } from "../browsing/ReaderView";
+import { ReaderView, useLeavingReader } from "../browsing/ReaderView";
 import { DuoSidebar } from "./DuoSidebar";
 import { DuoToolbar } from "./DuoToolbar";
 import { DUO, sidebarFrame, splitCardFrame, splitPanelFrame, toolbarFrame, wideCardFrame, type DuoFrame } from "./duoLayout";
@@ -160,6 +160,7 @@ function PageOverlays({ tab, width, height }: { tab: BrowserTab; width: number; 
   const menuOpen = useMenuOpen();
   const finding = useFindOpen();
   const readerId = useReaderTabId();
+  const reader = useLeavingReader(readerId === tab.id ? tab.id : null);
   const menu = usePresence(menuOpen);
   useEffect(() => closePageMenu, [tab.id]);
   return (
@@ -167,7 +168,7 @@ function PageOverlays({ tab, width, height }: { tab: BrowserTab; width: number; 
       {finding ? <FindBar tabId={tab.id} /> : null}
       <PressMenu width={width} height={height} />
       {menu.mounted ? <PageMenu tabId={tab.id} open={menuOpen} onHidden={menu.hidden} /> : null}
-      {readerId === tab.id ? <ReaderView tabId={tab.id} /> : null}
+      {reader.shown ? <ReaderView tabId={reader.shown} closing={reader.closing} /> : null}
       <PageRequestHost tabId={tab.id} />
     </>
   );

@@ -11,12 +11,12 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PressScale, rolesFor, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
+import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PressScale, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, GlassPlusButton, type ChromeFade } from "./ChromeButtons";
-import { besideStrip, DUO_BAR, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
+import { besideStrip, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
 
 type Props = {
   shown: boolean;
@@ -54,15 +54,29 @@ const noop = () => undefined;
 export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void } & ChromeFade) {
   const size = { width: controlSize.bar, height: controlSize.bar };
   return (
-    <PressScale label="Incognito" hint={incognito ? "Shows your tabs." : "Shows your Incognito tabs."} checked={incognito} onPress={switchDeckIncognito} onLongPress={onLongPress} longPressLabel={onLongPress ? "Close Incognito Tabs" : undefined} onPressIn={haptics.barPress} style={size}>
+    <ToggleIconButton
+      testID="deckBarIncognitoSwitch"
+      label="Incognito"
+      hint={incognito ? "Shows your tabs." : "Shows your Incognito tabs."}
+      checked={incognito}
+      onChange={switchIncognitoSide}
+      onLongPress={onLongPress}
+      longPressLabel={onLongPress ? CLOSE_INCOGNITO_TABS : undefined}
+      onPressIn={haptics.barPress}
+      visual={controlSize.bar}
+    >
       <ChromeSurface testID="deckBarIncognito" shape="circle" cornerRadius={capsule(controlSize.bar)} incognito={incognito} dark={dark || incognito} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
         <FadingGlyphs testID="deckBarIncognitoGlyph" pointerEvents="none" fade={glyphFade} style={[styles.centered, size]}>
           <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />
         </FadingGlyphs>
       </ChromeSurface>
-    </PressScale>
+    </ToggleIconButton>
   );
 }
+
+const CLOSE_INCOGNITO_TABS = "Close Incognito Tabs";
+
+const switchIncognitoSide = () => switchDeckIncognito();
 
 export const deckBarAboveKeyboard = (deckHeight: number, keyboard: number) => deckHeight - keyboard - deckChromeLayout.barGap - controlSize.bar / 2;
 
@@ -100,7 +114,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
   const { input, text, change, focus, blur } = search;
   return (
     <Pressable accessible={false} onPress={() => input.current?.focus()} style={style} collapsable={false} pointerEvents={resting ? "none" : "auto"} importantForAccessibility={resting ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={resting}>
-      <ChromeSurface testID={testID} shape="capsule" cornerRadius={deckLook.fieldCorner} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.search, { paddingRight: text ? deckChromeLayout.searchTrailFilled : deckChromeLayout.searchTrail }]}>
+      <ChromeSurface testID={testID} shape="capsule" cornerRadius={deckLook.fieldCorner} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.search, { paddingRight: text ? deckLook.clearTrail : deckChromeLayout.searchTrail }]}>
         <Animated.View testID={`${testID}Fade`} style={[styles.searchRow, contentStyle]}>
           <FadingGlyphs testID={`${testID}Content`} fade={glyphFade} style={styles.searchRow}>
             <View pointerEvents="none">
@@ -125,7 +139,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
               style={[font.callout, styles.field, { color: roles.label }]}
             />
             {text ? (
-              <FieldAccessory testID="deckSearchClear" icon={iconRoles.clearText} label={actionWords.clearText} color={roles.secondaryLabel} glyph={deckChromeLayout.clearGlyph} visual={deckChromeLayout.clearHit} layout="slop" onPress={() => change("")} />
+              <FieldAccessory testID="deckSearchClear" icon={iconRoles.clearText} label={actionWords.clearText} color={roles.secondaryLabel} onPress={() => change("")} />
             ) : null}
           </FadingGlyphs>
         </Animated.View>
@@ -155,7 +169,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
   const plusTop = strip ? (strip.ends ? strip.plus : strip.tabs) : 0;
   const plusPlace = strip ? { bottom: deckHeight - centerY - controlSize.bar / 2 - plusTop, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
   const switchPlace = strip ? plusPlace : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, left: span.left, width: tabsLayout.menuWidth };
-  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
+  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: CLOSE_INCOGNITO_TABS, destructive: true, onPress: onCloseIncognito }] : [];
   const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
   const incognitoSwitch = (
     <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} style={{ width: controlSize.bar, height: controlSize.bar }}>
@@ -208,8 +222,8 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
         )}
         {strip ? null : plus}
       </View>
-      {strip ? <View testID="deckStripPlus" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - DUO_BAR.button / 2, top: plusTop }]}>{plus}</View> : null}
-      {strip?.ends ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - DUO_BAR.button / 2, top: strip.tabs }]}>{incognitoSwitch}</View> : null}
+      {strip ? <View testID="deckStripPlus" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: plusTop }]}>{plus}</View> : null}
+      {strip?.ends ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: strip.tabs }]}>{incognitoSwitch}</View> : null}
     </Animated.View>
   );
 }
@@ -218,13 +232,13 @@ const styles = StyleSheet.create({
   place: { position: "absolute", left: 0, right: 0 },
   centered: { alignItems: "center", justifyContent: "center" },
   bar: { height: controlSize.bar, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.barGap },
-  strip: { position: "absolute", width: DUO_BAR.button, height: DUO_BAR.button },
+  strip: { position: "absolute", width: controlSize.bar, height: controlSize.bar },
   searchHit: { flex: 1, height: controlSize.bar },
   grows: { overflow: "hidden", borderRadius: deckLook.fieldCorner },
-  searchCircle: { position: "absolute", top: 0, width: DUO_BAR.button, height: DUO_BAR.button },
+  searchCircle: { position: "absolute", top: 0, width: controlSize.bar, height: controlSize.bar },
   circleLeading: { left: 0 },
   circleTrailing: { right: 0 },
-  circleHit: { width: DUO_BAR.button, height: DUO_BAR.button },
+  circleHit: { width: controlSize.bar, height: controlSize.bar },
   search: { flex: 1, paddingLeft: deckChromeLayout.searchLead + 3 },
   searchRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.searchSpacing },
   field: { flex: 1, paddingVertical: 0 },

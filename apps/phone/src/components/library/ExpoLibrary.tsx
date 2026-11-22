@@ -61,7 +61,8 @@ import { useSync } from "../../state/sync/store";
 import { useSelectedProfile, useSyncEnabled } from "../../state/sync/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { ExpoClearDataPage } from "../settings/ExpoClearDataPage";
-import { actionWords, dismissWords } from "../../lib/sharedWords";
+import { actionWords } from "../../lib/sharedWords";
+import { DoneToolbarItem } from "../settings/ExpoSettingsDone";
 import { contentMargins, iconRoles, modifierList, settingsChrome, sfName } from "../ui";
 import { LinkMenuItems, ListLoading, ListNoResults, ListRow, ListRowSubtitle, listSheetWords, opensPage } from "./listSheet";
 import { libraryLayout as L, listRowLayout } from "./listSheetTokens";
@@ -135,9 +136,7 @@ function LibraryNavigation() {
               <Button label="Clear Browsing Data" onPress={() => pushLibraryPage(LIBRARY_CLEAR_DATA)} />
             </Menu>
           </ToolbarItem>
-          <ToolbarItem placement="confirmationAction">
-            <Button label={dismissWords.done} onPress={closeLibrary} />
-          </ToolbarItem>
+          <DoneToolbarItem onDone={closeLibrary} />
         </Toolbar.Content>
       </Toolbar>
       {path.map((key) => (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ComponentProps } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, type ViewInstance } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useBarReturn } from "./barReturn";
 import { AddressFace } from "./AddressFace";
@@ -8,8 +8,9 @@ import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, floatingBarLayout, PressScale, Symbol, type ColorRoles } from "../ui";
+import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, floatingBarLayout, PressInPlace, Symbol, type ColorRoles } from "../ui";
 import { newTabLabel } from "./barWords";
+import { openPageMenuFrom } from "./pageMenuOpener";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { TabStack } from "./BottomBar";
 import { barReturnedToPage } from "../../state/browse/deckPull";
@@ -37,7 +38,7 @@ type Props = {
 
 export type DuoBar = { stripLeft: number; stripTop: number; squeeze: DuoSqueeze | null; progress: SharedValue<number>; collapsed: boolean };
 
-export type BarAddress = { host: string; insecure: boolean; isPrivate: boolean; iconUrl: string | null; pageUrl: string | null };
+export type BarAddress = { tabId: string; host: string; insecure: boolean; isPrivate: boolean; iconUrl: string | null; pageUrl: string | null };
 
 const AUTHORITY_PORT = /^[a-z][a-z0-9+.-]*:\/\/(?:[^/?#@]*@)?(?:\[[^\]]*\]|[^/?#:]*):0*(\d+)(?=[/?#]|$)/i;
 
@@ -57,6 +58,7 @@ export function barAddress(tab: BrowserTab): BarAddress {
   const shown = display(tab.url);
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(tab.url)?.[1]?.toLowerCase() ?? null;
   return {
+    tabId: tab.id,
     host: withoutPort(shown.host, tab.url) || tab.title || pageWords.untitledTab,
     insecure: scheme === "http",
     isPrivate: tab.isPrivate,
@@ -68,6 +70,7 @@ export function barAddress(tab: BrowserTab): BarAddress {
 export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true, duo = null, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   const address = barAddress(tab);
+  const menuButton = useRef<ViewInstance>(null);
   const returning = useBarReturn();
   const handed = useDeckOwnsBar();
   const wasHanded = useRef(handed);
@@ -112,7 +115,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
         <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} />
         </Animated.View>
-        <PressScale label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} onPress={onMore} onPressIn={haptics.barPress} style={styles.menu}>
+        <PressInPlace ref={menuButton} label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
             <Symbol name="ellipsis" size={floatingBarLayout.menuSymbol} color={ink.foreground} />
           </Animated.View>
@@ -121,7 +124,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
               <NotSecureLock testID="floatingBarMoreNotSecure" size={floatingBarLayout.siteIcon} color={ink.notSecure} />
             </Animated.View>
           ) : null}
-        </PressScale>
+        </PressInPlace>
         </PullGlyphs>
         </Animated.View>
         {handed ? null : (
@@ -156,7 +159,7 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
   return (
     <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu}>
       {({ onLongPress, screenReaderActions }) => (
-        <PressScale
+        <PressInPlace
           label="Tabs"
           value={`${count} ${count === 1 ? "tab" : "tabs"}`}
           hint="Touch and hold for recent tabs."
@@ -183,7 +186,7 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
               </PullGhost>
             ) : null}
           </ChromeSurface>
-        </PressScale>
+        </PressInPlace>
       )}
     </TabsMenuTrigger>
   );
@@ -192,7 +195,7 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
 export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, ghost = false, onPlus }: ButtonProps & { onPlus: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   return (
-    <PressScale label={newTabLabel(tab.isPrivate)} onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
+    <PressInPlace label={newTabLabel(tab.isPrivate)} onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
       <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
         <PullGlyphs>
           <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
@@ -205,7 +208,7 @@ export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, ghost = f
           </PullGhost>
         ) : null}
       </ChromeSurface>
-    </PressScale>
+    </PressInPlace>
   );
 }
 

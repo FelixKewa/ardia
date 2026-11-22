@@ -12,7 +12,7 @@ import { SyncScan } from "./SyncScan";
 import { copy } from "../../lib/platformCopy";
 import type { ConnectResult } from "../../platform/sync";
 import { canScanCodes } from "../../state/sync/scan";
-import { dismissWords, syncWords } from "../../lib/sharedWords";
+import { connectionWords, dismissWords, syncWords } from "../../lib/sharedWords";
 
 type FlowProps = { onClose: () => void; onConnected: () => void; closes?: boolean };
 
@@ -218,7 +218,7 @@ function Connecting() {
   return (
     <View style={styles.added}>
       <ActivityIndicator size="small" color={theme.secondaryLabel} />
-      <Text style={[font.subheadline, { color: theme.secondaryLabel }]}>Connecting…</Text>
+      <Text style={[font.subheadline, { color: theme.secondaryLabel }]}>{connectionWords.connecting}</Text>
     </View>
   );
 }

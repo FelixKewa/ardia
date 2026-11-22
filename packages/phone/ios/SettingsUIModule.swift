@@ -2,6 +2,7 @@ import ArdiaDesign
 import ArdiaSync
 import ExpoModulesCore
 import ExpoUI
+import Observation
 import SwiftUI
 
 enum SettingsTintChoice {
@@ -470,6 +471,13 @@ enum SettingsUIModifiers {
   }
 }
 
+@MainActor
+@Observable
+final class NativeChromeLook {
+  static let shared = NativeChromeLook()
+  var usesGlass = true
+}
+
 public final class SettingsUIModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaPhoneSettingsUI")
@@ -496,6 +504,12 @@ public final class SettingsUIModule: Module {
     ExpoUIView(PinnedTilesView.self)
     ExpoUIView(FullScreenCoverView.self)
     ExpoUIView(FilterTextEditorView.self)
+
+    Function("setChromeUsesGlass") { (glass: Bool) in
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated { NativeChromeLook.shared.usesGlass = glass }
+      }
+    }
 
     Function("spaceMenuSymbol") { (name: String, icon: String?) -> String in
       SpaceGlyph.menuSymbol(for: SpaceFields.profile(name: name, icon: icon, color: nil, themeColors: [], themeDarkColors: nil))

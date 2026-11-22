@@ -1,9 +1,10 @@
 import { createRef } from "react";
-import { StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { Platform, PlatformColor, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { ActionButton, EmptyState, FieldAccessory, LoadingLine, LoadingState, ModalOverlay, overlayInk, press, PressScale, Tappable, Toggle, ToggleIconButton, ToggleRow, useTheme, type Theme } from "../components/ui";
-import { renderSurface, unmount } from "../../test/render/harness";
+import { renderSurface, unmount, updateSurface } from "../../test/render/harness";
+import { switchColors, SYSTEM_SWITCH_COLOR_NAMES } from "../components/ui/Toggle";
 
 const mockMotion = { reduced: false };
 jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
@@ -113,9 +114,19 @@ test("the form switch is a checked switch whose off track is the system's off fi
   act(() => control.props.onPress());
   expect(onChange).toHaveBeenCalledWith(true);
   const track = host(root.root.findAll((node) => node.props.testID === "toggleTrack" && typeof node.type === "string")[0]);
-  const channels = (color: unknown) => String(color).replace(/[^\d.,]/g, "").split(",").map((value) => Math.round(Number(value) * 100) / 100);
-  expect(channels(getAnimatedStyle(track).backgroundColor)).toEqual(channels(theme.switchOff));
+  const onFill = host(root.root.findAll((node) => node.props.testID === "toggleTrackOn" && typeof node.type === "string")[0]);
+  const colors = switchColors(theme, Platform.OS);
+  expect(flat(track.props.style).backgroundColor).toEqual(colors.off);
+  expect(flat(onFill.props.style).backgroundColor).toEqual(colors.on);
+  expect(getAnimatedStyle(onFill).opacity).toBe(0);
   unmount(root);
+});
+
+test("switches take the platform's own switch colours where it has them, and the token pair elsewhere", () => {
+  const tokens = { switchOn: "#34C759", switchOff: "rgba(120,120,128,0.16)" };
+  expect(switchColors(tokens, "ios")).toEqual({ on: PlatformColor(SYSTEM_SWITCH_COLOR_NAMES.on), off: PlatformColor(SYSTEM_SWITCH_COLOR_NAMES.off) });
+  expect(SYSTEM_SWITCH_COLOR_NAMES).toEqual({ on: "systemGreen", off: "secondarySystemFill" });
+  expect(switchColors(tokens, "android")).toEqual({ on: tokens.switchOn, off: tokens.switchOff });
 });
 
 test("a switch row is pressable as a whole, or only at the knob when asked", () => {
@@ -183,41 +194,66 @@ test("a modal overlay is modal and escapable while open, and dead to touch and h
   unmount(root);
 });
 
-test("with Reduce Motion a press-scale control dims in place instead of shrinking", () => {
-  mockMotion.reduced = true;
+for (const reduced of [false, true]) {
+  test(`a bar control answers the press in place with an immediate dim and never scales${reduced ? ", with Reduce Motion too" : ""}`, () => {
+    mockMotion.reduced = reduced;
+    const root = renderSurface(
+      <PressScale label="Tabs" onPress={() => undefined}>
+        <View />
+      </PressScale>,
+    );
+    const control = pressableNamed(root, "Tabs");
+    const down = flat(control.props.children({ pressed: true }).props.style);
+    expect(down.opacity).toBe(press.iconOpacity);
+    expect(down.transform).toBeUndefined();
+    const up = flat(control.props.children({ pressed: false }).props.style);
+    expect(up.opacity).toBeUndefined();
+    expect(up.transform).toBeUndefined();
+    unmount(root);
+  });
+}
+
+test("a disabled bar control does not dim on contact", () => {
   const root = renderSurface(
-    <PressScale label="Tabs" onPress={() => undefined}>
+    <PressScale label="Back" disabled onPress={() => undefined}>
       <View />
     </PressScale>,
   );
-  const control = pressableNamed(root, "Tabs");
-  act(() => control.props.onPressIn());
-  act(() => jest.advanceTimersByTime(500));
-  const face = host(control.findAll((node) => typeof node.type === "string" && node.props.style !== undefined)[0]);
-  expect(getAnimatedStyle(face).transform).toEqual([{ scale: 1 }]);
-  const dimmed = flat(control.props.children({ pressed: true }).props.style);
-  expect(dimmed.opacity).toBe(press.iconOpacity);
+  expect(flat(pressableNamed(root, "Back").props.children({ pressed: true }).props.style).opacity).toBeUndefined();
   unmount(root);
 });
 
-test("without Reduce Motion a press-scale control settles at the shared press scale with no overshoot", () => {
-  const root = renderSurface(
-    <PressScale label="Tabs" onPress={() => undefined}>
-      <View />
-    </PressScale>,
-  );
-  const control = pressableNamed(root, "Tabs");
-  act(() => control.props.onPressIn());
-  const face = host(control.findAll((node) => typeof node.type === "string" && node.props.style !== undefined)[0]);
-  let lowest = 1;
-  for (let step = 0; step < 40; step++) {
-    act(() => jest.advanceTimersByTime(8));
-    lowest = Math.min(lowest, (getAnimatedStyle(face).transform as { scale: number }[])[0]!.scale);
+const settleFocus = async () => {
+  for (let step = 0; step < 4; step++) {
+    await act(async () => undefined);
+    act(() => jest.advanceTimersByTime(20));
   }
-  expect(lowest).toBeGreaterThanOrEqual(0.93 - 1e-3);
-  expect((getAnimatedStyle(face).transform as { scale: number }[])[0]!.scale).toBeCloseTo(0.93, 2);
-  unmount(root);
-});
+};
+
+for (const exit of ["closing render", "unmount while open"] as const) {
+  test(`a modal overlay hands focus back to its returnFocusTo target after a ${exit}`, async () => {
+    if (Platform.OS === "android") return;
+    const { AccessibilityInfo } = require("react-native") as typeof import("react-native");
+    const reader = jest.spyOn(AccessibilityInfo, "isScreenReaderEnabled").mockResolvedValue(true);
+    const focused = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => undefined);
+    focused.mockClear();
+    const opener = 4242;
+    const view = (closing: boolean) => (
+      <ModalOverlay open closing={closing} onDismiss={() => undefined} returnFocusTo={() => opener as never}>
+        <View />
+      </ModalOverlay>
+    );
+    const root = renderSurface(view(false));
+    await settleFocus();
+    expect(focused).not.toHaveBeenCalledWith(opener);
+    updateSurface(root, exit === "closing render" ? view(true) : <View />);
+    await settleFocus();
+    expect(focused).toHaveBeenCalledWith(opener);
+    unmount(root);
+    reader.mockResolvedValue(false);
+    focused.mockClear();
+  });
+}
 
 test("empty and loading states give a heading, a glyph and a busy announcement", () => {
   const root = renderSurface(
@@ -243,5 +279,84 @@ test("the page loading line draws the readable accent ink on every layout", () =
   const line = host(root.root.findAll((node) => node.props.testID === "loadingLine" && typeof node.type !== "string")[0]);
   const bar = host(line.findAll((node) => typeof node.type !== "string" && node.props.style)[1]);
   expect(flat(bar.props.style).backgroundColor).toBe(theme.spaceAccentInk);
+  unmount(root);
+});
+
+test("the glass overlay action is the shared action: glass fill, white label, the filled press, and the same busy and disabled contract", () => {
+  const onPress = jest.fn();
+  const root = renderSurface(
+    <>
+      <ActionButton title="Search" variant="glass" tone="overlay" onPress={onPress} stretch />
+      <ActionButton title="Done" variant="glass" tone="overlay" onPress={onPress} busy testID="glassBusy" />
+      <ActionButton title="Browse" variant="glass" tone="overlay" onPress={onPress} disabled />
+    </>,
+  );
+  const search = pressableNamed(root, "Search");
+  expect(pressedStyleOf(search, false)).toMatchObject({ backgroundColor: overlayInk.glass, alignSelf: "stretch", borderCurve: "continuous" });
+  expect(pressedStyleOf(search, true).opacity).toBe(press.filledOpacity);
+  expect(flat(host(search.findAll((node) => node.type === Text)[0]).props.style).color).toBe(overlayInk.label);
+  const busy = pressableNamed(root, "Done");
+  expect(busy.props.accessibilityState).toEqual({ disabled: true, busy: true });
+  expect(root.root.findAll((node) => node.props.testID === "glassBusyBusy").length).toBeGreaterThan(0);
+  expect(pressableNamed(root, "Browse").props.accessibilityState).toEqual({ disabled: true, busy: false });
+  unmount(root);
+});
+
+test("a field accessory draws one glyph size whatever its slot, so Clear Text looks the same in every field", () => {
+  const root = renderSurface(
+    <>
+      <FieldAccessory icon="xmarkCircleFill" label="Clear Search" color="#000000" onPress={() => undefined} />
+      <FieldAccessory icon="xmarkCircleFill" label="Clear Tabs" color="#000000" visual={32} layout="slop" onPress={() => undefined} />
+    </>,
+  );
+  const glyphOf = (label: string) => pressableNamed(root, label).findAll((node) => node.props.name === "xmarkCircleFill" && typeof node.props.size === "number")[0]!.props.size;
+  expect(glyphOf("Clear Search")).toBe(glyphOf("Clear Tabs"));
+  expect(pressedStyleOf(pressableNamed(root, "Clear Tabs"), false).width).toBe(32);
+  unmount(root);
+});
+
+test("the drawn and native loading states share one contract: role, busy state, the default label and one announcement", async () => {
+  const { loadingContract } = require("../components/ui/ListStates") as typeof import("../components/ui/ListStates");
+  const { ListLoading } = require("../components/library/listSheet") as typeof import("../components/library/listSheet");
+  const focus = require("../components/ui/coverFocus") as typeof import("../components/ui/coverFocus");
+  const announced = jest.spyOn(focus, "announceForScreenReader").mockImplementation(() => undefined);
+  const contract = loadingContract();
+  expect(contract).toEqual({ label: "Loading…", role: "progressbar", busy: true, liveRegion: "polite", nativeTraits: ["updatesFrequently"] });
+  const drawn = renderSurface(<LoadingState testID="drawnLoading" />);
+  await act(async () => undefined);
+  const node = host(drawn.root.findAll((inner) => inner.props.testID === "drawnLoading" && typeof inner.type === "string")[0]);
+  expect(node.props).toMatchObject({ accessibilityRole: contract.role, accessibilityLabel: contract.label, accessibilityState: { busy: true }, accessibilityLiveRegion: contract.liveRegion });
+  unmount(drawn);
+  const native = renderSurface(<ListLoading />);
+  await act(async () => undefined);
+  const modifiers = native.root.findAll((inner) => typeof inner.type === "string" && Array.isArray(inner.props.modifiers)).flatMap((inner) => inner.props.modifiers as { $type: string; label?: string; traits?: string[] }[]);
+  expect(modifiers).toContainEqual(expect.objectContaining({ $type: "accessibilityLabel", label: contract.label }));
+  expect(modifiers).toContainEqual(expect.objectContaining({ $type: "accessibilityAddTraits", traits: contract.nativeTraits }));
+  unmount(native);
+  expect(announced.mock.calls.map(([text]) => text)).toEqual([contract.label, contract.label]);
+  announced.mockRestore();
+});
+
+test("the loading state takes the caller's ink, as Reader needs, and its own label", async () => {
+  const drawn = renderSurface(<LoadingState testID="inked" label="Loading Article…" ink={{ label: "#111111", secondary: "#222222" }} />);
+  await act(async () => undefined);
+  const node = host(drawn.root.findAll((inner) => inner.props.testID === "inked" && typeof inner.type === "string")[0]);
+  expect(node.props.accessibilityLabel).toBe("Loading Article…");
+  const words = drawn.root.findAll((inner) => typeof inner.type === "string" && inner.props.children === "Loading Article…")[0]!;
+  expect(flat(words.props.style).color).toBe("#222222");
+  unmount(drawn);
+});
+
+test("Settings' drawn switch row is the shared switch row, its detail read with the label and indented under the icon tile", () => {
+  const { ToggleRow: SettingsToggleRow } = require("../components/settings/SettingsKit") as typeof import("../components/settings/SettingsKit");
+  const onChange = jest.fn();
+  const root = renderSurface(<SettingsToggleRow title="Share anonymous usage stats" icon="checkmarkShield" tint="#8E8E93" detail="Counts only." value={false} onChange={onChange} />);
+  const shared = root.root.findAll((node) => node.type === ToggleRow);
+  expect(shared).toHaveLength(1);
+  const control = pressableNamed(root, "Share anonymous usage stats, Counts only.");
+  expect(control.props.accessibilityRole).toBe("switch");
+  act(() => control.props.onPress());
+  expect(onChange).toHaveBeenCalledWith(true);
+  expect(shared[0]!.props.detailInset).toBeGreaterThan(0);
   unmount(root);
 });

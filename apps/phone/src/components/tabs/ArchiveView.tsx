@@ -202,7 +202,7 @@ function rowMenuItems(tab: BrowserTab): MenuItem[] {
       ]
     : [];
   return [
-    { label: "Open", icon: "arrowUpForward", systemImage: "arrow.up.forward.square", onPress: () => restoreRow(tab) },
+    { label: actionWords.open, icon: "arrowUpForward", systemImage: "arrow.up.forward.square", onPress: () => restoreRow(tab) },
     ...sharing,
     "divider",
     { label: "Delete", icon: "trash", destructive: true, onPress: () => deleteArchivedTab(tab) },

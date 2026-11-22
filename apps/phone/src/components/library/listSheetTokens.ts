@@ -5,6 +5,8 @@ export const listRowLayout = {
   gap: 12,
   lineGap: 2,
   titleLines: 1,
+  largeTextTitleLines: 3,
+  largeTextScale: 1.35,
   subtitleLines: 1,
 } as const;
 
@@ -24,3 +26,5 @@ export const libraryLayout = {
 } as const;
 
 export const listRowIconSide = (fontScale: number) => listRowLayout.icon * Math.min(fontScale, listRowLayout.iconScaleCap);
+
+export const listRowTitleLines = (fontScale: number) => (fontScale >= listRowLayout.largeTextScale ? listRowLayout.largeTextTitleLines : listRowLayout.titleLines);

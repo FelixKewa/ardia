@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { PlatformColor, useWindowDimensions, View } from "react-native";
 import { Button, ContentUnavailableView, HStack, Image, Label, ProgressView, RNHostView, ShareLink, Spacer, Text, VStack } from "@expo/ui/swift-ui";
-import { accessibilityElement, accessibilityHint, accessibilityLabel, buttonStyle, font, foregroundStyle, frame, lineLimit, truncationMode } from "@expo/ui/swift-ui/modifiers";
+import { accessibilityAddTraits, accessibilityElement, accessibilityHint, accessibilityLabel, buttonStyle, font, foregroundStyle, frame, lineLimit, truncationMode } from "@expo/ui/swift-ui/modifiers";
 import { actionWords, listWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { Favicon, iconRoles, sfName, type modifierList } from "../ui";
-import { listRowIconSide, listRowLayout } from "./listSheetTokens";
+import { loadingContract, useLoadingAnnouncement } from "../ui/ListStates";
+import { listRowIconSide, listRowLayout, listRowTitleLines } from "./listSheetTokens";
 
 export { listSheetWords } from "./listSheetWords";
 
@@ -39,7 +40,8 @@ type ListRowProps = {
 };
 
 export function ListRow({ title, leading, subtitle, label, hint, titleTruncation, minHeight, rowModifiers = [], onPress }: ListRowProps) {
-  const side = useListRowIcon();
+  const { fontScale } = useWindowDimensions();
+  const side = listRowIconSide(fontScale);
   return (
     <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityHint(hint)]}>
       <HStack alignment="center" spacing={listRowLayout.gap} modifiers={[frame({ maxWidth: FILL, minHeight, alignment: "leading" }), ...rowModifiers, accessibilityElement("combine"), ...(label ? [accessibilityLabel(label)] : [])]}>
@@ -53,7 +55,7 @@ export function ListRow({ title, leading, subtitle, label, hint, titleTruncation
           <Image systemName={leading.symbol as never} size={side * listRowLayout.symbolShare} color={PlatformColor("secondaryLabel")} modifiers={[frame({ width: side, height: side }), accessibilityElement("ignore")]} />
         )}
         <VStack alignment="leading" spacing={listRowLayout.lineGap}>
-          <Text modifiers={[font({ textStyle: "body" }), lineLimit(listRowLayout.titleLines), ...(titleTruncation ? [truncationMode(titleTruncation)] : [])]}>{title}</Text>
+          <Text modifiers={[font({ textStyle: "body" }), lineLimit(listRowTitleLines(fontScale)), frame({ maxWidth: FILL, alignment: "leading" }), ...(titleTruncation ? [truncationMode(titleTruncation)] : [])]}>{title}</Text>
           {typeof subtitle === "string" ? <ListRowSubtitle text={subtitle} /> : subtitle}
         </VStack>
         <Spacer />
@@ -81,11 +83,13 @@ export function ListNoResults({ query, modifiers }: { query: string; modifiers?:
   return <ContentUnavailableView title={listWords.noResults} systemImage={sfName(iconRoles.noResults)} description={listWords.noResultsCue(query.trim())} modifiers={modifiers} />;
 }
 
-export function ListLoading({ label = listWords.loading, modifiers, action }: { label?: string; modifiers?: Modifiers; action?: ReactNode }) {
+export function ListLoading({ label, modifiers, action }: { label?: string; modifiers?: Modifiers; action?: ReactNode }) {
+  const contract = loadingContract(label);
+  useLoadingAnnouncement(contract.label);
   return (
     <VStack spacing={listRowLayout.gap} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL }), ...(modifiers ?? [])]}>
-      <ProgressView modifiers={[accessibilityLabel(label)]}>
-        <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(SECONDARY)]}>{label}</Text>
+      <ProgressView modifiers={[accessibilityLabel(contract.label), accessibilityAddTraits(contract.nativeTraits)]}>
+        <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(SECONDARY)]}>{contract.label}</Text>
       </ProgressView>
       {action}
     </VStack>

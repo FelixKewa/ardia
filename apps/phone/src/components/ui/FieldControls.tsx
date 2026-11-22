@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
-import { Pressable, type StyleProp, type ViewStyle } from "react-native";
+import type { ReactNode, RefObject } from "react";
+import { Pressable, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import { slopToReach, slotAround } from "./hitTarget";
+import { screenReaderActions } from "./screenReaderActions";
 import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
@@ -21,16 +22,18 @@ type FieldAccessoryProps = SlotProps & {
   onPress: () => void;
   hint?: string;
   disabled?: boolean;
-  glyph?: number;
+  buttonRef?: RefObject<ViewInstance | null>;
   testID?: string;
 };
 
-export function FieldAccessory({ icon, label, color, onPress, hint, disabled = false, glyph = glyphSlot.field, visual = glyph, layout = "slot", style, testID }: FieldAccessoryProps) {
+export const FIELD_ACCESSORY_GLYPH = glyphSlot.field;
+
+export function FieldAccessory({ icon, label, color, onPress, hint, disabled = false, visual = FIELD_ACCESSORY_GLYPH, layout = "slot", style, buttonRef, testID }: FieldAccessoryProps) {
   const { box, slop } = slotPlacement(visual, layout);
   const pressStyle = usePressStyle("icon", { disabled, style: [box, style] });
   return (
-    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={hint} accessibilityState={{ disabled }} disabled={disabled} hitSlop={slop} onPress={onPress} style={pressStyle}>
-      <Symbol name={icon} size={glyph} color={color} />
+    <Pressable ref={buttonRef} testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={hint} accessibilityState={{ disabled }} disabled={disabled} hitSlop={slop} onPress={onPress} style={pressStyle}>
+      <Symbol name={icon} size={FIELD_ACCESSORY_GLYPH} color={color} />
     </Pressable>
   );
 }
@@ -45,11 +48,15 @@ type ToggleIconButtonProps = SlotProps & {
   role?: ToggleIconRole;
   disabled?: boolean;
   testID?: string;
+  onPressIn?: () => void;
+  onLongPress?: () => void;
+  longPressLabel?: string;
   children: ReactNode;
 };
 
-export function ToggleIconButton({ checked, onChange, label, hint, role = "switch", disabled = false, visual = glyphSlot.icon, layout = "slot", style, testID, children }: ToggleIconButtonProps) {
+export function ToggleIconButton({ checked, onChange, label, hint, role = "switch", disabled = false, visual = glyphSlot.icon, layout = "slot", style, testID, onPressIn, onLongPress, longPressLabel, children }: ToggleIconButtonProps) {
   const { box, slop } = slotPlacement(visual, layout);
+  const longPressAction = onLongPress ? screenReaderActions([{ name: "longpress", label: longPressLabel, run: onLongPress }]) : {};
   const pressStyle = usePressStyle("icon", { disabled, style: [box, style] });
   return (
     <Pressable
@@ -60,7 +67,10 @@ export function ToggleIconButton({ checked, onChange, label, hint, role = "switc
       accessibilityState={role === "switch" ? { checked, disabled } : { selected: checked, disabled }}
       disabled={disabled}
       hitSlop={slop}
+      {...longPressAction}
       onPress={() => onChange(!checked)}
+      onPressIn={onPressIn}
+      onLongPress={onLongPress}
       style={pressStyle}
     >
       {children}

@@ -1,8 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Modal, PlatformColor, StyleSheet, useWindowDimensions, View } from "react-native";
-import { Button, Form, HStack, Label, ProgressView, RNHostView, Section, Spacer, Text, Toolbar, ToolbarItem, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Button, Form, HStack, Label, RNHostView, Section, Spacer, Text, Toolbar, ToolbarItem, VStack, ZStack } from "@expo/ui/swift-ui";
 import { disabled, font, foregroundStyle, interactiveDismissDisabled, tint } from "@expo/ui/swift-ui/modifiers";
-import { dismissWords, syncWords } from "../../lib/sharedWords";
+import { connectionWords, dismissWords, syncWords } from "../../lib/sharedWords";
 import { copy } from "../../lib/platformCopy";
 import type { ConnectResult } from "../../platform/sync";
 import { haptics } from "../../state/app/haptics";
@@ -106,15 +106,10 @@ export function ExpoSyncConnectPage() {
         <ExpoStep number={2} title="Choose the Ardia Sync folder" detail={copy().chooseFolderDetail} progress={hasPhrase ? "current" : "upcoming"}>
           <VStack alignment="leading" spacing={8}>
             {session && picked.folder && !picked.connecting ? <Label title={picked.folder.name} systemImage="folder.fill" modifiers={[font({ textStyle: "subheadline", weight: "medium" }), foregroundStyle(SECONDARY)]} /> : null}
-            {busy ? (
-              <HStack spacing={8} modifiers={[font({ textStyle: "subheadline" })]}>
-                <ProgressView />
-                <Text modifiers={[foregroundStyle(SECONDARY)]}>Connecting…</Text>
-              </HStack>
-            ) : session ? (
-              <ExpoSettingsAction title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} size="compact" emphasis="secondary" onPress={() => void session.pickFolder(phrase).then(finished)} />
+            {session ? (
+              <ExpoSettingsAction title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} size="compact" emphasis="secondary" busy={busy} busyValue={connectionWords.connecting} onPress={() => void session.pickFolder(phrase).then(finished)} />
             ) : (
-              <ExpoSettingsAction title={chooseFolderTitle(lastResult)} size="compact" emphasis="secondary" isDisabled={!hasPhrase} onPress={() => void connect()} />
+              <ExpoSettingsAction title={chooseFolderTitle(lastResult)} size="compact" emphasis="secondary" isDisabled={!hasPhrase} busy={busy} busyValue={connectionWords.connecting} onPress={() => void connect()} />
             )}
             {problem ? <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(theme.destructive)]}>{problem}</Text> : null}
           </VStack>

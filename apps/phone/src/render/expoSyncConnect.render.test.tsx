@@ -109,3 +109,22 @@ test("pushed from Sync With Mac the connect page keeps Back, not Cancel, and the
   expect(scannerPresentation(true)).toBe("fade");
   closeSettings();
 });
+
+onIos("while it connects, Choose Folder stays on the page with its name, locked, with Connecting as its busy value, as the other Settings operations do", async () => {
+  let finish: (value: never) => void = () => undefined;
+  jest.spyOn(syncActions, "connectSync").mockReturnValue(new Promise((resolve) => (finish = resolve)) as never);
+  setConnectPhrase(WORDS);
+  openSettings({ page: "syncConnect" });
+  const rendered = renderSurface(<SettingsView />);
+  await act(async () => undefined);
+  const connect = () => destination(rendered, "syncConnect");
+  const choose = () => within(connect(), (props) => props.label === "Choose Folder…")[0];
+  expect(disabledOf(choose()!)).toBe(false);
+  await press(choose()!);
+  expect(choose()).toBeDefined();
+  expect(disabledOf(choose()!)).toBe(true);
+  expect(((choose()!.props.modifiers as { $type: string; value?: string }[]) ?? []).find((modifier) => modifier.$type === "accessibilityValue")?.value).toBe("Connecting…");
+  expect(texts(connect())).not.toContain("Connecting…");
+  await act(async () => finish({ result: "failed" } as never));
+  unmount(rendered);
+});

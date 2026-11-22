@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { PlatformColor } from "react-native";
 import { Button, HStack, Image, ProgressView, Section, Spacer, Text, VStack } from "@expo/ui/swift-ui";
-import { accessibilityAddTraits, accessibilityHidden, accessibilityValue, buttonBorderShape, buttonStyle, controlSize, disabled, fixedSize, font, foregroundStyle, frame, labelStyle, lineLimit, listRowBackground, listRowInsets, tint } from "@expo/ui/swift-ui/modifiers";
+import { accessibilityAddTraits, accessibilityHidden, accessibilityValue, buttonBorderShape, buttonStyle, controlSize, disabled, fixedSize, font, foregroundStyle, frame, labelStyle, listRowBackground, listRowInsets, tint } from "@expo/ui/swift-ui/modifiers";
 import { listWords } from "../../lib/sharedWords";
-import { actionLayout, CheckmarkLabel, space, SettingsHeroContent, settingsUIAvailable, SetupStepRow, useTheme, type SettingsTintName, type SetupProgress } from "../ui";
+import { primaryActionRoles, type PrimaryActionRole } from "../ui/tokens";
+import { CheckmarkLabel, space, SettingsHeroContent, settingsUIAvailable, SetupStepRow, useTheme, type SettingsTintName, type SetupProgress } from "../ui";
 
 const PAGE_INSET = 16;
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -48,30 +49,38 @@ export function ExpoStep({ number, title, detail, progress, children }: StepProp
   );
 }
 
-export type SettingsActionSize = "full" | "compact";
+export type SettingsActionSize = Exclude<PrimaryActionRole, "hero">;
 
 export type SettingsActionEmphasis = "primary" | "secondary";
 
 export function useSettingsActionModifiers(size: SettingsActionSize, emphasis: SettingsActionEmphasis = "primary") {
   const theme = useTheme();
-  const shape = buttonBorderShape("roundedRectangle", size === "full" ? actionLayout.radius.regular : actionLayout.radius.compact);
-  const fill = emphasis === "primary" ? [buttonStyle("borderedProminent"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction)] : [buttonStyle("bordered")];
-  const sizing = size === "full" ? [controlSize("large")] : [controlSize("regular"), labelStyle("titleAndIcon"), lineLimit(1), fixedSize({ horizontal: true, vertical: false })];
+  const role = primaryActionRoles[size];
+  const shape = buttonBorderShape("roundedRectangle", role.radius);
+  const fill = emphasis === "primary" ? [buttonStyle("borderedProminent"), tint(theme[role.fill]), foregroundStyle(theme[role.ink])] : [buttonStyle("bordered")];
+  const sizing = [controlSize(role.nativeControlSize), ...(size === "compact" ? [labelStyle("titleAndIcon")] : []), fixedSize({ horizontal: false, vertical: role.wraps })];
   return [...fill, shape, ...sizing];
 }
 
-type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; systemImage?: string; isDisabled?: boolean };
+type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; systemImage?: string; isDisabled?: boolean; busy?: boolean; busyValue?: string };
 
-export function ExpoSettingsAction({ title, onPress, size, emphasis = "primary", systemImage, isDisabled = false }: ActionProps) {
-  const modifiers = [...useSettingsActionModifiers(size, emphasis), disabled(isDisabled)];
-  if (size === "full") {
-    return (
+export function ExpoSettingsAction({ title, onPress, size, emphasis = "primary", systemImage, isDisabled = false, busy = false, busyValue = listWords.loading }: ActionProps) {
+  const modifiers = [...useSettingsActionModifiers(size, emphasis), disabled(isDisabled || busy), ...(busy ? [accessibilityValue(busyValue)] : [])];
+  const button =
+    size === "full" ? (
       <Button onPress={onPress} modifiers={modifiers}>
         <Text modifiers={[frame({ maxWidth: FILL })]}>{title}</Text>
       </Button>
+    ) : (
+      <Button label={title} systemImage={systemImage as never} onPress={onPress} modifiers={modifiers} />
     );
-  }
-  return <Button label={title} systemImage={systemImage as never} onPress={onPress} modifiers={modifiers} />;
+  if (!busy) return button;
+  return (
+    <HStack spacing={space.s}>
+      {button}
+      <ProgressView modifiers={[accessibilityHidden(true)]} />
+    </HStack>
+  );
 }
 
 export function ExpoChoiceRow({ title, checked, onPress }: { title: string; checked: boolean; onPress: () => void }) {

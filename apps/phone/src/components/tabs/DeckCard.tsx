@@ -10,7 +10,7 @@ import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
+import { barHeight, elevation, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, shadowCss, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
 import { OPENING_COVER_ID } from "../../state/browse/store";
@@ -547,11 +547,9 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
   );
 }
 
-const CARD_ELEVATION = 14;
 const COVER_NEAR_END_PX = 2;
 const HEADER_ROW_ROOM = 2000;
 const HEADER_TITLE_FONT = iPhoneOr<{ fontSize: number; lineHeight: number }>(font.footnote, font.caption);
-const CARD_SHADOW_BLUR = 28;
 const RECEIVED_INSET = 10;
 
 export function ReceivedBadge() {
@@ -572,7 +570,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...smoothCorners,
     borderWidth: StyleSheet.hairlineWidth,
-    ...Platform.select({ android: { elevation: CARD_ELEVATION, shadowColor: tabsInk.cardShadow }, default: { boxShadow: `0px 6px ${CARD_SHADOW_BLUR}px ${tabsInk.cardShadow}` } }),
+    ...Platform.select({ android: { elevation: elevation.stack.android, shadowColor: elevation.stack.light }, default: { boxShadow: shadowCss("stack", false) } }),
   },
   statusBand: { position: "absolute", left: 0, right: 0, top: 0 },
   band: { position: "absolute", left: 0, right: 0, bottom: 0, transformOrigin: "bottom" },

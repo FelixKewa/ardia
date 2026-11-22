@@ -18,7 +18,7 @@ export { barCenterFromBottom, barHeight, deckCenterFromBottom } from "./barGeome
 export { CodeCamera } from "./CodeCamera";
 export { Favicon } from "./Favicon";
 export { LoadingLine, type LoadWatch } from "./LoadingLine";
-export { barReturnMotion, deckChromeMotion, departBezier, duration, easeOutBezier, menuMotion, motionAliases, pressMotion, snapSpring, iPhoneOr, moveTo, pageMenuMotion, scanMotion, trayLandingDelayMs, settingsMotion, spring, springs, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
+export { barReturnMotion, deckChromeMotion, departBezier, duration, easeOutBezier, menuMotion, motionAliases, snapSpring, iPhoneOr, moveTo, pageMenuMotion, scanMotion, trayLandingDelayMs, settingsMotion, spring, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
 export { ConfirmDialog, Dialog, showActionSheet, type Confirmation, type DialogButton } from "./Dialog";
 export { FloatingMenu, Menu, menuExitMs, MenuFloorProvider, MenuFrostProvider, pointPlacer, type MenuPlacer, onDrawnMenuOpened, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
 export { ActionSheet, ConfirmSheet, type SheetAction } from "./ActionSheet";
@@ -30,7 +30,7 @@ export { Sheet, SheetScrollView, sheetMaxHeight, usePresence } from "./Sheet";
 export { Toggle, ToggleRow, ToggleTrack, type TogglePress } from "./Toggle";
 export { screenReaderActions, type ScreenReaderAction } from "./screenReaderActions";
 export { PageView, type PageNavigationState, type PageTone, type PageViewHandle } from "./Page";
-export { PressScale } from "./PressScale";
+export { PressInPlace, PressScale } from "./PressScale";
 export { Symbol } from "./Symbol";
 export { IncognitoSpecs } from "./IncognitoSpecs";
 export { SystemGlyph, systemGlyphsAvailable, type SystemGlyphWeight } from "./SystemGlyph";

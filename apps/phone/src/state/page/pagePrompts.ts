@@ -81,7 +81,7 @@ export function requestPlan(request: Request): RequestPlan {
     case "prompt":
       return { kind: "dialog", dialog: { ...base, field: "text", defaultText: request.defaultText, confirm: "OK" } };
     case "openExternal":
-      return { kind: "dialog", dialog: { ...base, confirm: "Open" } };
+      return { kind: "dialog", dialog: { ...base, confirm: actionWords.open } };
     case "httpAuthentication":
       return { kind: "dialog", dialog: { ...base, field: "credentials", confirm: "Sign In" } };
     case "permission":

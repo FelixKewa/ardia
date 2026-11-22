@@ -8,8 +8,8 @@ import { closeSettings, followSettingsPath, settingsPath, settingsRouteFromKey, 
 import { nativeLookColors } from "../../lib/profileLook";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { destinationWords, syncWords } from "../../lib/sharedWords";
-import { LookBackdrop, modifierList, profileLook, settingsChrome, settingsUIAvailable, useProfileLook, usesGlass, useTheme } from "../ui";
-import { useChromeStyle } from "../../state/settings/appearance";
+import { LookBackdrop, modifierList, profileLook, settingsChrome, settingsUIAvailable, useProfileLook, useTheme } from "../ui";
+import { useNativeChromeUsesGlass, usePublishNativeChromeLook } from "./nativeChromeLook";
 import { ExpoAppearancePage } from "./ExpoAppearancePage";
 import { ExpoSiteSettingsPage } from "./ExpoSiteSettingsPage";
 import { ExpoSyncPage } from "./ExpoSyncPage";
@@ -85,6 +85,7 @@ export function ExpoSettingsStack() {
 export function ExpoSettingsSheet() {
   const open = useSettingsNav((s) => s.open);
   useRefreshWhileOpen(open);
+  usePublishNativeChromeLook();
   return (
     <Host testID="expoSettingsSheet" style={styles.anchor} pointerEvents="none">
       <BottomSheet isPresented={open} onIsPresentedChange={(presented) => (presented ? undefined : closeSettings())}>
@@ -105,7 +106,7 @@ function SettingsNavigation() {
   const stack = useSettingsNav((s) => s.stack);
   const look = useProfileLook();
   const dark = useTheme().dark;
-  const glass = useChromeStyle() === "glass" && usesGlass();
+  const glass = useNativeChromeUsesGlass();
   const kept = useRef(stack);
   if (open && stack.length) kept.current = stack;
   const path = settingsPath(open ? stack : kept.current);

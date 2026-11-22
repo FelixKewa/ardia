@@ -396,7 +396,7 @@ onIPhone("the stage gets the panel's look, the field's centre and, on a late rev
   jest.spyOn(lookViews, "useSolidChrome").mockReturnValue(false);
   const root = page();
   open();
-  expect(stage().fieldCenter).toBeCloseTo(16 + 44 / 2);
+  expect(stage().fieldCenter).toBeCloseTo(16 + 47.5 / 2);
   expect(stage().morphLook).toMatchObject({ usesGlass: false, panelDark: false, frosted: true, classicPanel: "rgba(255,255,255,0.62)" });
   reveal(true);
   expect(counted).toHaveBeenCalledWith("search_reveals_late");

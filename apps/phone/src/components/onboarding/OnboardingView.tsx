@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import Animated, { Easing, FadeIn, FadeInLeft, FadeInRight, FadeOut, FadeOutLeft, FadeOutRight, useAnimatedStyle, useSharedValue, withDelay, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { advanceOnboarding, finishOnboarding, useOnboarding } from "../../state/onboarding/hooks";
@@ -151,18 +151,38 @@ export function OnboardingView() {
           {...closingGate(shown.closing)}
           style={[StyleSheet.absoluteFill, { zIndex: ONBOARDING_LAYERS.step, paddingTop: insets.top, paddingBottom: insets.bottom }]}
         >
-          {scrolls ? (
-            <ScrollView contentContainerStyle={styles.scrolled} keyboardShouldPersistTaps="handled">
+          <StepFocus live={showing && !shown.closing}>
+            {scrolls ? (
+              <ScrollView contentContainerStyle={styles.scrolled} keyboardShouldPersistTaps="handled">
+                <StepContent step={shown.step} />
+              </ScrollView>
+            ) : (
               <StepContent step={shown.step} />
-            </ScrollView>
-          ) : (
-            <StepContent step={shown.step} />
-          )}
+            )}
+          </StepFocus>
         </Animated.View>
       ))}
     </Animated.View>
   );
 }
+
+type StepHeadingSlot = { heading: RefObject<ViewInstance | null>; attach: (node: ViewInstance | null) => void };
+
+const StepHeading = createContext<StepHeadingSlot | null>(null);
+
+function StepFocus({ live, children }: { live: boolean; children: ReactNode }) {
+  const heading = useRef<ViewInstance | null>(null);
+  const [attached, setAttached] = useState<ViewInstance | null>(null);
+  const attach = useCallback((node: ViewInstance | null) => {
+    heading.current = node;
+    setAttached(node);
+  }, []);
+  const slot = useMemo(() => ({ heading, attach }), [attach]);
+  useEffect(() => (live && attached ? focusForScreenReader(() => heading.current) : undefined), [live, attached]);
+  return <StepHeading.Provider value={slot}>{children}</StepHeading.Provider>;
+}
+
+const useStepHeading = () => useContext(StepHeading)?.attach;
 
 function StepContent({ step }: { step: OnboardingStep }) {
   if (step === "welcome") return <Welcome />;
@@ -180,7 +200,7 @@ function DefaultBrowserStep() {
         <LinkBubble />
       </View>
       <View style={[styles.browserSheet, { backgroundColor: theme.groupFill, boxShadow: shadowCss("floating", theme.dark) }]}>
-        <DefaultBrowserSteps onLater={advanceOnboarding} onDone={advanceOnboarding} />
+        <DefaultBrowserSteps headingRef={useStepHeading()} onLater={advanceOnboarding} onDone={advanceOnboarding} />
       </View>
     </View>
   );
@@ -194,11 +214,11 @@ function SyncStep() {
   const { height } = useWindowDimensions();
   const settingsOpen = useSettingsNav((s) => s.open);
   const handedToSettings = useRef(false);
-  const heading = useRef<View>(null);
+  const heading = useContext(StepHeading)?.heading;
   useEffect(() => {
     if (!handedToSettings.current || settingsOpen) return;
     handedToSettings.current = false;
-    return focusForScreenReader(() => heading.current);
+    return focusForScreenReader(() => heading?.current);
   }, [settingsOpen]);
   const connect = () => {
     if (!connectsInSettings()) {
@@ -211,7 +231,6 @@ function SyncStep() {
   return (
     <>
       <Page
-        headingRef={heading}
         title={
           <>
             Every tab, <Text style={{ color: theme.spaceAccentInk }}>anywhere</Text>.
@@ -297,7 +316,7 @@ function Welcome() {
         <AppIcon side={appIconLayout.welcome} scalesWithText={false} />
       </Animated.View>
       <Animated.View testID="welcomeWords" style={[styles.welcomeWords, words]}>
-        <Text accessibilityRole="header" style={material ? [materialType.displaySmall, styles.centeredText, { color: theme.label }] : [onboardingLayout.welcomeTitle, styles.heavy, { color: theme.label }]}>
+        <Text ref={useStepHeading()} accessibilityRole="header" style={material ? [materialType.displaySmall, styles.centeredText, { color: theme.label }] : [onboardingLayout.welcomeTitle, styles.heavy, { color: theme.label }]}>
           Meet your new favorite browser
         </Text>
         <Text style={[material ? materialType.bodyLarge : onboardingLayout.welcomeSubtitle, styles.centered, { color: material ? theme.secondaryLabel : (theme.dark ? onboardingInk.dark : onboardingInk.light).subtitle }]}>Get what you want twice as fast.</Text>
@@ -310,8 +329,9 @@ function Welcome() {
   );
 }
 
-function Page({ title, subtitle, illustration, sitsLow, hero, headingRef, children }: { title: ReactNode; subtitle: string; illustration: ReactNode; sitsLow?: boolean; hero?: SymbolName; headingRef?: React.RefObject<View | null>; children: ReactNode }) {
+function Page({ title, subtitle, illustration, sitsLow, hero, children }: { title: ReactNode; subtitle: string; illustration: ReactNode; sitsLow?: boolean; hero?: SymbolName; children: ReactNode }) {
   const theme = useTheme();
+  const heading = useStepHeading();
   const material = useDesign() === "material";
   const subtitleInk = material ? theme.secondaryLabel : (theme.dark ? onboardingInk.dark : onboardingInk.light).subtitle;
   return (
@@ -321,7 +341,7 @@ function Page({ title, subtitle, illustration, sitsLow, hero, headingRef, childr
         {illustration}
       </View>
       <View testID="onboardingWords" style={styles.words}>
-        <Text ref={headingRef as never} accessibilityRole="header" style={material ? [materialType.headlineMedium, styles.centeredText, { color: theme.label }] : [onboardingLayout.title, styles.heavy, { color: theme.label }]}>
+        <Text ref={heading} accessibilityRole="header" style={material ? [materialType.headlineMedium, styles.centeredText, { color: theme.label }] : [onboardingLayout.title, styles.heavy, { color: theme.label }]}>
           {title}
         </Text>
         <CrossfadeText testID="onboardingSubtitle" text={subtitle} style={[material ? materialType.bodyLarge : font.body, styles.centered, { color: subtitleInk }]} />

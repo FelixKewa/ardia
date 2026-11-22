@@ -30,10 +30,10 @@ const host = (root: ReturnType<typeof renderSurface>, testID: string) => root.ro
 
 const departure = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.type === MotionView)[0]!;
 
-test("in the redesign search is Arc's panel: edge to edge, sitting on the keyboard and running on under it, smooth top corners concentric with the field, 16 + 22 = 38 points, the field 16 in and 16 down", () => {
+test("in the redesign search is Arc's panel: edge to edge, sitting on the keyboard and running on under it, smooth top corners concentric with the field, 16 + 23.75 = 39.75 points, the field 16 in and 16 down", () => {
   const root = open("redesigned");
   const panel = StyleSheet.flatten(host(root, "trayPanel")!.props.style);
-  expect(panel).toMatchObject({ position: "absolute", left: 0, right: 0, borderTopLeftRadius: 38, borderTopRightRadius: 38, borderCurve: "continuous" });
+  expect(panel).toMatchObject({ position: "absolute", left: 0, right: 0, borderTopLeftRadius: 39.75, borderTopRightRadius: 39.75, borderCurve: "continuous" });
   expect(panel.bottom as number).toBeLessThan(0);
   expect(panel.boxShadow).toBe(shadowCss("floating", false));
   expect(StyleSheet.flatten(host(root, "searchPanelFieldRow")!.props.style)).toMatchObject({ paddingHorizontal: 16, paddingTop: 16 });
@@ -59,15 +59,15 @@ test("in the redesign a submitted search lifts the panel 120 points and fades it
   unmount(root);
 });
 
-test("in the redesign the field is Arc's grey 44-point pill and rows have no refine arrow", () => {
+test("in the redesign the field is Arc's grey pill at the standard 47.5-point Search height and rows have no refine arrow", () => {
   act(() => presentSearch("page", "otter"));
   const root = renderSurface(
     <DesignProvider design="redesigned">
       <SearchTray />
     </DesignProvider>,
   );
-  const field = root.root.findAll((node) => typeof node.type === "string" && StyleSheet.flatten(node.props.style)?.borderWidth === 0.5 && StyleSheet.flatten(node.props.style)?.minHeight !== undefined)[0];
-  expect(StyleSheet.flatten(field!.props.style)).toMatchObject({ backgroundColor: "rgba(118,118,128,0.17)", minHeight: 44, borderRadius: 22, borderCurve: "continuous" });
+  const field = root.root.findAll((node) => typeof node.type === "string" && StyleSheet.flatten(node.props.style)?.borderWidth === 0.5 && StyleSheet.flatten(node.props.style)?.height !== undefined)[0];
+  expect(StyleSheet.flatten(field!.props.style)).toMatchObject({ backgroundColor: "rgba(118,118,128,0.17)", height: 47.5, borderRadius: 23.75, borderCurve: "continuous" });
   expect(root.root.findAll((node) => typeof node.props.accessibilityLabel === "string" && node.props.accessibilityLabel.startsWith("Refine ") && typeof node.props.onPress === "function")).toHaveLength(0);
   unmount(root);
 });

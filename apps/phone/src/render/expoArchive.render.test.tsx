@@ -113,3 +113,27 @@ onIos("while the Archive loads it shows the shared loading state, not an empty l
   await settle();
   unmount(root);
 });
+
+onIos("an empty Archive still offers Archive Inactive Tabs under More, with Delete All there but disabled", async () => {
+  useTabs.setState({ archive: [] });
+  const root = renderSurface(<Surfaces />);
+  await act(async () => browse.useBrowse.setState({ sheet: "archive" }));
+  await settle();
+  const sheet = archiveSheet(root);
+  expect(hosts(sheet, (props) => props.title === "No Archived Tabs")).toHaveLength(1);
+  const more = hosts(sheet, (props) => props.label === "More")[0]!;
+  expect(hosts(more, (props) => props.label === "Archive Inactive Tabs")).toHaveLength(1);
+  const deleteAll = hosts(more, (props) => props.label === "Delete All…")[0]!;
+  expect((deleteAll.props.modifiers as { $type: string; disabled?: boolean }[]).find((modifier) => modifier.$type === "disabled")?.disabled).toBe(true);
+  unmount(root);
+});
+
+onIos("Archive's Done is the one native dismissal control Settings, Library and Spaces use", async () => {
+  const { DoneToolbarItem } = require("../components/settings/ExpoSettingsDone") as typeof import("../components/settings/ExpoSettingsDone");
+  useTabs.setState({ archive: archived() });
+  const root = renderSurface(<Surfaces />);
+  await act(async () => browse.useBrowse.setState({ sheet: "archive" }));
+  await settle();
+  expect(archiveSheet(root).findAll((node) => node.type === DoneToolbarItem).length).toBeGreaterThan(0);
+  unmount(root);
+});

@@ -254,6 +254,22 @@ test("the address answers a press with the shared dim and the bar's tap haptic, 
   unmount(root);
 });
 
+test("the page's one busy cue for screen readers is the address: busy while the page loads, not after, and the progress line stays hidden from them", () => {
+  const tab = currentTabs().open[0]!;
+  const navigation = (isLoading: boolean, progress: number) => act(() => storeNavigation(tab.id, { url: "https://site0.example/", title: "Site", isLive: true, isLoading, progress, failure: null, canGoBack: false, canGoForward: false } as unknown as PageState));
+  navigation(true, 0.4);
+  const root = page("redesigned", tab);
+  const address = () => root.root.findAll((node) => node.props.accessibilityLabel === "Address" && typeof node.props.onPress === "function")[0]!;
+  expect(address().props.accessibilityState).toEqual({ busy: true });
+  expect(address().props.accessibilityValue).toEqual({ text: expect.not.stringContaining("%") });
+  navigation(true, 0.8);
+  expect(address().props.accessibilityState).toEqual({ busy: true });
+  navigation(false, 1);
+  expect(address().props.accessibilityState).toEqual({ busy: false });
+  expect(host(root, "loadingLine")!.props.accessibilityElementsHidden).toBe(true);
+  unmount(root);
+});
+
 test("the browsing address is the shared address face and the page's progress line is the shared one, set below the status bar", () => {
   const { AddressFace } = require("../components/browsing/AddressFace") as typeof import("../components/browsing/AddressFace");
   const { PageProgressLine } = require("../components/browsing/PageProgressLine") as typeof import("../components/browsing/PageProgressLine");

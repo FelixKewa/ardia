@@ -1,10 +1,12 @@
 import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
-import { StyleSheet, View } from "react-native";
+import { useRef } from "react";
+import { StyleSheet, View, type ViewInstance } from "react-native";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { display } from "../../state/search/omnibox";
-import { BarPlusGlyph, browseLayout, capsule, PressScale, shadowRadius, Symbol, TabFace, tabsInk, tabsLayout, type ColorRoles } from "../ui";
+import { BarPlusGlyph, browseLayout, capsule, PressInPlace, shadowRadius, Symbol, TabFace, tabsInk, tabsLayout, type ColorRoles } from "../ui";
 import { newTabLabel } from "./barWords";
+import { openPageMenuFrom } from "./pageMenuOpener";
 
 type Props = {
   order: BrowserTab[];
@@ -21,12 +23,13 @@ type Props = {
 export function BottomBar({ order, roles, showsPlus, incognito = false, onTabs, onTabsMenu, onStep, onPlus, onMore }: Props) {
   const plus = browseLayout.plusCapsule;
   const count = order.length;
+  const menuButton = useRef<ViewInstance>(null);
   return (
     <View style={styles.row}>
       <View style={styles.side}>
         <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu}>
           {({ onLongPress, screenReaderActions }) => (
-            <PressScale
+            <PressInPlace
               label="Tabs"
               value={`${count} ${count === 1 ? "tab" : "tabs"}`}
               hint="Touch and hold for recent tabs."
@@ -42,13 +45,13 @@ export function BottomBar({ order, roles, showsPlus, incognito = false, onTabs, 
               style={styles.tabs}
             >
               <TabStack tabs={order.slice(-2)} roles={roles} />
-            </PressScale>
+            </PressInPlace>
           )}
         </TabsMenuTrigger>
       </View>
       <View style={{ width: plus.width, height: plus.height }}>
         {showsPlus ? (
-          <PressScale
+          <PressInPlace
             label={newTabLabel(incognito)}
             onPress={onPlus}
             onPressIn={haptics.barPress}
@@ -58,11 +61,11 @@ export function BottomBar({ order, roles, showsPlus, incognito = false, onTabs, 
             ]}
           >
             <BarPlusGlyph color={roles.foregroundPrimary} />
-          </PressScale>
+          </PressInPlace>
         ) : null}
       </View>
       <View style={[styles.side, styles.end]}>
-        <PressScale label="Page Menu" onPress={onMore} onPressIn={haptics.barPress} style={styles.more}>
+        <PressInPlace ref={menuButton} label="Page Menu" onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.more}>
           <View
             style={[
               styles.center,
@@ -72,7 +75,7 @@ export function BottomBar({ order, roles, showsPlus, incognito = false, onTabs, 
           >
             <Symbol name="chevronUp" size={16} color={roles.foregroundPrimary} />
           </View>
-        </PressScale>
+        </PressInPlace>
       </View>
     </View>
   );

@@ -213,7 +213,7 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
           { label: actionWords.share, icon: iconRoles.share, onPress: () => shareUrl(url, title) },
         ]
       : [];
-    onMenu({ items: [{ label: "Open", icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], at });
+    onMenu({ items: [{ label: actionWords.open, icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], at });
   };
   return (
     <FlatList

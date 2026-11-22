@@ -4,8 +4,9 @@ import { act } from "react-test-renderer";
 import { DeckBar } from "../components/tabs/DeckBar";
 import { IncognitoChip } from "../components/tabs/DeckChrome";
 import { TabDeck } from "../components/tabs/TabDeck";
-import { BarPlusGlyph, ConfirmSheet, controlRadius, controlSize, DesignProvider, press, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsLayout } from "../components/ui";
+import { BarPlusGlyph, ConfirmSheet, elevation, PressScale, shadowCss, ToggleIconButton, controlRadius, controlSize, DesignProvider, press, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsLayout } from "../components/ui";
 import { IncognitoEyes } from "../components/ui/IncognitoEyes";
+import { PRIVATE_ACCENT } from "../components/ui/theme";
 import { DECK, DECK_ARC, deckGeometry, redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import { designFor, type Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
@@ -280,6 +281,25 @@ test("the bar's left button is an Incognito switch: Arc Search's two solid eyes,
   unmount(original);
 });
 
+test("the deck's Incognito switch is the search tray's toggled icon: it dims in place on the press with no spring, gives the bar haptic, keeps its 48-point glass and names Close Incognito Tabs for screen readers", () => {
+  withPrivateTabs(2);
+  const barPress = jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
+  const root = deck();
+  const toggle = incognitoSwitch(root)!;
+  expect(root.root.findAll((node) => node.type === ToggleIconButton && node.props.testID === "deckBarIncognitoSwitch")).toHaveLength(1);
+  expect(StyleSheet.flatten(toggle.props.style({ pressed: true }))).toMatchObject({ width: 48, height: 48, opacity: press.iconOpacity });
+  expect(StyleSheet.flatten(toggle.props.style({ pressed: false })).opacity).toBeUndefined();
+  act(() => toggle.props.onPressIn());
+  expect(barPress).toHaveBeenCalledTimes(1);
+  const holdsGlass = (node: { findAll: (test: (inner: { props: { testID?: string } }) => boolean) => unknown[] }) => node.findAll((inner) => inner.props.testID === "deckBarIncognito").length > 0;
+  expect(root.root.findAll((node) => node.type === ToggleIconButton && holdsGlass(node))).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === PressScale && holdsGlass(node))).toHaveLength(0);
+  expect(typeof toggle.props.onLongPress).toBe("function");
+  const named = (toggle.props.accessibilityActions ?? []) as { name: string; label?: string }[];
+  expect(named.some((action) => action.name === "Close Incognito Tabs" || action.label === "Close Incognito Tabs")).toBe(true);
+  unmount(root);
+});
+
 test("a tap on the switch shows only the Incognito tabs, fills the whole switch and turns its eyes to the switch's ink, the plus makes Incognito tabs, and a second tap brings the normal deck back; only the switch to Incognito is counted", () => {
   withPrivateTabs(2);
   const root = deck();
@@ -308,11 +328,13 @@ test("Incognito carries one look through the whole deck in light mode: the priva
   const chrome = ["deckHeaderMore", "deckSearchTabs", "deckBarIncognito", "deckBarPlus"];
   const root = deck();
   expect(searchField(root).props.keyboardAppearance).toBe("light");
+  expect(searchField(root).props.selectionColor).not.toBe(PRIVATE_ACCENT.spaceAccentInk);
   expect(chrome.filter((id) => privateGlass(root, id))).toEqual([]);
   expect(root.root.findAll((node) => node.props.testID === "deckIncognitoBackdrop")).toHaveLength(0);
   act(() => incognitoSwitch(root)!.props.onPress());
   act(() => jest.advanceTimersByTime(600));
   expect(searchField(root).props.keyboardAppearance).toBe("dark");
+  expect(searchField(root).props.selectionColor).toBe(PRIVATE_ACCENT.spaceAccentInk);
   expect(chrome.filter((id) => privateGlass(root, id))).toEqual(chrome);
   expect(root.root.findAll((node) => node.props.testID === "deckIncognitoBackdrop").length).toBeGreaterThan(0);
   const empty = root.root.findAll((node) => typeof node.type === "string" && node.props.children === "No Incognito Tabs")[0]!;
@@ -324,6 +346,15 @@ test("Incognito carries one look through the whole deck in light mode: the priva
   unmount(root);
 });
 
+test("the stack card's shadow is the named stack elevation role on both renderers, at the measured 6 down and 28 blur", () => {
+  expect(elevation.stack).toMatchObject({ y: 6, blur: 28, android: 14 });
+  const root = deck();
+  const card = style(root, "deckCard");
+  if (Platform.OS === "android") expect(card).toMatchObject({ elevation: elevation.stack.android, shadowColor: elevation.stack.light });
+  else expect(card.boxShadow).toBe(shadowCss("stack", false));
+  unmount(root);
+});
+
 test("the deck's + draws the shared bar plus, its Clear Text reaches 44 points with the shared dim, and the bar is the shared 48-point control", () => {
   const root = deck();
   expect(host(root, "deckBarPlusGlyph")!.findAll((node) => node.type === BarPlusGlyph)).toHaveLength(1);
@@ -332,7 +363,10 @@ test("the deck's + draws the shared bar plus, its Clear Text reaches 44 points w
   const clear = host(root, "deckSearchClear")!;
   expect(clear.props.accessibilityLabel).toBe("Clear Text");
   const { width, height } = StyleSheet.flatten(clear.props.style) as { width: number; height: number };
-  expect(reachesTarget(width, height, clear.props.hitSlop)).toBe(true);
+  expect({ width, height }).toEqual({ width: 44, height: 44 });
+  expect(clear.props.hitSlop).toBeUndefined();
+  expect(reachesTarget(width, height)).toBe(true);
+  expect(root.root.findAll((node) => node.props.testID === "deckSearchClear" && node.props.glyph !== undefined)).toHaveLength(0);
   const pressable = root.root.findAll((node) => node.props.testID === "deckSearchClear" && typeof node.props.style === "function")[0]!;
   expect(StyleSheet.flatten(pressable.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
   unmount(root);
@@ -415,7 +449,7 @@ test("Search Tabs filters the deck to the tabs whose title or address match, sho
   search(root, "Site 3");
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(1);
-  expect(style(root, "deckSearchTabs").paddingRight).toBe(8);
+  expect(style(root, "deckSearchTabs").paddingRight).toBe(8 + 32 / 2 - 44 / 2);
   search(root, "site5.example");
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(1);

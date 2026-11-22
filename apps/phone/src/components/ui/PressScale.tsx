@@ -1,10 +1,8 @@
-import { type ReactNode } from "react";
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import { useReduceMotion } from "./contrast";
-import { pressMotion } from "./motion";
+import { type ReactNode, type Ref } from "react";
+import { Pressable, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import { pressedLook, type PressKind } from "./pressFeedback";
 import { screenReaderActions } from "./screenReaderActions";
-import { press } from "./tokens";
+import { useTheme } from "./theme";
 
 type Props = {
   label: string;
@@ -18,22 +16,20 @@ type Props = {
   disabled?: boolean;
   checked?: boolean;
   grow?: boolean;
+  kind?: PressKind;
+  ref?: Ref<ViewInstance>;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 };
 
-export function PressScale({ label, hint, value, longPressLabel, actions, onPress, onLongPress, onPressIn, disabled, checked, grow, style, children }: Props) {
-  const scale = useSharedValue(1);
-  const reduceMotion = useReduceMotion();
-  const scaled = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+export function PressInPlace({ label, hint, value, longPressLabel, actions, onPress, onLongPress, onPressIn, disabled, checked, grow, kind = "icon", ref, style, children }: Props) {
+  const { rowPressed } = useTheme();
   const exposed = actions
     ? screenReaderActions([{ name: "activate", run: onPress }, ...(onLongPress ? [{ name: "longpress", label: longPressLabel, run: onLongPress }] : []), ...actions])
     : {};
-  const to = (target: number) => {
-    scale.value = reduceMotion ? 1 : withSpring(target, pressMotion.spring);
-  };
   return (
     <Pressable
+      ref={ref}
       accessibilityRole={checked === undefined ? "button" : "switch"}
       accessibilityLabel={label}
       accessibilityHint={hint}
@@ -44,15 +40,13 @@ export function PressScale({ label, hint, value, longPressLabel, actions, onPres
       style={grow ? styles.grow : undefined}
       onPress={onPress}
       onLongPress={onLongPress}
-      onPressIn={() => {
-        onPressIn?.();
-        to(pressMotion.scale);
-      }}
-      onPressOut={() => to(1)}
+      onPressIn={onPressIn}
     >
-      {({ pressed }) => <Animated.View style={[style, scaled, reduceMotion && pressed ? styles.dimmed : null]}>{children}</Animated.View>}
+      {({ pressed }) => <View style={[style, pressedLook(kind, pressed && !disabled, false, rowPressed)]}>{children}</View>}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({ grow: { flex: 1 }, dimmed: { opacity: press.iconOpacity } });
+export const PressScale = PressInPlace;
+
+const styles = StyleSheet.create({ grow: { flex: 1 } });

@@ -113,12 +113,6 @@ export const departBezier = [0.2, 0, 0, 1] as const;
 
 export const tabsCurve = { easeOut: WorkletEasing.bezier(0, 0, 0.58, 1), easeInOut: WorkletEasing.bezier(0.42, 0, 0.58, 1), depart: WorkletEasing.bezier(...departBezier) } as const;
 
-export const pressMotion = { scale: 0.93, spring: spring(0.12, 1), reducedOpacityMs: 0 } as const;
-
-export const springs = {
-  barPress: pressMotion.spring,
-} as const;
-
 export const easeOutBezier = [0, 0, 0.58, 1] as const;
 
 const stepBezier = [0.05, 0.7, 0.1, 1] as const;
@@ -132,7 +126,7 @@ export const motionAliases = {
   settingsTitleFade: snapSpring,
   onboardingStep: { timing: { duration: 300, easing: WorkletEasing.bezier(...stepBezier) } } as Motion,
   onboardingStepReduced: { timing: { duration: 150, easing: WorkletEasing.bezier(...easeOutBezier) } } as Motion,
-  toggleKnob: pressMotion.spring,
+  toggleKnob: spring(0.12, 1),
   toggleKnobReducedMs: 0,
 } as const;
 

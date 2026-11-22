@@ -5,7 +5,9 @@ import { ExpoChoiceRow, ExpoSettingsAction } from "../components/settings/ExpoSe
 import { SettingsView } from "../components/settings/SettingsView";
 import { ThemePage } from "../components/settings/ThemePage";
 import { TRUSTED_SITES_EMPTY } from "../components/settings/ExpoBlockingPages";
-import { actionLayout, controlSize, DesignProvider } from "../components/ui";
+import { actionLayout, controlSize, DesignProvider, useTheme, type Theme } from "../components/ui";
+import { primaryActionRoles } from "../components/ui/tokens";
+import { tint } from "@expo/ui/swift-ui/modifiers";
 import * as settingsActions from "../state/settings/actions";
 import * as defaultBrowser from "../state/settings/defaultBrowser";
 import { closeSettings, openSettings, pushSettings, type SettingsRoute } from "../state/settings/nav";
@@ -161,4 +163,31 @@ test("the theme editor's Add and Remove Color keep their 32-point plates inside 
   expect(steppers.map((node) => node.props.accessibilityLabel)).toEqual(["Remove Color", "Add Color"]);
   for (const stepper of steppers) expect(StyleSheet.flatten(stepper.props.style)).toMatchObject({ width: controlSize.hitTarget, height: controlSize.hitTarget });
   unmount(root);
+});
+
+onIos("the native primary actions take the named roles the drawn ones use: the accent fill, the role's corner and size, and compact labels wrap instead of running out of room", async () => {
+  let theme: Theme | null = null;
+  function ThemeProbe() {
+    theme = useTheme();
+    return null;
+  }
+  const probe = renderSurface(<ThemeProbe />);
+  const connect = await open({ page: "syncConnect" });
+  const steps = connect.root.findAll((node) => node.type === ExpoSettingsAction);
+  expect(steps.length).toBeGreaterThan(1);
+  for (const step of steps) {
+    const button = within(step, (props) => Array.isArray(props.modifiers))[0]!;
+    expect(modifier(button, "lineLimit")).toBeUndefined();
+    expect(modifier(button, "fixedSize")).toMatchObject({ horizontal: false, vertical: true });
+    expect(modifier(button, "buttonBorderShape")).toMatchObject({ cornerRadius: primaryActionRoles.compact.radius });
+    expect(modifier(button, "controlSize")).toMatchObject({ size: primaryActionRoles.compact.nativeControlSize });
+  }
+  const primary = steps.find((step) => (step.props.emphasis ?? "primary") === "primary")!;
+  const primaryButton = within(primary, (props) => Array.isArray(props.modifiers))[0]!;
+  expect(modifier(primaryButton, "tint")).toEqual(tint(theme![primaryActionRoles.compact.fill]));
+  expect(primaryActionRoles.full.fill).toBe(primaryActionRoles.hero.fill);
+  expect(primaryActionRoles.full.radius).toBe(actionLayout.radius.regular);
+  expect(primaryActionRoles.hero.height).toBe(actionLayout.height.hero);
+  unmount(connect);
+  unmount(probe);
 });

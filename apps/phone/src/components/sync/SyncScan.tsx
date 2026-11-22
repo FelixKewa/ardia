@@ -9,12 +9,13 @@ import { actionWords, dismissWords, syncWords } from "../../lib/sharedWords";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { ActionButton, CodeCamera, controlSize, font, ink, ModalOverlay, Portal, scanInk, scanLayout, scanMotion, smoothCorners, space, Symbol, tabsMotion } from "../ui";
-import { OverlayCancelButton, OverlayGlassButton } from "../ui/LookViews";
+import { OverlayCancelButton } from "../ui/LookViews";
+import type { FocusTarget } from "../ui/coverFocus";
 
 
-type Props = { onScan: (phrase: string) => void; onEnterWords: () => void; onCancel: () => void; inline?: boolean };
+type Props = { onScan: (phrase: string) => void; onEnterWords: () => void; onCancel: () => void; inline?: boolean; returnFocusTo?: FocusTarget };
 
-export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Props) {
+export function SyncScan({ onScan, onEnterWords, onCancel, inline = false, returnFocusTo }: Props) {
   const insets = useSafeAreaInsets();
   const [access, setAccess] = useState<CameraAccess | "checking">("checking");
   const [rejected, setRejected] = useState(false);
@@ -51,7 +52,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
   const cancelButton = useRef<ViewInstance>(null);
   const cancel = () => leave(onCancel);
   const screen = (
-      <ModalOverlay open closing={leaving} onDismiss={cancel} focus={cancelButton} testID="syncScanner" style={styles.screen}>
+      <ModalOverlay open closing={leaving} onDismiss={cancel} focus={cancelButton} returnFocusTo={returnFocusTo} testID="syncScanner" style={styles.screen}>
         {access === "checking" ? <ActivityIndicator style={styles.center} color={ink.white} /> : null}
         {access === "granted" ? (
           <>
@@ -76,7 +77,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
               ) : (
                 <View />
               )}
-              <OverlayGlassButton title={syncWords.enterRecoveryPhrase} onPress={() => leave(onEnterWords)} />
+              <ActionButton testID="scanEnterWords" title={syncWords.enterRecoveryPhrase} variant="glass" tone="overlay" onPress={() => leave(onEnterWords)} stretch />
             </View>
           </>
         ) : null}
@@ -128,7 +129,7 @@ function Unavailable({ icon, title, message, onSettings, onEnterWords }: { icon:
       <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white, styles.centered]}>{title}</Text>
       <Text style={[font.subheadline, styles.soft]}>{message}</Text>
       {onSettings ? <ActionButton testID="scanOpenSettings" title={actionWords.openSettings} tone="overlay" onPress={onSettings} stretch /> : null}
-      <OverlayGlassButton title={syncWords.enterRecoveryPhrase} onPress={onEnterWords} />
+      <ActionButton testID="scanEnterWords" title={syncWords.enterRecoveryPhrase} variant="glass" tone="overlay" onPress={onEnterWords} stretch />
     </View>
   );
 }

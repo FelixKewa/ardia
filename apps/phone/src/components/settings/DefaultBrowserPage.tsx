@@ -1,12 +1,12 @@
 import { useEffect } from "react";
-import { AppState, Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { AppState, Platform, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import { askForDefaultBrowser, refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
 import { popSettings } from "../../state/settings/nav";
 import { defaultBrowserCopy } from "../../state/settings/settingsRules";
 import { ActionButton, AppIcon, font, ink, PrimaryButton, radius, settingsLayout, settingsTint, space, spacesLayout, Symbol, useTheme, smoothCorners } from "../ui";
 import { SettingsPage } from "./SettingsKit";
 
-export function DefaultBrowserSteps({ onLater, onDone }: { onLater?: () => void; onDone?: () => void }) {
+export function DefaultBrowserSteps({ onLater, onDone, headingRef }: { onLater?: () => void; onDone?: () => void; headingRef?: (node: ViewInstance | null) => void }) {
   const theme = useTheme();
   const status = useDefaultBrowser((s) => s.status);
   const { fontScale } = useWindowDimensions();
@@ -30,7 +30,7 @@ export function DefaultBrowserSteps({ onLater, onDone }: { onLater?: () => void;
   return (
     <View style={styles.column}>
       <View style={styles.words}>
-        <Text accessibilityRole="header" style={[font.title, styles.heavy, { color: theme.label }]}>
+        <Text ref={headingRef} accessibilityRole="header" style={[font.title, styles.heavy, { color: theme.label }]}>
           {copy.title}
         </Text>
         <Text style={[font.body, styles.centered, { color: theme.secondaryLabel }]}>{copy.subtitle}</Text>

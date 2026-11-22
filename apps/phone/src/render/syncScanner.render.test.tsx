@@ -1,8 +1,8 @@
-import { StyleSheet } from "react-native";
+import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SyncScan } from "../components/sync/SyncScan";
 import { ActionButton, overlayInk, Portal, voiceLayout } from "../components/ui";
-import { OverlayCancelButton, OverlayGlassButton } from "../components/ui/LookViews";
+import { OverlayCancelButton } from "../components/ui/LookViews";
 import * as scan from "../state/sync/scan";
 import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
 
@@ -72,7 +72,10 @@ test("the scanner's Cancel is the voice screen's: the shared top-right overlay b
   expect(flat(cancel)).toMatchObject({ width: voiceLayout.cancel, height: voiceLayout.cancel });
   expect(flat(cancel).right).toBeDefined();
   expect(flat(cancel).left).toBeUndefined();
-  expect(root.root.findAll((node) => node.type === OverlayGlassButton && node.props.title === "Enter Recovery Phrase")).toHaveLength(1);
+  const enter = root.root.findAll((node) => node.type === ActionButton && node.props.title === "Enter Recovery Phrase");
+  expect(enter).toHaveLength(1);
+  expect(enter[0]!.props).toMatchObject({ variant: "glass", tone: "overlay", stretch: true });
+  expect(flat(scanHost(root, "scanEnterWords")).backgroundColor).toBe(overlayInk.glass);
   unmount(root);
 });
 
@@ -100,5 +103,24 @@ test("the scanner is a modal overlay that stops taking touches and leaves the sc
   expect(cancelled).not.toHaveBeenCalled();
   act(() => jest.runOnlyPendingTimers());
   expect(cancelled).toHaveBeenCalledTimes(1);
+  unmount(root);
+});
+
+const onIPhone = Platform.OS === "ios" ? test : test.skip;
+
+onIPhone("Cancel gives screen reader focus back to the action that opened the scanner, after the scanner has gone", async () => {
+  jest.spyOn(AccessibilityInfo, "isScreenReaderEnabled").mockResolvedValue(true);
+  const focused = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => undefined);
+  jest.spyOn(scan, "prepareCamera").mockImplementation(async () => "granted");
+  const opener = 4242;
+  const root = renderSurface(<SyncScan inline returnFocusTo={() => opener as never} onScan={() => undefined} onEnterWords={() => undefined} onCancel={() => undefined} />);
+  await act(async () => undefined);
+  focused.mockClear();
+  act(() => scanHost(root, "syncScanner").props.onAccessibilityEscape());
+  await act(async () => undefined);
+  act(() => jest.advanceTimersByTime(100));
+  await act(async () => undefined);
+  act(() => jest.advanceTimersByTime(100));
+  expect(focused).toHaveBeenCalledWith(opener);
   unmount(root);
 });

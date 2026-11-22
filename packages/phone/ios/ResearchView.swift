@@ -68,6 +68,7 @@ struct ResearchView: View {
     .onChange(of: talk.isReady) { talk.watch(session) }
     .onChange(of: talk.isOn) { talk.watch(session) }
     .onDisappear { host.closed(session) }
+    .environment(\.usesGlass, NativeChromeLook.shared.usesGlass)
   }
 
   private var listenBar: some View {
@@ -113,7 +114,7 @@ struct ResearchView: View {
       }
       .clipShape(.rect(cornerRadius: Radius.control, style: .continuous))
     }
-    .glassEffect(.regular, in: .rect(cornerRadius: Radius.control, style: .continuous))
+    .chromeSurface(in: .rect(cornerRadius: Radius.control, style: .continuous), interactive: false)
     .accessibilityElement(children: .contain)
   }
 
@@ -255,9 +256,9 @@ struct ResearchView: View {
           .foregroundStyle(.secondary)
         HStack(spacing: Spacing.tight) {
           Button("Try Again") { session.retry() }
-            .buttonStyle(.glassProminent)
+            .chromeButtonStyle(prominent: true)
           Button("Search the Web") { host.searchWeb(session.query) }
-            .buttonStyle(.glass)
+            .chromeButtonStyle(prominent: false)
         }
       }
     default:
@@ -348,7 +349,7 @@ struct ResearchView: View {
         .font(.subheadline.weight(.semibold))
         .padding(.horizontal, Spacing.medium)
         .padding(.vertical, Spacing.small)
-        .glassEffect(.regular, in: .rect(cornerRadius: Radius.control, style: .continuous))
+        .chromeSurface(in: .rect(cornerRadius: Radius.control, style: .continuous), interactive: false)
         .padding(.bottom, Spacing.section * 3)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityAddTraits(.updatesFrequently)

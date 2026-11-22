@@ -8,7 +8,19 @@ import { PHONE_LAYOUT, useScreenLayout, type ScreenLayout } from "../state/app/s
 import * as browse from "../state/browse/store";
 import { presentSearch, dismissSearch } from "../state/search/store";
 import { currentTabs, useTabs } from "../state/tabs/store";
+import { usePageUi } from "../state/page/store";
+import { actionWords } from "../lib/sharedWords";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+
+const mockReaderRenders: { tabId: string; closing: boolean }[] = [];
+
+jest.mock("../components/browsing/ReaderView", () => ({
+  ...jest.requireActual("../components/browsing/ReaderView"),
+  ReaderView: ({ tabId, closing = false }: { tabId: string; closing?: boolean }) => {
+    mockReaderRenders.push({ tabId, closing });
+    return null;
+  },
+}));
 
 const safeArea = require("react-native-safe-area-context") as { useSafeAreaInsets: () => { top: number; bottom: number; left: number; right: number } };
 
@@ -250,5 +262,53 @@ test("the wide toolbar and the sidebar draw the browsing bar's own address face,
   const progress = root.root.findAll((node) => node.type === PageProgressLine);
   expect(progress).toHaveLength(1);
   expect(progress[0]!.props.top).toBe(0);
+  unmount(root);
+});
+
+test("Duo passes Reader through the regular browser's closing render, so the outgoing copy is gated before it unmounts", () => {
+  useShape(OPEN, { name: "wide" });
+  const root = redesigned();
+  const selected = currentTabs().selectedId!;
+  mockReaderRenders.length = 0;
+  act(() => usePageUi.setState({ readerTabId: selected }));
+  expect(mockReaderRenders.at(-1)).toEqual({ tabId: selected, closing: false });
+  act(() => usePageUi.setState({ readerTabId: null }));
+  expect(mockReaderRenders.at(-1)).toEqual({ tabId: selected, closing: true });
+  expect(mockReaderRenders.filter((render) => render.closing)).toHaveLength(1);
+  unmount(root);
+});
+
+test("Duo's toolbar and sidebar plates take the tab's private state, as the browsing bar's do", () => {
+  useShape(OPEN, { name: "wide" });
+  const privates = [{ ...currentTabs().open[0]!, id: "private-0", isPrivate: true }];
+  act(() => useTabs.setState((state) => ({ ...state, privates, selectedId: "private-0", incognito: true })));
+  const root = redesigned();
+  const privatePlate = (id: string) => root.root.findAll((node) => node.props.testID === id && node.props.incognito === true).length > 0;
+  expect(privatePlate("duoAddress")).toBe(true);
+  expect(privatePlate("duoToolbar:Back")).toBe(true);
+  expect(privatePlate("duoToolbar:Page Menu")).toBe(true);
+  press(button(root, "Show Sidebar"));
+  settle();
+  expect(privatePlate("duoSidebarAddress")).toBe(true);
+  unmount(root);
+  act(() => useTabs.setState((state) => ({ ...state, privates: [], selectedId: state.open[0]!.id, incognito: false })));
+  const regular = redesigned();
+  expect(regular.root.findAll((node) => node.props.testID === "duoAddress" && node.props.incognito === true)).toHaveLength(0);
+  unmount(regular);
+});
+
+test("with no tab, Duo's address face is named New Tab and starts one, not a search with this page's address", () => {
+  useShape(OPEN, { name: "wide" });
+  act(() => useTabs.setState({ selectedId: null }));
+  act(() => browse.useBrowse.setState({ surface: "start" }));
+  const started = jest.spyOn(browse, "newTab").mockImplementation(() => undefined);
+  const root = redesigned();
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Address")).toHaveLength(0);
+  const face = button(root, actionWords.newTab);
+  expect(face.props.accessibilityHint).toBeUndefined();
+  expect(face.props.accessibilityRole).toBe("button");
+  press(face);
+  expect(started).toHaveBeenCalledTimes(1);
+  expect(host(root, "duoHost").props.children).toBe(actionWords.newTab);
   unmount(root);
 });

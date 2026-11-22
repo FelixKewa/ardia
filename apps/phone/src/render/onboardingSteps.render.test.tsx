@@ -313,3 +313,43 @@ test("every step's primary is the shared PrimaryButton and Not Now is the shared
   }
   unmount(root);
 });
+
+test("the usage-sharing row is the shared switch row, its label and switch state from the one contract", () => {
+  const root = showStep("allSet");
+  const rows = root.root.findAll((node) => node.type === SwitchRow && node.props.label === "Share anonymous usage stats");
+  expect(rows).toHaveLength(1);
+  const control = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Share anonymous usage stats");
+  expect(control).toHaveLength(1);
+  expect(control[0]!.props.accessibilityState).toMatchObject({ checked: expect.any(Boolean) });
+  unmount(root);
+});
+
+test.each(["welcome", "blocking", "sync", "allSet"] as const)("arriving at the %s step gives the screen reader its heading", async (step) => {
+  const focus = require("../components/ui/coverFocus") as typeof import("../components/ui/coverFocus");
+  const asked = jest.spyOn(focus, "focusForScreenReader").mockImplementation(() => () => undefined);
+  const root = showStep(step);
+  await act(async () => undefined);
+  const headingView = root.root.findAll((node) => typeof node.type !== "string" && node.props.accessibilityRole === "header").map((node) => node.instance).filter(Boolean)[0];
+  expect(headingView).toBeTruthy();
+  expect(asked.mock.calls.some(([target]) => target() === headingView)).toBe(true);
+  unmount(root);
+});
+
+test("moving on focuses the incoming step's heading and only the closing gate covers the outgoing one", async () => {
+  const focus = require("../components/ui/coverFocus") as typeof import("../components/ui/coverFocus");
+  const cancelled = jest.fn();
+  const asked = jest.spyOn(focus, "focusForScreenReader").mockImplementation(() => cancelled);
+  const root = showStep("welcome");
+  await act(async () => undefined);
+  const first = asked.mock.calls.length;
+  await act(async () => advanceOnboarding());
+  await act(async () => undefined);
+  expect(cancelled).toHaveBeenCalled();
+  const fresh = asked.mock.calls.slice(first).map(([target]) => target());
+  const incoming = root.root.findAll((node) => typeof node.type !== "string" && node.props.accessibilityRole === "header" && !textIn(node).includes("Meet your new favorite browser")).map((node) => node.instance).filter(Boolean)[0];
+  expect(incoming).toBeTruthy();
+  expect(fresh).toContain(incoming);
+  const outgoing = hosts(root, "onboardingStep").filter((node) => textIn(node).includes("Meet your new favorite browser"));
+  for (const step of outgoing) expect(step.props.accessibilityElementsHidden).toBe(true);
+  unmount(root);
+});

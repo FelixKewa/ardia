@@ -3,6 +3,7 @@ import { PlatformColor, StyleSheet, View } from "react-native";
 import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, Divider, Host, List, Menu, NavigationStack, Picker, Section, Text, Toolbar, ToolbarItem, useNativeState } from "@expo/ui/swift-ui";
 import { accessibilityLabel, disabled, environment, listRowInsets, listStyle, navigationBarTitleDisplayMode, navigationTitle, onAppear, pickerStyle, searchable, tag, tint } from "@expo/ui/swift-ui/modifiers";
 import { actionWords, destinationWords, dismissWords } from "../../lib/sharedWords";
+import { DoneToolbarItem } from "../settings/ExpoSettingsDone";
 import { ARCHIVE_SEARCH_DELAY_MS, archiveDayTitle } from "../../lib/archiveDay";
 import { eagerSections, LIST_PAGE_ROWS, sectionOverscan, sectionsWithin, sheetWasSlow } from "../../lib/sectionWindow";
 import { countUsage } from "../../state/telemetry/telemetry";
@@ -82,9 +83,7 @@ function WarmArchive() {
           <ToolbarItem placement="primaryAction">
             <Menu label={actionWords.more} systemImage={sfName(iconRoles.more)} modifiers={[accessibilityLabel(actionWords.more)]}>{null}</Menu>
           </ToolbarItem>
-          <ToolbarItem placement="confirmationAction">
-            <Button label={dismissWords.done} onPress={noop} />
-          </ToolbarItem>
+          <DoneToolbarItem onDone={noop} />
         </Toolbar.Content>
       </Toolbar>
     </NavigationStack>
@@ -174,7 +173,7 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
             <Menu label={actionWords.more} systemImage={sfName(iconRoles.more)} modifiers={[accessibilityLabel(actionWords.more)]}>
-              {shown ? (
+              {shown || (loaded && !hasArchive) ? (
                 <>
                   <Picker label="Archive Inactive Tabs" systemImage="archivebox" selection={interval} onSelectionChange={(next: AutoArchiveInterval) => setAutoArchiveInterval(next)} modifiers={[pickerStyle("menu")]}>
                     {INTERVALS.map((option) => (
@@ -189,9 +188,7 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
               ) : null}
             </Menu>
           </ToolbarItem>
-          <ToolbarItem placement="confirmationAction">
-            <Button label={dismissWords.done} onPress={closeArchive} />
-          </ToolbarItem>
+          <DoneToolbarItem onDone={closeArchive} />
         </Toolbar.Content>
       </Toolbar>
     </NavigationStack>
@@ -230,7 +227,7 @@ function ArchiveRow({ tab }: { tab: BrowserTab }) {
         <ListRow title={tab.title || shown.host} subtitle={shown.display || shown.host} leading={{ favicon: { url: tab.url, iconUrl: tab.faviconUrl } }} hint="Reopens the tab." onPress={restore} />
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        <Button label="Open" systemImage="arrow.up.forward.square" onPress={restore} />
+        <Button label={actionWords.open} systemImage="arrow.up.forward.square" onPress={restore} />
         {canShareTab(tab) ? <LinkMenuItems url={tab.url} onCopy={() => copyTabLink(tab)} /> : null}
         <Divider />
         <Button label="Delete" systemImage="trash" role="destructive" onPress={() => deleteArchivedTab(tab)} />

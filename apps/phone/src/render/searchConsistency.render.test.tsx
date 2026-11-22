@@ -1,9 +1,10 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { SearchTray } from "../components/search/SearchTray";
-import { searchFieldHeight, searchPanel, searchPanelRadius } from "../components/search/searchPanelTokens";
-import { DesignProvider, iconRoles, press, Symbol } from "../components/ui";
-import { chromeIsSolid } from "../components/ui/LookViews";
+import { SearchTray, searchPanelMorphLook } from "../components/search/SearchTray";
+import { searchFieldHeight, searchPanel, searchPanelPlace, searchPanelPlacement, searchPanelPreferredHeight, searchPanelRadius } from "../components/search/searchPanelTokens";
+import { browseLayout, DesignProvider, floatingPanelLayout, iconRoles, press, Symbol } from "../components/ui";
+import { nativeClassicChrome } from "../components/ui/tokens";
+import { chromeIsSolid, plateMaterial, SEARCH_PANEL_FACE } from "../components/ui/LookViews";
 import { PHONE_LAYOUT, useScreenLayout } from "../state/app/screenLayout";
 import * as browse from "../state/browse/store";
 import * as tabMenus from "../state/browse/tabMenus";
@@ -70,7 +71,7 @@ const clipOf = (root: Root) => host(root, "traySurface")!.findAll((node) => type
 
 test("the panel's corner is concentric with its field: half the field's height plus the one inset around it", () => {
   expect(searchPanelRadius(searchPanel.fieldHeight)).toBe(searchPanel.fieldHeight / 2 + searchPanel.fieldInset);
-  expect(searchPanelRadius(searchPanel.fieldHeight)).toBe(38);
+  expect(searchPanelRadius(searchPanel.fieldHeight)).toBe(39.75);
   expect(searchFieldHeight(1)).toBe(searchPanel.fieldHeight);
   expect(searchFieldHeight(0.8)).toBe(searchPanel.fieldHeight);
   expect(searchFieldHeight(1.2)).toBeCloseTo(searchPanel.fieldHeight * 1.2);
@@ -84,6 +85,38 @@ test("one chrome rule decides solid: Classic, Reduce Transparency or no native f
   expect(chromeIsSolid("glass", false, false)).toBe(true);
 });
 
+test("the search field is the documented 47.5-point Search field, never shorter than its 44-point accessories and two edges, and its capsule comes from that outer height", () => {
+  expect(searchPanel.fieldHeight).toBe(browseLayout.searchFieldHeight);
+  expect(searchPanel.fieldHeight).toBe(47.5);
+  for (const scale of [0.8, 1, 1.2, 3]) expect(searchFieldHeight(scale)).toBeGreaterThanOrEqual(searchPanel.accessorySlot + searchPanel.fieldEdge * 2);
+});
+
+test("the search panel's face and its morph follow the one plate rule: the panel asks for frost, Classic and Reduce Transparency make it solid, and only a glass face would ever use Liquid Glass", () => {
+  expect(SEARCH_PANEL_FACE).toBe("frost");
+  expect(plateMaterial(SEARCH_PANEL_FACE, false, true)).toBe("frost");
+  expect(plateMaterial(SEARCH_PANEL_FACE, true, true)).toBe("solid");
+  expect(plateMaterial("glass", false, true)).toBe("glass");
+  expect(plateMaterial("glass", false, false)).toBe("frost");
+  expect(plateMaterial("glass", true, true)).toBe("solid");
+  expect(searchPanelMorphLook(false, false, "frost")).toMatchObject({ usesGlass: false, frosted: true, classicPanel: searchPanel.light.tint });
+  expect(searchPanelMorphLook(false, false, "solid")).toMatchObject({ usesGlass: false, frosted: false, classicPanel: searchPanel.light.solid });
+  expect(searchPanelMorphLook(false, false, "glass")).toMatchObject({ usesGlass: true, frosted: false });
+  expect(searchPanelMorphLook(false, true, "solid").classicChrome).toBe(nativeClassicChrome);
+});
+
+test("one placement decides the panel's corners, card and keyboard gaps: the phone's panel runs on under the keyboard, a floating panel sits above it", () => {
+  expect(searchPanelPlacement(true, false)).toBe("underKeyboard");
+  expect(searchPanelPlacement(false, false)).toBe("aboveKeyboard");
+  expect(searchPanelPlacement(true, true)).toBe("commandBar");
+  expect(searchPanelPlace("underKeyboard", 300, false)).toMatchObject({ corners: "top", cardInset: 0, cardGap: 0, underKeyboard: 300, gapAboveKeyboard: 0, fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset });
+  expect(searchPanelPlace("underKeyboard", 300, true).cardInset).toBe(floatingPanelLayout.inset);
+  expect(searchPanelPlace("aboveKeyboard", 300, false)).toMatchObject({ corners: "all", cardInset: floatingPanelLayout.inset, cardGap: floatingPanelLayout.aboveKeyboard, underKeyboard: 0, fieldInset: searchPanel.fieldInset });
+  const fixed = searchPanelPreferredHeight("underKeyboard", searchPanel.fieldHeight, 1, 10);
+  expect(searchPanelPreferredHeight("underKeyboard", searchPanel.fieldHeight, 1, 5000)).toBe(fixed);
+  expect(searchPanelPreferredHeight("aboveKeyboard", searchPanel.fieldHeight, 1, 10)).toBeLessThan(fixed);
+  expect(searchPanelPreferredHeight("aboveKeyboard", searchPanel.fieldHeight, 1, 5000)).toBe(fixed);
+});
+
 onIPhone("on a phone the panel, its clip, its field row and the native morph all come from the one field and inset", () => {
   act(() => presentSearch("start", ""));
   const root = tray();
@@ -91,8 +124,8 @@ onIPhone("on a phone the panel, its clip, its field row and the native morph all
   expect(flat(host(root, "traySurface"))).toMatchObject({ borderTopLeftRadius: radius, borderTopRightRadius: radius, borderCurve: "continuous" });
   expect(flat(clipOf(root))).toMatchObject({ borderTopLeftRadius: radius, borderTopRightRadius: radius });
   expect(flat(host(root, "searchPanelFieldRow"))).toMatchObject({ paddingHorizontal: searchPanel.fieldInset, paddingTop: searchPanel.fieldInset });
-  expect(flat(host(root, "trayFieldCapsule"))).toMatchObject({ minHeight: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
-  expect(stage()).toMatchObject({ fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, fieldCenter: searchPanel.fieldInset + searchPanel.fieldHeight / 2, morphCorners: { panel: radius } });
+  expect(flat(host(root, "trayFieldCapsule"))).toMatchObject({ height: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
+  expect(stage()).toMatchObject({ fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, fieldCenter: searchPanel.fieldInset + searchPanel.fieldHeight / 2, morphCorners: { panel: radius, field: searchPanel.fieldHeight / 2 } });
   unmount(root);
 });
 
@@ -105,8 +138,8 @@ onIPhone("beside a command bar the panel keeps the same field, insets and concen
   expect(flat(host(root, "traySurface"))).toMatchObject({ borderRadius: radius, borderCurve: "continuous" });
   expect(flat(clipOf(root))).toMatchObject({ borderRadius: radius });
   expect(flat(host(root, "searchPanelFieldRow"))).toMatchObject({ paddingHorizontal: searchPanel.fieldInset, paddingTop: searchPanel.fieldInset });
-  expect(flat(host(root, "trayFieldCapsule"))).toMatchObject({ minHeight: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
-  expect(stage()).toMatchObject({ fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, fieldCenter: searchPanel.fieldInset + searchPanel.fieldHeight / 2, morphCorners: { panel: radius } });
+  expect(flat(host(root, "trayFieldCapsule"))).toMatchObject({ height: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
+  expect(stage()).toMatchObject({ fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, fieldCenter: searchPanel.fieldInset + searchPanel.fieldHeight / 2, morphCorners: { panel: radius, field: searchPanel.fieldHeight / 2 } });
   unmount(root);
 });
 
@@ -115,17 +148,18 @@ onIPhone("larger text grows the field to the native field's capped scale, and th
   act(() => presentSearch("start", ""));
   const root = tray();
   const grown = searchPanel.fieldHeight * 1.2;
-  expect(flat(host(root, "trayFieldCapsule")).minHeight).toBeCloseTo(grown);
+  expect(flat(host(root, "trayFieldCapsule")).height).toBeCloseTo(grown);
   expect(flat(host(root, "trayFieldCapsule")).borderRadius).toBeCloseTo(grown / 2);
   expect(stage().fieldCenter as number).toBeCloseTo(searchPanel.fieldInset + grown / 2);
   expect((stage().morphCorners as { panel: number }).panel).toBeCloseTo(grown / 2 + searchPanel.fieldInset);
+  expect((stage().morphCorners as { field: number }).field).toBeCloseTo(grown / 2);
   unmount(root);
   act(() => dismissSearch());
   act(() => jest.runOnlyPendingTimers());
   textSize(3);
   act(() => presentSearch("start", ""));
   const huge = tray();
-  expect(flat(host(huge, "trayFieldCapsule")).minHeight).toBeCloseTo(searchPanel.fieldHeight * searchPanel.maxTextScale);
+  expect(flat(host(huge, "trayFieldCapsule")).height).toBeCloseTo(searchPanel.fieldHeight * searchPanel.maxTextScale);
   unmount(huge);
 });
 

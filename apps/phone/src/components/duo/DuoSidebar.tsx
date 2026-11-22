@@ -255,7 +255,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
     <MenuTrigger frost={null} items={[{ label: CLOSE_TAB, destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
       {({ onLongPress }) => (
         <View testID={`duoSidebarRow:${tab.id}`} style={styles.row}>
-          {selected ? <ChromeSurface testID="duoSidebarRowGlass" shape="rounded" cornerRadius={DUO.sidebarRowRadius} interactive={false} dark={dark} style={StyleSheet.absoluteFill} /> : null}
+          {selected ? <ChromeSurface testID="duoSidebarRowGlass" shape="rounded" cornerRadius={DUO.sidebarRowRadius} interactive={false} incognito={tab.isPrivate} dark={dark} style={StyleSheet.absoluteFill} /> : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={title}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -7,9 +7,10 @@ import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, useToast } from "../../state/toasts/hooks";
 import { pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace } from "../../state/toasts/placement";
-import { dismissesToast, toastDragReturn, toastSemantics, toastSpokenLabel } from "../../state/toasts/semantics";
+import { dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics, toastSpokenLabel } from "../../state/toasts/semantics";
 import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/toasts/store";
-import { font, space, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { ChromeSurface, font, space, stroke, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { toastGesture } from "./toastTokens";
 import { materialBottomBar } from "../ui/materialTokens";
 
 const ICONS: Record<ToastIcon, SymbolName> = {
@@ -64,7 +65,7 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
   const semantics = toastSemantics(actionLabel, Platform.OS);
   useEffect(() => {
     drag.value = 0;
-    if (toast && semantics.announcement === "announceForAccessibility") AccessibilityInfo.announceForAccessibility(toast.message);
+    if (toast && semantics.announcement === "announceForAccessibility") AccessibilityInfo.announceForAccessibility(toastAnnouncement(toast.message, actionLabel));
   }, [toast?.id]);
   const gesture = useMemo(
     () =>
@@ -87,31 +88,31 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
     [reduceMotion],
   );
   const dragged = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(drag.value, drag.value / 4) }] }));
-  const face = [styles.toast, { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: toastLayout.radius }];
-  const pressStyle = usePressStyle("filled", { style: face });
+  const pressStyle = usePressStyle("filled", { style: styles.press });
   if (!toast) return null;
   const onAccessibilityAction = (event: AccessibilityActionEvent) => {
     if (dismissesToast(event.nativeEvent.actionName)) dismissToast();
   };
+  const escape = semantics.escapes ? dismissToast : undefined;
   const content = (
-    <>
+    <ToastPlate>
       <Symbol name={ICONS[toast.icon]} size={toastLayout.iconSize} color={theme.toastLabel} />
       <Text style={[font.subheadline, styles.text, { color: theme.toastLabel }]} numberOfLines={3}>
         {toast.message}
       </Text>
       {actionLabel !== null ? <Text testID="toastAction" style={[font.subheadline, styles.action, { color: theme.toastLabel }]}>{actionLabel}</Text> : null}
-    </>
+    </ToastPlate>
   );
   return (
     <View style={[styles.host, place]} pointerEvents="box-none">
       <GestureDetector gesture={gesture}>
         <Animated.View key={toast.id} entering={reduceMotion ? REDUCED_IN : toastIn} exiting={reduceMotion ? REDUCED_OUT : toastOut} style={[styles.origin, dragged]}>
           {semantics.pressable ? (
-            <Pressable testID="toast" accessibilityRole="button" accessibilityLabel={toastSpokenLabel(toast.message, actionLabel)} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} onPress={tapToast} style={pressStyle}>
+            <Pressable testID="toast" accessibilityRole="button" accessibilityLabel={toastSpokenLabel(toast.message, actionLabel)} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} onAccessibilityEscape={escape} onPress={tapToast} style={pressStyle}>
               {content}
             </Pressable>
           ) : (
-            <View testID="toast" accessible accessibilityRole="alert" accessibilityLabel={toast.message} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} style={face}>
+            <View testID="toast" accessible accessibilityRole="alert" accessibilityLabel={toast.message} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} onAccessibilityEscape={escape} style={styles.press}>
               {content}
             </View>
           )}
@@ -121,7 +122,17 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
   );
 }
 
-const TOAST_SLOP = 8;
+function ToastPlate({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  if (useDesign() === "material") return <View testID="toastPlate" style={[styles.toast, styles.materialPlate, { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: toastLayout.radius }]}>{children}</View>;
+  return (
+    <ChromeSurface testID="toastPlate" shape="rounded" cornerRadius={toastLayout.radius} interactive={false} barShadow style={styles.toast}>
+      {children}
+    </ChromeSurface>
+  );
+}
+
+const TOAST_SLOP = toastGesture.slop;
 const REDUCED_IN = FadeIn.duration(tabsMotion.surfaceFade);
 const REDUCED_OUT = FadeOut.duration(tabsMotion.surfaceFade);
 
@@ -147,6 +158,7 @@ const toastOut = () => {
 const styles = StyleSheet.create({
   host: { position: "absolute", left: toastLayout.sideInset, right: toastLayout.sideInset, alignItems: "center" },
   origin: { transformOrigin: "50% 100%" },
+  press: { borderRadius: toastLayout.radius, borderCurve: "continuous" },
   toast: {
     flexDirection: "row",
     alignItems: "center",
@@ -154,13 +166,9 @@ const styles = StyleSheet.create({
     minHeight: toastLayout.minHeight,
     paddingHorizontal: space.l,
     paddingVertical: toastLayout.verticalPadding,
-    borderWidth: StyleSheet.hairlineWidth,
     borderCurve: "continuous",
-    shadowOpacity: 1,
-    shadowRadius: toastLayout.shadowRadius,
-    shadowOffset: { width: 0, height: toastLayout.shadowY },
-    elevation: 8,
   },
+  materialPlate: { borderWidth: stroke.hairline, shadowOpacity: 1, shadowRadius: toastLayout.shadowRadius, shadowOffset: { width: 0, height: toastLayout.shadowY }, elevation: toastGesture.materialElevation },
   text: { fontWeight: "600", flexShrink: 1 },
   action: { fontWeight: "700" },
 });

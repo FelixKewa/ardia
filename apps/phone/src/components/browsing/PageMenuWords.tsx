@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
@@ -29,12 +29,13 @@ import {
   zoomIn,
   zoomOut,
 } from "../../state/page/actions";
+import { actionColumns } from "../../state/page/menuActionColumns";
 import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import { openLibrary, type LibrarySection } from "../../state/library/store";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useTab } from "../../state/tabs/hooks";
-import { font, iconRoles, pageMenuLayout, pageMenuMotion, PressScale, SheetScrollView, smoothCorners, space, Symbol, ToggleRow as SharedToggleRow, usePressStyle, useTheme, type MenuItem, type PressKind, type SymbolName } from "../ui";
+import { font, iconRoles, pageMenuLayout, pageMenuMotion, PressInPlace, SheetScrollView, smoothCorners, space, Symbol, ToggleRow as SharedToggleRow, usePressStyle, useTheme, type MenuItem, type PressKind, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
@@ -57,6 +58,14 @@ function inRows<T>(items: T[], perRow: number): T[][] {
   return rows;
 }
 
+function useActionColumns(labels: readonly string[]) {
+  const { width, fontScale } = useWindowDimensions();
+  const [measured, setMeasured] = useState<number | null>(null);
+  const available = measured ?? width - pageMenuCards.padding * 2;
+  const columns = actionColumns(labels, available, pageMenuCards.tileGap, { fontSize: font.caption.fontSize, fontScale, advance: pageMenuCards.captionAdvance, maxLines: pageMenuCards.captionLines });
+  return { columns, measure: (next: number) => setMeasured((now) => (now === next ? now : next)) };
+}
+
 export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; model: MenuModel; onTranslate: () => void }) {
   const large = useAccessibilityText();
   const devices = useSendTargets(tabId);
@@ -67,14 +76,16 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
     { icon: iconRoles.copyLink, label: actionWords.copyLink, enabled: model.tiles, onPress: copyCurrentLink },
     { icon: iconRoles.share, label: actionWords.share, enabled: model.tiles, onPress: shareCurrentPage },
   ];
+  const { columns, measure } = useActionColumns(actions.map((action) => action.label));
+  const square = columns === actions.length;
   return (
     <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
       <NavigationBar tabId={tabId} model={model} large={large} />
-      <View testID="pageMenuActions" style={styles.actionRows}>
-        {inRows(actions, large ? pageMenuCards.largeTextColumns : actions.length).map((row, index) => (
+      <View testID="pageMenuActions" style={styles.actionRows} onLayout={(event) => measure(event.nativeEvent.layout.width)}>
+        {inRows(actions, columns).map((row, index) => (
           <View key={index} testID="pageMenuActionRow" style={styles.actions}>
             {row.map((action) => (
-              <ActionTile key={action.label} {...action} large={large} />
+              <ActionTile key={action.label} {...action} square={square} large={large} />
             ))}
           </View>
         ))}
@@ -122,7 +133,7 @@ function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuMode
         entering={TITLE_IN}
         exiting={TITLE_OUT}
         style={[font.body, styles.titleText, large && !feedback ? styles.leading : styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
-        numberOfLines={large ? 3 : 1}
+        numberOfLines={large ? 3 : feedback ? pageMenuCards.feedbackLines : 1}
       >
         {shown}
       </Animated.Text>
@@ -152,19 +163,19 @@ function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
 function BarButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} style={styles.barButton}>
+    <PressInPlace label={label} disabled={!enabled} onPress={onPress} style={styles.barButton}>
       <Symbol name={icon} size={pageMenuCards.barGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
-    </PressScale>
+    </PressInPlace>
   );
 }
 
-function ActionTile({ icon, label, enabled, large, onPress }: Action & { large: boolean }) {
+function ActionTile({ icon, label, enabled, square, large, onPress }: Action & { square: boolean; large: boolean }) {
   const theme = useTheme();
   const ink = usePageMenuInk();
   return (
     <View testID={`pageMenuAction:${label}`} style={styles.action}>
-      <PressScale label={label} disabled={!enabled} onPress={onPress} grow style={styles.actionPress}>
-        <View style={[styles.tile, large ? styles.tileLarge : styles.tileSquare, { backgroundColor: ink.cell }]}>
+      <PressInPlace label={label} disabled={!enabled} onPress={onPress} grow style={styles.actionPress}>
+        <View style={[styles.tile, square ? styles.tileSquare : styles.tileLarge, { backgroundColor: ink.cell }]}>
           <Symbol name={icon} size={pageMenuCards.tileGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
         </View>
         <Text
@@ -172,11 +183,11 @@ function ActionTile({ icon, label, enabled, large, onPress }: Action & { large: 
           importantForAccessibility="no"
           accessibilityElementsHidden
           style={[font.caption, styles.medium, styles.centered, { color: enabled ? theme.secondaryLabel : theme.tertiaryLabel }]}
-          numberOfLines={large ? undefined : 1}
+          numberOfLines={large ? undefined : pageMenuCards.captionLines}
         >
           {label}
         </Text>
-      </PressScale>
+      </PressInPlace>
     </View>
   );
 }

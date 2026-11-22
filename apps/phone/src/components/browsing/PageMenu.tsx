@@ -48,12 +48,12 @@ import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../
 import { cancelSearch } from "../../state/browse/store";
 import { useTab } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { ConfirmDialog, settingsUIAvailable, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressScale, shape, Sheet, slotSide, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type PressKind, type SymbolName } from "../ui";
+import { ConfirmDialog, settingsUIAvailable, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressInPlace, shape, Sheet, slotSide, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type PressKind, type SymbolName } from "../ui";
 import { MaterialPageMenu, MaterialPageMenuItems, MaterialSiteSettingsContent, MaterialSiteSettingsHeader } from "./MaterialPageMenu";
 import { countSearchExpansion, MaterialSearchField, MaterialSearchResults, useMaterialSheetSearch } from "../search/MaterialSearchView";
 import { barAddress } from "./FloatingBar";
 import { PageMenuWords, usePageMenuInk } from "./PageMenuWords";
-import { classicPageMenu } from "./pageMenuTokens";
+import { classicPageMenu, pageMenuCards } from "./pageMenuTokens";
 import { SystemPageMenu } from "./SystemPageMenu";
 import { MaterialAddressContent } from "../ui/MaterialBottomBar";
 import { useMaterialTheme } from "../ui/materialTheme";
@@ -325,7 +325,7 @@ function NavigationCapsule({ tabId }: { tabId: string }) {
         entering={TITLE_IN}
         exiting={TITLE_OUT}
         style={[font.body, styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
-        numberOfLines={below ? 3 : 1}
+        numberOfLines={below ? 3 : feedback ? pageMenuCards.feedbackLines : 1}
       >
         {shown}
       </Animated.Text>
@@ -355,9 +355,9 @@ function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
   const pinned = useIsPinned(tabId);
   const can = enabled && !tab?.isPrivate;
   return (
-    <PressScale label={pinned ? "Pinned to Mac" : "Pin to Mac"} disabled={!can} onPress={pinCurrentToMac} style={styles.capsuleButton}>
+    <PressInPlace label={pinned ? "Pinned to Mac" : "Pin to Mac"} disabled={!can} onPress={pinCurrentToMac} style={styles.capsuleButton}>
       <Symbol name={pinned ? "starFill" : "star"} size={19} color={can ? theme.label : theme.tertiaryLabel} />
-    </PressScale>
+    </PressInPlace>
   );
 }
 
@@ -400,9 +400,9 @@ function RowWithEvent({ icon, title, onPress }: { icon: SymbolName; title: strin
 function CapsuleButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} style={styles.capsuleButton}>
+    <PressInPlace label={label} disabled={!enabled} onPress={onPress} style={styles.capsuleButton}>
       <Symbol name={icon} size={19} color={enabled ? theme.label : theme.tertiaryLabel} />
-    </PressScale>
+    </PressInPlace>
   );
 }
 
@@ -410,12 +410,12 @@ function Tile({ icon, title, enabled, onPress }: { icon: SymbolName; title: stri
   const theme = useTheme();
   const ink = enabled ? theme.label : theme.tertiaryLabel;
   return (
-    <PressScale label={title} disabled={!enabled} onPress={onPress} grow style={[styles.tile, { backgroundColor: theme.groupFill }]}>
+    <PressInPlace label={title} disabled={!enabled} onPress={onPress} grow style={[styles.tile, { backgroundColor: theme.groupFill }]}>
       <Symbol name={icon} size={22} color={ink} />
       <Text style={[font.footnote, styles.medium, { color: ink }]} numberOfLines={1}>
         {title}
       </Text>
-    </PressScale>
+    </PressInPlace>
   );
 }
 

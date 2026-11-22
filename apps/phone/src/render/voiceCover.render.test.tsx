@@ -1,10 +1,11 @@
-import { StyleSheet } from "react-native";
+import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { VoiceSearchView } from "../components/search/VoiceSearchView";
+import { presentVoiceSearchFrom, VoiceSearchView } from "../components/search/VoiceSearchView";
 import { ActionButton, overlayInk, press, voiceInk, voiceLayout } from "../components/ui";
-import { OverlayCancelButton, OverlayGlassButton } from "../components/ui/LookViews";
+import { ChromeFrost, OverlayCancelButton } from "../components/ui/LookViews";
 import { DICTATION_IDLE, type Dictation } from "../state/voice/dictation";
+import * as voiceStore from "../state/voice/store";
 import { useVoice } from "../state/voice/store";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
@@ -68,9 +69,13 @@ test("a problem's message is a header too, and Try Again is the overlay recovery
   unmount(root);
 });
 
-test("the voice actions share the filled press and the transcript plate has the continuous curve", () => {
+test("the voice actions are the shared action's glass face over the cover's frost, with its filled press, and the transcript plate has the continuous curve", () => {
   const root = show({ phase: "finished", transcript: "otters" });
-  const search = root.root.findAll((node) => node.type === OverlayGlassButton && node.props.title === "Search")[0]!;
+  const search = root.root.findAll((node) => node.type === ActionButton && node.props.title === "Search")[0]!;
+  expect(search.props).toMatchObject({ variant: "glass", tone: "overlay", stretch: true });
+  expect(search.props.frostSource).toBeDefined();
+  expect(search.findAll((node) => node.type === ChromeFrost)).toHaveLength(1);
+  expect(flat(host(root, "voiceSearch")).borderCurve).toBe("continuous");
   const pressable = search.findAll((node) => typeof node.props.style === "function")[0]!;
   expect(flat(pressable, true).opacity).toBe(press.filledOpacity);
   const plate = root.root.findAll((node) => typeof node.type === "string" && flat(node).backgroundColor === voiceInk.transcript)[0]!;
@@ -88,4 +93,28 @@ test("the waveform follows the level, and holds still at its resting height unde
   const still = show({ phase: "listening" }, levels);
   expect(heights(still)).toEqual(levels.map(() => voiceLayout.barMin));
   unmount(still);
+});
+
+const onIPhone = Platform.OS === "ios" ? test : test.skip;
+
+onIPhone("closing voice search gives screen reader focus back to the control that opened it, once the cover has left", async () => {
+  jest.spyOn(AccessibilityInfo, "isScreenReaderEnabled").mockResolvedValue(true);
+  const focused = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => undefined);
+  jest.spyOn(voiceStore, "presentVoiceSearch").mockImplementation(() => {
+    useVoice.setState({ presented: true, dictation: { ...DICTATION_IDLE, phase: "listening" } });
+    return true;
+  });
+  const opener = 4343;
+  act(() => presentVoiceSearchFrom(() => opener as never));
+  const root = renderSurface(<VoiceSearchView />);
+  await act(async () => undefined);
+  focused.mockClear();
+  act(() => host(root, "voiceCover")!.props.onAccessibilityEscape());
+  expect(host(root, "voiceCover")).toBeUndefined();
+  await act(async () => undefined);
+  act(() => jest.advanceTimersByTime(100));
+  await act(async () => undefined);
+  act(() => jest.advanceTimersByTime(100));
+  expect(focused).toHaveBeenCalledWith(opener);
+  unmount(root);
 });

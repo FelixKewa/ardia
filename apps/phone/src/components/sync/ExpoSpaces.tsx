@@ -7,7 +7,6 @@ import {
   accessibilityHint,
   accessibilityLabel,
   backgroundOverlay,
-  buttonBorderShape,
   buttonStyle,
   cornerRadius,
   dynamicTypeSize,
@@ -41,7 +40,9 @@ import { COLLAPSED_LIMIT, pinnedKeyAt, remoteTitle } from "../../state/sync/spac
 import { showAllDeviceTabs, toggleSpaceRow, useSpaceOpenFor } from "../../state/sync/spaceOpen";
 import { syncBanner, type BannerIcon } from "../../state/sync/syncRules";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { destinationWords, dismissWords, syncWords } from "../../lib/sharedWords";
+import { actionWords, destinationWords, syncWords } from "../../lib/sharedWords";
+import { DoneButton } from "../settings/ExpoSettingsDone";
+import { ExpoSettingsAction } from "../settings/ExpoSettingsParts";
 import { LinkMenuItems, ListLoading, ListRow, opensPage } from "../library/listSheet";
 import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, chromeSurface, contentMargins, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, shape, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
 
@@ -121,7 +122,7 @@ function SpacesSheetContent() {
 }
 
 function SpacesFallback({ off, waiting }: { off: boolean; waiting: boolean }) {
-  const action = <Button label={off ? syncWords.connect : destinationWords.sync} onPress={() => openSettings({ page: off ? "syncConnect" : "sync" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", shape.control)]} />;
+  const action = <ExpoSettingsAction title={off ? syncWords.connect : destinationWords.sync} size="compact" onPress={() => openSettings({ page: off ? "syncConnect" : "sync" })} />;
   if (waiting) return <ListLoading label={WAITING_FOR_MAC} action={action} />;
   return <ContentUnavailableView title="Your Mac’s Spaces" systemImage="macbook.and.iphone" description={off ? "Every tab, anywhere." : WAITING_FOR_MAC} modifiers={[frame({ maxHeight: FILL })]} actions={action} />;
 }
@@ -156,9 +157,7 @@ function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile
         <HeaderFace label={destinationWords.archive} onPress={openArchive}>
           <Image systemName="archivebox" modifiers={modifierList(font({ textStyle: "body", weight: "medium" }), frame({ width: L.headerCircle, height: L.headerCircle }), ROUNDED_FACE)} />
         </HeaderFace>
-        <HeaderFace label={dismissWords.done} onPress={closeArchive}>
-          <Text modifiers={modifierList(font({ textStyle: "body", weight: "semibold" }), padding({ horizontal: L.page }), frame({ minWidth: L.headerCircle, minHeight: L.headerCircle }), ROUNDED_FACE)}>{dismissWords.done}</Text>
-        </HeaderFace>
+        <DoneButton onDone={closeArchive} modifiers={modifierList(buttonStyle("plain"), font({ textStyle: "body", weight: "semibold" }), padding({ horizontal: L.page }), frame({ minWidth: L.headerCircle, minHeight: L.headerCircle }), ROUNDED_FACE)} />
       </HStack>
     </HStack>
   );
@@ -242,7 +241,7 @@ function RemoteRow({ title, url, symbol, pinnedKey = null, open }: { title: stri
         <ListRow title={remoteTitle(title, url)} leading={systemSymbol ? { symbol: systemSymbol } : { favicon: { url } }} hint="Opens the page." minHeight={L.rowHeight} onPress={go} />
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        <Button label="Open" systemImage="arrow.up.forward.square" onPress={go} />
+        <Button label={actionWords.open} systemImage="arrow.up.forward.square" onPress={go} />
         {shareable(url) ? <LinkMenuItems url={url} onCopy={() => copyLink(url)} /> : null}
       </ContextMenu.Items>
     </ContextMenu>

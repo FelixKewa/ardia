@@ -7,6 +7,8 @@ import * as syncActions from "../state/sync/actions";
 import { useSync } from "../state/sync/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { DoneButton } from "../components/settings/ExpoSettingsDone";
+import { ExpoSettingsAction } from "../components/settings/ExpoSettingsParts";
 
 jest.mock("@ardia/phone-native", () => {
   const actual = jest.requireActual("@ardia/phone-native");
@@ -118,6 +120,9 @@ onIos("with sync off, Spaces shows main's unavailable view, whose button is the 
   await open();
   expect(hosts(spacesSheet(root), (props) => props.title === "Your Mac’s Spaces")).toHaveLength(1);
   expect(hosts(spacesSheet(root), (props) => props.label === "Connect to Your Mac")).toHaveLength(1);
+  const actions = spacesSheet(root).findAll((node) => node.type === ExpoSettingsAction);
+  expect(actions.map((action) => action.props.title)).toEqual(["Connect to Your Mac"]);
+  expect(actions[0]!.props.size).toBe("compact");
   unmount(root);
 });
 
@@ -143,7 +148,11 @@ onIos("the header's Archive and Done faces and the page dots are rounded rectang
   expect(hosts(spacesSheet(root), (props) => props.label === "Close" || props.symbol === "xmark")).toHaveLength(0);
   const labelled = (label: string) => hosts(spacesSheet(root), (props) => Array.isArray(props.modifiers) && (props.modifiers as { $type: string; label?: string }[]).some((modifier) => modifier.$type === "accessibilityLabel" && modifier.label === label))[0]!;
   expect(labelled("Archive")).toBeDefined();
-  await act(async () => void labelled("Done").props.onButtonPress({ nativeEvent: {} }));
+  const done = spacesSheet(root).findAll((node) => node.type === DoneButton);
+  expect(done).toHaveLength(1);
+  const doneButton = hosts(done[0]!, (props) => props.label === "Done")[0]!;
+  expect((doneButton.props.modifiers as { $type: string }[]).map((modifier) => modifier.$type)).toEqual(expect.arrayContaining(["font", "tint", "ardia.chromeSurface"]));
+  await act(async () => void doneButton.props.onButtonPress({ nativeEvent: {} }));
   expect(browse.useBrowse.getState().sheet).toBe(null);
   await settle();
   unmount(root);

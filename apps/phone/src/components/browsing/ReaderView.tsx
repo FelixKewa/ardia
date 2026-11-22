@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { FlatList, Image, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSystemBars } from "../../state/app/systemBars";
@@ -17,10 +17,11 @@ import {
   type ReaderTheme,
 } from "../../state/page/pagePrompts";
 import { copy } from "../../lib/platformCopy";
-import { dismissWords } from "../../lib/sharedWords";
-import { ChromeSurface, EmptyState, font, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
+import { dismissWords, ELLIPSIS } from "../../lib/sharedWords";
+import { ChromeSurface, EmptyState, font, LoadingState, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
 import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
+import { pageMenuOpener } from "./pageMenuOpener";
 import { readerGlyphs } from "./readerTokens";
 
 const rise = SlideInDown.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
@@ -43,7 +44,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
   const material = useDesign() === "material";
   const reduceMotion = useReduceMotion();
   const done = useRef<ViewInstance>(null);
-  const { ref: overlayRef, ...overlay } = useModalOverlay({ open: true, closing, onDismiss: closeReader, focus: material ? undefined : done });
+  const { ref: overlayRef, ...overlay } = useModalOverlay({ open: true, closing, onDismiss: closeReader, focus: material ? undefined : done, returnFocusTo: pageMenuOpener });
   const donePress = usePressStyle("text");
   const appearancePress = usePressStyle("icon");
   const dark = useDarkScheme();
@@ -119,7 +120,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
       )}
       {load.kind === "loading" ? (
         <View style={styles.center}>
-          <ActivityIndicator accessibilityLabel="Loading article" color={ink.secondary} />
+          <LoadingState testID="readerLoading" label={LOADING_ARTICLE} ink={{ label: ink.ink, secondary: ink.secondary }} />
         </View>
       ) : load.kind === "failed" ? (
         <View style={styles.center}>
@@ -172,6 +173,8 @@ function Paragraph({ text, family, size, color }: { text: string; family: string
 
 const WEB_IMAGE = /^https?:\/\//i;
 const NO_ARTICLE = "No Article Found";
+
+const LOADING_ARTICLE = `Loading Article${ELLIPSIS}`;
 
 function LeadImage({ uri }: { uri: string }) {
   const [aspect, setAspect] = useState<number | null>(null);

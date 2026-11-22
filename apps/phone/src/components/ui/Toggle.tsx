@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import { Platform, PlatformColor, Pressable, StyleSheet, Text, View, type ColorValue, type StyleProp, type ViewStyle } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
 import { MaterialSwitchTrack } from "./MaterialSurfaces";
@@ -34,15 +34,15 @@ export function Toggle({ value, disabled, onChange, label, hint, testID }: Toggl
   );
 }
 
-type ToggleRowProps = ToggleProps & { press?: TogglePress; detail?: string; children?: ReactNode; style?: StyleProp<ViewStyle> };
+type ToggleRowProps = ToggleProps & { press?: TogglePress; detail?: string; detailInset?: number; children?: ReactNode; style?: StyleProp<ViewStyle> };
 
-export function ToggleRow({ value, disabled = false, onChange, label, hint, detail, press: pressMode = "row", testID, children, style }: ToggleRowProps) {
+export function ToggleRow({ value, disabled = false, onChange, label, hint, detail, detailInset = 0, press: pressMode = "row", testID, children, style }: ToggleRowProps) {
   const theme = useTheme();
   const rowStyle = usePressStyle("row", { style: [styles.row, style] });
   const words = (
     <View style={styles.words} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
       {children ?? <Text style={[font.body, { color: disabled ? theme.disabled : theme.label }]}>{label}</Text>}
-      {detail ? <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{detail}</Text> : null}
+      {detail ? <Text style={[font.footnote, { color: theme.secondaryLabel, marginLeft: detailInset }]}>{detail}</Text> : null}
     </View>
   );
   if (pressMode === "knob") {
@@ -75,6 +75,15 @@ export function ToggleTrack({ value, disabled }: { value: boolean; disabled?: bo
   return <ClassicToggleTrack value={value} disabled={disabled} />;
 }
 
+export type SwitchColors = { on: ColorValue; off: ColorValue };
+
+export const SYSTEM_SWITCH_COLOR_NAMES = { on: "systemGreen", off: "secondarySystemFill" } as const;
+
+export function switchColors(tokens: { switchOn: string; switchOff: string }, os: string): SwitchColors {
+  if (os === "ios") return { on: PlatformColor(SYSTEM_SWITCH_COLOR_NAMES.on), off: PlatformColor(SYSTEM_SWITCH_COLOR_NAMES.off) };
+  return { on: tokens.switchOn, off: tokens.switchOff };
+}
+
 function ClassicToggleTrack({ value, disabled }: { value: boolean; disabled?: boolean }) {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
@@ -82,14 +91,14 @@ function ClassicToggleTrack({ value, disabled }: { value: boolean; disabled?: bo
   useEffect(() => {
     position.value = reduceMotion ? withTiming(value ? 1 : 0, { duration: motionAliases.toggleKnobReducedMs }) : withSpring(value ? 1 : 0, motionAliases.toggleKnob);
   }, [position, value, reduceMotion]);
-  const off = theme.switchOff;
-  const on = theme.switchOn;
-  const trackStyle = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(position.value, [0, 1], [off, on]) }), [off, on]);
+  const colors = switchColors(theme, Platform.OS);
+  const onStyle = useAnimatedStyle(() => ({ opacity: position.value }));
   const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: position.value * TRAVEL }] }));
   return (
-    <Animated.View testID="toggleTrack" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[styles.track, trackStyle, disabled ? styles.disabled : null]}>
+    <View testID="toggleTrack" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[styles.track, { backgroundColor: colors.off }, disabled ? styles.disabled : null]}>
+      <Animated.View testID="toggleTrackOn" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.onFill, { backgroundColor: colors.on }, onStyle]} />
       <Animated.View style={[styles.knob, knobStyle]} />
-    </Animated.View>
+    </View>
   );
 }
 
@@ -97,6 +106,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m },
   words: { flex: 1, gap: space.tight },
   track: { width: toggleLayout.width, height: toggleLayout.height, borderRadius: capsule(toggleLayout.height), padding: toggleLayout.inset, justifyContent: "center" },
+  onFill: { borderRadius: capsule(toggleLayout.height) },
   knob: {
     width: toggleLayout.knob,
     height: toggleLayout.knob,

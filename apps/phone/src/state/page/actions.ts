@@ -1,4 +1,3 @@
-import { mobileClean } from "@ardia/core/src/mobile";
 import { blocking } from "../../platform/blocking";
 import { downloads, type DownloadEvent } from "../../platform/downloads";
 import { pages, type PageEngineEvent, type PageRequestAnswer } from "../../platform/pages";
@@ -22,6 +21,7 @@ import { refreshSettings } from "../settings/actions";
 import { openSettings, openSettingsPage, popSettings, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
+import { linkToCopy } from "./linkCopy";
 import { pageUi, usePageUi, type Press } from "./store";
 import { closeVoiceSearch, useVoice } from "../voice/store";
 import { addOnlineAgainListener } from "../../platform/network";
@@ -231,9 +231,10 @@ export const editDockedPageQuery = () => {
 export function copyCurrentLink() {
   const tab = selectedTab();
   if (!tab || !isSyncableUrl(tab.url)) return;
-  quietly(() => copyText(mobileClean(tab.url)));
+  const link = linkToCopy(tab.url);
+  quietly(() => copyText(link.text));
   quietly(successHaptic);
-  showTitleFeedback(actionWords.copiedLink);
+  showTitleFeedback(link.acknowledgement);
 }
 
 export function showTitleFeedback(text: string) {
@@ -378,11 +379,13 @@ export function pressAction(press: Press, action: PressAction) {
       else openTab(tab.id);
       return;
     }
-    case "copy":
-      quietly(() => copyText(mobileClean(plan.url)));
+    case "copy": {
+      const link = linkToCopy(plan.url);
+      quietly(() => copyText(link.text));
       quietly(successHaptic);
-      showToast(actionWords.copiedLinkWithoutTrackers, "link");
+      showToast(link.acknowledgement, "link");
       return;
+    }
     case "share":
       quietly(() => shareLink(plan.url, ""));
       return;

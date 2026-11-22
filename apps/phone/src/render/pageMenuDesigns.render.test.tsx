@@ -16,7 +16,8 @@ import { useLibrary } from "../state/library/store";
 import { OFF_STATUS, useSync, type SyncedProfile } from "../state/sync/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { useTabs } from "../state/tabs/store";
-import { pressButton, renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
+import { pressButton, renderSurface, someTabs, textOf, unmount, withTabs } from "../../test/render/harness";
+import { launchTabs } from "../state/tabs/tabsState";
 
 const realWindow = Dimensions.get("window");
 
@@ -77,7 +78,10 @@ const rowAround = (node: ReactTestRenderer["root"]) => {
   return at;
 };
 const labelled = (root: ReactTestRenderer, label: string) => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0];
-const textSize = (scale: number) => Dimensions.set({ window: { ...realWindow, fontScale: scale }, screen: { ...realWindow, fontScale: scale } });
+const textSize = (scale: number, width = realWindow.width) => Dimensions.set({ window: { ...realWindow, width, fontScale: scale }, screen: { ...realWindow, width, fontScale: scale } });
+
+const actionRows = (root: ReactTestRenderer) =>
+  hosts(root, (id) => id === "pageMenuActionRow").map((row) => row.findAll((node) => typeof node.type === "string" && String(node.props.testID).startsWith("pageMenuAction:")).map((node) => String(node.props.testID).replace("pageMenuAction:", "")));
 
 function withOneMac() {
   const profile = { syncId: "work", name: "Work", color: null, icon: null, isDefault: true, theme: null, deviceTabs: [], pinned: { tiles: [], sections: [] }, bookmarks: [], history: [], sendTargets: ["mac"] } as SyncedProfile;
@@ -346,7 +350,7 @@ test("the redesign's Site Settings closes the menu and opens Settings at Site Se
 });
 
 test("at accessibility text sizes the redesign's title moves under the navigation buttons, the zoom controls stack, and the four action tiles keep their captions in two rows of two", async () => {
-  textSize(1.7);
+  textSize(2.4, 393);
   const root = await openMenu("redesigned");
   const titlesIn = (testID: string) => host(root, testID)!.findAll((node) => node.props.testID === "pageMenuTitle" && typeof node.type === "string").length;
   expect(titlesIn("pageMenuCapsule")).toBe(1);
@@ -365,6 +369,28 @@ test("at accessibility text sizes the redesign's title moves under the navigatio
     expect(caption.props.numberOfLines).toBeUndefined();
   }
   unmount(root);
+});
+
+test("at the default text size the redesign's action tiles sit in one row of four, and their captions may wrap to a second line before they truncate", async () => {
+  textSize(1, 393);
+  const root = await openMenu("redesigned");
+  expect(actionRows(root)).toEqual([["Reader", "Find on Page", "Copy Link", "Share"]]);
+  for (const label of ["Reader", "Find on Page", "Copy Link", "Share"]) expect(host(root, `pageMenuActionCaption:${label}`)!.props.numberOfLines).toBe(2);
+  unmount(root);
+});
+
+test("the redesign's action columns follow the menu's width as well as the text size", async () => {
+  textSize(1.7, 393);
+  const wide = await openMenu("redesigned");
+  expect(actionRows(wide)).toEqual([["Reader", "Find on Page", "Copy Link", "Share"]]);
+  unmount(wide);
+  textSize(1.7, 300);
+  const narrow = await openMenu("redesigned");
+  expect(actionRows(narrow)).toEqual([
+    ["Reader", "Find on Page"],
+    ["Copy Link", "Share"],
+  ]);
+  unmount(narrow);
 });
 
 test("the redesign's switches that close the menu and reload say so in their hint, and Stop Loading names the in-flight button", async () => {
@@ -388,11 +414,17 @@ test("the redesign's switches are the shared switch: its grey off track, and no 
   unmount(root);
 });
 
-test("Copy Link in the redesign says Copied Link in the title, from the shared words", async () => {
+test("Copy Link in the redesign says Copied Link in the title, and Copied Link Without Trackers only when it removed one", async () => {
   const root = await openMenu("redesigned");
   await pressButton(root, "Copy Link");
   expect(usePageUi.getState().titleFeedback).toBe("Copied Link");
   unmount(root);
+  act(() => useTabs.setState({ ...launchTabs([{ ...someTabs(1)[0]!, url: "https://site0.example/?utm_source=mail" }], 0), incognito: false, listing: 0 }));
+  const tracked = await openMenu("redesigned");
+  await pressButton(tracked, "Copy Link");
+  expect(usePageUi.getState().titleFeedback).toBe("Copied Link Without Trackers");
+  expect(host(tracked, "pageMenuTitle")!.findAll((node) => typeof node.type === "string" && node.props.numberOfLines !== undefined)[0]!.props.numberOfLines).toBe(2);
+  unmount(tracked);
 });
 
 test("off a web page the redesign's zoom percentage takes the same disabled ink as the rest of the row", async () => {

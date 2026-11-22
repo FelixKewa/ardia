@@ -384,19 +384,51 @@ public struct ColorSwatch: View {
 }
 
 public struct PressableStyle: ButtonStyle {
-  public static let pressedScale: CGFloat = 0.93
-  public static let reducedPressedOpacity: Double = 0.35
-  public static let pressSpring = Animation.spring(response: 0.12, dampingFraction: 1)
+  public enum Kind: Sendable {
+    case icon
+    case filled
 
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    public var pressedOpacity: Double {
+      switch self {
+      case .icon: 0.35
+      case .filled: 0.8
+      }
+    }
+  }
 
-  public init() {}
+  public let kind: Kind
+
+  public init(_ kind: Kind = .icon) {
+    self.kind = kind
+  }
 
   public func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .scaleEffect(configuration.isPressed && !reduceMotion ? Self.pressedScale : 1)
-      .opacity(configuration.isPressed && reduceMotion ? Self.reducedPressedOpacity : 1)
-      .animation(reduceMotion ? nil : Self.pressSpring, value: configuration.isPressed)
+      .opacity(configuration.isPressed ? kind.pressedOpacity : 1)
+      .transaction { $0.animation = nil }
+  }
+}
+
+public extension View {
+  @ViewBuilder
+  func chromeButtonStyle(prominent: Bool) -> some View {
+    modifier(ChromeButtonStyle(prominent: prominent))
+  }
+}
+
+private struct ChromeButtonStyle: ViewModifier {
+  let prominent: Bool
+
+  @Environment(\.usesGlass) private var usesGlass
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    switch (usesGlass, prominent) {
+    case (true, true): content.buttonStyle(.glassProminent)
+    case (true, false): content.buttonStyle(.glass)
+    case (false, true): content.buttonStyle(.borderedProminent)
+    case (false, false): content.buttonStyle(.bordered)
+    }
   }
 }
 

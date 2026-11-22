@@ -23,6 +23,8 @@ export const actionWords = {
   color: "Color",
 } as const;
 
+export const copiedLinkWords = (trackersRemoved: boolean) => (trackersRemoved ? actionWords.copiedLinkWithoutTrackers : actionWords.copiedLink);
+
 export const pageWords = {
   untitledTab: actionWords.newTab,
 } as const;
@@ -57,4 +59,12 @@ export const listWords = {
   noResults: "No Results",
   noResultsCue: (query: string) => `Check the spelling or try a new search for “${query}”.`,
   loading: `Loading${ELLIPSIS}`,
+} as const;
+
+export const connectionWords = {
+  connecting: `Connecting${ELLIPSIS}`,
+} as const;
+
+export const blockingWords = {
+  blockAdsAndTrackers: "Block Ads and Trackers",
 } as const;

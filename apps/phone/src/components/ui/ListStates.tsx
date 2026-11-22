@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { listWords } from "../../lib/sharedWords";
 import { ActionButton } from "./ActionButton";
+import { announceForScreenReader } from "./coverFocus";
 import { iconRoles } from "./iconRoles";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
@@ -13,7 +15,7 @@ type EmptyStateProps = {
   message?: string;
   action?: { title: string; onPress: () => void };
   testID?: string;
-  ink?: { label: string; secondary: string };
+  ink?: StateInk;
 };
 
 export function EmptyState({ title, glyph, message, action, testID, ink }: EmptyStateProps) {
@@ -44,12 +46,31 @@ export function NoResultsState({ query, onClear, clearTitle, testID }: { query: 
   return <EmptyState testID={testID} title={listWords.noResults} glyph={iconRoles.noResults} message={listWords.noResultsCue(query)} action={onClear && clearTitle ? { title: clearTitle, onPress: onClear } : undefined} />;
 }
 
-export function LoadingState({ label = listWords.loading, testID }: { label?: string; testID?: string }) {
+export type LoadingContract = { label: string; role: "progressbar"; busy: true; liveRegion: "polite"; nativeTraits: ["updatesFrequently"] };
+
+export const loadingContract = (label: string = listWords.loading): LoadingContract => ({ label, role: "progressbar", busy: true, liveRegion: "polite", nativeTraits: ["updatesFrequently"] });
+
+export function useLoadingAnnouncement(label: string) {
+  useEffect(() => {
+    let live = true;
+    announceForScreenReader(label, () => live);
+    return () => {
+      live = false;
+    };
+  }, [label]);
+}
+
+type StateInk = { label: string; secondary: string };
+
+export function LoadingState({ label, testID, ink }: { label?: string; testID?: string; ink?: StateInk }) {
   const theme = useTheme();
+  const contract = loadingContract(label);
+  const secondary = ink?.secondary ?? theme.secondaryLabel;
+  useLoadingAnnouncement(contract.label);
   return (
-    <View testID={testID} style={styles.column} accessible accessibilityRole="progressbar" accessibilityLabel={label} accessibilityState={{ busy: true }} accessibilityLiveRegion="polite">
-      <ActivityIndicator color={theme.secondaryLabel} />
-      <Text style={[font.subheadline, styles.message, { color: theme.secondaryLabel }]}>{label}</Text>
+    <View testID={testID} style={styles.column} accessible accessibilityRole={contract.role} accessibilityLabel={contract.label} accessibilityState={{ busy: contract.busy }} accessibilityLiveRegion={contract.liveRegion}>
+      <ActivityIndicator color={secondary} />
+      <Text style={[font.subheadline, styles.message, { color: secondary }]}>{contract.label}</Text>
     </View>
   );
 }

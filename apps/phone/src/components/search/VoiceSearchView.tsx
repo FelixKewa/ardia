@@ -1,25 +1,45 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/platformCopy";
 import { actionWords, dismissWords } from "../../lib/sharedWords";
 import { PROBLEM_TEXT, voiceControl, type Dictation } from "../../state/voice/dictation";
-import { browseSpoken, closeVoiceSearch, openSpeechSettings, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
+import { browseSpoken, closeVoiceSearch, openSpeechSettings, presentVoiceSearch, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
 import { browseForMeOffered } from "../../state/browseForMe/offer";
 import { ActionButton, ArdiaLogo, font, FrostSource, LookBackdrop, motionAliases, smoothCorners, space, useModalOverlay, voiceInk, voiceLayout, useReduceMotion } from "../ui";
-import { OverlayCancelButton, OverlayGlassButton } from "../ui/LookViews";
+import { OverlayCancelButton } from "../ui/LookViews";
+import type { FocusTarget } from "../ui/coverFocus";
+
+let voiceOpener: FocusTarget | null = null;
+
+export function presentVoiceSearchFrom(opener: FocusTarget) {
+  voiceOpener = opener;
+  if (!presentVoiceSearch()) voiceOpener = null;
+}
+
+const takeVoiceOpener = () => {
+  const opener = voiceOpener;
+  voiceOpener = null;
+  return opener ?? undefined;
+};
 
 export function VoiceSearchView() {
   const presented = useVoicePresented();
-  return presented ? <VoiceCover /> : null;
+  const [mounted, setMounted] = useState(presented);
+  if (presented && !mounted) setMounted(true);
+  useEffect(() => {
+    if (!presented && mounted) setMounted(false);
+  }, [presented, mounted]);
+  return mounted ? <VoiceCover closing={!presented} /> : null;
 }
 
-function VoiceCover() {
+function VoiceCover({ closing }: { closing: boolean }) {
   const insets = useSafeAreaInsets();
   const dictation = useDictation();
   const cancel = useRef<ViewInstance>(null);
-  const modal = useModalOverlay({ open: true, onDismiss: closeVoiceSearch, focus: cancel });
+  const [opener] = useState(takeVoiceOpener);
+  const modal = useModalOverlay({ open: true, closing, onDismiss: closeVoiceSearch, focus: cancel, returnFocusTo: opener });
   return (
     <View testID="voiceCover" style={StyleSheet.absoluteFill} {...modal}>
       <FrostSource name={VOICE_FROST} style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -112,9 +132,9 @@ function Controls({ dictation }: { dictation: Dictation }) {
   const control = voiceControl(dictation);
   return (
     <View style={styles.controls}>
-      {control?.kind === "done" ? <OverlayGlassButton title={dismissWords.done} icon="stopFill" frostSource={VOICE_FROST} onPress={stopListening} /> : null}
-      {control?.kind === "search" ? <OverlayGlassButton title="Search" frostSource={VOICE_FROST} onPress={() => searchSpoken(control.text)} /> : null}
-      {control?.kind === "search" && browseForMeOffered() ? <OverlayGlassButton title="Browse for Me" icon="sparkleMagnifyingglass" frostSource={VOICE_FROST} onPress={() => browseSpoken(control.text)} /> : null}
+      {control?.kind === "done" ? <ActionButton testID="voiceDone" title={dismissWords.done} icon="stopFill" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={stopListening} stretch /> : null}
+      {control?.kind === "search" ? <ActionButton testID="voiceSearch" title="Search" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => searchSpoken(control.text)} stretch /> : null}
+      {control?.kind === "search" && browseForMeOffered() ? <ActionButton testID="voiceBrowseForMe" title="Browse for Me" icon="sparkleMagnifyingglass" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => browseSpoken(control.text)} stretch /> : null}
       {control?.kind === "tryAgain" ? <ActionButton testID="voiceTryAgain" title={actionWords.tryAgain} icon="micFill" tone="overlay" onPress={() => void startListening()} stretch /> : null}
     </View>
   );

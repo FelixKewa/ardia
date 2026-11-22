@@ -10,7 +10,7 @@ import {
   type GlassShape,
 } from "@ardia/phone-native";
 import type { ReactNode, RefObject } from "react";
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   backdropStops,
@@ -27,8 +27,7 @@ import { useReduceTransparency } from "./contrast";
 import { useProfileLook, useTheme } from "./theme";
 import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
-import type { SymbolName } from "./symbolPaths";
-import { actionLayout, chromeInk, chromeLayout, controlRadius, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
+import { chromeInk, chromeLayout, controlRadius, nativeGlassChrome, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
 
@@ -185,6 +184,14 @@ export function useSolidChrome() {
   return chromeIsSolid(style, reduceTransparency, useNativeLook());
 }
 
+export type PlateMaterial = "glass" | "frost" | "solid";
+
+export type PlateFace = Exclude<PlateMaterial, "solid">;
+
+export const SEARCH_PANEL_FACE: PlateFace = "frost";
+
+export const plateMaterial = (face: PlateFace, solid: boolean, glassIsLive: boolean): PlateMaterial => (solid ? "solid" : face === "glass" && glassIsLive ? "glass" : "frost");
+
 export function LookFrost({
   source,
   variant,
@@ -263,7 +270,7 @@ export function ChromeSurface({
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
     return (
-      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
+      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...nativeGlassChrome} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
         {children}
       </Glass>
     );
@@ -302,6 +309,7 @@ export function LookGlass({
       source={frost.source}
       shape={shape}
       tint={frost.incognito ? undefined : lookGlassTint(look)}
+      {...nativeGlassChrome}
       {...lookColors(look, frost.incognito ?? false, shade)}
       dark={shade}
       style={frost.style}
@@ -335,32 +343,8 @@ export function OverlayCancelButton({ label, onPress, frostSource, buttonRef, te
   );
 }
 
-export function OverlayGlassButton({ title, icon, onPress, frostSource, testID }: OverlayFace & { title: string; icon?: SymbolName; onPress: () => void; testID?: string }) {
-  const pressStyle = usePressStyle("filled", { style: overlayStyles.stretch });
-  return (
-    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={pressStyle}>
-      <OverlayPlate frostSource={frostSource} cornerRadius={actionLayout.radius.regular} style={overlayStyles.glassFace}>
-        {icon ? <Symbol name={icon} size={actionLayout.icon.regular} color={overlayInk.label} /> : null}
-        <Text style={[actionLayout.label.regular, overlayStyles.glassLabel]}>{title}</Text>
-      </OverlayPlate>
-    </Pressable>
-  );
-}
-
 const overlayStyles = StyleSheet.create({
   plate: { backgroundColor: overlayInk.glass, overflow: "hidden", ...smoothCorners },
   cancel: { position: "absolute", width: voiceLayout.cancel, height: voiceLayout.cancel },
   cancelFace: { flex: 1, alignItems: "center", justifyContent: "center", ...smoothCorners },
-  stretch: { alignSelf: "stretch" },
-  glassFace: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: actionLayout.iconGap,
-    minHeight: actionLayout.height.regular,
-    paddingHorizontal: actionLayout.sidePadding.regular,
-    paddingVertical: actionLayout.verticalPadding,
-    ...smoothCorners,
-  },
-  glassLabel: { color: overlayInk.label, fontWeight: actionLayout.labelWeight, textAlign: "center", flexShrink: 1 },
 });
