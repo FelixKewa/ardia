@@ -1,31 +1,25 @@
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { FLOATING_BAR_PLACE } from "../../lib/deckGeometry";
 import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES } from "../../lib/menuPlace";
+import { neutralFills } from "./paletteTokens";
+import { targetMinimum } from "./targetTokens";
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", knobShadow: "rgba(0,0,0,0.25)" } as const;
 
 export const shape = { control: 12, field: 12, row: 12, card: 16, panel: 22 } as const;
 
 export const smoothCorners = { borderCurve: "continuous" } as const;
 
+export const controlSize = { bar: FLOATING_BAR_PLACE.control, hitTarget: targetMinimum } as const;
+
+export const stroke = { chrome: 0.5, hairline: StyleSheet.hairlineWidth } as const;
+
+export const press = { textOpacity: 0.35, iconOpacity: 0.35, filledOpacity: 0.8, disabledOpacity: 0.4 } as const;
+
 const ANDROID_DARK_SURFACE = "#1E1B1D";
 
 export const toggleLayout = { width: 51, height: 31, knob: 27, inset: 2 } as const;
 
-export type ProfileColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange" | "yellow" | "green" | "neutral";
-
-export type ProfileColorSpec = { name: string; swatch: string; tint?: string; action?: string };
-
-export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
-  plum: { name: "Plum", swatch: "#C07A98", tint: "#B25B6B", action: "#DD899B" },
-  blue: { name: "Blue", swatch: "#4691C3" },
-  purple: { name: "Purple", swatch: "#7873AF" },
-  pink: { name: "Pink", swatch: "#D37B8B" },
-  red: { name: "Red", swatch: "#C1575C" },
-  orange: { name: "Orange", swatch: "#D87249" },
-  yellow: { name: "Yellow", swatch: "#E3AC38" },
-  green: { name: "Green", swatch: "#3EB489" },
-  neutral: { name: "Neutral", swatch: "#8E8E93" },
-};
+export { PROFILE_COLORS, type ProfileColor, type ProfileColorSpec } from "./paletteTokens";
 
 const lightRoles = {
   dark: false,
@@ -69,6 +63,12 @@ const lightRoles = {
   toastShadow: "rgba(0,0,0,0.18)",
   panelBorder: "rgba(0,0,0,0.1)",
   dialogScrim: "rgba(0,0,0,0.32)",
+  appSurface: neutralFills.light.appSurface as string,
+  groupedBackground: neutralFills.light.groupedBackground as string,
+  groupedCell: neutralFills.light.groupedCell as string,
+  rowPressed: "rgba(0,0,0,0.06)",
+  secondaryFill: "rgba(120,120,128,0.16)",
+  switchOff: "rgba(120,120,128,0.16)",
 };
 
 export type ColorRoles = typeof lightRoles;
@@ -115,6 +115,12 @@ const darkRoles: ColorRoles = {
   toastShadow: "rgba(0,0,0,0.5)",
   panelBorder: "rgba(255,255,255,0.1)",
   dialogScrim: "rgba(0,0,0,0.48)",
+  appSurface: neutralFills.dark.appSurface,
+  groupedBackground: neutralFills.dark.groupedBackground,
+  groupedCell: neutralFills.dark.groupedCell,
+  rowPressed: "rgba(255,255,255,0.1)",
+  secondaryFill: "rgba(120,120,128,0.32)",
+  switchOff: "rgba(120,120,128,0.32)",
 };
 
 export const colorRoles = { light: lightRoles, dark: darkRoles } as const;
@@ -134,7 +140,7 @@ export const menuLayout = {
   halfSheetGrabber: { width: 32, height: 4, top: 10 },
 } as const;
 
-export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24, pressedScale: 0.94 } as const;
+export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24 } as const;
 
 export const pageMenuInk = {
   light: { sheet: "#FFFFFF", group: "#FFFFFF", rowPressed: "rgba(120,120,128,0.2)" },
@@ -458,7 +464,7 @@ export const floatingPanelLayout = {
   departMs: 200,
   fieldInset: 9,
   fieldBottom: 1,
-  fieldEdge: 0.5,
+  fieldEdge: stroke.chrome,
   fieldLight: { fill: "rgba(118,118,128,0.12)", edge: "rgba(0,0,0,0)" },
   fieldDark: { fill: "rgba(118,118,128,0.24)", edge: "rgba(255,255,255,0)" },
   panelRadius: shape.panel,
@@ -476,8 +482,8 @@ export const startLayout = {
   switcherRatio: 0.44,
   tilesGap: 45,
   pageDotsAboveBar: 60,
-  barCircle: 48,
-  barPlus: { width: 77, height: 48 },
+  barCircle: controlSize.bar,
+  barPlus: { width: 77, height: controlSize.bar },
   barGap: 8,
   circleGlyph: 19.2,
   plusGlyph: 22.4,
@@ -513,7 +519,7 @@ export const deckChromeLayout = {
   pillPadding: 14,
   pillSpacing: 8,
   pillSpecs: 20,
-  barCircle: 48,
+  barCircle: controlSize.bar,
   barGap: 8,
   searchLead: 13,
   searchTrail: 16,
@@ -546,7 +552,7 @@ export const startInk = {
   dark: { pageDot: "rgba(255,255,255,0.32)", badgeInk: "#FFFFFF" },
 } as const;
 
-export const chromeLayout = { edge: 0.5, shadowRadius: 10, shadowY: 2, barSideInset: 24, barCastsShadow: Platform.OS === "ios" } as const;
+export const chromeLayout = { edge: stroke.chrome, shadowRadius: 10, shadowY: 2, barSideInset: 24, barCastsShadow: Platform.OS === "ios" } as const;
 
 export const chromeInk = {
   light: { surface: "#FFFFFF", edge: "rgba(0,0,0,0.12)", shadow: "rgba(0,0,0,0.12)", foreground: "rgba(14,15,16,0.9)", secondary: "rgba(0,0,0,0.5)", notSecure: lightRoles.destructive },
@@ -600,7 +606,7 @@ export const syncSketch = {
   ],
 } as const;
 
-export const sheetInk = { scrim: "rgba(0,0,0,0.25)", fill: { light: "#F2F2F7", dark: "#1C1C1E" } } as const;
+export const sheetInk = { scrim: "rgba(0,0,0,0.25)", fill: { light: neutralFills.light.groupedBackground, dark: neutralFills.dark.groupedBackground } } as const;
 
 export const sheetLayout = { topGap: 10, iPhoneTopGap: 0, radius: 32, backgroundRadius: 24 } as const;
 
@@ -705,7 +711,7 @@ export const appIconLayout = {
   maxScale: 1.4,
   corner: 0.225,
   fill: "#FFFFFF",
-  edge: 0.5,
+  edge: stroke.chrome,
   edgeAlpha: 0.08,
   shadow: "0px 4px 20px rgba(0, 0, 0, 0.12)",
   about: 72,
@@ -746,7 +752,7 @@ export const browseLayout = {
   chevronCircle: 35,
   barCenterFromBottom: 44,
   barSideInset: 20,
-  hitTarget: 44,
+  hitTarget: controlSize.hitTarget,
   barHeight: 75,
   pageOverlap: 26,
   barControlScale: 0.93,
@@ -762,3 +768,42 @@ export const logoInk = {
   frontHill: ["#17604B", "#063528"],
   outline: "#FFFFFF",
 } as const;
+
+export const elevation = {
+  control: { y: chromeLayout.shadowY, blur: chromeLayout.shadowRadius * 2, light: chromeInk.light.shadow, dark: chromeInk.dark.shadow },
+  card: { y: 3, blur: 20, light: "rgba(0,0,0,0.11)", dark: "rgba(0,0,0,0.4)" },
+  floating: { y: 4, blur: 36, light: "rgba(0,0,0,0.1)", dark: "rgba(0,0,0,0.3)" },
+} as const;
+
+export type ElevationLevel = keyof typeof elevation;
+
+export const shadowCss = (level: ElevationLevel, dark: boolean) => {
+  const { y, blur, light, dark: night } = elevation[level];
+  return `0px ${y}px ${blur}px ${dark ? night : light}`;
+};
+
+export const nativeShadowRadius = (level: ElevationLevel) => elevation[level].blur / 2;
+
+export const overlayInk = { fill: ink.white, onFill: ink.black, glass: "rgba(255,255,255,0.18)", label: ink.white, edge: "rgba(255,255,255,0.55)" } as const;
+
+export type ActionSize = "hero" | "regular" | "compact";
+
+export const actionLayout = {
+  height: { hero: Platform.OS === "ios" ? settingsLayout.primaryButton.height.ios : settingsLayout.primaryButton.height.android, regular: 50, compact: controlSize.hitTarget },
+  radius: { hero: settingsLayout.primaryButton.radius, regular: shape.control, compact: shape.control },
+  sidePadding: { hero: space.xl, regular: space.xl, compact: space.l },
+  verticalPadding: space.m,
+  label: { hero: font.body, regular: font.body, compact: font.subheadline },
+  labelWeight: "600",
+  icon: { hero: 19, regular: 19, compact: 17 },
+  iconGap: space.s,
+  edge: 1,
+} as const;
+
+export const faviconLayout = { cornerShare: 0.26, plateInset: 0.14, letterShare: 0.56, letterLine: 1.15, globeShare: 0.6 } as const;
+
+export const emptyStateLayout = { glyph: 40, maxWidth: tabsLayout.emptyWidth, gap: space.s, glyphGap: space.m, actionGap: space.l, pad: space.xxl } as const;
+
+export const glyphSlot = { field: 20, icon: 22 } as const;
+
+export const barGlyphLayout = { plus: { pointSize: 18, weight: "medium", side: startLayout.plusGlyph } } as const;

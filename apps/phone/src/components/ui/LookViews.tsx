@@ -23,7 +23,7 @@ import { Backdrop } from "./Backdrop";
 import { useChromeStyle } from "../../state/settings/appearance";
 import { useReduceTransparency } from "./contrast";
 import { useProfileLook, useTheme } from "./theme";
-import { chromeInk, chromeLayout, startInk, tabsInk } from "./tokens";
+import { chromeInk, chromeLayout, shadowCss, startInk, tabsInk } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
 
@@ -257,10 +257,10 @@ export function ChromeSurface({
         style,
         {
           borderRadius: cornerRadius,
-          backgroundColor: tinted ? theme.surface : ink.surface,
+          backgroundColor: tinted ? theme.canvas : ink.surface,
           borderWidth: chromeLayout.edge,
           borderColor: ink.edge,
-          boxShadow: barShadow ? `0px ${chromeLayout.shadowY}px ${chromeLayout.shadowRadius * 2}px ${ink.shadow}` : undefined,
+          boxShadow: barShadow ? shadowCss("control", dark ?? (incognito || theme.dark)) : undefined,
         },
       ]}
     >

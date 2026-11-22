@@ -231,8 +231,8 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
       </Animated.View>
-      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[deckCardStyles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.surface }, bandStyle]}>
-        {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.surface) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
+      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[deckCardStyles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }, bandStyle]}>
+        {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.canvas) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
       </Animated.View>
       {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
     </>
@@ -244,10 +244,10 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
         needsOffscreenAlphaCompositing
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={[deckCardStyles.card, { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.surface }, cardZ, lookStyle, moveStyle]}
+        style={[deckCardStyles.card, { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.canvas }, cardZ, lookStyle, moveStyle]}
       >
         {nativeMenus() ? (
-          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.surface} corner={g.cardCorner}>
+          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.canvas} corner={g.cardCorner}>
             {cardContents}
           </DeckCardMenu>
         ) : (

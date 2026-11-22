@@ -62,7 +62,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
   };
   return (
     <View testID={variant === "overlay" ? "duoSidebar" : "duoPanel"} accessibilityLabel={variant === "overlay" ? "Sidebar" : "Tabs"} style={styles.fill}>
-      {variant === "overlay" ? <View testID="duoSidebarFill" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayFill, { backgroundColor: incognito ? tabsInk.incognitoSheet : theme.surface }]} /> : null}
+      {variant === "overlay" ? <View testID="duoSidebarFill" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayFill, { backgroundColor: incognito ? tabsInk.incognitoSheet : theme.canvas }]} /> : null}
       <View testID="duoSidebarHeader" style={[styles.header, { marginTop: variant === "overlay" ? DUO.sidebarHeaderTop : DUO.panelTop }]}>
         <View style={styles.switcher}>
           {current && spaces.length > 1 ? (

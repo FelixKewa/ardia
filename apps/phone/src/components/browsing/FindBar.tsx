@@ -21,7 +21,7 @@ export function FindBar({ tabId }: { tabId: string }) {
   const count = findCount(result, query);
   const matches = findHasMatches(result, query);
   return (
-    <View style={[styles.bar, { bottom: 0, paddingBottom: lift, backgroundColor: theme.surface }]}>
+    <View style={[styles.bar, { bottom: 0, paddingBottom: lift, backgroundColor: theme.canvas }]}>
       <View style={[styles.divider, { backgroundColor: theme.separator }]} />
       <View style={styles.row}>
         <View style={[styles.field, { backgroundColor: theme.fieldFill, borderColor: theme.fieldStroke, borderRadius: capsule(FIELD_HEIGHT) }]}>

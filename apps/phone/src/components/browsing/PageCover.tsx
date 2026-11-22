@@ -109,7 +109,7 @@ export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
       importantForAccessibility="no-hide-descendants"
       accessibilityElementsHidden={!spoken}
       onLayout={face.kind === "card" && face.cardWidth ? laidOut : undefined}
-      style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }, style]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }, style]}
     >
       {face.kind === "card" ? (
         <AtCardScale cardWidth={face.cardWidth} box={box}>

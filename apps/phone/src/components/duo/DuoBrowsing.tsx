@@ -139,14 +139,14 @@ function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null
   const theme = useTheme();
   return (
     <View testID="duoCard" style={[styles.place, styles.card, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
-      <View style={[styles.cardClip, { backgroundColor: tab ? theme.surface : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
+      <View style={[styles.cardClip, { backgroundColor: tab ? theme.canvas : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
         {tab ? (
           <>
             <PageSurface key={tab.id} tab={tab} toneBottom={0} obscured={NO_INSETS} topClearance={DUO.toolbarClearance} testID="duoPage" />
             <PageCover key={`${tab.id}:cover`} tab={tab} />
             <PageFailureView key={`${tab.id}:failure`} tabId={tab.id} />
             <View style={styles.loading} pointerEvents="none">
-              <DuoLoadingLine tabId={tab.id} color={theme.spaceAccentInk} />
+              <DuoLoadingLine tabId={tab.id} />
             </View>
           </>
         ) : null}
@@ -157,9 +157,9 @@ function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null
 
 const NO_INSETS = { top: 0, bottom: 0 } as const;
 
-function DuoLoadingLine({ tabId, color }: { tabId: string; color: string }) {
+function DuoLoadingLine({ tabId }: { tabId: string }) {
   const watch = useMemo<LoadWatch>(() => (show) => watchPageLoad(tabId, show), [tabId]);
-  return <LoadingLine watch={watch} color={color} />;
+  return <LoadingLine watch={watch} />;
 }
 
 function PageOverlays({ tab, width, height }: { tab: BrowserTab; width: number; height: number }) {

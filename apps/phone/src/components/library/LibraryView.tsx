@@ -234,7 +234,7 @@ type MenuOpener = (items: MenuItem[], at: Point) => void;
 function SectionHeader({ title }: { title: string }) {
   const theme = useTheme();
   return (
-    <Text accessibilityRole="header" style={[font.footnote, styles.section, { color: theme.secondaryLabel, backgroundColor: theme.surface }]}>
+    <Text accessibilityRole="header" style={[font.footnote, styles.section, { color: theme.secondaryLabel, backgroundColor: theme.canvas }]}>
       {title}
     </Text>
   );

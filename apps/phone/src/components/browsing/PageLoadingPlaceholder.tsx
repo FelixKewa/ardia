@@ -50,7 +50,7 @@ export function PageLoadingPlaceholder({ tab, revealed = false }: { tab: Placeho
       accessible={Platform.OS === "ios"}
       accessibilityLabel={`Loading ${spoken}`}
       importantForAccessibility="no-hide-descendants"
-      style={[StyleSheet.absoluteFill, styles.page, { backgroundColor: page?.color ?? theme.surface }]}
+      style={[StyleSheet.absoluteFill, styles.page, { backgroundColor: page?.color ?? theme.canvas }]}
     >
       <Animated.View testID="pageLoadingContent" style={[styles.column, shown]}>
         <Animated.View testID="pageLoadingIcon" style={styles.icon}>

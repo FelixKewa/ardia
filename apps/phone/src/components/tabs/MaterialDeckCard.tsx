@@ -56,7 +56,7 @@ export const MaterialDeckCard = memo(function MaterialDeckCard({ tab, index, geo
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={roles} paintedAs={`deck:${tab.id}`} />
       </Animated.View>
-      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[deckCardStyles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.surface }, bandStyle]} />
+      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[deckCardStyles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }, bandStyle]} />
       {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
     </>
   );

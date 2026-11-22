@@ -120,7 +120,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   const press = (to: number) => {
     scale.value = withSpring(to, tabGridMotion.press);
   };
-  const fill = tone.top ?? theme.surface;
+  const fill = tone.top ?? theme.canvas;
   return (
     <View style={styles.cell}>
       <View testID="tabGridHeader" style={styles.header}>
@@ -162,7 +162,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
               <View
                 testID="tabGridEdge"
                 pointerEvents="none"
-                style={[styles.edge, selected ? { borderWidth: tabGridLayout.selectedEdge, borderColor: theme.spaceAccentInk } : { borderWidth: tabGridLayout.edge, borderColor: theme.cardEdge }]}
+                style={[styles.edge, selected ? { borderWidth: tabGridLayout.selectedEdge, borderColor: theme.spaceAccentGlyph } : { borderWidth: tabGridLayout.edge, borderColor: theme.cardEdge }]}
               />
             </Animated.View>
           </Pressable>

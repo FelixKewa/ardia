@@ -2,7 +2,7 @@ import { actionSheet, ContextMenuView, nativeMenusAvailable, settingsUI, type Me
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { findNodeHandle, Platform, View, type GestureResponderEvent, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import type { MenuAlign, Point } from "../../lib/menuPlace";
-import { sfName } from "../../lib/sfSymbols";
+import { sfName } from "./sfSymbolNames";
 import { handFocusOver } from "./coverFocus";
 import { useFocusReturn } from "./focusReturn";
 import type { Confirmation } from "./Dialog";

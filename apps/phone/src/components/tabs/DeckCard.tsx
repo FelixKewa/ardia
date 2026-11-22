@@ -317,8 +317,8 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
       </Animated.View>
-      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[styles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.surface }, bandStyle]}>
-        {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.surface) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
+      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[styles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }, bandStyle]}>
+        {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.canvas) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
       </Animated.View>
       {underBars && tab.snapshotFileName ? <View testID="deckCardStatusBand" pointerEvents="none" style={[styles.statusBand, { height: (g.safeTop * g.cardWidth) / g.width, backgroundColor: tone.top ?? theme.pageSurface }]} /> : null}
       {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
@@ -333,12 +333,12 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
         importantForAccessibility="no-hide-descendants"
         style={[
           styles.card,
-          { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.surface },
+          { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.canvas },
           cardStyle,
         ]}
       >
         {nativeMenus() ? (
-          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.surface} corner={g.cardCorner}>
+          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.canvas} corner={g.cardCorner}>
             {cardContents}
           </DeckCardMenu>
         ) : (
@@ -524,7 +524,7 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
       motion={OPENING_CARD_MOTION}
       onMotionEnd={onLanded ? (finished) => finished && onLanded() : undefined}
       {...(endsSquare && onLanded && motionReportsNearEnd() ? { nativeID: OPENING_COVER_ID, nearEndPx: COVER_NEAR_END_PX, onMotionNearEnd: () => onLanded() } : endsSquare ? { nativeID: OPENING_COVER_ID } : {})}
-      style={[styles.opening, endsSquare ? null : styles.openingEdge, { left: frame.left, top: frame.top, width: frame.width, height: frame.height, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.surface }]}
+      style={[styles.opening, endsSquare ? null : styles.openingEdge, { left: frame.left, top: frame.top, width: frame.width, height: frame.height, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.canvas }]}
     >
       <MotionView testID="openingCardFace" style={StyleSheet.absoluteFill} from={growsAtMount ? { translateY: 0 } : undefined} to={{ translateY: grown ? deckStatusStrip(inner, 0, pageTop) : 0 }} motion={OPENING_CARD_MOTION}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
@@ -532,8 +532,8 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
       {underBars && tab.snapshotFileName ? <View testID="openingCardStatusBand" pointerEvents="none" style={[styles.statusBand, { height: (g.safeTop * frame.width) / g.width, backgroundColor: tone.top ?? theme.pageSurface }]} /> : null}
       {underBars ? null : (
         <MotionView testID="openingCardBand" pointerEvents="none" style={StyleSheet.absoluteFill} from={growsAtMount ? { translateY: bar.height } : undefined} to={{ translateY: grown ? 0 : bar.height }} motion={OPENING_CARD_MOTION}>
-          <View testID="openingCardBandFill" style={[styles.openingBand, { top: frame.height - bar.height, width: frame.width, height: bar.height, backgroundColor: tone.bottom ?? theme.surface }]}>
-            {design === "original" ? <View style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.surface) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
+          <View testID="openingCardBandFill" style={[styles.openingBand, { top: frame.height - bar.height, width: frame.width, height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }]}>
+            {design === "original" ? <View style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.canvas) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
           </View>
         </MotionView>
       )}

@@ -124,7 +124,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const failed = useNavigation(tab.id, (n) => n?.failure != null);
   const pageTone = failed ? null : shownTone(tone, tab.themeColorHex);
   const underBar = usePageUnderBars();
-  const blankPage = underBar ? theme.pageSurface : theme.surface;
+  const blankPage = underBar ? theme.pageSurface : theme.canvas;
   const top = pageTone?.top ?? blankPage;
   const bottom = pageTone?.bottom ?? blankPage;
   const barDark = (design === "redesigned" || design === "material") && !pageTone?.bottom ? theme.dark : isDarkColor(bottom);
@@ -195,11 +195,11 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   } : null);
 
   return (
-    <View style={[StyleSheet.absoluteFill, pulls ? null : { backgroundColor: theme.surface }]} onLayout={() => pageLaidOut(tab.id)}>
+    <View style={[StyleSheet.absoluteFill, pulls ? null : { backgroundColor: theme.canvas }]} onLayout={() => pageLaidOut(tab.id)}>
       <Shade shaded={menuOpen || dockedSearch || readerId === tab.id || pressing || tabsMenu}>
         <PageStack pulledTab={pulls ? tab.id : null} barTop={barTop}>
         <PagerBackdrop />
-        <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: theme.surface }, pager.outgoing]}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: theme.canvas }, pager.outgoing]}>
           {underBar ? null : <Animated.View testID="pageStatusStrip" style={[{ height: insets.top }, statusStyle]} />}
           <View testID="pageArea" style={[styles.page, { marginBottom: layout.pageBottom }]}>
             <PageSurface key={tab.id} tab={tab} toneBottom={layout.toneBottom} obscured={obscured} bottomInsetTransitionMs={Platform.OS === "android" && collapse.collapses && design === "redesigned" && !fullscreen && !finding && !searching ? hostPillLayout.foldSettleMs : 0} summaryBottomInset={summaryBottomInset} pinsSafeArea={pulls ? true : undefined} />
@@ -213,7 +213,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
           <PagerNeighbour key={card.id} pager={pager} tab={card} side={side} width={width} statusHeight={insets.top} statusOver={underBar} hasLeft={left !== null} hasRight={right !== null} coverId={ARRIVAL_COVER_ID} />
         ))}
         <View style={[styles.loading, { top: insets.top }]} pointerEvents="none">
-          <PageLoadingLine tabId={tab.id} color={theme.accent} />
+          <PageLoadingLine tabId={tab.id} />
         </View>
         </PageStack>
         {materialBarHosted && design === "material" ? null : (
@@ -425,13 +425,13 @@ export function barSwipeUp(enabled: boolean, pagerActive: { value: number }, ope
     });
 }
 
-function PageLoadingLine({ tabId, color }: { tabId: string; color: string }) {
+function PageLoadingLine({ tabId }: { tabId: string }) {
   const watch = useMemo<LoadWatch>(() => {
     const loadFreeze = launchArguments().loadFreeze;
     if (loadFreeze !== null) return (show) => (show(loadFreeze, true), () => undefined);
     return (show) => watchPageLoad(tabId, show);
   }, [tabId]);
-  return <LoadingLine watch={watch} color={color} />;
+  return <LoadingLine watch={watch} />;
 }
 
 

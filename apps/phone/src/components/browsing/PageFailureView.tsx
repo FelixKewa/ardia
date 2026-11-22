@@ -19,7 +19,7 @@ export function PageFailureView({ tabId }: { tabId: string }) {
   useEffect(() => (waitsForNetwork ? retryWhenOnline(tabId) : undefined), [waitsForNetwork, tabId]);
   if (!failure) return null;
   return (
-    <View style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.surface }]}>
+    <View style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.canvas }]}>
       <View testID="pageFailureIcon" style={styles.icon}>
         <Symbol name={ICONS[failureIcon(failure)]} size={failureButton.iconBox} color={theme.secondaryLabel} />
       </View>

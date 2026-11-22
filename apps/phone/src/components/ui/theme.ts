@@ -6,25 +6,15 @@ import { colorRoles, PROFILE_COLORS, type ColorRoles, type ProfileColor } from "
 import { useDesign } from "./design";
 import { rolesFromScheme } from "./materialRoles";
 import { useMaterialTheme } from "./materialTheme";
+import { spaceAccentFor, type SpaceAccent } from "./accentRoles";
+
+export { spaceAccentFor, type SpaceAccent } from "./accentRoles";
 
 export type StartBackdrop = { colors: string[]; diagonal: boolean };
 
-export type SpaceAccent = { spaceAccent: string; spaceAccentInk: string; onSpaceAccent: string; spaceAccentWash: string };
-
-export type Theme = ColorRoles & SpaceAccent & { backdrop: [string, string]; surface: string; start: StartBackdrop };
+export type Theme = ColorRoles & SpaceAccent & { backdrop: [string, string]; canvas: string; start: StartBackdrop };
 
 export const rolesFor = (dark: boolean): ColorRoles => (dark ? colorRoles.dark : colorRoles.light);
-
-const NEUTRAL_ACCENT = { light: { fill: "#1C1C1E", ink: "#1C1C1E", on: "#FFFFFF" }, dark: { fill: "#F2F2F7", ink: "#F2F2F7", on: "#000000" } } as const;
-
-export function spaceAccentFor(look: ProfileLook, dark: boolean): SpaceAccent {
-  if (look.isNeutral) {
-    const neutral = dark ? NEUTRAL_ACCENT.dark : NEUTRAL_ACCENT.light;
-    return { spaceAccent: neutral.fill, spaceAccentInk: neutral.ink, onSpaceAccent: neutral.on, spaceAccentWash: withAlpha(neutral.fill, 0.08) };
-  }
-  const ink = dark ? look.swatch : look.tint;
-  return { spaceAccent: look.tint, spaceAccentInk: ink, onSpaceAccent: "#FFFFFF", spaceAccentWash: withAlpha(look.tint, dark ? 0.22 : 0.12) };
-}
 
 export const PROFILE_PRESETS: PresetSpec[] = (Object.keys(PROFILE_COLORS) as ProfileColor[]).map((key) => ({
   key,
@@ -47,12 +37,12 @@ export function useTheme(): Theme {
   const { scheme } = useMaterialTheme();
   return useMemo(() => {
     if (material) {
-      const surface = scheme.surface;
-      return { ...rolesFromScheme(scheme, dark), spaceAccent: scheme.primary, spaceAccentInk: scheme.primary, onSpaceAccent: scheme.onPrimary, spaceAccentWash: withAlpha(scheme.primary, 0.12), backdrop: [surface, surface], surface, start: { colors: [surface, scheme.surfaceContainerLow], diagonal: false } };
+      const canvas = scheme.surface;
+      return { ...rolesFromScheme(scheme, dark), spaceAccent: scheme.primary, spaceAccentInk: scheme.primary, spaceAccentGlyph: scheme.primary, onSpaceAccent: scheme.onPrimary, spaceAccentWash: withAlpha(scheme.primary, 0.12), backdrop: [canvas, canvas], canvas, start: { colors: [canvas, scheme.surfaceContainerLow], diagonal: false } };
     }
     const backdrop = windowTintStops(look, dark);
     const start = { colors: backdropStops(look, dark, true), diagonal: showsTheme(look, dark, true) };
     const space = spaceAccentFor(look, dark);
-    return { ...rolesFor(dark), ...space, accent: space.spaceAccent, formAccent: space.spaceAccentInk, backdrop, surface: backdrop[0], start };
+    return { ...rolesFor(dark), ...space, accent: space.spaceAccent, formAccent: space.spaceAccentInk, backdrop, canvas: backdrop[0], start };
   }, [look, dark, material, scheme]);
 }

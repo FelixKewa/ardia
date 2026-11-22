@@ -14,7 +14,7 @@ export function ImportFailedView() {
   const words = copy().importFailed;
   const choices = importChoices(failures, offersStartWithout());
   return (
-    <View style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.surface, paddingTop: insets.top, paddingBottom: insets.bottom + space.l }]}>
+    <View style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.canvas, paddingTop: insets.top, paddingBottom: insets.bottom + space.l }]}>
       <View style={styles.icon}>
         <Symbol name="exclamationmarkTriangle" size={failureLayout.icon} color={theme.secondaryLabel} />
       </View>

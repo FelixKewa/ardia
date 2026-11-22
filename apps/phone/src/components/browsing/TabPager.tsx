@@ -159,8 +159,8 @@ export function PagerNeighbour({ pager, tab, side, width, statusHeight, statusOv
   return (
     <>
       <Animated.View testID="pagerEdgeShadow" pointerEvents="none" style={[styles.edge, { top: cornerRadius * 0.6, bottom: cornerRadius * 0.6 }, edge, shadowStyle]} />
-      <Animated.View testID={arrived ? "pagerArrival" : undefined} nativeID={arrived ? coverId : undefined} collapsable={false} style={[StyleSheet.absoluteFill, styles.card, { backgroundColor: theme.surface }, style]} pointerEvents="none">
-        {statusOver ? null : <View style={{ height: statusHeight, backgroundColor: tone?.top ?? theme.surface }} />}
+      <Animated.View testID={arrived ? "pagerArrival" : undefined} nativeID={arrived ? coverId : undefined} collapsable={false} style={[StyleSheet.absoluteFill, styles.card, { backgroundColor: theme.canvas }, style]} pointerEvents="none">
+        {statusOver ? null : <View style={{ height: statusHeight, backgroundColor: tone?.top ?? theme.canvas }} />}
         <View style={styles.body}>
           <TabFace tab={tab} title={tab.title || shown.host} host={shown.host} tone={tone?.top ?? null} roles={theme} />
         </View>
@@ -176,7 +176,7 @@ const EDGE_SHADOW_TRAILING = `linear-gradient(to left, ${EDGE_SHADOW_STOPS.join(
 
 export function PagerBackdrop() {
   const theme = useTheme();
-  return <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }]} />;
+  return <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]} />;
 }
 
 const cornerRadius = screenCornerRadius(tabsLayout.displayCornerRadius);

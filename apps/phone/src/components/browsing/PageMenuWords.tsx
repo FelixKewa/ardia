@@ -133,7 +133,7 @@ function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
 function BarButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.barButton}>
+    <PressScale label={label} disabled={!enabled} onPress={onPress} style={styles.barButton}>
       <Symbol name={icon} size={19} color={enabled ? theme.label : theme.tertiaryLabel} />
     </PressScale>
   );
@@ -144,7 +144,7 @@ function ActionTile({ icon, label, enabled, large, onPress }: { icon: SymbolName
   const ink = usePageMenuInk();
   return (
     <View testID={`pageMenuAction:${label}`} style={styles.action}>
-      <PressScale label={label} disabled={!enabled} onPress={onPress} grow pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.actionPress}>
+      <PressScale label={label} disabled={!enabled} onPress={onPress} grow style={styles.actionPress}>
         <View style={[styles.tile, { backgroundColor: ink.cell }]}>
           <Symbol name={icon} size={pageMenuCards.tileGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
         </View>

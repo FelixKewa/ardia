@@ -440,7 +440,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
           {
             bottom: -extend,
             height: trayHeight + extend,
-            backgroundColor: incognito ? theme.surface : ink.clear,
+            backgroundColor: incognito ? theme.canvas : ink.clear,
             shadowColor: theme.trayShadow,
             shadowOpacity: trayShadow.opacity,
             shadowRadius: trayShadow.radius,
@@ -449,7 +449,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
           trayStyle,
         ]}
       >
-        {incognito ? null : <LookFrost source={SURFACES_FROST} variant="sheet" cornerRadius={radius.sheet} fill={theme.surface} style={StyleSheet.absoluteFill} />}
+        {incognito ? null : <LookFrost source={SURFACES_FROST} variant="sheet" cornerRadius={radius.sheet} fill={theme.canvas} style={StyleSheet.absoluteFill} />}
         <View style={{ height: trayHeight }}>
           <GestureDetector gesture={dismissDrag}>
             <View collapsable={false}>

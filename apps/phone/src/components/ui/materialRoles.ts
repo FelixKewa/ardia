@@ -47,5 +47,11 @@ export function rolesFromScheme(s: MaterialScheme, dark: boolean): ColorRoles {
     toastShadow: withAlpha(s.scrim, MATERIAL_STATE.scrim),
     panelBorder: s.outlineVariant,
     dialogScrim: withAlpha(s.scrim, MATERIAL_STATE.scrim),
+    appSurface: s.surface,
+    groupedBackground: s.surfaceContainerLow,
+    groupedCell: s.surfaceContainer,
+    rowPressed: withAlpha(s.onSurface, MATERIAL_STATE.pressed),
+    secondaryFill: s.surfaceContainerHighest,
+    switchOff: s.surfaceContainerHighest,
   };
 }
