@@ -17,7 +17,7 @@ export async function saveTabPosition(id: string) {
   if (at) watches.set(id, { lastSeen: at.y, lastSaved: at.y });
 }
 
-async function checkFront(frontId: () => string | null) {
+async function checkFront(frontId: () => string | null, cameToRest: (id: string) => void) {
   const id = frontId();
   if (!id || checking) return;
   checking = true;
@@ -26,15 +26,17 @@ async function checkFront(frontId: () => string | null) {
     if (!at || frontId() !== id) return;
     const step = scrollSaveDecision(watches.get(id) ?? { lastSeen: null, lastSaved: null }, at.y);
     watches.set(id, step.next);
-    if (step.save) await saveTabPosition(id);
+    if (!step.save) return;
+    await saveTabPosition(id);
+    if (frontId() === id) cameToRest(id);
   } finally {
     checking = false;
   }
 }
 
-export function watchFrontScroll(frontId: () => string | null) {
+export function watchFrontScroll(frontId: () => string | null, cameToRest: (id: string) => void = () => undefined) {
   if (timer) return;
-  timer = setInterval(() => void checkFront(frontId), SCROLL_CHECK_MS);
+  timer = setInterval(() => void checkFront(frontId, cameToRest), SCROLL_CHECK_MS);
 }
 
 export function forgetPosition(id: string) {

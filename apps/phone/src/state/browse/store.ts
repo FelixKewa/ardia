@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { create } from "zustand";
 import { history } from "../history/store";
 import { HISTORY_RETENTION_MS } from "../history/historySummary";
@@ -97,7 +98,7 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
   archiveDueTabs();
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
   listenToPages(pageEvent);
-  watchFrontScroll(frontPageId);
+  watchFrontScroll(frontPageId, pictureScrolledPage);
   if (!currentPreferences().hasFinishedOnboarding) showOnboarding();
   else if (currentPreferences().autoOpensKeyboard) presentSearch("home", "", useTabs.getState().incognito, null, "atRest");
 }
@@ -790,6 +791,15 @@ export async function captureSnapshot(id: string, pageTop: number | null = null)
     updateTabById(id, { snapshotFileName: step.show });
     showFadingDeckThePicture(id);
   }
+}
+
+function pictureScrolledPage(id: string) {
+  if (Platform.OS !== "android" || loading.get(id) !== true || !coverIsCapturable(true, pageCovered())) return;
+  const counts = pictureCountable(id);
+  const before = findTab(currentTabs(), id)?.snapshotFileName ?? null;
+  void captureSnapshot(id).then(() => {
+    if (counts && (findTab(currentTabs(), id)?.snapshotFileName ?? null) !== before) countUsage("page_pictures_scrolled");
+  });
 }
 
 function pictureCountable(id: string) {
