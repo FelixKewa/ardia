@@ -27,12 +27,10 @@ async function checkFront(frontId: () => string | null, cameToRest: (id: string)
     if (!at || frontId() !== id) return;
     const step = scrollSaveDecision(watches.get(id) ?? { lastSeen: null, lastSaved: null }, at.y);
     watches.set(id, step.next);
-    const rested = rests.get(id) ?? { lastSeen: null, lastSaved: null };
-    const rest = scrollSaveDecision(rested, at.y);
+    const rest = scrollSaveDecision(rests.get(id) ?? { lastSeen: null, lastSaved: null }, at.y);
+    rests.set(id, rest.next);
+    if (rest.save) cameToRest(id);
     if (step.save) await saveTabPosition(id);
-    const acted = rest.save && frontId() === id;
-    rests.set(id, acted ? rest.next : { ...rest.next, lastSaved: rested.lastSaved });
-    if (acted) cameToRest(id);
   } finally {
     checking = false;
   }

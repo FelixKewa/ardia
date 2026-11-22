@@ -5,7 +5,7 @@ import { saveTabPosition } from "../state/browse/positions";
 import * as browse from "../state/browse/store";
 import { useOnboarding } from "../state/onboarding/store";
 import { dismissSearch } from "../state/search/store";
-import { closeTabById, currentTabs, selectTabById, updateTabById, useTabs } from "../state/tabs/store";
+import { closeTabById, currentTabs, updateTabById, useTabs } from "../state/tabs/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { withTabs } from "../../test/render/harness";
 
@@ -169,27 +169,31 @@ test("a refused capture isn't counted even when another capture changes the tab'
   expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
 });
 
-test("a rest the watch couldn't act on, because another tab came to the front while the position saved, is pictured once the page is back", async () => {
+test("the picture is asked for from the same check that read the resting place, before the position saves, so a scroll during the save gets its own picture", async () => {
   const id = front();
-  const other = currentTabs().open.find((tab) => tab.id !== id)!.id;
   pageIs(id, true);
   await scrollWatchTicks(2);
   snapshot.mockClear();
-  let switched = false;
-  jest.spyOn(pages, "saveState").mockImplementation(async () => {
-    if (!switched) {
-      switched = true;
-      selectTabById(other);
+  let moved = false;
+  const save = jest.spyOn(pages, "saveState").mockImplementation(async () => {
+    if (!moved && scrollY === 1900) {
+      moved = true;
+      scrollY = 2600;
     }
     return `state-at-${scrollY}`;
   });
+  save.mockClear();
   scrollY = 1900;
   await scrollWatchTicks(2);
-  expect(switched).toBe(true);
-  expect(snapshot).not.toHaveBeenCalled();
-  act(() => selectTabById(id));
+  expect(moved).toBe(true);
+  if (Platform.OS !== "android") {
+    expect(snapshot).not.toHaveBeenCalled();
+    return;
+  }
+  expect(snapshot).toHaveBeenCalledTimes(1);
+  expect(snapshot.mock.invocationCallOrder[0]!).toBeLessThan(save.mock.invocationCallOrder[0]!);
   await scrollWatchTicks(2);
-  expect(snapshot).toHaveBeenCalledTimes(Platform.OS === "android" ? 1 : 0);
+  expect(snapshot).toHaveBeenCalledTimes(2);
 });
 
 test("a capture that finishes after Incognito came on isn't counted", async () => {
