@@ -39,7 +39,9 @@ class WindowCornersTests(unittest.TestCase):
         text = shell.read_text()
         declaration = text[text.index('const TILING_DESKTOPS'):]
         listed = declaration[declaration.index('= [') + len('= ['):]
-        self.assertEqual(engine, re.findall(r'"([^"]+)"', listed[:listed.index(']')]))
+        array = listed[:listed.index(']')]
+        self.assertRegex(re.sub(r'"[^"]+"', '', array), r'^[\s,]*$')
+        self.assertEqual(engine, re.findall(r'"([^"]+)"', array))
 
     def test_every_window_clips_its_native_views_to_the_frames_corners(self):
         round_corners = between(HOST, 'void ShellHostView::RoundWindowCorners() {', '\n}\n')
