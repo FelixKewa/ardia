@@ -185,9 +185,43 @@ const FIXTURES = [
     want: "example.test##.banner >\rspan",
   },
   {
-    name: "d: a carriage-return list whose second line is also a selector",
+    name: "d: a scriptlet after a hide in a carriage-return list looks the same as a planted one, so it is commented out, not deleted",
     text: "example.test##.banner\rdiv\rexample.test##+js(set-constant, userFlag, 1)",
-    want: "example.test##.banner\rdiv\rexample.test##+js(set-constant, userFlag, 1)",
+    want: "example.test##.banner\ndiv\n! example.test##+js(set-constant, userFlag, 1)",
+    spans: 1,
+    disabled: 1,
+  },
+  {
+    name: "a: a scriptlet planted after a plain hide behind a carriage return is commented out on its own line",
+    text: `news.test##.promo\nexample.test##.banner\r${MARKER}\nlater.test##.banner`,
+    want: `news.test##.promo\nexample.test##.banner\n! ${MARKER}\nlater.test##.banner`,
+    spans: 1,
+    disabled: 1,
+  },
+  {
+    name: "a: the same in a file with CRLF line ends",
+    text: `example.test##.banner\r${MARKER}\r\nlater.test##.banner\r\n`,
+    want: `example.test##.banner\r\n! ${MARKER}\r\nlater.test##.banner\r\n`,
+    spans: 1,
+    disabled: 1,
+  },
+  {
+    name: "a: an HTML filter or a rewriting network option behind a carriage return is commented out too",
+    text: "example.test##.banner\rexample.test##^script:has-text(x)\r||ads.example^$redirect=noop.js\r||ads.example^$third-party",
+    want: "example.test##.banner\n! example.test##^script:has-text(x)\n! ||ads.example^$redirect=noop.js\n||ads.example^$third-party",
+    spans: 1,
+    disabled: 2,
+  },
+  {
+    name: "d: a carriage-return list of blocking rules and hides after a hide stays byte for byte",
+    text: "example.test##.banner\r||ads.example^$third-party\r! a note\rnews.test##.promo",
+    want: "example.test##.banner\r||ads.example^$third-party\r! a note\rnews.test##.promo",
+  },
+  {
+    name: "e: a scriptlet on its own line after a hide stays: two lines a user wrote look exactly like that",
+    text: `example.test##.banner\n${MARKER}`,
+    want: `example.test##.banner\n${MARKER}`,
+    neighbours: 1,
   },
   {
     name: "e: a user's own scriptlets and network rules stay, and next to a hide they are counted",
@@ -220,7 +254,7 @@ test("the cleanup runs before the engines load, holds back My filters reads and 
   assert.match(script, /"µb\.loadUserFilters = async function\(\) \{\\n"\n\s+"    await ardiaCleanupGate;\\n"/);
   assert.match(script, /patch\("js\/start\.js",\n\s+"    \/\/ Prime the filtering engines before first use\.\\n",\n\s+"    await µb\.ardiaRemoveSplitHidingRules\(\);/);
   assert.match(script, /rawText = µb\.ardiaCleanHidingRules\(rawText\)\.text;/);
-  assert.match(script, /^UBO_PATCH="29"$/m);
+  assert.match(script, /^UBO_PATCH="30"$/m);
   assert.match(script, /compiledMagic: 173,/);
   assert.match(script, /selfieMagic: 173,/);
   assert.match(script, /selfie\/staticArdia2/);

@@ -6,7 +6,7 @@ vendor="$(cd "$(dirname "$0")/.." && pwd)/vendor"
 UBO_VERSION="1.76.4"
 UBO_SHA256="4b1b27ed82e734d508ae6d255933c334f62f256e8a8aece92724b826828e3d5f"
 UBO_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1MPdIgJjIsN4Y0N/20GDNPfN4J//aknk5dsH8Y1LBxSnz3Jp/BT187Gub5cv6lee5CUVDmVBa3Yiqow8GMna5KwX+ZP+yc1pt/ewzyNxm2BzoQPgWz+1DgZaahz56/szi1EEtWVYxd3wNxFN4wPDqwV6aqlnV4R3RnxlF1ocw1kDgJ+8BxR1EY+MB+H8bymdef+xB3TNifBZIVmZt81cC3UMOG6KWRTU1wtIXsW+ZqSv5zaeFHLkjG4MPB7EfcMGrvO80ElJBZZLdrTmYOL4uUPsz2Wy6GiPWzpDmzzI9RfsZm11sLiJo63blcPF0Cz3sM0wQfxJPPcQuqkZDReswIDAQAB"
-UBO_PATCH="29"
+UBO_PATCH="30"
 ubo="$vendor/ubo"
 stamp="$UBO_VERSION-$UBO_PATCH"
 installed() { [ -f "$ubo/.version" ] && [ "$(cat "$ubo/.version")" = "$stamp" ]; }
@@ -197,6 +197,14 @@ hiding_cleanup = r'''
 const ardiaOldHidingRule = /^[a-z0-9.-]+##[^+^\s][^\n{}]*$/;
 const ardiaOldHidingRuleLength = 1024;
 const ardiaCosmeticRule = /^[^\s#]*#@?#[^+^\s]/;
+const ardiaCodeFilter = /#@?#[+^]|#@?[$%]\??#/;
+const ardiaCodeOption = /\$(?:[^#]*,)?~?(?:redirect|redirect-rule|rewrite|replace|csp|removeparam|urlskip|uritransform|header|permissions|responseheader)(?:[=,]|$)/;
+
+const ardiaRunsCode = part => {
+    const line = part.trim();
+    if ( line === '' || line.startsWith('!') ) { return false; }
+    return ardiaCodeFilter.test(line) || ( line.includes('#') === false && ardiaCodeOption.test(line) );
+};
 
 const ardiaSelectorParses = selector => {
     try {
@@ -241,12 +249,21 @@ const ardiaOpensAcrossBreak = filter => {
     for ( let i = 0; i < lines.length; i++ ) {
         const filter = bodyOf(lines[i]).trim();
         if ( filter.includes('\r') ) {
-            if ( ardiaStorableHidingRule(filter) === false || ardiaOpensAcrossBreak(filter) === false ) { continue; }
             const parts = filter.split('\r');
+            const opened = ardiaStorableHidingRule(filter) && ardiaOpensAcrossBreak(filter);
+            const carriesCode = ardiaOldHidingRule.test(parts[0].trim()) && parts.slice(1).some(ardiaRunsCode);
+            if ( opened === false && carriesCode === false ) { continue; }
             const eol = eolOf(lines[i]);
             lines.splice(i, 1, ...parts.map(part => part + eol));
             spans += 1;
-            for ( let j = i; j < i + parts.length; j++ ) { disable(j); }
+            for ( let j = i; j < i + parts.length; j++ ) {
+                if ( opened ) {
+                    disable(j);
+                } else if ( ardiaRunsCode(parts[j - i]) ) {
+                    lines[j] = '! ' + lines[j];
+                    disabled += 1;
+                }
+            }
             i += parts.length - 1;
             continue;
         }
