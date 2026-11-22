@@ -350,7 +350,7 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
   settings: DEFAULT_SETTINGS,
   settingsMeta: NO_SETTINGS_META,
   updateSettings(patch, { fromSync = false, inferred = false } = {}) {
-    if ("customSearchEngines" in patch) patch = { ...patch, customSearchEngines: customEnginesFrom(patch.customSearchEngines) };
+    if (validSettingValue("customSearchEngines", patch.customSearchEngines)) patch = { ...patch, customSearchEngines: customEnginesFrom(patch.customSearchEngines) };
     set((s) => {
       const windows = windowsFollowingAutoHideTabs(s, patch);
       if (fromSync) return { settings: { ...s.settings, ...settledPatch(s.settings, patch) }, ...windows };
