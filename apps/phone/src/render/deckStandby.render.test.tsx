@@ -16,7 +16,7 @@ import { presentSearch, dismissSearch } from "../state/search/store";
 import { setPreference } from "../state/settings/store";
 import { currentTabs, updateTabById, useTabs } from "../state/tabs/store";
 import { framesUntil, renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
-import { noteSnapshotShown } from "../lib/shownSnapshots";
+import { noteSnapshotLoaded, noteSnapshotShown } from "../lib/shownSnapshots";
 
 const DESIGNS: Design[] = ["redesigned", "original"];
 const FRESH = "file:///snapshots/leaving-fresh.jpg";
@@ -116,11 +116,13 @@ for (const design of DESIGNS) {
     const selected = currentTabs().selectedId!;
     act(() => updateTabById(selected, { snapshotFileName: EARLIER }));
     noteSnapshotShown(EARLIER);
+    noteSnapshotLoaded(EARLIER);
     act(() => pageStateChanged(selected, { url: "https://site0.example/", title: "Kernel Archives", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
     jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1157 }) as never);
     const root = app(design);
     settle();
     const before = new Set(deckCards(root));
+    for (const image of cardsLayer(root).findAll((node) => node.props.source?.uri === EARLIER && typeof node.props.onLoad === "function" && typeof node.type !== "string")) act(() => image.props.onLoad({ nativeEvent: { source: { width: 600, height: 1157 } } }));
     renders = [];
     let frames = 0;
     await act(async () => {

@@ -1,4 +1,4 @@
-import { makeMutable, ReduceMotion, runOnJS, runOnUI, withSpring, withTiming } from "react-native-reanimated";
+import { cancelAnimation, makeMutable, ReduceMotion, runOnJS, runOnUI, withSpring, withTiming } from "react-native-reanimated";
 import { create } from "zustand";
 import { labTrace } from "../../platform/lab";
 import { DECK_PULL, DECK_PULL_SPRING, landingVelocity, pullLands, pullShrink, pullSpeed, type PullTarget } from "../../lib/deckPull";
@@ -97,6 +97,7 @@ export function settleDeckPull(lands: boolean, velocityY: number, settled: PullS
   const velocity = pullSpeed(velocityY, target.pull);
   if (lands) {
     deckPull.stage.value = PULL_STAGE.landing;
+    cancelAnimation(deckPull.shrink);
     deckPull.reveal.value = withSpring(1, DECK_PULL_SPRING.land);
     deckPull.shrink.value = withSpring(1, { ...DECK_PULL_SPRING.land, velocity: landingVelocity(deckPull.shrink.value, velocity) }, (finished) => {
       "worklet";
@@ -230,6 +231,7 @@ export function showPulledPage() {
 
 export function endDeckPull() {
   growingId = null;
+  grownLanded = null;
   growSeq += 1;
   grownEnded = null;
   clearTimeout(grownCap);
@@ -249,11 +251,11 @@ export function pullCanGrow(stage: number): boolean {
 
 const traceGrow = (line: string) => labTrace(`PAGELAB card grow ${line}`);
 
-function growDeckPullOnUI(target: PullTarget, steady: boolean, grown: (id: string) => void) {
+function growDeckPullOnUI(target: PullTarget, steady: boolean, seq: number, grown: (id: string, seq: number) => void) {
   "worklet";
   if (!pullCanGrow(deckPull.stage.value)) {
     runOnJS(traceGrow)(`refused at stage ${deckPull.stage.value}`);
-    runOnJS(grown)(target.id);
+    runOnJS(grown)(target.id, seq);
     return;
   }
   deckPull.target.value = target;
@@ -269,26 +271,37 @@ function growDeckPullOnUI(target: PullTarget, steady: boolean, grown: (id: strin
   deckPull.steady.value = steady;
   deckPull.stage.value = PULL_STAGE.growing;
   if (steady) {
-    runOnJS(grown)(target.id);
+    runOnJS(grown)(target.id, seq);
     return;
   }
   deckPull.reveal.value = withSpring(0, DECK_PULL_SPRING.grow);
   deckPull.shrink.value = withSpring(0, DECK_PULL_SPRING.grow, (finished) => {
     "worklet";
-    if (finished && deckPull.stage.value === PULL_STAGE.growing && deckPull.id.value === target.id) runOnJS(grown)(target.id);
+    if (finished && deckPull.stage.value === PULL_STAGE.growing && deckPull.id.value === target.id) runOnJS(grown)(target.id, seq);
     else runOnJS(traceGrow)(`ended without landing: finished ${finished}, stage ${deckPull.stage.value}`);
   });
 }
 
 let grownEnded: ((id: string) => void) | null = null;
+let grownLanded: ((id: string) => void) | null = null;
 let grownCap: ReturnType<typeof setTimeout> | undefined;
 
-export function growDeckPull(target: PullTarget, ended: (id: string) => void, grown: (id: string) => void, steady = false) {
+function growLanded(id: string, seq: number) {
+  if (seq !== growSeq || growingId !== id) return;
+  const landed = grownLanded;
+  grownLanded = null;
+  landed?.(id);
+}
+
+export function growDeckPull(target: PullTarget, ended: (id: string) => void, grown: (id: string) => void, steady = false): boolean {
+  if (growingId !== null) return false;
   growingId = target.id;
   growSeq += 1;
   grownEnded = ended;
+  grownLanded = grown;
   setDeckOwnsBar(true);
-  runOnUI(growDeckPullOnUI)(target, steady, grown);
+  runOnUI(growDeckPullOnUI)(target, steady, growSeq, growLanded);
+  return true;
 }
 
 function growEnded(id: string, seq: number) {

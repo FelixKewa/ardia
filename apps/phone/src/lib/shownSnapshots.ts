@@ -2,6 +2,14 @@ const shown = new Set<string>();
 
 export const snapshotWasShown = (uri: string) => shown.has(uri);
 
+const loadedOnce = new Set<string>();
+
+export const snapshotLoadedOnce = (uri: string) => loadedOnce.has(uri);
+
+export function noteSnapshotLoaded(uri: string) {
+  loadedOnce.add(uri);
+}
+
 export function noteSnapshotShown(uri: string) {
   shown.add(uri);
 }

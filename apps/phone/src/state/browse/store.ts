@@ -272,23 +272,23 @@ export function whenPageCoverHidden(id: string, capMs: number, then: (reason: Co
 
 export const pageCoverHidden = (id: string, reason: "drawn" | "cap") => coverWaiters.get(id)?.(reason);
 
-const laidOutWaiters = new Map<string, () => void>();
+const laidOutWaiters = new Map<string, (laidOut: boolean) => void>();
 
-export function whenPageLaidOut(id: string, capMs: number, then: () => void) {
-  laidOutWaiters.get(id)?.();
+export function whenPageLaidOut(id: string, capMs: number, then: (laidOut: boolean) => void) {
+  laidOutWaiters.get(id)?.(false);
   let called = false;
-  const done = () => {
+  const done = (laidOut: boolean) => {
     if (called) return;
     called = true;
     clearTimeout(cap);
     if (laidOutWaiters.get(id) === done) laidOutWaiters.delete(id);
-    then();
+    then(laidOut);
   };
-  const cap = setTimeout(done, capMs);
+  const cap = setTimeout(() => done(false), capMs);
   laidOutWaiters.set(id, done);
 }
 
-export const pageLaidOut = (id: string) => laidOutWaiters.get(id)?.();
+export const pageLaidOut = (id: string) => laidOutWaiters.get(id)?.(true);
 
 export function stopOpeningTab(id: string) {
   if (useBrowse.getState().opening === id) useBrowse.setState({ opening: null, veiled: null, covered: null });
@@ -365,7 +365,10 @@ export async function showDeck() {
   enterDeck();
 }
 
+let entranceSeq = 0;
+
 function enterDeck() {
+  entranceSeq += 1;
   const { surface } = useBrowse.getState();
   const selected = currentTabs().selectedId;
   const covered = pageCovered();
@@ -391,7 +394,8 @@ const PULL_STALE_MS = 1500;
 
 function pullBusyWith(id: string) {
   if (landingFromRest !== id && trackedPull !== id) return false;
-  if (deckPull.stage.value === PULL_STAGE.landing || deckPull.stage.value === PULL_STAGE.tracking || Date.now() - pullBusySince < PULL_STALE_MS) return true;
+  const stage = deckPull.stage.value;
+  if (stage === PULL_STAGE.tracking || stage === PULL_STAGE.landing || stage === PULL_STAGE.returning || Date.now() - pullBusySince < PULL_STALE_MS) return true;
   labTrace("PAGELAB deck pull left waiting with nothing in flight, a new request takes over");
   landingFromRest = null;
   trackedPull = null;
@@ -450,12 +454,13 @@ export function deckMotionDone(id: string) {
     deckEntered(id);
     return;
   }
+  const entrance = entranceSeq;
   let entered = false;
   const enter = () => {
     if (entered) return;
     entered = true;
     clearTimeout(hold);
-    deckEntered(id);
+    if (entrance === entranceSeq) deckEntered(id);
   };
   const hold = setTimeout(enter, CAPTURE_HOLDS_PAGE_MS);
   void takeDeckCapture(latched).then(enter);
@@ -473,6 +478,7 @@ export function deckPullBegan(id: string, tracked = true) {
 }
 
 export function deckPullReleased(id: string, lands: boolean) {
+  pullBusySince = Date.now();
   cutInteraction(PULL_PERF);
   beginInteraction(lands ? PULL_LANDING_PERF : "deck pull return", INTERACTION_WINDOW_MS.deckPullLanding);
   if (pullCounts(id)) countUsage(lands ? "deck_bar_swipes" : "deck_bar_swipes_returned");
@@ -725,7 +731,7 @@ export function captureCurrentCover() {
 
 export async function captureSnapshot(id: string, pageTop: number | null = null, latched = false) {
   if (!latched && !snapshotAllowed(id)) return;
-  const snapshot = await snapshotPage(id);
+  const snapshot = await snapshotPage(id, !latched);
   const pulled = (deckCapture?.id === id && deckCapture.pageTop !== null) || deckPullGrowing() === id;
   const top = pageTop ?? (pulled ? PULLED_PAGE_TOP : null);
   if (snapshot && top !== null) noteSnapshotPageTop(snapshot.uri, top);

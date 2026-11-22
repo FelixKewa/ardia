@@ -603,7 +603,7 @@ export const TabDeck = memo(function TabDeck() {
   const open = (index: number) => {
     beginInteraction("card open", INTERACTION_WINDOW_MS.cardOpen);
     const id = order[index];
-    if (!id || phase.kind !== "settled" || dragIndex.value === index) return;
+    if (!id || phase.kind !== "settled" || dragIndex.value === index || openingId.current !== null) return;
     markTiming("card tap");
     runOnUI(markNextUiFrame)("card motion");
     if (searchChrome) Keyboard.dismiss();
@@ -614,6 +614,7 @@ export const TabDeck = memo(function TabDeck() {
     setMenu(null);
     const chosen = cardOpen();
     const path = pulls && chosen !== "coveringCard" ? "pulledCard" : chosen;
+    if (path === "pulledCard" && !growDeckPull(stackPullTarget(g, id, index, scroll.value, 0), barBackWithPage, handOver, reduceMotion)) return;
     openPath.current = path;
     if (path === "coveringCard") {
       coverPending.current = id;
@@ -627,7 +628,6 @@ export const TabDeck = memo(function TabDeck() {
     clearTimeout(landingCap.current);
     if (path === "pulledCard") {
       grown.current = { id, opened: false, steady: reduceMotion };
-      growDeckPull(stackPullTarget(g, id, index, scroll.value, 0), barBackWithPage, handOver, reduceMotion);
       handOverOnLoss(id);
       return;
     }
@@ -704,9 +704,10 @@ export const TabDeck = memo(function TabDeck() {
     const state = { id, ready: false, landed: false };
     prepared.current = state;
     beginOpeningTab(id, veiled, openPath.current === "coveringCard" ? coverFrame(g).width : g.cardWidth);
-    const ready = () => {
+    const ready = (laidOut: boolean) => {
       if (prepared.current !== state || state.ready) return;
       state.ready = true;
+      if (!laidOut && openPath.current !== "coveringCard" && !tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
       if (state.landed) finishOpen(id);
     };
     whenPageLaidOut(id, HANDOVER_CAP_MS, ready);
@@ -766,7 +767,6 @@ export const TabDeck = memo(function TabDeck() {
     if (!state || state.id !== id) return;
     state.landed = true;
     if (state.ready) finishOpen(id);
-    else if (!tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
   };
 
   const closeKeepingSide = (id: string) => {

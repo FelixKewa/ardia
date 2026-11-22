@@ -282,6 +282,8 @@ test("the handover never waits for the fresh picture of the page: the capture st
   act(() => browse.pageStateChanged(id, { url: "https://site0.example/", title: "Site 0", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
   const snapped = jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1333 }) as never);
   const root = app();
+  act(() => pictureOf(root, EARLIER)!.props.onLoad(LOADED));
+  frame();
   renders = [];
   swipe([{ dy: -22 }, { dy: -150 }]);
   await act(async () => {
@@ -587,6 +589,90 @@ test("a Tabs tap right after a card opened, while its bar is still coming back, 
   framesUntil(() => surface() === "deck", 20);
   expect(surface()).toBe("deck");
   expect(browse.useBrowse.getState().deckEntrance).toBeNull();
+});
+
+test("two card taps that land before React commits open only the first: its grow owns the animation, the second is dropped, and the first card's page takes over as its growth lands", () => {
+  withTabs(3);
+  browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
+  const root = renderSurface(<Surfaces />);
+  mounted.push(root);
+  const cards = root.root.findAll((node) => (node.type as { name?: string; type?: { name?: string } })?.type?.name === "DeckCard" || (node.type as { name?: string })?.name === "DeckCard");
+  const first = cards[cards.length - 1]!;
+  const second = cards[0]!;
+  expect(first.props.tab.id).not.toBe(second.props.tab.id);
+  act(() => {
+    first.props.onOpen(first.props.index);
+    second.props.onOpen(second.props.index);
+  });
+  let landed = false;
+  let frames = 0;
+  for (; frames < 40 && surface() !== "browsing"; frames++) {
+    frame();
+    if (!landed && browse.useBrowse.getState().opening !== null) landed = landOpeningPage(root);
+  }
+  expect(surface()).toBe("browsing");
+  expect(currentTabs().selectedId).toBe(first.props.tab.id);
+  expect(frames * 16).toBeLessThan(DECK_PULL.growLostMs);
+});
+
+test("a fast flick lands without overshooting the card, even with the finger's tracking spring still moving when it is let go", () => {
+  const root = app();
+  const id = currentTabs().selectedId!;
+  const settled = jest.fn();
+  act(() => runOnUI((tab: string) => {
+    "worklet";
+    pull.beginDeckPull(tab, 0);
+  })(id));
+  for (let step = 1; step <= 6; step++) {
+    act(() => runOnUI((at: number) => {
+      "worklet";
+      pull.trackDeckPull(at);
+    })(-44 * step));
+    frame();
+  }
+  expect(deckPull.shrink.value).toBeLessThan(1);
+  act(() => runOnUI((tab: string) => {
+    "worklet";
+    pull.releaseDeckPull(tab, -6000, true, () => undefined, settled);
+  })(id));
+  let most = 0;
+  for (let step = 0; step < 40; step++) {
+    frame();
+    most = Math.max(most, deckPull.shrink.value);
+  }
+  expect(most).toBeLessThanOrEqual(1.002);
+  expect(root).toBeDefined();
+});
+
+test("a Tabs tap while a long-held pull springs back is still ignored: the pull counts as in flight from its release, not from when the finger came down", () => {
+  app();
+  const id = currentTabs().selectedId!;
+  act(() => runOnUI((tab: string) => {
+    "worklet";
+    pull.beginDeckPull(tab, 0);
+  })(id));
+  act(() => browse.deckPullBegan(id));
+  for (let step = 1; step <= 120; step++) {
+    act(() => runOnUI((at: number) => {
+      "worklet";
+      pull.trackDeckPull(at);
+    })(-Math.min(step, 40)));
+    frame();
+  }
+  act(() => runOnUI((tab: string, settled: (id: string, landed: boolean, worst: number) => void) => {
+    "worklet";
+    pull.releaseDeckPull(tab, 0, false, () => undefined, settled);
+  })(id, browse.deckPullSettled));
+  act(() => browse.deckPullReleased(id, false));
+  frame();
+  expect(deckPull.stage.value).toBe(PULL_STAGE.returning);
+  act(() => void browse.showDeck());
+  frame();
+  frame();
+  expect(surface()).toBe("browsing");
+  expect(browse.useBrowse.getState().deckEntrance).toBeNull();
+  framesUntil(() => deckPull.stage.value === PULL_STAGE.idle, 60);
+  expect(surface()).toBe("browsing");
 });
 
 test("with Reduce Motion an overtaken card open is cleared when what overtook it left it recorded: a page opened from a link while the page fades in stays in front, and no opening is left behind", () => {

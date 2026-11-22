@@ -6,6 +6,7 @@ import * as system from "../platform/system";
 import * as browse from "../state/browse/store";
 import { currentTabs, useTabs } from "../state/tabs/store";
 import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
+import { noteSnapshotLoaded, noteSnapshotShown } from "../lib/shownSnapshots";
 
 const EARLIER = "file:///snapshots/t2-earlier.jpg";
 const FRESH = "file:///snapshots/t2-fresh.jpg";
@@ -17,6 +18,8 @@ beforeEach(() => {
   withTabs(3);
   const selected = currentTabs().selectedId!;
   useTabs.setState((state) => ({ open: state.open.map((tab) => (tab.id === selected ? { ...tab, snapshotFileName: EARLIER, title: "Kernel Archives" } : tab)) }));
+  noteSnapshotShown(EARLIER);
+  noteSnapshotLoaded(EARLIER);
   browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
   act(() => browse.pageStateChanged(selected, { url: "https://kernel.org/", title: "Kernel Archives", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
   prefetched = [];
@@ -59,6 +62,7 @@ test("opening the deck from a page switches at once, without waiting for the cap
   const card = entranceCard(root);
   expect(card).toBeTruthy();
   expect(card!.findAll((node) => node.props.source?.uri === FRESH && typeof node.type === "string")).toHaveLength(1);
+  act(() => card!.findAll((node) => node.props.source?.uri === FRESH && typeof node.props.onLoad === "function")[0]!.props.onLoad({ nativeEvent: { source: { width: 600, height: 1157 } } }));
   expect(textOf({ root: card! } as never)).not.toContain("Kernel Archives");
   unmount(root);
 });

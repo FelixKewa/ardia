@@ -136,7 +136,7 @@ export function deletePageSnapshots(ids: readonly string[]) {
 
 export const endPrivateSession = () => void settled(() => pages.endPrivateSession(), undefined);
 
-export const snapshotPage = (id: string): Promise<PageSnapshot | null> => settled(() => pages.snapshot(id, { maxWidth: 600, quality: 72 }), null);
+export const snapshotPage = (id: string, windowCopy = true): Promise<PageSnapshot | null> => settled(() => pages.snapshot(id, windowCopy ? { maxWidth: 600, quality: 72 } : { maxWidth: 600, quality: 72, windowCopy }), null);
 
 export function snapshotIsCurrent(id: string): boolean | null {
   try {
