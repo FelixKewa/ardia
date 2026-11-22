@@ -399,3 +399,18 @@ test("round 2: an ended page's old report can't bring its document back", async 
   assert.ok(pageBarFor(state(), pane("ended")), "a new commit shows it again");
   forgetPageDocument("ended", R);
 });
+
+test("round 3: an intent a hook cancels later can't be spent by another user-started navigation to the same address", async () => {
+  await enable();
+  lifecycle.setPluginValue("developer-mode", "localAddresses", true);
+  const windowId = useBrowser.getState().createWindow({ url: "https://example.com/" });
+  const tabId = useBrowser.getState().windows[windowId].tabIds[0];
+  setOpeningGate(() => Promise.resolve({ cancel: true }));
+  openFromBar("http://localhost:4700/", tabId, "current");
+  setOpeningGate(null);
+  await wait(5);
+  useBrowser.getState().navigate(tabId, "http://localhost:4700/", { userInitiated: true });
+  notePageDocument(tabId, "http://localhost:4700/", "http://localhost:4700/", Date.now() + 10, false, R);
+  assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:4700"), undefined);
+  forgetPageDocument(tabId, R);
+});

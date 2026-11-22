@@ -846,8 +846,9 @@ change. The tracker keeps each tab's last report, so pages already open show the
 turns on, and on the Mac pages already open report again when reports turn on. A page that crashes or is discarded
 forgets its document until it commits a new one, and its old report can't bring it back. A typed local address is
 kept as an intent only while a page-bar plugin is on, for at most 20 s, and is spent only by the navigation it started:
-the tab's next user-started navigation to that address (a `tab.opening` hook may hold it and let it through unchanged;
-one that cancels or redirects it leaves nothing to spend), or the new tab it opened. It goes with the tab.
+the address bar's own navigation of that tab (a `tab.opening` hook may hold it and let it through unchanged; one that
+cancels or redirects it leaves nothing to spend), or the new tab it opened. It goes with the tab. A typed address
+opened in a split or a new window, from a frozen pinned copy, or in a new tab a hook held, records no intent.
 
 
 ### The channel
