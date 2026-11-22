@@ -905,33 +905,88 @@ test("the conflict a sign-in reports stays a conflict even while the task's othe
   }
 });
 
-test("the engine's evidence and reasons reach the caller: weak or no evidence for submitted, no submit control, interrupted, and the browser's own password dialogs", async () => {
-  stub.controlSocket.peers[742] = NODE;
-  const { call } = socketClient(742);
+test("evidence reaches the caller, and a weak submitted sign-in whose session moved reloads the tab while one with no evidence doesn't", async () => {
+  const { tabReloads } = await import("../vault/signIn.ts");
+  const real = tabReloads.reload;
+  const reloaded = [];
+  tabReloads.reload = async (tabId) => (reloaded.push(tabId), true);
+  try {
+    const { tab } = await freshWindow("https://one.example/login");
+    stub.controlSocket.peers[742] = NODE;
+    const { call } = socketClient(742);
+    const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+    const login = (result) => ((stub.vaultFake.signInResult = result), call("vault.login", { task: reply.result.task, site: "one.example", tab }));
+    takeVaultCounts();
+    const weak = await login({ status: "submitted", evidence: "weak", transfer: "complete" });
+    assert.equal(weak.result.status, "submitted");
+    assert.equal(weak.result.evidence, "weak");
+    assert.equal(weak.result.transfer, "complete");
+    assert.deepEqual(reloaded, [tab], "the agent can check its page");
+    const none = await login({ status: "submitted", evidence: "none", transfer: "none" });
+    assert.equal(none.result.evidence, "none");
+    assert.equal(none.result.transfer, "none");
+    assert.equal((await login({ status: "submitted", evidence: "weak", transfer: "none" })).result.evidence, "weak");
+    assert.deepEqual(reloaded, [tab], "nothing moved, nothing reloads");
+    const strong = await login({ status: "signed_in", evidence: "strong", transfer: "complete" });
+    assert.equal(strong.result.evidence, "strong");
+    assert.equal((await login({ status: "signed_in", transfer: "complete" })).result.evidence, null);
+    assert.deepEqual(reloaded, [tab, tab, tab]);
+    const counts = takeVaultCounts();
+    assert.equal(counts.vault_submitted_evidence_weak, 2);
+    assert.equal(counts.vault_submitted_evidence_none, 1);
+  } finally {
+    tabReloads.reload = real;
+  }
+});
+
+test("failed with no_submit_control names it", async () => {
+  stub.controlSocket.peers[745] = NODE;
+  const { call } = socketClient(745);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  takeVaultCounts();
+  stub.vaultFake.signInResult = { status: "failed", reason: "no_submit_control" };
+  const answer = await call("vault.login", { task: reply.result.task, site: "one.example" });
+  assert.equal(answer.error.code, "failed");
+  assert.match(answer.error.message, /no button or key that sends it \(reason: no_submit_control\)/);
+  assert.equal(takeVaultCounts().vault_failures_no_submit_control, 1);
+});
+
+test("interrupted comes with any status but signed_in: an error names it, a submitted answer carries it as its reason", async () => {
+  stub.controlSocket.peers[746] = NODE;
+  const { call } = socketClient(746);
   const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
   const login = (result) => ((stub.vaultFake.signInResult = result), call("vault.login", { task: reply.result.task, site: "one.example" }));
   takeVaultCounts();
-  const weak = await login({ status: "submitted", evidence: "weak", transfer: "complete" });
-  assert.equal(weak.result.evidence, "weak");
-  assert.equal((await login({ status: "submitted", evidence: "none" })).result.evidence, "none");
-  assert.equal((await login({ status: "signed_in", transfer: "complete" })).result.evidence, null);
-  const noSubmit = await login({ status: "failed", reason: "no_submit_control" });
-  assert.equal(noSubmit.error.code, "failed");
-  assert.match(noSubmit.error.message, /reason: no_submit_control/);
-  const interrupted = await login({ status: "interrupted" });
-  assert.equal(interrupted.error.code, "failed");
-  assert.match(interrupted.error.message, /reason: interrupted/);
-  for (const reason of ["basic_auth", "proxy_auth"]) {
-    const dialog = await login({ status: "needs_human", reason });
-    assert.equal(dialog.error.code, "needs_human");
-    assert.match(dialog.error.message, new RegExp(`reason: ${reason}`));
+  const failed = await login({ status: "failed", reason: "interrupted" });
+  assert.equal(failed.error.code, "failed");
+  assert.match(failed.error.message, /interrupted before it finished \(reason: interrupted\)/);
+  const noForm = await login({ status: "no_form", reason: "interrupted" });
+  assert.equal(noForm.error.code, "no_form");
+  assert.match(noForm.error.message, /didn't find a sign-in form.*\(reason: interrupted\)/);
+  const stillOnLogin = await login({ status: "still_on_login", reason: "interrupted" });
+  assert.equal(stillOnLogin.error.code, "needs_human");
+  assert.match(stillOnLogin.error.message, /\(reason: interrupted\)/);
+  const submitted = await login({ status: "submitted", evidence: "none", reason: "interrupted" });
+  assert.equal(submitted.result.status, "submitted");
+  assert.equal(submitted.result.reason, "interrupted");
+  assert.equal(takeVaultCounts().vault_failures_interrupted, 4);
+});
+
+test("needs_human names the browser's own password dialog for a site (basic_auth) or a proxy (proxy_auth)", async () => {
+  stub.controlSocket.peers[747] = NODE;
+  const { call } = socketClient(747);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  takeVaultCounts();
+  for (const [reason, who] of [["basic_auth", /The site asks/], ["proxy_auth", /A proxy asks/]]) {
+    stub.vaultFake.signInResult = { status: "needs_human", reason };
+    const answer = await call("vault.login", { task: reply.result.task, site: "one.example" });
+    assert.equal(answer.error.code, "needs_human");
+    assert.match(answer.error.message, who);
+    assert.match(answer.error.message, new RegExp(`\\(reason: ${reason}\\)`));
   }
-  assert.match((await login({ status: "failed", reason: "something_new" })).error.message, /reason: something_new/);
+  stub.vaultFake.signInResult = { status: "failed", reason: "something_new" };
+  assert.match((await call("vault.login", { task: reply.result.task, site: "one.example" })).error.message, /\(reason: something_new\)/);
   const counts = takeVaultCounts();
-  assert.equal(counts.vault_submitted_evidence_weak, 1);
-  assert.equal(counts.vault_submitted_evidence_none, 1);
-  assert.equal(counts.vault_failures_no_submit_control, 1);
-  assert.equal(counts.vault_failures_interrupted, 1);
   assert.equal(counts.vault_failures_basic_auth, 1);
   assert.equal(counts.vault_failures_proxy_auth, 1);
 });

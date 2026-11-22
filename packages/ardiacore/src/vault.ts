@@ -1,4 +1,4 @@
-export type VaultSignInStatus = "signed_in" | "submitted" | "still_on_login" | "filled" | "no_form" | "no_login" | "needs_passkey" | "needs_human" | "cross_origin" | "busy" | "cancelled" | "failed" | "interrupted";
+export type VaultSignInStatus = "signed_in" | "submitted" | "still_on_login" | "filled" | "no_form" | "no_login" | "needs_passkey" | "needs_human" | "cross_origin" | "busy" | "cancelled" | "failed";
 export type VaultTransfer = "none" | "complete" | "partial" | "sent" | "timed_out";
 export type VaultFailure = "unreachable" | "field_missing" | "field_changed" | "steps" | "no_submit_control" | "interrupted" | "basic_auth" | "proxy_auth";
 export type VaultEvidence = "strong" | "weak" | "none";

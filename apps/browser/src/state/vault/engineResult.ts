@@ -23,7 +23,6 @@ const STATUS_CODES: Partial<Record<VaultSignIn["status"], VaultRefusal>> = {
   cancelled: "task_expired",
   busy: "busy",
   failed: "failed",
-  interrupted: "failed",
 };
 
 const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
@@ -36,7 +35,6 @@ const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
   cancelled: "The task ended before the sign-in finished.",
   busy: "Another sign-in is running for this site or profile; try again shortly.",
   failed: "The sign-in didn't finish.",
-  interrupted: "The sign-in was interrupted before it finished (reason: interrupted).",
 };
 
 const REASON_MESSAGES: Record<NonNullable<VaultSignIn["reason"]>, string> = {
@@ -64,9 +62,13 @@ const timing = (value: number | undefined) => (typeof value === "number" && valu
 
 const REASON_TOKEN = /^[a-z][a-z_]{0,39}$/;
 
+const NEEDS_HUMAN_REASONS: ReadonlySet<string> = new Set(["basic_auth", "proxy_auth"]);
+
+const reasonFits = (status: VaultSignIn["status"], reason: string) => (status === "needs_human" ? NEEDS_HUMAN_REASONS.has(reason) : status === "failed" && !NEEDS_HUMAN_REASONS.has(reason));
+
 function engineMessage(result: VaultSignIn): string {
   const reason = result.reason;
-  const known = reason ? REASON_MESSAGES[reason] : undefined;
+  const known = reason && reasonFits(result.status, reason) ? REASON_MESSAGES[reason] : undefined;
   if (known) return known;
   const base = STATUS_MESSAGES[result.status] ?? "The sign-in didn't finish.";
   return reason && REASON_TOKEN.test(reason) ? `${base} (reason: ${reason})` : base;
@@ -85,14 +87,14 @@ export function judge(result: VaultSignIn, auto: boolean, username: string, base
   noteVaultTransfer(result.transfer, result, consent);
   for (const [kind, value] of [["profile", result.profileMs], ["seed", result.seedMs], ["load", result.loadMs], ["scan", result.scanMs]] as const) noteVaultTiming(kind, value, consent);
   noteVaultTiming("transfer", result.transferMs, consent);
-  if (result.status !== "signed_in" && result.status !== "submitted") noteVaultFailure(result.reason ?? (result.status === "interrupted" ? "interrupted" : undefined), consent);
+  if (result.status !== "signed_in") noteVaultFailure(result.reason, consent);
   if (result.status === "submitted") noteVaultEvidence(result.evidence, consent);
   const refuse = (error: VaultError, drive = false, reload = false) => runRefusal(error, username, base, consent, drive, reload);
   const code = STATUS_CODES[result.status];
   if (code) return refuse(new VaultError(code, engineMessage(result)));
   const transfer = TRANSFER_REFUSALS[result.transfer ?? "none"];
   if (transfer) return refuse(new VaultError(...transfer));
-  const reload = result.status === "signed_in" && result.transfer === "complete";
+  const reload = result.transfer === "complete" && (result.status === "signed_in" || (result.status === "submitted" && result.evidence === "weak"));
   if (result.status === "signed_in" && (result.conflicts ?? 0) > 0) return refuse(new VaultError("conflict", "You changed this site's session in Ardia while the agent was signing in, so Ardia kept your changes and reloaded the tab; it may be signed in as you rather than as the saved login."), true, reload);
   const ms = result.totalMs ?? result.appMs;
   noteVaultFill(auto, result.usedCode, consent);
