@@ -780,6 +780,7 @@ Requests from the helper (`{"id", "method", "params"}`):
 | `windows` | `tabs` | as on the socket |
 | `run` `{"command", "arg"?, "window"?, "tab"?}` | `commands` | as on the socket |
 | `open` `{"urls", "activate"?}` | `commands` | opens 1 to 10 `http:` or `https:` URLs as background tabs in the last focused window (`activate` selects the first there without raising the window). Each URL, at most 2048 characters, is parsed whole as http or https with a host, before anything opens: the host as written must be ASCII (a Unicode name is refused; send it in punycode, `xn--`), with no user name or password and a port from 1 to 65535; an IPv6 host is put in its short form, and dotted IPv4 must have four parts. Raw spaces (percent-encode them), backslashes and control characters are refused before parsing. What opens is the normalised address: scheme and host lower-cased, the default port dropped, non-ASCII in the path, query and fragment percent-encoded as UTF-8, everything else as given. Anything else (`file:`, a path, `ardia:` or `chrome:` pages, `about:`, `javascript:`, `data:`, `ardia-plugin:`) is `bad_request`, and the message names the first bad entry, as in `urls[1] isn't a valid address`. It runs only while the run that asked is still the plugin's current run and still has `commands`; one queued behind other work when that stops opens nothing. Answers `{"ok": true, "tabs": [ids]}`: the tabs it made, nothing else |
+| `apply` `{"ops"}` | `workspace`, or `tabs: write` for `open`, `tab.close` and `tab.activate` | as on the socket, except that every URL in `open` and `group.create` is read by `open`'s rules above (http or https only). A batch with any other address is `refused` whole before anything in it runs, and the message names the address |
 | `page.post` `{"message", "view"?}` | a `page` | `{"ok": true}`, or `overloaded`: a message to the plugin's page views ([Pages and their helper](#pages-and-their-helper)); `refused` for a plugin with no page, however the method name is spelled in JSON |
 | `page.open` `{"path"?, "split"?, "side"?, "context"?}` | a `page`; `context` needs `tabs` | `{"tabId", "windowId"}`: opens the plugin's page at that path in the last focused window, as a tab or in Split View beside the current tab |
 | `tools.call` `{"plugin", "tool", "input"?}` | every permission the other plugin has | the tool's result, or its error; the plugin must be on and running. A plugin can't reach through another plugin's tools to what it wasn't granted itself |
@@ -974,6 +975,8 @@ in the local copy. Hourly `usage_counts`:
   `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,
   `plugin_ui_prompts` (a quick pick, input box or confirm shown),
   `plugin_net_fetches`, `plugin_net_refusals` (a fetch outside `permissions.network` or to a private address),
+  `plugin_url_refusals_open`, `plugin_url_refusals_group_create` (an `apply` batch refused for an address that isn't http
+  or https, by the operation that held it),
   `plugin_storage_writes`, `plugin_storage_cancels` (a storage request dropped because the plugin was being removed),
   `plugin_secret_writes`, `plugin_page_reads` (`activePage` reads), `plugin_decide_calls`,
   `plugin_decide_timeouts`.
@@ -997,5 +1000,6 @@ and each refusal's reason
 
 Dashboard: watch `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against
 `plugin_activations`, `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
-`plugin_net_refusals` against `plugin_net_fetches`, `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
+`plugin_net_refusals` against `plugin_net_fetches`, `plugin_url_refusals_open` and `plugin_url_refusals_group_create`
+(a plugin trying addresses it may not open), `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
 `program_after_update_quit_exits` (afterUpdate commands that ignore TERM at quit).
