@@ -1,19 +1,7 @@
 import {
-  allEngines,
-  controllingExtensionEngine,
-  appUrlRoute,
-  engineById,
-  extensionEngineId,
-  fixupUrl,
-  makeCustomEngine,
-  resolveInput,
-  validateEngine,
-  type CustomSearchEngine,
-  type EngineInput,
-  type ExtensionSearchEngine,
-  type SearchEngine,
-  isProviderEntryList,
-  type ProviderEntry,
+  allEngines, controllingExtensionEngine, customEnginesFrom, appUrlRoute, engineById, extensionEngineId, fixupUrl, makeCustomEngine, resolveInput,
+  validateEngine, validSearchTemplate, isProviderEntryList,
+  type CustomSearchEngine, type EngineInput, type ExtensionSearchEngine, type SearchEngine, type ProviderEntry,
 } from "@ardia/core";
 import type { StateCreator } from "zustand";
 import { fromLegacyUrl } from "../../lib/legacy";
@@ -220,6 +208,7 @@ export function parseSettings(raw: unknown): Settings {
   const saved = isFields(raw) ? raw : {};
   const value = (key: SettingKey) => (SETTING_SPECS[key].valid(saved[key]) ? saved[key] : SETTING_SPECS[key].default);
   const settings = Object.fromEntries(SETTING_KEYS.map((key) => [key, value(key)])) as Settings;
+  settings.customSearchEngines = customEnginesFrom(settings.customSearchEngines);
   if (saved.hideBookmarksBarImport === true) settings.bookmarksImportDismissed = true;
   return { ...settings, ...withLinkKeysApart(settings, {}) };
 }
@@ -239,7 +228,7 @@ export function searchEngines(settings: Settings): SearchEngine[] {
   const cached = engineCache.get(custom);
   if (cached && cached.legacyUrl === settings.customSearchUrl && cached.extension === extension) return cached.engines;
   const engines = allEngines(custom, extension);
-  if (settings.customSearchUrl.includes("%s")) {
+  if (validSearchTemplate(settings.customSearchUrl)) {
     const at = engines.findIndex((e) => e.extension);
     engines.splice(at < 0 ? engines.length : at, 0, { id: "custom", name: "Custom", keyword: "custom", url: settings.customSearchUrl, custom: true });
   }
@@ -361,6 +350,7 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
   settings: DEFAULT_SETTINGS,
   settingsMeta: NO_SETTINGS_META,
   updateSettings(patch, { fromSync = false, inferred = false } = {}) {
+    if ("customSearchEngines" in patch) patch = { ...patch, customSearchEngines: customEnginesFrom(patch.customSearchEngines) };
     set((s) => {
       const windows = windowsFollowingAutoHideTabs(s, patch);
       if (fromSync) return { settings: { ...s.settings, ...withPageFrameDependencies(s.settings, patch) }, ...windows };
