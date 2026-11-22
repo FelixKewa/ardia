@@ -157,6 +157,9 @@ rules are for the owner's Mac.
   flags, never URLs, page content, titles or free text. List new events and fields in the "What's Sent" copy, and
   say in the commit and the parity row what to watch on the dashboard. Skip it only when nothing measurable exists,
   and say so.
+- **Test the boundary.** Code that takes data from a page, a frame, another device, another app, a plugin or the
+  socket gets a row in `apps/browser/src/boundaries.json` and runs the shared hostile inputs through its guard, checked
+  at the sink (`docs/security-testing.md`). The boundary test fails until the row is there.
 - **Verify before you call it done.** Typecheck, build, and exercise the feature in a hidden instance
   (dev harness, CDP, window snapshots).
   - The screen is often locked, and then WindowServer captures fail. Use the in-process snapshots

@@ -1411,8 +1411,12 @@ function fixup(raw        )                {
   return host.port || path.endsWith("/") || parts > 1 ? `${proto}://${input}` : null;
 }
 
+const SURROGATE_PAIR_OR_LONE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;
+
+const wellFormed = (text        ) => text.replace(SURROGATE_PAIR_OR_LONE, (unit) => (unit.length === 2 ? unit : "\uFFFD"));
+
 function searchUrlFor(template        , query        )         {
-  const q = encodeURIComponent(query.trim());
+  const q = encodeURIComponent(wellFormed(query.trim()));
   return template.includes("%s") ? template.replace(/%s/g, q) : template + q;
 }
 
