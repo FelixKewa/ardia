@@ -9,7 +9,7 @@ import { openImport } from "../../state/settings/settingsWindows";
 import { Favicon } from "../favicon/Favicon";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import type { SidebarEdge } from "../../state/bookmarks/sidebarEdge";
-import { ContextMenuArea, HoverFill, MouseArea, Symbol, Text, useHover, useTheme } from "../ui";
+import { ContextMenuArea, HoverFill, MouseArea, Symbol, Text, useHover, useTheme, tapActivates } from "../ui";
 import { openBarMenu, openImportButtonMenu, type ClickMods } from "../../state/bookmarks/barMenus";
 import { bookmarkDrag, bookmarksBar, type BarSize } from "./tokens";
 import { chipFrame } from "./chipFrame";
@@ -132,7 +132,7 @@ export const BarButton = forwardRef<View, {
   const size = useBarSize();
   return (
     <View ref={ref} collapsable={false} {...hoverProps} tooltip={tooltip}>
-      <Pressable accessibilityRole="button" accessibilityLabel={title || tooltip} onPress={(e) => onPress(e.nativeEvent as unknown as ClickMods)}>
+      <Pressable accessibilityRole="button" accessibilityLabel={title || tooltip} onPress={(e) => onPress(e.nativeEvent as unknown as ClickMods)} onAccessibilityTap={tapActivates((e: { nativeEvent: unknown }) => onPress(e.nativeEvent as ClickMods))}>
         {({ pressed }) => (
           <Chip size={size} width={width} titled={!!title} hovered={hovered || active || dropRing} pressed={pressed || !!active} dropRing={dropRing}>
             <ChipIcon size={size} favicon={favicon} icon={icon} />

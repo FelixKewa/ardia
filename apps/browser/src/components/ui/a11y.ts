@@ -36,3 +36,7 @@ export const spaceActivates =
     e.preventDefault?.();
     activate(e);
   };
+
+const TAP = { nativeEvent: {} };
+
+export const tapActivates = (press: ((event: never) => unknown) | null | undefined) => (press ? () => void (press as (event: unknown) => unknown)(TAP) : undefined);

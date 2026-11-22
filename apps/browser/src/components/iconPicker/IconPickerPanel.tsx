@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
-import { Button, ClosingView, liveWhile, PopoverSurface, SearchField, space, usePopoverMotion, usePopoverMotionStyle } from "../ui";
+import { Button, ClosingView, useLiveWhile, PopoverSurface, SearchField, space, usePopoverMotion, usePopoverMotionStyle } from "../ui";
 import { iconSymbol, symbolIcon } from "../../lib/customIcon";
 import { emojiSections, matchesTerms, searchEmoji, searchTerms } from "../../lib/emoji";
 import { IconGrid, type GridSection } from "./IconGrid";
@@ -124,7 +124,7 @@ export function IconPickerLayer({
 }: Omit<PanelProps, "place" | "onSize" | "closing"> & { closing?: boolean; placeIn: (height: number, room: Room) => PickerPlace }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [height, setHeight] = useState<number | null>(null);
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   return (
     <>
       <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setRoom({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })} />

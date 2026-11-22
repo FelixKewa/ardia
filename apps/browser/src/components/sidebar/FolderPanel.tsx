@@ -5,7 +5,7 @@ import { useIsActiveTab, useTab } from "../../state/browser/hooks";
 import { plural, tabTitle } from "../../state/browser/model";
 import { useTileFolderLabel, useTileFolderMembers } from "../../state/pins/hooks";
 import { useGated } from "../ui/motion";
-import { ClosingView, ContextMenuArea, HoverCard as HoverPanel, HoverFill, OutsidePressArea, liveWhile, radius, space, useClosing, useHover, useLiveAction, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf } from "../ui";
+import { ClosingView, ContextMenuArea, HoverCard as HoverPanel, HoverFill, OutsidePressArea, useLiveWhile, radius, space, useClosing, useHover, useLiveAction, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf } from "../ui";
 import { SectionLabel } from "./SectionLabel";
 import { Squish, useSquish } from "../ui/Squish";
 import { SidebarListRow, SidebarRowLabel } from "./SidebarRow";
@@ -42,7 +42,7 @@ function PanelBody({ windowId, folderId, anchor, closing, onClosed }: { windowId
   const origin = useMemo<[number, number, number]>(() => [originX, 0, 0], [originX]);
   const motion = usePopoverMotionStyle(appear, origin);
   const opacity = useGated(!away, appear, 0);
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   const tail = useDragItem(tailKey("folder"), { kind: "tail", tabIds: [], section: "folder" });
 
   useEffect(() => {

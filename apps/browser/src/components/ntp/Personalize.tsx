@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { PERSONALIZE_COPY, TabLayoutPicker } from "../onboarding/Personalize";
 import { ThemePicker } from "../settings/ThemeEditor";
-import { Box, capsule, ClosingView, liveWhile, PopoverSurface, proseLineHeight, space, Symbol, Text, useHover, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence, useTheme } from "../ui";
+import { Box, capsule, ClosingView, useLiveWhile, PopoverSurface, proseLineHeight, space, Symbol, Text, useHover, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence, useTheme, tapActivates } from "../ui";
 import { closePersonalizePanelOf, setPersonalizePanel as setOpen, usePersonalizePanel } from "../../state/pages/personalizePanel";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
@@ -25,7 +25,7 @@ export function PersonalizeButton({ windowId }: { windowId: string }) {
       {shown ? <PersonalizePanel windowId={windowId} onClose={() => setOpen(null)} closing={closing} onClosed={onClosed} /> : null}
       <View {...hoverProps} tooltip="Personalize" style={{ position: "absolute", right: INSET, bottom: INSET - GLYPH_DROP }}>
         <Pressable
-          onPress={() => setOpen(open ? null : windowId)}
+          onPress={() => setOpen(open ? null : windowId)} onAccessibilityTap={tapActivates(() => setOpen(open ? null : windowId))}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
           accessibilityRole="button"
@@ -59,7 +59,7 @@ const PERSONALIZE_GLYPH = { width: BUTTON, height: BUTTON, alignItems: "center",
 function PersonalizePanel({ windowId, onClose, closing, onClosed }: { windowId: string; onClose: () => void; closing: boolean; onClosed: () => void }) {
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, "bottom right", true);
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   return (
     <>
       {closing ? null : <Pressable style={StyleSheet.absoluteFill} onPress={live(onClose)} accessibilityLabel="Close Personalize" />}

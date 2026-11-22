@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { Checkbox, checkboxA11y, IconTile, Radio, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction } from "../ui";
+import { Checkbox, checkboxA11y, IconTile, Radio, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction, tapActivates } from "../ui";
 import { radius, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { useOnboardingColors } from "./Parts";
@@ -54,7 +54,7 @@ export function OptionCard({
       <View {...hoverProps} style={{ opacity: disabled ? DISABLED_OPACITY : 1 }}>
         <Pressable
           disabled={disabled || closing}
-          onPress={live(onPress)}
+          onPress={live(onPress)} onAccessibilityTap={disabled || closing ? undefined : tapActivates(live(onPress))}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
           onKeyDown={disabled ? undefined : live(spaceActivates(onPress))}
@@ -91,7 +91,7 @@ export function OptionCard({
   if (preview)
     return (
       <View {...hoverProps} style={{ flex: 1 }}>
-        <Pressable disabled={closing} onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
+        <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
           <Animated.View style={scaleStyle}>
             <ChoiceCard mouseDownCanMoveWindow={false} radius={radius.panel} selected={selected} hovered={hovered} style={{ padding: space.ml, gap: space.ml }}>
               {preview}
@@ -116,7 +116,7 @@ export function OptionCard({
 
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         <Animated.View style={scaleStyle}>
           <ChoiceCard
             mouseDownCanMoveWindow={false}

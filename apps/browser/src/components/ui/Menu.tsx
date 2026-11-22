@@ -8,8 +8,8 @@ import { PANEL } from "./Popover";
 import { useTheme, type Theme } from "./theme";
 import { opacity, space, typeFace } from "./tokens";
 import { useHover } from "./useHover";
-import { radioA11y, spaceActivates } from "./a11y";
-import { liveWhile, useClosing } from "./Closing";
+import { radioA11y, spaceActivates, tapActivates } from "./a11y";
+import { useLiveWhile, useClosing } from "./Closing";
 
 export const menuRowFill = (theme: Theme, pressed = false) => (pressed ? theme.popoverRowPressed : theme.rowHover);
 
@@ -53,6 +53,7 @@ export function MenuRow({
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
   const closing = useClosing();
+  const live = useLiveWhile(closing);
   const tint = destructive ? theme.destructive : theme.textPrimary;
   const interactive = !!onPress && !disabled;
   const marked = !!(selected || checked);
@@ -103,11 +104,10 @@ export function MenuRow({
     );
   const choosable = checked !== undefined;
   const active = !disabled && !closing;
-  const live = liveWhile(closing);
   return (
     <View {...hoverProps} tooltip={tooltip}>
       <Pressable
-        onPress={live(onPress)}
+        onPress={live(onPress)} onAccessibilityTap={!active ? undefined : tapActivates(live(onPress))}
         disabled={!active}
         {...(choosable
           ? { ...radioA11y(!!checked), onKeyDown: active ? live(spaceActivates((e) => onPress(e as unknown as GestureResponderEvent))) : undefined }

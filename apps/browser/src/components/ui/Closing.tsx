@@ -28,12 +28,33 @@ export function ClosingView({ closing, pointerEvents, children, ...props }: Omit
 
 export type Live = <H>(handler: H) => H | undefined;
 
-const KEPT: Live = (handler) => handler;
+type Action = (...args: never[]) => unknown;
+type Latest = { current: boolean };
+
 const DROPPED: Live = () => undefined;
 
-export const liveWhile = (closing: boolean): Live => (closing ? DROPPED : KEPT);
+export function guardedLive(latest: Latest, guards: WeakMap<Action, Action>): Live {
+  return <H,>(handler: H): H | undefined => {
+    if (typeof handler !== "function") return handler;
+    const action = handler as unknown as Action;
+    let guard = guards.get(action);
+    if (!guard) {
+      guard = ((...args: never[]) => (latest.current ? undefined : action(...args))) as Action;
+      guards.set(action, guard);
+    }
+    return guard as unknown as H;
+  };
+}
 
-export const useLiveAction = () => liveWhile(useClosing());
+export function useLiveWhile(closing: boolean): Live {
+  const latest = useRef(closing);
+  latest.current = closing;
+  const kept = useRef<Live | null>(null);
+  kept.current ??= guardedLive(latest, new WeakMap());
+  return closing ? DROPPED : kept.current;
+}
+
+export const useLiveAction = () => useLiveWhile(useClosing());
 
 const IGNORED = () => {};
 const ALWAYS_OPEN = () => true;

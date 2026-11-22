@@ -1,4 +1,5 @@
 import { OutsidePressArea, showMenu, type MenuItem } from "@ardia/shell";
+import { tapActivates } from "./a11y";
 import { withIconNames } from "../../lib/activeLook";
 import { POP_UP_CHROME } from "../../lib/platformChrome";
 import { Symbol } from "./Symbol";
@@ -10,7 +11,7 @@ import { monoFace, opacity, perLook, proseLineHeight, radius, space, font as typ
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
-import { liveWhile, useClosing, useClosingField } from "./Closing";
+import { useLiveWhile, useClosing, useClosingField } from "./Closing";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -53,7 +54,7 @@ export function SearchField({
   const clearMotion = usePressScaleMotion(!!value && !bare, buttonMotion.iconPressScale);
   const field = useClosingField(inputRef);
   const closing = field.closing;
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   return (
     <View
       style={[
@@ -104,7 +105,7 @@ export function SearchField({
       />
       {value && !bare ? (
         <View tooltip="Clear">
-          <Pressable disabled={closing} onPress={live(() => onChangeText(""))} accessibilityRole="button" accessibilityLabel="Clear" onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
+          <Pressable disabled={closing} onPress={live(() => onChangeText(""))} onAccessibilityTap={tapActivates(live(() => onChangeText("")))} accessibilityRole="button" accessibilityLabel="Clear" onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
             <Animated.View style={[CLEAR_GLYPH, clearMotion.scale ? { transform: [{ scale: clearMotion.scale }] } : null]}>
               <Symbol name="xmark.circle.fill" size={12} color={theme.textTertiary} style={CLEAR_GLYPH} />
             </Animated.View>
@@ -154,7 +155,7 @@ export function TextField({
   const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
   const field = useClosingField();
   const locked = disabled || field.closing;
-  const live = liveWhile(field.closing);
+  const live = useLiveWhile(field.closing);
   return (
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
@@ -223,7 +224,7 @@ export function PopUp<T extends string>({
   const native = useNativeForm();
   const { hovered, hoverProps } = useHover();
   const closing = useClosing();
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   const pressMotion = usePressScaleMotion(!disabled && !native, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const current = options.find((o) => o.value === value);
@@ -239,7 +240,7 @@ export function PopUp<T extends string>({
   };
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled || closing} onPress={live(open)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
+      <Pressable disabled={disabled || closing} onPress={live(open)} onAccessibilityTap={disabled || closing ? undefined : tapActivates(live(open))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
         {({ pressed }) =>
           native ? (
             <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>

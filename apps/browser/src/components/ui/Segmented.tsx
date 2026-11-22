@@ -1,4 +1,5 @@
 import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { tapActivates } from "./a11y";
 import { Symbol } from "./native";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
@@ -42,7 +43,7 @@ function Segment<T extends string>({ option, selected, onPress, onLayout }: { op
       accessibilityRole="button"
       accessibilityLabel={option.title}
       aria-selected={selected}
-      onPress={live(onPress)}
+      onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
       onLayout={onLayout}

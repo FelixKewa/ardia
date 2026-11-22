@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Animated, Pressable, StyleSheet, View, type ScrollView } from "react-native";
 import { revealTab, rowsStamp, sameRows, samePillTab, selectedTabIn, selectedTabSnapshot, selectedPlaceIn, movedInPlace, watchPillTab, watchSelectedPlace, type PillTab, type RowsStamp, type SelectedPlace } from "../../state/sidebar/reveal";
 import { notePageOverlay } from "../../state/telemetry/usage";
-import { capsule, Panel, radius, reduceMotion, Symbol, Text, tintedImage } from "../ui";
+import { capsule, Panel, radius, reduceMotion, Symbol, Text, tintedImage, tapActivates } from "../ui";
 import { useTheme } from "../ui/theme";
 import { SHADOWS } from "../window/tokens";
 import { GLOW_ROOM, type SidebarGeometry } from "./pageLayout";
@@ -208,7 +208,7 @@ function PillFace({ windowId, side, tab }: { windowId: string; side: "above" | "
     revealTab(windowId, tab.id);
   };
   return (
-    <Pressable onPress={press} accessibilityRole="button" accessibilityLabel={side === "below" ? "Scroll down to the selected tab" : "Scroll up to the selected tab"}>
+    <Pressable onPress={press} onAccessibilityTap={tapActivates(press)} accessibilityRole="button" accessibilityLabel={side === "below" ? "Scroll down to the selected tab" : "Scroll up to the selected tab"}>
       <Panel fill={tokens.selectedRowPillFill} border={tokens.selectedRowPillStroke} radius={capsule(SELECTED_ROW_PILL.height)} shadow={SHADOWS.status}>
         <View style={FACE}>
           <PillIcon tab={tab} size={SELECTED_ROW_PILL.icon} />

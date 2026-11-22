@@ -10,7 +10,7 @@ import {
   shareTab,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, radioA11y, spaceActivates, Text, liveWhile, useClosing, useHover, useLiveAction, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
+import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, radioA11y, spaceActivates, Text, useLiveWhile, useClosing, useHover, useLiveAction, usePopoverPresenceOf, useStillOpen, whileOpen, tapActivates } from "../ui";
 import { PromptHeader } from "../site/PromptParts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
@@ -77,6 +77,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     );
   }, [sources]);
 
+  const live = useLiveWhile(closing);
   if (!request) return null;
   const tabs = shareableTabs(tabId);
   const screens = screenAccess ? sources.filter((s) => s.kind === "screen") : [];
@@ -88,7 +89,6 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const selectedKind = kindOf(selected);
   const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
   const act = whileOpen(closing, stillOpen);
-  const live = liveWhile(closing);
   const share = act((id: string | null = selected) => {
     const kind = kindOf(id);
     if (!id || !kind) return;
@@ -223,7 +223,7 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
   const live = useLiveAction();
   return (
     <View {...hoverProps} onDoubleClick={live(onShare)}>
-      <Pressable disabled={closing} onPress={live(onSelect)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onSelect))} {...radioA11y(selected, source.name)}>
+      <Pressable disabled={closing} onPress={live(onSelect)} onAccessibilityTap={tapActivates(live(onSelect))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onSelect))} {...radioA11y(selected, source.name)}>
         <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? theme.rowSelected : hovered ? theme.rowHover : undefined }}>
           <View
             style={{

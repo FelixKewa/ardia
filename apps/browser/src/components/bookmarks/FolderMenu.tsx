@@ -14,7 +14,7 @@ import { currentBookmarks } from "../../state/browser/current";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { modifiersOf } from "../../lib/keys";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { ClosingView, ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosing, useLiveAction, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
+import { ClosingView, ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosing, useLiveAction, usePopoverMotion, usePopoverMotionStyle, useTheme, tapActivates } from "../ui";
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -297,7 +297,7 @@ function FolderRow({
       <ContextMenuArea onContextMenu={live(() => void openBarMenu(windowId, profileId, node))}>
         <MouseArea onMiddleClick={live((e) => press({ ...e, middle: true }))}>
           <View tooltip={node.kind === "url" ? node.url : undefined}>
-            <Pressable disabled={closing} accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={live((e) => press(modifiersOf(e)))}>
+            <Pressable disabled={closing} accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={live((e) => press(modifiersOf(e)))} onAccessibilityTap={tapActivates(live((e) => press(modifiersOf(e))))}>
               {({ pressed }) => (
                 <RowFrame size={size} plate={(hovered && !anyDrag) || open || dropInto} pressed={pressed} ring={dropInto}>
                   <View style={ICON_SLOT}>

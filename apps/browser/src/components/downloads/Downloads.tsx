@@ -22,7 +22,7 @@ import {
   useClosing,
   useHover,
   useLiveAction,
-  liveWhile,
+  useLiveWhile,
   usePopoverMotion,
   usePopoverMotionStyle,
   usePopoverPresence,
@@ -98,7 +98,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const { root, placement: p, onLayout } = useDownloadsPlacement(windowId, closing, { topStrip, footer: addressBar, footerBottom: PROFILE_DOTS_HEIGHT + 2, sidebarRight });
   const placed = p !== null;
   const appear = usePopoverMotion(closing, onClosed, placed);
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
 
   const upward = p?.bottom !== undefined;
   const arrowX = p?.arrowX;

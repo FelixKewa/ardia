@@ -6,7 +6,7 @@ import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
 import { useTheme } from "./theme";
 import { capsule, lineHeight, opacity, radius, space, font as typeScale } from "./tokens";
 import { checkboxA11y, spaceActivates } from "./a11y";
-import { liveWhile, useClosing } from "./Closing";
+import { useLiveWhile, useClosing } from "./Closing";
 
 const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
 const CHECK_RING_BORDER = 1.5;
@@ -53,7 +53,7 @@ export function Checkbox({ value, onChange, label, accessibilityLabel, disabled,
   const closing = useClosing();
   const on = value || mixed;
   const active = !!onChange && !disabled && !closing;
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const toggle = () => onChange?.(!value);

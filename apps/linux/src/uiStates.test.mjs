@@ -273,14 +273,17 @@ test("a toast's action is dead while the toast fades out", () => {
   assert.deepEqual(dead.map((d) => d.at), []);
 });
 
-test("useLiveAction keeps a handler while open and drops it while the scope closes", () => {
+test("useLiveAction runs a handler while open and hands the host nothing while the scope closes", () => {
   const seen = [];
-  const Probe = () => (seen.push(ui.useLiveAction()(noop)), null);
+  const calls = [];
+  const press = (n) => calls.push(n);
+  const Probe = () => (seen.push(ui.useLiveAction()(press)), null);
   render(h(Probe));
   render(closing(h(Probe)));
-  assert.deepEqual(seen, [noop, undefined]);
-  assert.equal(ui.liveWhile(false)(noop), noop);
-  assert.equal(ui.liveWhile(true)(noop), undefined);
+  assert.equal(typeof seen[0], "function");
+  seen[0](1);
+  assert.deepEqual(calls, [1]);
+  assert.equal(seen[1], undefined);
 });
 
 test("every shared button is a button, so Space and Enter both activate it on Linux", () => {

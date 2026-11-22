@@ -7,7 +7,7 @@ import { THEME_TEXTURES } from "@ardia/core";
 import { PROFILE_COLORS } from "../ui/theme";
 import { useAppDark, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../state/browser/types";
-import { Box, Button, curve, duration, Group, PopUp, radioA11y, Segmented, space, spaceActivates, Swatch, swatch, Text, ThemeSwatch, useClosing, useLiveAction } from "../ui";
+import { Box, Button, curve, duration, Group, PopUp, radioA11y, Segmented, space, spaceActivates, Swatch, swatch, Text, ThemeSwatch, useClosing, useLiveAction, tapActivates } from "../ui";
 import { importArcTheme } from "../../state/profiles/arcThemes";
 import { noteThemePreset } from "../../state/telemetry/themePresetCounts";
 import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
@@ -177,7 +177,7 @@ function ColorButton({ name, ring, size, selected, onPress, children }: { name: 
   const live = useLiveAction();
   return (
     <View tooltip={name}>
-      <Pressable disabled={closing} onPress={live(onPress)} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, name)}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, name)}>
         {({ pressed }) => (
           <View style={{ transform: [{ scale: pressed ? PRESSED_SCALE : 1 }] }}>
             <Swatch animated size={size} selected={selected} ring={ring} fill={children ? undefined : ring}>

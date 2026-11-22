@@ -1,10 +1,11 @@
 import { useRef, useState, type ReactNode } from "react";
+import { tapActivates } from "./a11y";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { useTheme } from "./theme";
 import { radius, space } from "./tokens";
 import { HoverFill } from "./HoverFill";
-import { liveWhile, useClosing } from "./Closing";
+import { useLiveWhile, useClosing } from "./Closing";
 
 export type ListRowState = { hovered: boolean; pressed: boolean; selected: boolean };
 
@@ -27,7 +28,7 @@ export function ListRow({
 }) {
   const theme = useTheme();
   const closing = useClosing();
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   const [hovered, setHovered] = useState(false);
   const notify = useRef(onHover);
   notify.current = onHover;
@@ -45,7 +46,7 @@ export function ListRow({
   );
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={live(onPress)} onPressIn={live(onPressIn)} accessibilityRole={onPress ? "button" : undefined}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={live(onPressIn)} accessibilityRole={onPress ? "button" : undefined}>
         {({ pressed }) => (
           <View
             style={{

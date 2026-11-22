@@ -7,6 +7,10 @@ const source = (file) => readFileSync(new URL(file, components), "utf8");
 
 const CLOSING_PANELS = [
   "bookmarks/FolderMenu.tsx",
+  "bookmarks/FolderMenus.tsx",
+  "pages/BookmarksPage.tsx",
+  "plugins/PluginOverlays.tsx",
+  "split/SplitChrome.tsx",
   "downloads/Downloads.tsx",
   "downloads/FooterButton.tsx",
   "find/FindBar.tsx",
@@ -59,7 +63,7 @@ const CLOSING_PANELS = [
 
 const HOSTS = ["Pressable", "TextInput", "MouseArea", "ContextMenuArea", "OutsidePressArea", "View", "Animated.View", "ScrollView", "NativeText", "Text"];
 const ACTIONS = /^on(Press|LongPress|KeyDown|KeyUp|ContextMenu|DoubleClick|MiddleClick|ChangeText|SubmitEditing|AccessibilityAction|AccessibilityTap|OutsidePress|StartShouldSetResponder|MoveShouldSetResponder)$/;
-const READS_CLOSING = /\b(useClosing|useLiveAction|liveWhile|whileOpen|ClosingView|ClosingScope|useClosingField|usePopoverPresence|usePopoverPresenceOf|usePanelsPresence)\b/;
+const READS_CLOSING = /\b(useClosing|useLiveAction|useLiveWhile|whileOpen|ClosingView|ClosingScope|useClosingField|usePopoverPresence|usePopoverPresenceOf|usePanelsPresence)\b|\bclosing=/;
 
 function closingBrace(text, open) {
   let depth = 0;
@@ -103,7 +107,9 @@ function openingTags(text) {
   return tags;
 }
 
-const OUTSIDE_ITS_PANEL = new Set(["ntp/Personalize.tsx <Pressable onPress={() => setOpen(open ? null : windowId)}>"]);
+const OUTSIDE_ITS_PANEL = new Set(["ntp/Personalize.tsx <Pressable onPress={() => setOpen(open ? null : windowId)}>", "ntp/Personalize.tsx <Pressable onAccessibilityTap={tapActivates(() => setOpen(open ? null : windowId))}>"]);
+
+const NOT_IN_A_CLOSING_PANEL = new Set(["plugins/PluginOverlays.tsx <View onKeyDown>", "split/SplitChrome.tsx <View onDoubleClick>"]);
 
 const STOPS_PROPAGATION_ONLY = new Set(["keepActivationKeys"]);
 
@@ -118,9 +124,9 @@ test("every file that reads a closing state or renders a closing panel is pinned
 
 test("a control inside a closing panel passes its actions only through the live check", () => {
   const unguarded = CLOSING_PANELS.flatMap((file) =>
-    openingTags(source(file)).flatMap(({ host, line, attributes }) => attributes.filter((a) => ACTIONS.test(a.name) && !routed(a.value) && !OUTSIDE_ITS_PANEL.has(`${file} <${host} ${a.name}={${a.value}}>`)).map((a) => `${file}:${line} <${host} ${a.name}={${a.value}}>`)),
+    openingTags(source(file)).flatMap(({ host, line, attributes }) => attributes.filter((a) => ACTIONS.test(a.name) && !routed(a.value) && !OUTSIDE_ITS_PANEL.has(`${file} <${host} ${a.name}={${a.value}}>`) && !NOT_IN_A_CLOSING_PANEL.has(`${file} <${host} ${a.name}>`)).map((a) => `${file}:${line} <${host} ${a.name}={${a.value}}>`)),
   );
-  assert.deepEqual(unguarded, [], "a closing panel hands no callback to the host: write on…={live(handler)} (useLiveAction or liveWhile from ui/Closing)");
+  assert.deepEqual(unguarded, [], "a closing panel hands no callback to the host: write on…={live(handler)} (useLiveAction or useLiveWhile from ui/Closing)");
 });
 
 test("the scanner sees the handlers it guards", () => {

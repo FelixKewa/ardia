@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, type GestureResponderEvent } from "react-native";
-import { iconButton, radius as radii, Symbol, useOffstage, useTooltip } from "../ui";
+import { iconButton, radius as radii, Symbol, useOffstage, useTooltip, tapActivates } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useTabCloseControlWhile } from "../../state/sidebar/closeControl";
 
@@ -29,7 +29,7 @@ export function RowCloseButton({
   return (
     <Pressable
       tooltip={tip}
-      onPress={onPress}
+      onPress={onPress} onAccessibilityTap={tapActivates(onPress)}
       onHoverIn={() => setPointed(true)}
       onHoverOut={() => setPointed(false)}
       accessibilityRole="button"

@@ -2,7 +2,7 @@ import { Pressable, View } from "react-native";
 import { setAttach, setAttachedOpen, setPreview } from "../../state/report/actions";
 import type { AttachmentKey } from "../../state/report/form";
 import { useReport, useReportShallow } from "../../state/report/hooks";
-import { Box, Button, Divider, space, Symbol, Text, useHover, useTheme } from "../ui";
+import { Box, Button, Divider, space, Symbol, Text, useHover, useTheme, tapActivates } from "../ui";
 import { CheckMark, CheckTarget } from "../ui";
 
 const shortAddress = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, "").replace(/[?#].*$/, "");
@@ -33,7 +33,7 @@ export function AttachedRow() {
   return (
     <Box fill="groupFill" border="groupBorder" radius="panel" style={CLIP}>
       <View {...hoverProps}>
-        <Pressable onPress={() => setAttachedOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`Attached: ${summary}. Preview`}>
+        <Pressable onPress={() => setAttachedOpen(!open)} onAccessibilityTap={tapActivates(() => setAttachedOpen(!open))} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`Attached: ${summary}. Preview`}>
           <Box row gap="m" padX="l" fill={hovered ? "rowHover" : undefined} style={ROW}>
             <Symbol name="paperclip" size={12} color={theme.textSecondary} style={GLYPH} />
             <Text tone="textSecondary">Attached</Text>

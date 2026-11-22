@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { useTab } from "../../state/browser/hooks";
-import { Box, Button, PANEL, Popover, space, Text, useClosing, useLiveAction } from "../ui";
+import { Box, Button, PANEL, Popover, space, Text, useClosing, useLiveAction, tapActivates } from "../ui";
 import { usePages } from "../../state/tabs/pageState";
 import { hoverZoomPopover, toggleZoomPopover, useIsZoomBubble } from "../../state/site/zoomBubble";
 import { closedByThisPress, dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
@@ -61,7 +61,7 @@ export function ZoomStepper({ tabId, zoom, percent = true }: { tabId: string; zo
     <Box row gap={percent ? "xxs" : "xs"} style={CENTER_ROW}>
       <Button variant="stepper" icon="minus" tooltip={withShortcut("Zoom Out", zoomOutHint)} onPress={() => void webviews.get(tabId)?.zoomStep(-1)} />
       {percent ? (
-        <Pressable disabled={closing} onPress={live(() => void webviews.get(tabId)?.zoomStep(0))} tooltip="Reset to 100%" accessibilityRole="button" accessibilityLabel="Reset to 100%">
+        <Pressable disabled={closing} onPress={live(() => void webviews.get(tabId)?.zoomStep(0))} onAccessibilityTap={tapActivates(live(() => void webviews.get(tabId)?.zoomStep(0)))} tooltip="Reset to 100%" accessibilityRole="button" accessibilityLabel="Reset to 100%">
           <Text size="small" tone={zoom === 1 ? "textSecondary" : "textPrimary"} style={{ width: 44, textAlign: "center", fontVariant: ["tabular-nums"] }}>
             {Math.round(zoom * 100)}%
           </Text>

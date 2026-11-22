@@ -4,8 +4,8 @@ import { curve, duration } from "./motion";
 import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
 import { useNativeForm } from "./nativeForm";
-import { spaceActivates, switchA11y } from "./a11y";
-import { liveWhile, useClosing } from "./Closing";
+import { spaceActivates, switchA11y, tapActivates } from "./a11y";
+import { useLiveWhile, useClosing } from "./Closing";
 
 export type SwitchLook = {
   width: number;
@@ -43,7 +43,7 @@ function Switch({
   const pressedAt = useRef(0);
   const closing = useClosing();
   const active = !disabled && !closing;
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
 
   const slideTo = (on: boolean) => {
     if (target.current === on) return;
@@ -76,7 +76,7 @@ function Switch({
       hitSlop={SWITCH_HIT_SLOP}
       {...switchA11y(value, disabled, accessibilityLabel)}
       onKeyDown={active ? live(spaceActivates(flip)) : undefined}
-      onPress={live(flip)}
+      onPress={live(flip)} onAccessibilityTap={!active ? undefined : tapActivates(live(flip))}
       style={{ opacity: disabled ? opacity.disabled : 1 }}
     >
       <View pointerEvents="none" style={{ width: look.width, height: look.height, borderRadius: radius, backgroundColor: look.offColor, overflow: "hidden" }}>

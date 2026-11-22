@@ -9,7 +9,7 @@ import { currentTab } from "../../state/browser/current";
 import { setFind as setTabFind } from "../../state/windows/actions";
 import { closeFind, findStep, noteFind, submitRepeatsKey, takeFindFocusRequest } from "../../state/find/actions";
 import type { FindState } from "../../state/browser/types";
-import { Button, ClosingView, Divider, font, liveWhile, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
+import { Button, ClosingView, Divider, font, useLiveWhile, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { replaceInField } from "../../state/site/selection";
 import { FIND_WIDTH } from "./tokens";
 
@@ -40,7 +40,7 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, "top right");
   const act = whileOpen(closing, useStillOpen(!closing));
-  const live = liveWhile(closing);
+  const live = useLiveWhile(closing);
   useEffect(() => {
     if (!find.focusRequest) return;
     takeFindFocusRequest(tabId);

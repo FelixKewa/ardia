@@ -3,7 +3,7 @@ import { Animated, Image, Pressable, View, type StyleProp, type ViewStyle } from
 import { useTheme } from "../ui/theme";
 import { IconRing } from "./GlassBacking";
 import type { TileTheme } from "../../state/favicons/tileTheme";
-import { Button, Checkbox, checkboxA11y, Dot, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction } from "../ui";
+import { Button, Checkbox, checkboxA11y, Dot, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction, tapActivates } from "../ui";
 import { activeSteps, cancelOnboarding, useOnboarding, type OnboardingStep } from "../../state/onboarding/onboarding";
 import { useQuestions } from "../../state/onboarding/questions";
 import { curve } from "../ui/motion";
@@ -171,7 +171,7 @@ function Segment({ title, image, selected, onPress }: { title: string; image?: s
   const live = useLiveAction();
   return (
     <View {...hoverProps} tooltip={image ? title : undefined}>
-      <Pressable disabled={closing} onPress={live(onPress)} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
@@ -237,7 +237,7 @@ export function SelectTile({
   const live = useLiveAction();
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={live(onPress)} onKeyDown={live(spaceActivates(onPress))} {...a11y}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...a11y}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
