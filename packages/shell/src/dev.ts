@@ -30,6 +30,20 @@ export type KeyPressResult = {
 export type Click = { x: number; y: number; in?: "window" | "page"; label?: string; queued?: boolean; asKey?: boolean; wait?: number };
 export type ClickResult = { hit?: string; root?: [number, number]; at?: number; firstResponder?: string; firstResponderOnClick?: string; firstResponderAfter?: string; error?: string };
 
+export type PointerSweep = {
+  y: number;
+  x0: number;
+  x1: number;
+  periodMs?: number;
+  durationMs?: number;
+  override?: boolean;
+  control?: boolean;
+  track?: boolean;
+  direct?: boolean;
+  scroll?: { everyMs: number; gestureMs?: number; delta?: number; momentumMs?: number; phased?: boolean } | null;
+};
+export type PointerSweepResult = { ticks: [number, number, number, number][]; enters: number; exits: number; scrolls: number; scrollsWithWindow: number; tracked: number };
+
 export type DevNative = {
   devCrash(kind?: "exception"): Promise<void>;
   devBlockMain(ms: number): Promise<number>;
@@ -37,6 +51,7 @@ export type DevNative = {
   devRunAppleScript(source: string): Promise<{ ok: boolean; result?: unknown; error?: string; number?: number }>;
   devSnapshotWindow(windowId: string, path: string, transparent?: boolean): Promise<boolean>;
   devSetPointer(windowId: string, x: number, y: number, on: boolean): Promise<boolean>;
+  devPointerSweep(windowId: string, sweep: PointerSweep): Promise<PointerSweepResult | null>;
   devSetMouseButtons(pressed: number): Promise<boolean>;
   devSidebarEdgePointer(windowId: string, x: number, y: number, on: boolean): Promise<boolean>;
   devSidebarEdgeStats(reset: boolean): Promise<SidebarEdgeStats>;

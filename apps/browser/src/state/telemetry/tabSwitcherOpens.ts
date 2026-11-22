@@ -1,3 +1,4 @@
+import { takeLongHoverHolds } from "../../platform/focus";
 import { isSharing, onConsentPeriodChange, type ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 
@@ -39,7 +40,7 @@ export function takeTabSwitcherMenuReleases(): number {
   return taken;
 }
 
-const scrollCounts = { overflowOpens: 0, overflowClicks: 0, wheelScrolls: 0, picturesLate: 0 };
+const scrollCounts = { overflowOpens: 0, overflowClicks: 0, wheelScrolls: 0, picturesLate: 0, hoverClipped: 0 };
 
 export function noteTabSwitcherOverflowOpened() {
   scrollCounts.overflowOpens++;
@@ -57,13 +58,19 @@ export function noteTabSwitcherPictureLate() {
   scrollCounts.picturesLate++;
 }
 
+export function noteTabSwitcherHoverClipped() {
+  scrollCounts.hoverClipped++;
+}
+
 export function takeTabSwitcherScrollCounts() {
   const taken = {
     tab_switcher_overflow_opens: scrollCounts.overflowOpens,
     tab_switcher_overflow_clicks: scrollCounts.overflowClicks,
     tab_switcher_wheel_scrolls: scrollCounts.wheelScrolls,
     tab_switcher_pictures_late: scrollCounts.picturesLate,
+    tab_switcher_hover_clipped_skips: scrollCounts.hoverClipped,
+    hover_holds_over_300ms: takeLongHoverHolds(),
   };
-  scrollCounts.overflowOpens = scrollCounts.overflowClicks = scrollCounts.wheelScrolls = scrollCounts.picturesLate = 0;
+  scrollCounts.overflowOpens = scrollCounts.overflowClicks = scrollCounts.wheelScrolls = scrollCounts.picturesLate = scrollCounts.hoverClipped = 0;
   return taken;
 }

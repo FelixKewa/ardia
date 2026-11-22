@@ -77,6 +77,11 @@ public class FocusModule: Module {
       self.lifetime.run { self.setDragEscapeCapture(active) }
     }.runOnQueue(.main)
 
+    Function("takeLongHoverHolds") { () -> Int in
+      let take = NSSelectorFromString("ardia_takeLongHoverHolds")
+      guard let view = NSClassFromString("RCTView") as AnyObject?, view.responds(to: take) else { return 0 }
+      return (view.perform(take)?.takeUnretainedValue() as? NSNumber)?.intValue ?? 0
+    }
     Function("switcherPointerMoved") { [weak self] () -> Bool in self?.switcherPointer.moved(to: SwitcherPointer.location) ?? true }
   }
 

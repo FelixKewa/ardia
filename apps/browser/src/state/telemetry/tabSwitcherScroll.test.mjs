@@ -7,7 +7,7 @@ globalThis.fetch = async () => ({ status: 200 });
 
 const client = await import("./client.ts");
 const usage = await import("./usage.ts");
-const { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } = await import("./tabSwitcherOpens.ts");
+const { noteTabSwitcherHoverClipped, noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } = await import("./tabSwitcherOpens.ts");
 after(() => client.setSharing(false, "settings"));
 
 async function usageCounts() {
@@ -23,6 +23,9 @@ test("an hour with only overflowing switcher opens, clicks and wheel scrolls sen
   noteTabSwitcherOverflowClick();
   noteTabSwitcherWheelScrolled();
   noteTabSwitcherPictureLate();
+  noteTabSwitcherHoverClipped();
+  noteTabSwitcherHoverClipped();
+  stub.longHoverHolds.pending = 3;
   usage.sessionEnding();
   const sent = await usageCounts();
   assert.equal(sent.length, 1);
@@ -30,6 +33,8 @@ test("an hour with only overflowing switcher opens, clicks and wheel scrolls sen
   assert.equal(sent[0].tab_switcher_overflow_clicks, 1);
   assert.equal(sent[0].tab_switcher_wheel_scrolls, 1);
   assert.equal(sent[0].tab_switcher_pictures_late, 1);
+  assert.equal(sent[0].tab_switcher_hover_clipped_skips, 2);
+  assert.equal(sent[0].hover_holds_over_300ms, 3);
   usage.sessionEnding();
   assert.equal((await usageCounts()).length, 1);
 });
