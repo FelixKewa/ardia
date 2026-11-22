@@ -5,8 +5,3 @@ export function revealedOffset(index: number, offset: number, viewport: number, 
   if (right > offset + viewport) return right - viewport;
   return offset;
 }
-
-export function pointerOnVisiblePart(index: number, clientX: number, offset: number, viewport: number, stride: number) {
-  const x = index * stride + clientX;
-  return x >= offset - 0.5 && x <= offset + viewport + 0.5;
-}

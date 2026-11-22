@@ -26,4 +26,4 @@ export const pressesWithoutRelease = (): number => Focus.pressesWithoutRelease()
 export const takeFocusHandoffCounts = (): Record<string, Record<string, number>> => Focus.takeFocusHandoffCounts?.() ?? {};
 export const setConsentEpoch = (epoch: string) => void Focus.setConsentEpoch?.(epoch);
 export const switcherPointerMoved = () => Focus.switcherPointerMoved();
-export const takeLongHoverHolds = (): number => Focus.takeLongHoverHolds?.() ?? 0;
+export const takeHoverCounts = (): Record<string, Record<string, number>> => Focus.takeHoverCounts?.() ?? {};

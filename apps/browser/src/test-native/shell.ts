@@ -157,7 +157,7 @@ const focus: Modules["ArdiaFocus"] = {
   takeEditKeyAcks: () => editKeyAcks.take(),
   takeInputSourceKeys: () => inputSourceKeys.take(),
   switcherPointerMoved: () => true,
-  takeLongHoverHolds: () => longHoverHolds.take(),
+  takeHoverCounts: () => hoverCounts.take(),
   cancelFocusMove: () => Promise.resolve(),
   claimFocus: () => Promise.resolve(),
   pressesWithoutRelease: () => pressesWithoutRelease.count,
@@ -687,11 +687,11 @@ export const shellNativeModules: Modules = {
   ArdiaReport: reportModule,
 };
 
-export const longHoverHolds = {
-  pending: 0,
+export const hoverCounts = {
+  pending: {} as Record<string, Record<string, number>>,
   take() {
     const taken = this.pending;
-    this.pending = 0;
+    this.pending = {};
     return taken;
   },
 };

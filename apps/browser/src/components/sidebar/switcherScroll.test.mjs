@@ -47,15 +47,3 @@ test("a card cut off by a wheel scroll comes fully into view by the smallest scr
   assert.equal(at(2 + COUNT, offset), (2 + COUNT) * STRIDE + CARD - VIEWPORT);
   assert.equal(at(5, offset), offset);
 });
-
-test("the pointer picks a card only where the row shows it, never over the part the row clips", async () => {
-  const { pointerOnVisiblePart } = await import("./switcherScroll.ts");
-  const on = (index, clientX, offset) => pointerOnVisiblePart(index, clientX, offset, VIEWPORT, STRIDE);
-  assert.equal(on(0, 20, 0), true);
-  assert.equal(on(COUNT - 1, CARD - 1, 0), true);
-  assert.equal(on(COUNT, 4, 0), false, "the next card past the right end is hidden");
-  assert.equal(on(0, CARD - 20, STRIDE), false, "the card scrolled out on the left is hidden");
-  assert.equal(on(1, 20, STRIDE), true);
-  assert.equal(on(2, 20, STRIDE * 2.5), false, "the clipped part of a half-shown card");
-  assert.equal(on(2, CARD - 10, STRIDE * 2.5), true, "the shown part of a half-shown card");
-});

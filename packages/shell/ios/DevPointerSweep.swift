@@ -61,6 +61,7 @@ final class DevPointerSweep: NSObject {
     let phased: Bool
     let sign: Double
     let elastic: Bool
+    let at: Double?
   }
 
   private let window: NSWindow
@@ -71,6 +72,7 @@ final class DevPointerSweep: NSObject {
   private let started: CFTimeInterval
   private let until: CFTimeInterval
   private let override: Bool
+  private let quiet: Bool
   private let flags: NSEvent.ModifierFlags
   private let scroll: Scroll?
   private let promise: Promise
@@ -82,12 +84,15 @@ final class DevPointerSweep: NSObject {
   private var gesturePhase = 0
   private let direct: Bool
   private let track: Bool
+  private let scrollFirst: Bool
+  private var parked = false
   private var areas: [(NSView, NSTrackingArea)] = []
   private var areasAt: CFTimeInterval = 0
   private var inside = Set<ObjectIdentifier>()
   private var known = Set<ObjectIdentifier>()
   private var scrollsWithWindow = 0
   private var tracked = 0
+  private var lastPoint: NSPoint?
 
   private init(window: NSWindow, spec: [String: Any], promise: Promise) {
     func number(_ key: String, _ fallback: Double) -> Double { (spec[key] as? NSNumber)?.doubleValue ?? fallback }
@@ -99,17 +104,19 @@ final class DevPointerSweep: NSObject {
     started = CACurrentMediaTime()
     until = started + number("durationMs", 10000) / 1000
     override = (spec["override"] as? Bool) ?? true
+    quiet = (spec["quiet"] as? Bool) ?? false
     flags = (spec["control"] as? Bool) ?? true ? [.control] : []
     if let s = spec["scroll"] as? [String: Any], let every = (s["everyMs"] as? NSNumber)?.doubleValue, every > 0 {
       scroll = Scroll(
         everyMs: every, gestureMs: (s["gestureMs"] as? NSNumber)?.doubleValue ?? 300, delta: (s["delta"] as? NSNumber)?.doubleValue ?? 8,
         momentumMs: (s["momentumMs"] as? NSNumber)?.doubleValue ?? 0, phased: (s["phased"] as? Bool) ?? true,
-        sign: (s["sign"] as? NSNumber)?.doubleValue ?? 0, elastic: (s["elastic"] as? Bool) ?? false)
+        sign: (s["sign"] as? NSNumber)?.doubleValue ?? 0, elastic: (s["elastic"] as? Bool) ?? false, at: (s["at"] as? NSNumber)?.doubleValue)
     } else {
       scroll = nil
     }
     direct = (spec["direct"] as? Bool) ?? false
     track = (spec["track"] as? Bool) ?? false
+    scrollFirst = (spec["scrollFirst"] as? Bool) ?? false
     self.promise = promise
     lastTick = started
   }
@@ -143,7 +150,7 @@ final class DevPointerSweep: NSObject {
     if override {
       let screen = window.convertPoint(toScreen: windowPoint)
       SwitcherPointer.devLocation = screen
-      let select = NSSelectorFromString("ardia_setPointerOverride:")
+      let select = NSSelectorFromString(quiet ? "ardia_setPointerOverrideQuietly:" : "ardia_setPointerOverride:")
       if let view = NSClassFromString("RCTView") as AnyObject?, view.responds(to: select) { _ = view.perform(select, with: NSValue(point: screen)) }
     }
     if let moved = NSEvent.mouseEvent(
@@ -152,8 +159,9 @@ final class DevPointerSweep: NSObject {
     {
       NSApp.postEvent(moved, atStart: false)
     }
+    if scrollFirst, let scroll { postScroll(scroll, elapsed: elapsed, at: windowPoint) }
     if track { trackAreas(at: windowPoint, now: now) }
-    if let scroll { postScroll(scroll, elapsed: elapsed, at: windowPoint) }
+    if !scrollFirst, let scroll { postScroll(scroll, elapsed: elapsed, at: windowPoint) }
     ticks.append([Date().timeIntervalSince1970 * 1000, Double(x), scrolledX(at: windowPoint), late])
     guard now >= until else { return }
     timer?.invalidate()
@@ -177,6 +185,7 @@ final class DevPointerSweep: NSObject {
   private func postScroll(_ scroll: Scroll, elapsed: Double, at windowPoint: NSPoint) {
     let index = Int(elapsed / scroll.everyMs)
     let into = elapsed - Double(index) * scroll.everyMs
+    if let at = scroll.at { return park(at: at, windowPoint: windowPoint) }
     if scroll.elastic { return stretch(elapsed: elapsed, at: windowPoint) }
     let direction: Double = scroll.sign != 0 ? scroll.sign : index % 2 == 0 ? 1 : -1
     var phase: Int64 = 0
@@ -213,6 +222,18 @@ final class DevPointerSweep: NSObject {
       momentum = 0
     }
     send(phase: phase, momentum: momentum, delta: delta, continuous: scroll.phased, at: windowPoint)
+  }
+
+  private func park(at x: Double, windowPoint: NSPoint) {
+    guard !parked, let frame = window.contentView?.superview else { return }
+    guard let scrollView = scrollViews(in: frame).first(where: { $0.accessibilityIdentifier() == "ardia-tab-switcher" || $0.superview?.accessibilityIdentifier() == "ardia-tab-switcher" }) else { return }
+    parked = true
+    scrollView.contentView.scroll(to: NSPoint(x: x, y: scrollView.contentView.bounds.origin.y))
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+  }
+
+  private func scrollViews(in view: NSView) -> [NSScrollView] {
+    ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap { scrollViews(in: $0) }
   }
 
   private func stretch(elapsed: Double, at windowPoint: NSPoint) {
@@ -281,6 +302,17 @@ final class DevPointerSweep: NSObject {
       }
     }
     inside = nowInside
+    defer { lastPoint = windowPoint }
+    if lastPoint != windowPoint {
+      for (_, area) in areas where area.options.contains(.mouseMoved) && nowInside.contains(ObjectIdentifier(area)) {
+        guard let owner = area.owner as? NSResponder,
+          let event = NSEvent.mouseEvent(
+            with: .mouseMoved, location: windowPoint, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
+        else { continue }
+        owner.mouseMoved(with: event)
+      }
+    }
     for (type, list) in [(NSEvent.EventType.mouseExited, exited), (.mouseEntered, entered)] {
       for (_, area) in list {
         guard let owner = area.owner as? NSResponder,
@@ -288,7 +320,11 @@ final class DevPointerSweep: NSObject {
             with: type, location: windowPoint, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
         else { continue }
-        if type == .mouseEntered { owner.mouseEntered(with: event) } else { owner.mouseExited(with: event) }
+        if type == .mouseEntered {
+          owner.mouseEntered(with: event)
+        } else {
+          owner.mouseExited(with: event)
+        }
       }
     }
   }

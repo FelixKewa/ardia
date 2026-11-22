@@ -107,7 +107,7 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   discardKeyResponder,
   cancelFocusMove: resolved,
   switcherPointerMoved: () => false,
-  takeLongHoverHolds: () => 0,
+  takeHoverCounts: () => ({}),
   pressesWithoutRelease: () => 0,
   takeFocusHandoffCounts: () => ({}),
   setConsentEpoch: () => undefined,

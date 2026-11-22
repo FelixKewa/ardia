@@ -1,16 +1,16 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { tabTitle } from "../../state/browser/model";
 import { useTab, useTabLive } from "../../state/browser/hooks";
 import { useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { lastPicture, onPicturesChanged } from "../../state/tabs/tabPictures";
 import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow, subscribeSwitcherTabChanges } from "../../state/sidebar/switcher";
-import { noteTabSwitcherHoverClipped, noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } from "../../state/telemetry/tabSwitcherOpens";
+import { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } from "../../state/telemetry/tabSwitcherOpens";
 import { Symbol, Text, Panel } from "../ui";
 import { useTheme } from "../ui/theme";
 import { TabIcon } from "./TabIcon";
 import { previewBackdrop } from "./switcherPreview";
-import { pointerOnVisiblePart, revealedOffset } from "./switcherScroll";
+import { revealedOffset } from "./switcherScroll";
 import { SIDEBAR_SHADOW, TAB_SWITCHER as T, TAB_SWITCHER_SCROLL_ID, tabSwitcherColors } from "./tokens";
 
 const SHOT = Math.round(T.card / T.shotAspect);
@@ -91,14 +91,6 @@ function SwitcherRow({ ids, index, viewport, overflows, accent, visible }: { ids
     if (Math.abs(next - offset.current) >= 0.5) scrollTo(next, moved);
   }, [index, viewport]);
 
-  const hover = useCallback(
-    (i: number, clientX: number) => {
-      if (pointerOnVisiblePart(i, clientX, offset.current, viewport, STRIDE)) return hoverSwitcherRow(i);
-      noteTabSwitcherHoverClipped();
-    },
-    [viewport],
-  );
-
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     offset.current = e.nativeEvent.contentOffset.x;
     if (!visible || wheeled.current || performance.now() < ownScrollUntil.current) return;
@@ -125,29 +117,13 @@ function SwitcherRow({ ids, index, viewport, overflows, accent, visible }: { ids
       contentContainerStyle={{ gap: T.gap }}
     >
       {ids.map((id, i) => (
-        <SwitcherCard key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} visible={visible} onHover={hover} />
+        <SwitcherCard key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} visible={visible} />
       ))}
     </ScrollView>
   );
 }
 
-const SwitcherCard = memo(function SwitcherCard({
-  tabId,
-  index,
-  focused,
-  accent,
-  overflows,
-  visible,
-  onHover,
-}: {
-  tabId: string;
-  index: number;
-  focused: boolean;
-  accent: string;
-  overflows: boolean;
-  visible: boolean;
-  onHover: (index: number, clientX: number) => void;
-}) {
+const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent, overflows, visible }: { tabId: string; index: number; focused: boolean; accent: string; overflows: boolean; visible: boolean }) {
   const tab = useTab(tabId);
   const colors = tabSwitcherColors(useTheme().dark);
   const themeColor = useTabLive(tabId, (live) => live.themeColor);
@@ -176,7 +152,7 @@ const SwitcherCard = memo(function SwitcherCard({
       }}
     >
       <View
-        onMouseEnter={(e) => onHover(index, e.nativeEvent.clientX)}
+        onMouseEnter={() => hoverSwitcherRow(index)}
         onMouseLeave={() => leaveSwitcherRow(index)}
       >
         <View style={{ width: T.card, padding: T.cardInset, borderRadius: T.cardRadius, backgroundColor: focused ? colors.focusFill : undefined }}>

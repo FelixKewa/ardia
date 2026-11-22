@@ -15,7 +15,7 @@ export type FocusNative = {
   restoreKeyResponder(token: number): Promise<boolean>;
   discardKeyResponder(token: number): Promise<void>;
   switcherPointerMoved(): boolean;
-  takeLongHoverHolds?(): number;
+  takeHoverCounts?(): Record<string, Record<string, number>>;
   pressesWithoutRelease(): number;
   takeFocusHandoffCounts?(): Record<string, Record<string, number>>;
   setConsentEpoch?(epoch: string): void;

@@ -40,9 +40,20 @@ export type PointerSweep = {
   control?: boolean;
   track?: boolean;
   direct?: boolean;
-  scroll?: { everyMs: number; gestureMs?: number; delta?: number; momentumMs?: number; phased?: boolean } | null;
+  quiet?: boolean;
+  scrollFirst?: boolean;
+  scroll?: { everyMs: number; gestureMs?: number; delta?: number; momentumMs?: number; phased?: boolean; sign?: number; elastic?: boolean; at?: number } | null;
 };
-export type PointerSweepResult = { ticks: [number, number, number, number][]; enters: number; exits: number; scrolls: number; scrollsWithWindow: number; tracked: number };
+export type PointerSweepResult = {
+  ticks: [number, number, number, number][];
+  enters: number;
+  exits: number;
+  scrolls: number;
+  scrollsWithWindow: number;
+  tracked: number;
+  scrollSteps: number;
+  heldHovers: number;
+};
 
 export type DevNative = {
   devCrash(kind?: "exception"): Promise<void>;
