@@ -8,7 +8,8 @@ import { addBookmarkFolder, addBookmarkTree, closeBookmarkDialog, moveBookmark, 
 import { useBookmarks } from "../../state/bookmarks/hooks";
 import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/current";
 import { FolderPicker } from "./DialogParts";
-import { bookmarkDialog } from "./tokens";
+import { FolderTreeAction } from "./FolderTree";
+import { bookmarkDialog, folderPicker } from "./tokens";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { useSidebarField } from "../../state/sidebar/chrome";
 import { sidebarHeaderWithField } from "../sidebar/geometry";
@@ -73,6 +74,7 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
     <Dialog
       width="xs"
       pad="xl"
+      controls="large"
       onDismiss={done}
       place={
         addressBar
@@ -87,9 +89,9 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
         <TextField value={name} onChangeText={setName} autoFocus selectOnFocus placeholder={state.kind === "allTabs" ? "Tabs" : "Name"} onSubmit={done} onEscape={done} />
       </FormField>
       <FormField label="Folder">
-        <FolderPicker profileId={profileId} selectedId={folderId} onSelect={setFolderId} />
+        <FolderPicker profileId={profileId} selectedId={folderId} onSelect={setFolderId} footer={<FolderTreeAction title="New Folder…" icon="plus" height={folderPicker.row} onPress={newFolder} />} />
       </FormField>
-      <DialogActions leading={<Button title="New Folder…" onPress={newFolder} />}>
+      <DialogActions>
         {state.kind === "page" ? <Button title="Remove" onPress={remove} /> : <Button title="Cancel" onPress={close} />}
         <Button title={state.kind === "page" ? "Done" : "Save"} kind="primary" onPress={done} />
       </DialogActions>

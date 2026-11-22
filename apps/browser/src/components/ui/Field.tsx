@@ -12,6 +12,7 @@ import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
 import { useLiveWhile, useClosing, useClosingField } from "./Closing";
+import { useControlSize } from "./controlSize";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -152,6 +153,7 @@ export function TextField({
   style?: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const sized = useControlSize();
   const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
   const field = useClosingField();
   const locked = disabled || field.closing;
@@ -160,8 +162,8 @@ export function TextField({
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
         style={{
-          height: multiline ? MULTILINE_HEIGHT : 24,
-          borderRadius: radius.control,
+          height: multiline ? MULTILINE_HEIGHT : sized.field,
+          borderRadius: sized.radius,
           justifyContent: multiline ? "flex-start" : "center",
           paddingHorizontal: space.m,
           paddingVertical: multiline ? space.m : 0,
