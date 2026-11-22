@@ -1,15 +1,19 @@
 #include "ardia/core/ac_login_forms.h"
 
+#include <algorithm>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/containers/flat_set.h"
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
@@ -98,6 +102,72 @@ content::RenderFrameHost* FrameWithToken(
   return found;
 }
 
+std::string Letters(std::u16string_view text) {
+  std::string letters;
+  for (char16_t c : text) {
+    if (base::IsAsciiAlpha(c)) {
+      letters.push_back(base::ToLowerASCII(static_cast<char>(c)));
+    }
+  }
+  return letters;
+}
+
+bool HasAnyWord(const std::string& letters,
+                std::initializer_list<std::string_view> words) {
+  return std::ranges::any_of(words, [&](std::string_view word) {
+    return letters.find(word) != std::string::npos;
+  });
+}
+
+bool ReadsAsSignUp(const autofill::ButtonTitleList& titles,
+                   std::u16string_view id,
+                   std::u16string_view name) {
+  bool reset = false;
+  bool sign_up = false;
+  bool button_signs_in = false;
+  auto read = [&](std::u16string_view text, bool button) {
+    const std::string letters = Letters(text);
+    reset |= HasAnyWord(letters, {"reset", "newpassword", "changepassword",
+                                  "forgotpassword", "setpassword",
+                                  "updatepassword", "choosepassword"});
+    sign_up |= HasAnyWord(letters, {"signup", "register", "createaccount",
+                                    "createanaccount", "createmyaccount",
+                                    "createyouraccount", "joinnow",
+                                    "getstarted"});
+    button_signs_in |=
+        button && HasAnyWord(letters, {"signin", "login", "logon", "signon"});
+  };
+  for (const autofill::ButtonTitleInfo& title : titles) {
+    read(title.first, true);
+  }
+  read(id, false);
+  read(name, false);
+  return reset || (sign_up && !button_signs_in);
+}
+
+bool MarkedNewPassword(const autofill::FormFieldData& field) {
+  return field.autocomplete_attribute().find("new-password") !=
+         std::string::npos;
+}
+
+bool IsTextLike(const autofill::FormFieldData& field) {
+  return field.IsTextInputElement() &&
+         field.form_control_type() != autofill::FormControlType::kInputPassword;
+}
+
+struct PieceFacts {
+  int passwords = 0;
+  bool new_password = false;
+  autofill::FieldRendererId text_before_password;
+};
+
+bool SignUpBy(int passwords, bool new_password, bool reads_as_sign_up) {
+  if (passwords >= 2) {
+    return true;
+  }
+  return passwords == 1 && (new_password || reads_as_sign_up);
+}
+
 const FormStructure* CachedForm(content::RenderFrameHost* frame,
                                 const FormGlobalId& id) {
   auto* driver = autofill::ContentAutofillDriver::GetForRenderFrameHost(frame);
@@ -173,13 +243,35 @@ class LoginFormIndex::Observers
         form->form = parsed->form_data.renderer_id();
         form->username = parsed->username_element_renderer_id;
         form->password = parsed->password_element_renderer_id;
-        form->sign_up =
-            parsed->IsLikelySignupForm() || parsed->HasNewPasswordElement();
+        form->password_name = parsed->password_element;
+        int passwords = 0;
+        bool new_password = parsed->HasNewPasswordElement();
+        autofill::FieldRendererId text_before_password;
+        for (const autofill::FormFieldData& field :
+             parsed->form_data.fields()) {
+          if (field.form_control_type() ==
+              autofill::FormControlType::kInputPassword) {
+            ++passwords;
+            new_password |= MarkedNewPassword(field);
+          } else if (field.is_focusable() && IsTextLike(field) &&
+                     passwords == 0) {
+            text_before_password = field.renderer_id();
+          }
+        }
+        form->sign_up = SignUpBy(
+            passwords, new_password,
+            ReadsAsSignUp(parsed->form_data.button_titles(),
+                          parsed->form_data.id_attribute(),
+                          parsed->form_data.name_attribute()));
+        if (!form->sign_up && passwords == 1 && form->username.is_null()) {
+          form->username = text_before_password;
+        }
         if (const FormStructure* cached =
                 CachedForm(frame, parsed->form_data.global_id())) {
           for (const std::unique_ptr<AutofillField>& field : cached->fields()) {
             if (IsOneTimeCode(*field)) {
               form->code = field->renderer_id();
+              form->code_name = field->name();
               break;
             }
           }
@@ -195,11 +287,17 @@ class LoginFormIndex::Observers
         continue;
       }
       std::map<autofill::FormGlobalId, std::optional<LoginForm>> pieces;
+      std::map<autofill::FormGlobalId, PieceFacts> facts;
       for (const std::unique_ptr<AutofillField>& field : cached->fields()) {
+        const FormGlobalId piece_id = field->renderer_form_id();
+        if (IsPasswordField(*field)) {
+          PieceFacts& hidden_facts = facts[piece_id];
+          ++hidden_facts.passwords;
+          hidden_facts.new_password |= MarkedNewPassword(*field);
+        }
         if (!field->is_focusable()) {
           continue;
         }
-        const FormGlobalId piece_id = field->renderer_form_id();
         auto [piece, added] = pieces.try_emplace(piece_id);
         if (added) {
           content::RenderFrameHost* host =
@@ -217,21 +315,38 @@ class LoginFormIndex::Observers
         if (!form) {
           continue;
         }
-        if (field->autocomplete_attribute().find("new-password") !=
-            std::string::npos) {
-          form->sign_up = true;
+        PieceFacts& piece_facts = facts[piece_id];
+        if (!IsPasswordField(*field) && IsTextLike(*field) &&
+            piece_facts.passwords == 0 && !IsOneTimeCode(*field)) {
+          piece_facts.text_before_password = field->renderer_id();
         }
         if (IsOneTimeCode(*field) && form->code.is_null()) {
           form->code = field->renderer_id();
+          form->code_name = field->name();
         } else if (IsPasswordField(*field) && form->password.is_null()) {
           form->password = field->renderer_id();
+          form->password_name = field->name();
         } else if (IsUsernameLike(*field) && form->username.is_null()) {
           form->username = field->renderer_id();
         }
       }
-      for (const auto& [piece_id, form] : pieces) {
-        if (form && (!form->username.is_null() || !form->password.is_null() ||
-                     !form->code.is_null())) {
+      for (auto& [piece_id, form] : pieces) {
+        if (!form) {
+          continue;
+        }
+        const PieceFacts& piece_facts = facts[piece_id];
+        const bool root_form = piece_id == id;
+        form->sign_up = SignUpBy(
+            piece_facts.passwords, piece_facts.new_password,
+            root_form && ReadsAsSignUp(cached->button_titles(),
+                                       cached->id_attribute(),
+                                       cached->name_attribute()));
+        if (!form->sign_up && piece_facts.passwords == 1 &&
+            form->username.is_null()) {
+          form->username = piece_facts.text_before_password;
+        }
+        if (!form->username.is_null() || !form->password.is_null() ||
+            !form->code.is_null()) {
           forms.push_back(*form);
         }
       }

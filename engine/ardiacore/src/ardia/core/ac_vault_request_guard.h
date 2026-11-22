@@ -23,7 +23,7 @@ class URLLoaderFactoryBuilder;
 
 namespace ardiacore {
 
-enum class VaultRequestVerdict { kAllow, kBlock, kRefuse };
+enum class VaultRequestVerdict { kAllow, kBlock, kRefuse, kSecretInURL };
 
 struct VaultRequest {
   bool navigation = false;
@@ -34,7 +34,10 @@ struct VaultRequest {
 
 class VaultRequestPolicy {
  public:
-  VaultRequestPolicy(url::Origin origin, base::RepeatingClosure refused);
+  VaultRequestPolicy(url::Origin origin,
+                     base::RepeatingClosure refused,
+                     base::RepeatingCallback<bool(const GURL&)> carries_secret,
+                     base::RepeatingClosure secret_in_url);
   ~VaultRequestPolicy();
   VaultRequestPolicy(const VaultRequestPolicy&) = delete;
   VaultRequestPolicy& operator=(const VaultRequestPolicy&) = delete;
@@ -47,6 +50,7 @@ class VaultRequestPolicy {
                             std::string_view method,
                             const VaultRequest& request) const;
   void Refuse();
+  void RefuseSecretInURL();
   base::WeakPtr<VaultRequestPolicy> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
@@ -55,6 +59,8 @@ class VaultRequestPolicy {
   const url::Origin origin_;
   const net::SchemefulSite site_;
   base::RepeatingClosure refused_;
+  base::RepeatingCallback<bool(const GURL&)> carries_secret_;
+  base::RepeatingClosure secret_in_url_;
   std::set<content::FrameTreeNodeId> armed_;
   bool filled_ = false;
   int blocked_ = 0;

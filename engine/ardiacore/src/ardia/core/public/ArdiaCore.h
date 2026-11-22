@@ -153,6 +153,7 @@ typedef void (^ArdiaCoreVaultCodeReply)(NSString* _Nullable code);
                                  username:(NSString*)username
                              codeProvider:(nullable void (^)(ArdiaCoreVaultCodeReply reply))codeProvider
                                completion:(void (^)(NSDictionary<NSString*, id>* result))completion;
++ (void)setVaultTransferHoldForTesting:(NSTimeInterval)seconds;
 @end
 
 typedef NS_ENUM(NSInteger, ArdiaCoreAdoption) {

@@ -486,6 +486,7 @@ void ACContentRendererClient::RenderThreadStarted() {
   ChromeContentRendererClient::RenderThreadStarted();
   g_ardia_frame_blocks_extension_scripts = &IsVaultFrame;
   g_ardia_forms_seen_at_once = &IsVaultFrame;
+  g_ardia_form_get_blocked = &BlockVaultGetSubmission;
   observer_ = std::make_unique<ACRenderThreadObserver>();
   content::RenderThread::Get()->AddObserver(observer_.get());
 }

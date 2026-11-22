@@ -36,6 +36,7 @@
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/os_crypt/common/os_crypt_switches.h"
 #include "content/public/browser/authenticator_request_client_delegate.h"
+#include "net/base/auth.h"
 #include "content/public/browser/render_process_host.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/mojom/web_transport.mojom.h"
@@ -380,6 +381,33 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
     }
     return ChromeContentBrowserClient::GetWebAuthenticationRequestDelegate(
         render_frame_host);
+  }
+  std::unique_ptr<content::LoginDelegate> CreateLoginDelegate(
+      const net::AuthChallengeInfo& auth_info,
+      content::WebContents* web_contents,
+      content::BrowserContext* browser_context,
+      const content::GlobalRequestID& request_id,
+      bool is_request_for_primary_main_frame_navigation,
+      bool is_request_for_navigation,
+      const GURL& url,
+      scoped_refptr<net::HttpResponseHeaders> response_headers,
+      bool first_auth_attempt,
+      bool do_not_prompt_for_login,
+      content::GuestPageHolder* guest_page_holder,
+      content::LoginDelegate::LoginAuthRequiredCallback auth_required_callback)
+      override {
+    if (IsVaultBrowserContext(browser_context)) {
+      NoteVaultAuthChallenge(is_request_for_navigation ? web_contents : nullptr,
+                             auth_info.is_proxy,
+                             is_request_for_primary_main_frame_navigation, url);
+      return nullptr;
+    }
+    return ChromeContentBrowserClient::CreateLoginDelegate(
+        auth_info, web_contents, browser_context, request_id,
+        is_request_for_primary_main_frame_navigation, is_request_for_navigation,
+        url, std::move(response_headers), first_auth_attempt,
+        do_not_prompt_for_login, guest_page_holder,
+        std::move(auth_required_callback));
   }
   void CreateThrottlesForNavigation(
       content::NavigationThrottleRegistry& registry) override {

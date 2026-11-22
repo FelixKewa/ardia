@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "base/functional/callback.h"
@@ -30,6 +31,8 @@ struct LoginForm {
   autofill::FieldRendererId username;
   autofill::FieldRendererId password;
   autofill::FieldRendererId code;
+  std::u16string password_name;
+  std::u16string code_name;
   bool sign_up = false;
 };
 

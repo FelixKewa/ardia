@@ -95,6 +95,9 @@ void VaultSignIn::FormsChanged(content::RenderFrameHost* frame) {
   }
   Advance();
   MaybeNoForm();
+  if (DecidingInPlace()) {
+    ProbeInPlace();
+  }
 }
 
 std::optional<LoginForm> VaultSignIn::Pick(
@@ -185,6 +188,7 @@ void VaultSignIn::CodeArrived(std::optional<std::u16string> code) {
     return;
   }
   code_ = std::move(code);
+  sent_code_ = code_;
   Dispatch(*form, false, false, true, Phase::kCodeSent);
   code_.reset();
 }
@@ -206,18 +210,54 @@ void VaultSignIn::Dispatch(const LoginForm& form,
     Conclude("failed");
     return;
   }
+  if (!baseline_ready_) {
+    if (!transfer_op_ || !vault_profile_) {
+      baseline_ready_ = true;
+    } else {
+      if (!baseline_requested_) {
+        baseline_requested_ = true;
+        transfer_op_->MarkFillStarted(
+            vault_profile_, base::BindOnce(&VaultSignIn::BaselineReady,
+                                           weak_factory_.GetWeakPtr()));
+      }
+      return;
+    }
+  }
   retry_.Stop();
   const base::TimeTicks now = base::TimeTicks::Now();
   if (ready_.is_null()) {
     ready_ = now;
   }
   dispatched_ = now;
+  navigated_since_submit_ = false;
   filled_node_ = frame->GetFrameTreeNodeId();
   filling_ = true;
   settle_.Stop();
   if (password || code) {
     armed_[frame->GetGlobalId()] = frame->GetFrameTreeNodeId();
     PublishArmed();
+    url_changed_ = false;
+    cookie_changed_ = false;
+    server_cookie_changed_ = false;
+    nav_away_ = false;
+    fill_path_ = frame->GetLastCommittedURL().path();
+    step_navigations_.clear();
+    doc_error_page_ = false;
+    doc_status_ = 0;
+    secret_names_.clear();
+    if (password) {
+      secret_names_.push_back(form.password_name);
+    }
+    if (code) {
+      secret_names_.push_back(form.code_name);
+    }
+    doc_qualifies_ = false;
+    doc_navigation_ = 0;
+    httponly_navigations_.clear();
+    form_gone_ = false;
+    InvalidateProbes();
+    evidence_armed_ = true;
+    ListenForCookies();
   }
   filler_.reset();
   frame->GetRemoteAssociatedInterfaces()->GetInterface(&filler_);
@@ -254,6 +294,24 @@ void VaultSignIn::Filled(Phase next, mojom::ACVaultFillOutcome outcome) {
   }
   using Outcome = mojom::ACVaultFillOutcome;
   switch (outcome) {
+    case Outcome::kNoSubmitControl:
+      reason_ = "no_submit_control";
+      Conclude("failed");
+      return;
+    case Outcome::kInterruptedBeforeActivation:
+      reason_ = "interrupted";
+      Conclude("failed");
+      return;
+    case Outcome::kNotLogin:
+      Conclude("no_form");
+      return;
+    case Outcome::kGetForm:
+      reason_ = "get_form";
+      Conclude("failed");
+      return;
+    case Outcome::kInterrupted:
+      interrupted_ = true;
+      [[fallthrough]];
     case Outcome::kSubmitted:
     case Outcome::kFilled:
       fill_ = std::max(fill_, base::TimeTicks::Now() - dispatched_);
@@ -261,12 +319,14 @@ void VaultSignIn::Filled(Phase next, mojom::ACVaultFillOutcome outcome) {
       retries_ = 0;
       submitted_at_ = base::TimeTicks::Now();
       submitted_ = true;
-      navigated_since_submit_ = false;
+
       phase_ = next;
       settle_.Start(FROM_HERE, kSettleWithoutNavigation,
                     base::BindOnce(&VaultSignIn::Judge,
                                    base::Unretained(this)));
       Advance();
+      WatchInPlace();
+      ProbeInPlace();
       return;
     case Outcome::kDestinationRefused:
     case Outcome::kOriginChanged:
@@ -294,59 +354,9 @@ void VaultSignIn::Filled(Phase next, mojom::ACVaultFillOutcome outcome) {
   }
 }
 
-void VaultSignIn::LoginSucceeded() {
-  if (phase_ == Phase::kDone || !submitted_) {
-    return;
-  }
-  if (phase_ == Phase::kPasswordSent && request_.code_provider) {
-    return;
-  }
-  if (phase_ == Phase::kPasswordSent || phase_ == Phase::kCodeSent) {
-    Conclude("signed_in");
-  }
-}
-
-void VaultSignIn::Judge() {
-  if (phase_ == Phase::kDone || filling_ || awaiting_code_) {
-    return;
-  }
-  const std::vector<LoginForm> forms = Usable();
-  const bool password_form = std::ranges::any_of(
-      forms, [](const LoginForm& f) { return !f.password.is_null(); });
-  const bool code_form = std::ranges::any_of(
-      forms, [](const LoginForm& f) { return !f.code.is_null(); });
-  if (phase_ == Phase::kUsernameSent) {
-    Conclude(passkey_requested_      ? "needs_passkey"
-             : navigated_since_submit_ ? "needs_human"
-                                       : "still_on_login");
-    return;
-  }
-  if (password_form) {
-    Conclude("still_on_login");
-    return;
-  }
-  if (phase_ == Phase::kPasswordSent && code_form) {
-    Conclude("needs_human");
-    return;
-  }
-  Conclude(navigated_since_submit_ ? "signed_in" : "submitted");
-}
-
-void VaultSignIn::DeadlinePassed() {
-  if (phase_ == Phase::kDone) {
-    return;
-  }
-  if (!submitted_) {
-    if (credential_ready_) {
-      NoForm();
-    } else {
-      Conclude("failed");
-    }
-    return;
-  }
-  filling_ = false;
-  awaiting_code_ = false;
-  Judge();
+void VaultSignIn::BaselineReady() {
+  baseline_ready_ = true;
+  Advance();
 }
 
 void VaultSignIn::FillerGone(Phase next) {
@@ -378,75 +388,6 @@ bool VaultSignIn::SignUpOnly() {
     }
   }
   return false;
-}
-
-void VaultSignIn::DOMContentLoaded(content::RenderFrameHost* frame) {
-  if (phase_ != Phase::kDone && !submitted_ && frame->IsInPrimaryMainFrame()) {
-    page_ready_ = true;
-    MaybeNoForm();
-    return;
-  }
-  if (phase_ == Phase::kDone || !submitted_ || !navigated_since_submit_ ||
-      filling_ || awaiting_code_ || !IsDecidingFrame(frame) ||
-      (phase_ != Phase::kPasswordSent && phase_ != Phase::kCodeSent) ||
-      net::SchemefulSite(frame->GetLastCommittedOrigin()) !=
-          net::SchemefulSite(request_.origin)) {
-    return;
-  }
-  probe_.reset();
-  frame->GetRemoteAssociatedInterfaces()->GetInterface(&probe_);
-  probe_->ProbeDocument(base::BindOnce(&VaultSignIn::Probed,
-                                       weak_factory_.GetWeakPtr(),
-                                       frame->GetGlobalId()));
-}
-
-void VaultSignIn::Probed(content::GlobalRenderFrameHostId frame,
-                         bool password_field,
-                         bool text_field) {
-  probe_.reset();
-  content::RenderFrameHost* host = content::RenderFrameHost::FromID(frame);
-  if (phase_ == Phase::kDone || filling_ || awaiting_code_ || !host ||
-      !IsDecidingFrame(host)) {
-    return;
-  }
-  if (password_field) {
-    Conclude("still_on_login");
-    return;
-  }
-  if (phase_ == Phase::kPasswordSent && request_.code_provider && text_field) {
-    return;
-  }
-  Conclude("signed_in");
-}
-
-void VaultSignIn::DidFinishNavigation(content::NavigationHandle* navigation) {
-  if (!navigation->HasCommitted() || navigation->IsSameDocument()) {
-    return;
-  }
-  Disarm(navigation->GetPreviousRenderFrameHostId());
-  const bool main_frame = navigation->IsInPrimaryMainFrame();
-  if (!main_frame && navigation->GetFrameTreeNodeId() != filled_node_) {
-    return;
-  }
-  if (main_frame) {
-    page_loaded_ = false;
-    passkey_requested_ = false;
-    if (!submitted_) {
-      page_ready_ = false;
-      no_form_.Stop();
-    }
-  }
-  if (submitted_) {
-    navigated_since_submit_ = true;
-    settle_.Start(FROM_HERE, kSettleWithoutNavigation,
-                  base::BindOnce(&VaultSignIn::Judge,
-                                 base::Unretained(this)));
-  }
-}
-
-bool VaultSignIn::IsDecidingFrame(content::RenderFrameHost* frame) const {
-  return frame->IsInPrimaryMainFrame() ||
-         (frame->IsActive() && frame->GetFrameTreeNodeId() == filled_node_);
 }
 
 void VaultSignIn::RenderFrameDeleted(content::RenderFrameHost* frame) {

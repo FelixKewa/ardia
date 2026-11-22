@@ -31,6 +31,10 @@ bool ArdiaMainFrameHandlesEnterPictureInPicture(WebContents* contents);
 DevToolsAgentHost* ArdiaDevToolsAgentHostForId(const std::string& id);
 }
 
+namespace blink {
+class WebFormElement;
+}
+
 namespace gfx {
 class Point;
 class Rect;
@@ -180,5 +184,7 @@ extern void (*g_ardia_clear_filled_passwords)(content::WebContents* contents);
 extern bool (*g_ardia_frame_blocks_extension_scripts)(content::RenderFrame* frame);
 
 extern bool (*g_ardia_forms_seen_at_once)(content::RenderFrame* frame);
+
+extern bool (*g_ardia_form_get_blocked)(const blink::WebFormElement& form);
 
 #endif

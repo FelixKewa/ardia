@@ -39,12 +39,29 @@ enum ACVaultFillOutcome {
   kFieldChanged,
   kDestinationRefused,
   kSubmitterRefused,
+  kNoSubmitControl,
+  kInterrupted,
+  kInterruptedBeforeActivation,
+  kNotLogin,
+  kGetForm,
+};
+
+struct ACVaultPageState {
+  bool complete;
+  bool password_field;
+  bool text_field;
+  bool code_field;
+  bool challenge;
+  bool error_shown;
+  bool get_form_blocked;
 };
 
 interface ACVaultFiller {
   Fill(url.mojom.Origin expected_origin, ACVaultFillStep step)
       => (ACVaultFillOutcome outcome);
   MarkVaultFrame();
-  ProbeDocument() => (bool password_field, bool text_field);
+  ProbeDocument() => (ACVaultPageState state);
+  WatchForChange() => ();
+  StopWatching();
   ClearFilledPasswords();
 };

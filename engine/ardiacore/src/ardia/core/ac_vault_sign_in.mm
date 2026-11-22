@@ -8,6 +8,9 @@
 #include <string_view>
 
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
+#include "content/public/browser/storage_partition.h"
+#include "base/strings/string_split.h"
 
 namespace ardiacore {
 namespace vault_internal {
@@ -18,9 +21,27 @@ NSNumber* Milliseconds(base::TimeDelta delta) {
   return @(std::max<int64_t>(0, delta.InMilliseconds()));
 }
 
+std::string FormDecoded(std::string_view raw) {
+  std::string decoded;
+  decoded.reserve(raw.size());
+  for (size_t i = 0; i < raw.size(); ++i) {
+    if (raw[i] == '+') {
+      decoded.push_back(' ');
+    } else if (raw[i] == '%' && i + 2 < raw.size() &&
+               base::IsHexDigit(raw[i + 1]) && base::IsHexDigit(raw[i + 2])) {
+      decoded.push_back(static_cast<char>(base::HexDigitToInt(raw[i + 1]) * 16 +
+                                          base::HexDigitToInt(raw[i + 2])));
+      i += 2;
+    } else {
+      decoded.push_back(raw[i]);
+    }
+  }
+  return decoded;
+}
+
 bool CarriesSession(const char* status) {
   const std::string_view outcome(status);
-  return outcome == "signed_in";
+  return outcome == "signed_in" || outcome == "submitted";
 }
 
 }
@@ -69,8 +90,13 @@ void VaultSignIn::Start() {
   profiles_.AddObservation(vault_profile_);
   transfer_op_ = std::make_unique<VaultTransfer>(profile_, request_.origin);
   policy_ = std::make_unique<VaultRequestPolicy>(
-      request_.origin, base::BindRepeating(&VaultSignIn::RequestRefused,
-                                           weak_factory_.GetWeakPtr()));
+      request_.origin,
+      base::BindRepeating(&VaultSignIn::RequestRefused,
+                          weak_factory_.GetWeakPtr()),
+      base::BindRepeating(&VaultSignIn::CarriesSecret,
+                          base::Unretained(this)),
+      base::BindRepeating(&VaultSignIn::SecretInURL,
+                          weak_factory_.GetWeakPtr()));
   content::WebContents::CreateParams params(vault_profile_);
   params.initially_hidden = true;
   contents_ = content::WebContents::Create(params);
@@ -82,6 +108,7 @@ void VaultSignIn::Start() {
   capture_ = contents_->IncrementCapturerCount(
       gfx::Size(kWidth, kHeight), false, false, false);
   Observe(contents_.get());
+  ListenForCookies();
   forms_ = std::make_unique<LoginFormIndex>(contents_.get());
   forms_->SetChanged(base::BindRepeating(&VaultSignIn::FormsChanged,
                                          weak_factory_.GetWeakPtr()));
@@ -141,6 +168,15 @@ base::WeakPtr<VaultRequestPolicy> VaultSignIn::policy() const {
 
 base::WeakPtr<VaultSignIn> VaultSignIn::GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
+void VaultSignIn::AuthChallenged(bool proxy, bool main_frame, const GURL& url) {
+  if (phase_ == Phase::kDone ||
+      (!main_frame && !url::Origin::Create(url).IsSameOriginWith(request_.origin))) {
+    return;
+  }
+  reason_ = proxy ? "proxy_auth" : "basic_auth";
+  Conclude("needs_human");
+}
+
 void VaultSignIn::PasskeyRequested() {
   if (phase_ == Phase::kDone) {
     return;
@@ -151,14 +187,17 @@ void VaultSignIn::PasskeyRequested() {
 
 void VaultSignIn::TearDown() {
   password_.clear();
+  sent_code_.reset();
   code_.reset();
   filler_.reset();
-  probe_.reset();
+  probes_.clear();
+  watch_.reset();
   if (fetcher_) {
     fetcher_->RemoveConsumer(this);
     fetcher_.reset();
   }
   forms_.reset();
+  cookie_listener_.reset();
   Observe(nullptr);
   capture_.RunAndReset();
   if (contents_) {
@@ -188,6 +227,7 @@ void VaultSignIn::StopTimers() {
   settle_.Stop();
   no_form_.Stop();
   code_wait_.Stop();
+  confirm_gone_.Stop();
 }
 
 void VaultSignIn::Conclude(const char* status) {
@@ -196,13 +236,22 @@ void VaultSignIn::Conclude(const char* status) {
   }
   phase_ = Phase::kDone;
   decided_ = status;
+  if (interrupted_ && !reason_ && std::string_view(status) != "signed_in") {
+    reason_ = "interrupted";
+  }
   if (submitted_) {
     decide_ = base::TimeTicks::Now() - submitted_at_;
   }
   StopTimers();
   password_.clear();
+  sent_code_.reset();
   code_.reset();
   filler_.reset();
+  probes_.clear();
+  if (watch_.is_bound()) {
+    watch_->StopWatching();
+  }
+  watch_.reset();
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&VaultSignIn::AfterConclusion,
                                 weak_factory_.GetWeakPtr()));
@@ -210,6 +259,10 @@ void VaultSignIn::Conclude(const char* status) {
 
 void VaultSignIn::Abort(const char* status) {
   if (settled_) {
+    return;
+  }
+  if (transferring_) {
+    cancel_requested_ = true;
     return;
   }
   if (transfer_op_ && transfer_op_->sent()) {
@@ -234,16 +287,30 @@ void VaultSignIn::AfterConclusion() {
     return;
   }
   transfer_started_ = base::TimeTicks::Now();
-  transfer_wait_.Start(FROM_HERE, kTransferWait,
+  const base::TimeDelta left = start_ + kDeadline - transfer_started_;
+  if (left <= base::TimeDelta()) {
+    TransferTimedOut();
+    return;
+  }
+  transfer_wait_.Start(FROM_HERE, left,
                        base::BindOnce(&VaultSignIn::TransferTimedOut,
                                       base::Unretained(this)));
-  transfer_op_->Run(vault_profile_, base::BindOnce(&VaultSignIn::Transferred,
-                                                   weak_factory_.GetWeakPtr()));
+  transferring_ = true;
+  transfer_op_->Run(
+      vault_profile_, evidence_ && std::string_view(evidence_) == "none",
+      base::BindOnce(&VaultSignIn::Transferred, weak_factory_.GetWeakPtr()));
 }
 
 void VaultSignIn::Transferred(VaultTransferCounts counts) {
   transfer_ = counts;
   transfer_state_ = counts.failed ? "partial" : "complete";
+  if (evidence_ && std::string_view(evidence_) == "none") {
+    if (counts.changed_since_fill) {
+      evidence_ = "weak";
+    } else {
+      transfer_state_ = "none";
+    }
+  }
   transfer_done_ = base::TimeTicks::Now();
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
@@ -282,6 +349,14 @@ void VaultSignIn::Settle(const char* status) {
     @"totalMs" : Milliseconds(now - start_),
     @"decideMs" : submitted_ ? Milliseconds(decide_) : @(-1),
     @"reason" : reason_ ? @(reason_) : @"",
+    @"evidence" : evidence_ ? @(evidence_) : @"",
+    @"cancelRequested" : @(cancel_requested_),
+    @"signals" : @{
+      @"navigated" : @(navigated_since_submit_),
+      @"httpOnlyCookie" : @(server_cookie_changed_),
+      @"formGone" : @(form_gone_),
+      @"pathChanged" : @(nav_away_),
+    },
     @"refills" : @(refills_),
     @"profileMs" : Milliseconds(profile_ms_),
     @"seedMs" : Milliseconds(seed_ms_),
@@ -321,6 +396,53 @@ void VaultSignIn::ReadyToCommitNavigation(content::NavigationHandle* navigation)
 }
 
 void VaultSignIn::RequestRefused() { Conclude("cross_origin"); }
+
+bool VaultSignIn::CarriesSecret(const GURL& url) const {
+  if ((password_.empty() && !sent_code_) || !url.has_query()) {
+    return false;
+  }
+  std::vector<std::string> secrets;
+  std::vector<std::string> names;
+  auto add_forms = [](std::vector<std::string>& into, const std::u16string& text) {
+    if (text.empty()) {
+      return;
+    }
+    into.push_back(base::UTF16ToUTF8(text));
+    std::string latin1;
+    for (char16_t c : text) {
+      if (c > 0xFF) {
+        return;
+      }
+      latin1.push_back(static_cast<char>(c));
+    }
+    into.push_back(std::move(latin1));
+  };
+  add_forms(secrets, password_.value());
+  if (sent_code_) {
+    add_forms(secrets, *sent_code_);
+  }
+  for (const std::u16string& name : secret_names_) {
+    add_forms(names, name);
+  }
+  for (std::string_view pair : base::SplitStringPiece(
+           url.query(), "&", base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
+    const size_t equals = pair.find('=');
+    const std::string key = FormDecoded(pair.substr(0, equals));
+    const std::string value = equals == std::string_view::npos
+                                  ? std::string()
+                                  : FormDecoded(pair.substr(equals + 1));
+    if (!value.empty() && std::ranges::find(names, key) != names.end() &&
+        std::ranges::find(secrets, value) != secrets.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void VaultSignIn::SecretInURL() {
+  reason_ = "get_form";
+  Conclude("failed");
+}
 
 void VaultSignIn::OnProfileWillBeDestroyed(Profile* profile) {
   if (profile == vault_profile_.get()) {
@@ -407,6 +529,15 @@ void ClearFilledPasswords(content::WebContents* contents) {
     frame->GetRemoteAssociatedInterfaces()->GetInterface(&filler);
     filler->ClearFilledPasswords();
   });
+}
+
+void NoteVaultAuthChallenge(content::WebContents* contents,
+                            bool proxy,
+                            bool main_frame,
+                            const GURL& url) {
+  if (VaultSignIn* sign_in = contents ? RunningFor(contents) : nullptr) {
+    sign_in->AuthChallenged(proxy, main_frame, url);
+  }
 }
 
 void NoteVaultPasskeyRequest(content::RenderFrameHost* frame) {

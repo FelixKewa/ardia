@@ -5,10 +5,12 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/cookies/canonical_cookie.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
@@ -24,7 +26,11 @@ struct VaultTransferCounts {
   int local_storage = 0;
   int conflicts = 0;
   int failed = 0;
+  bool changed_since_fill = false;
 };
+
+void SetVaultTransferHoldForTesting(base::TimeDelta hold);
+base::TimeDelta WriteHoldForTesting();
 
 class VaultTransfer {
  public:
@@ -34,7 +40,10 @@ class VaultTransfer {
   VaultTransfer& operator=(const VaultTransfer&) = delete;
 
   void Seed(Profile* vault, base::OnceClosure seeded);
-  void Run(Profile* from, base::OnceCallback<void(VaultTransferCounts)> done);
+  void MarkFillStarted(Profile* vault, base::OnceClosure ready);
+  void Run(Profile* from,
+           bool only_if_changed_since_fill,
+           base::OnceCallback<void(VaultTransferCounts)> done);
   const VaultTransferCounts& counts() const { return counts_; }
   bool sent() const { return sent_; }
 
@@ -49,8 +58,11 @@ class VaultTransfer {
   void SeedNow();
   void Seeded();
   void Write();
+  void WriteChecked();
   void Wrote(int* count, bool success);
   void Step();
+  void MaybeBaselineReady();
+  bool ChangedSinceFill() const;
 
   const url::Origin origin_;
   const std::string registrable_domain_;
@@ -65,6 +77,16 @@ class VaultTransfer {
   std::optional<Storage> storage_now_;
   std::optional<std::vector<net::CanonicalCookie>> vault_list_;
   std::optional<Storage> vault_items_;
+  bool fill_marked_ = false;
+  std::vector<net::CanonicalCookie> cookie_writes_;
+  std::vector<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
+      storage_writes_;
+  std::optional<CookieValues> target_recheck_;
+  std::optional<Storage> storage_recheck_;
+  bool only_if_changed_since_fill_ = false;
+  base::OnceClosure baseline_ready_;
+  std::optional<CookieValues> vault_at_fill_;
+  std::optional<Storage> vault_storage_at_fill_;
   base::OnceClosure seeded_;
   int seeding_ = 0;
   base::OnceCallback<void(VaultTransferCounts)> done_;

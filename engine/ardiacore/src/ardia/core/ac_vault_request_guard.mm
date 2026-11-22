@@ -97,7 +97,9 @@ class GuardLoader : public network::mojom::URLLoader,
                                  hop)
                 : VaultRequestVerdict::kBlock;
     if (verdict != VaultRequestVerdict::kAllow) {
-      if (verdict == VaultRequestVerdict::kRefuse) {
+      if (verdict == VaultRequestVerdict::kSecretInURL) {
+        policy_->RefuseSecretInURL();
+      } else if (verdict == VaultRequestVerdict::kRefuse) {
         policy_->Refuse();
       } else if (policy_) {
         policy_->NoteBlocked();
@@ -171,7 +173,9 @@ class GuardFactory : public network::mojom::URLLoaderFactory {
         policy_ ? policy_->Check(request.url, request.method, kind)
                 : VaultRequestVerdict::kBlock;
     if (verdict != VaultRequestVerdict::kAllow) {
-      if (verdict == VaultRequestVerdict::kRefuse) {
+      if (verdict == VaultRequestVerdict::kSecretInURL) {
+        policy_->RefuseSecretInURL();
+      } else if (verdict == VaultRequestVerdict::kRefuse) {
         policy_->Refuse();
       } else if (policy_) {
         policy_->NoteBlocked();
@@ -207,11 +211,16 @@ class GuardFactory : public network::mojom::URLLoaderFactory {
 
 }
 
-VaultRequestPolicy::VaultRequestPolicy(url::Origin origin,
-                                       base::RepeatingClosure refused)
+VaultRequestPolicy::VaultRequestPolicy(
+    url::Origin origin,
+    base::RepeatingClosure refused,
+    base::RepeatingCallback<bool(const GURL&)> carries_secret,
+    base::RepeatingClosure secret_in_url)
     : origin_(std::move(origin)),
       site_(origin_),
-      refused_(std::move(refused)) {}
+      refused_(std::move(refused)),
+      carries_secret_(std::move(carries_secret)),
+      secret_in_url_(std::move(secret_in_url)) {}
 
 void VaultRequestPolicy::SetArmed(std::set<content::FrameTreeNodeId> frames) {
   armed_ = std::move(frames);
@@ -223,6 +232,12 @@ VaultRequestPolicy::~VaultRequestPolicy() = default;
 VaultRequestVerdict VaultRequestPolicy::Check(const GURL& url,
                                               std::string_view method,
                                               const VaultRequest& request) const {
+  if (request.navigation && armed_.contains(request.frame) &&
+      (base::EqualsCaseInsensitiveASCII(method, "GET") ||
+       base::EqualsCaseInsensitiveASCII(method, "HEAD")) &&
+      carries_secret_ && carries_secret_.Run(url)) {
+    return VaultRequestVerdict::kSecretInURL;
+  }
   if (url.SchemeIsHTTPOrHTTPS() &&
       url::Origin::Create(url).IsSameOriginWith(origin_)) {
     return VaultRequestVerdict::kAllow;
@@ -251,6 +266,12 @@ VaultRequestVerdict VaultRequestPolicy::Check(const GURL& url,
 void VaultRequestPolicy::Refuse() {
   if (refused_) {
     refused_.Run();
+  }
+}
+
+void VaultRequestPolicy::RefuseSecretInURL() {
+  if (secret_in_url_) {
+    secret_in_url_.Run();
   }
 }
 

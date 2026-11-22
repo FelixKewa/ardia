@@ -1,11 +1,13 @@
 #import "ardia/core/public/ArdiaCore.h"
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
 #include "ardia/core/ac_vault_sign_in.h"
+#include "ardia/core/ac_vault_transfer.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/strings/sys_string_conversions.h"
@@ -112,6 +114,13 @@ NSDictionary<NSString*, id>* Refused(NSString* status) {
                           answer(result);
                         }))];
   return handle;
+}
+
++ (void)setVaultTransferHoldForTesting:(NSTimeInterval)seconds {
+  const base::TimeDelta hold = base::Seconds(std::max(0.0, seconds));
+  dispatch_async(dispatch_get_main_queue(), ^{
+    ardiacore::SetVaultTransferHoldForTesting(hold);
+  });
 }
 
 @end
