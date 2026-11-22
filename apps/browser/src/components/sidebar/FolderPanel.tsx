@@ -5,7 +5,7 @@ import { useIsActiveTab, useTab } from "../../state/browser/hooks";
 import { plural, tabTitle } from "../../state/browser/model";
 import { useTileFolderLabel, useTileFolderMembers } from "../../state/pins/hooks";
 import { useGated } from "../ui/motion";
-import { ClosingView, ContextMenuArea, HoverCard as HoverPanel, HoverFill, OutsidePressArea, radius, space, useClosing, useHover, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf } from "../ui";
+import { ClosingView, ContextMenuArea, HoverCard as HoverPanel, HoverFill, OutsidePressArea, liveWhile, radius, space, useClosing, useHover, useLiveAction, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf } from "../ui";
 import { SectionLabel } from "./SectionLabel";
 import { Squish, useSquish } from "../ui/Squish";
 import { SidebarListRow, SidebarRowLabel } from "./SidebarRow";
@@ -42,6 +42,7 @@ function PanelBody({ windowId, folderId, anchor, closing, onClosed }: { windowId
   const origin = useMemo<[number, number, number]>(() => [originX, 0, 0], [originX]);
   const motion = usePopoverMotionStyle(appear, origin);
   const opacity = useGated(!away, appear, 0);
+  const live = liveWhile(closing);
   const tail = useDragItem(tailKey("folder"), { kind: "tail", tabIds: [], section: "folder" });
 
   useEffect(() => {
@@ -78,9 +79,9 @@ function PanelBody({ windowId, folderId, anchor, closing, onClosed }: { windowId
         opacity,
       }}
     >
-      <OutsidePressArea onOutsidePress={closing ? undefined : closeFolderPanelOnPress}>
+      <OutsidePressArea onOutsidePress={live(closeFolderPanelOnPress)}>
         <HoverPanel width={root.w - layout.sidebarInset * 2} pad="s">
-          <ContextMenuArea onContextMenu={closing ? undefined : () => void openTileFolderMenu(windowId, folderId)}>
+          <ContextMenuArea onContextMenu={live(() => void openTileFolderMenu(windowId, folderId))}>
             <SectionLabel title={`${label} · ${plural(members.length, "tab")}`} inset={space.s} top={space.xxs} bottom={space.s} />
           </ContextMenuArea>
           <View style={{ gap: layout.rowGap }}>
@@ -104,19 +105,20 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
   const { wrapper, handle } = useDragItem(`fm:${tabId}`, { kind: "row", tabIds: [tabId], section: "folder" });
   const squish = useSquish("row");
   const closing = useClosing();
+  const live = useLiveAction();
   if (!tab) return null;
   return (
-    <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
+    <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle} onStartShouldSetResponder={live(handle.onStartShouldSetResponder)} onMoveShouldSetResponder={live(handle.onMoveShouldSetResponder)}>
       <View {...hoverProps}>
-        <ContextMenuArea onContextMenu={closing ? undefined : () => void openTabMenu(windowId, tab)}>
+        <ContextMenuArea onContextMenu={live(() => void openTabMenu(windowId, tab))}>
           <Pressable
             disabled={closing}
             onPressIn={squish.onPressIn}
             onPressOut={squish.onPressOut}
-            onPress={() => {
+            onPress={live(() => {
               closeFolderPanel();
               clickTab(windowId, tabId);
-            }}
+            })}
           >
             {({ pressed }) => (
               <Squish scale={squish.scale}>

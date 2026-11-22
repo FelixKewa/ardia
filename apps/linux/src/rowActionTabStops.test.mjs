@@ -12,12 +12,21 @@ const reactNativeWeb = new URL("./", pathToFileURL(requireHere.resolve("react-na
 const shims = new URL("./shims/", import.meta.url);
 const packages = new URL("../../../packages/", import.meta.url);
 const shellWithFiles = `data:text/javascript,export * from ${JSON.stringify(new URL("shell.tsx", shims).href)}; export const fileExists = () => true;`;
+const reactUrl = pathToFileURL(requireHere.resolve("react")).href;
+const recording = (real, names) =>
+  "data:text/javascript," +
+  encodeURIComponent(
+    `import React from ${JSON.stringify(reactUrl)}; import * as real from ${JSON.stringify(real)}; export * from ${JSON.stringify(real)};
+const seen = (globalThis.hostProps ??= { on: false, list: [] });
+const wrap = (name) => React.forwardRef(function Recorded(props, ref) { if (seen.on) seen.list.push({ name, props }); return React.createElement(real[name], { ...props, ref }); });
+${names.map((name) => `export const ${name} = wrap(${JSON.stringify(name)});`).join("\n")}`,
+  );
 const aliases = new Map([
-  ["react-native", new URL("react-native.tsx", shims).href],
+  ["react-native", recording(new URL("react-native.tsx", shims).href, ["Pressable", "View"])],
   ["react-native/Libraries/Animated/useAnimatedProps", new URL("dist/cjs/vendor/react-native/Animated/useAnimatedProps.js", reactNativeWeb).href],
   ["expo-modules-core", new URL("expo-modules-core.ts", shims).href],
   ["react-native/Libraries/Core/ExceptionsManager", new URL("exceptions-manager.ts", shims).href],
-  ["@ardia/shell", shellWithFiles],
+  ["@ardia/shell", recording(shellWithFiles, ["MouseArea", "ContextMenuArea", "OutsidePressArea"])],
   ...["ardiacore", "shaders", "sync", "import"].map((name) => [`@ardia/${name}`, new URL(`${name}.tsx`, shims).href]),
   ...[["shell", "index.tsx"], ["ardiacore", "index.ts"], ["shaders", "index.tsx"], ["sync", "index.ts"], ["import", "index.ts"]].map(([name, file]) => [`@ardia-real/${name}`, new URL(`${name}/src/${file}`, packages).href]),
 ]);
@@ -46,6 +55,7 @@ function adapted(url, importer) {
 
 registerHooks({
   resolve(specifier, context, next) {
+    if (specifier === "react-native" && context.parentURL?.startsWith(shims.href)) return { url: new URL("react-native.tsx", shims).href, shortCircuit: true };
     if (aliases.has(specifier)) return { url: aliases.get(specifier), shortCircuit: true };
     if (specifier.startsWith(".") && context.parentURL?.startsWith("file:")) {
       for (const ext of PLATFORM_FIRST) {
@@ -145,4 +155,46 @@ test("the History cursor row reveals its checkbox and More Actions button as Tab
   assert.equal(named(cursor, "More actions")?.tabindex, "0", cursor);
   assert.equal(tabStops(cursor).length, 2, cursor);
   assert.equal(tabStops(render(HistoryRow, { ...props, highlighted: false })).length, 0);
+});
+
+const { ClosingScope } = await import("../../browser/src/components/ui/index.ts");
+const { keepActivationKeys } = await import("../../browser/src/components/pages/listCursor.ts");
+
+test("a blocked download's Keep and Discard are buttons like Pause, Cancel and Show in Folder, so Space and Enter both activate them", () => {
+  const blocked = render(DownloadRowActions, { d: download({ state: "downloading", dangerous: true }), done: false, blocked: true, revealed: false });
+  const running = render(DownloadRowActions, { d: download({ state: "downloading", received: 4 }), done: false, blocked: false, revealed: false });
+  const finished = render(DownloadRowActions, { d: download(), done: true, blocked: false, revealed: true });
+  const keep = named(blocked, "Keep");
+  const discard = named(blocked, "Discard");
+  for (const action of [keep, discard, named(running, "Pause"), named(running, "Cancel"), named(finished, "Show in Folder")]) {
+    assert.ok(action, blocked);
+    assert.equal(action.tabindex, "0");
+    assert.equal(action.role, "button", JSON.stringify(action));
+  }
+  for (const label of ["Keep", "Discard"]) assert.match(blocked, new RegExp(`<button\\b[^>]*aria-label="${label}"`), blocked);
+});
+
+const DOWNLOAD_ACTIONS = ["onPress", "onLongPress", "onKeyDown", "onContextMenu", "onDoubleClick", "onMiddleClick", "onAccessibilityAction", "onAccessibilityTap", "onOutsidePress"];
+
+function recordedHandlers(node) {
+  const seen = globalThis.hostProps;
+  seen.list = [];
+  seen.on = true;
+  try {
+    renderToStaticMarkup(node);
+  } finally {
+    seen.on = false;
+  }
+  return seen.list.flatMap(({ name, props }) => DOWNLOAD_ACTIONS.filter((key) => typeof props[key] === "function" && props[key] !== keepActivationKeys).map((key) => `${name}.${key}`));
+}
+
+test("a download row and its Keep, Discard, Pause and Cancel hand no action to the host while Recent Downloads closes", () => {
+  const rows = [download(), download({ state: "downloading", received: 4 }), download({ state: "downloading", dangerous: true })];
+  for (const d of rows) {
+    const row = createElement(DownloadRow, { d, windowId: "w" });
+    assert.ok(recordedHandlers(row).length > 0);
+    assert.deepEqual(recordedHandlers(createElement(ClosingScope, { closing: true }, row)), [], d.state);
+  }
+  const actions = createElement(DownloadRowActions, { d: download({ state: "downloading", dangerous: true }), done: false, blocked: true, revealed: false });
+  assert.deepEqual(recordedHandlers(createElement(ClosingScope, { closing: true }, actions)), []);
 });

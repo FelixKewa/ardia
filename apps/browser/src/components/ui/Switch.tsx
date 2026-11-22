@@ -5,7 +5,7 @@ import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
 import { useNativeForm } from "./nativeForm";
 import { spaceActivates, switchA11y } from "./a11y";
-import { useClosing } from "./Closing";
+import { liveWhile, useClosing } from "./Closing";
 
 export type SwitchLook = {
   width: number;
@@ -42,7 +42,8 @@ function Switch({
   shown.current = value;
   const pressedAt = useRef(0);
   const closing = useClosing();
-  const live = !disabled && !closing;
+  const active = !disabled && !closing;
+  const live = liveWhile(closing);
 
   const slideTo = (on: boolean) => {
     if (target.current === on) return;
@@ -71,11 +72,11 @@ function Switch({
   const radius = look.height / 2;
   return (
     <Pressable
-      disabled={!live}
+      disabled={!active}
       hitSlop={SWITCH_HIT_SLOP}
       {...switchA11y(value, disabled, accessibilityLabel)}
-      onKeyDown={live ? spaceActivates(flip) : undefined}
-      onPress={flip}
+      onKeyDown={active ? live(spaceActivates(flip)) : undefined}
+      onPress={live(flip)}
       style={{ opacity: disabled ? opacity.disabled : 1 }}
     >
       <View pointerEvents="none" style={{ width: look.width, height: look.height, borderRadius: radius, backgroundColor: look.offColor, overflow: "hidden" }}>

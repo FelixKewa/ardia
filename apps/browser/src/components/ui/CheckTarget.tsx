@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, type StyleProp, type ViewStyle } from "react-native";
 import { CheckBoxFace } from "./Checkbox";
 import { checkboxA11y, spaceActivates } from "./a11y";
-import { useClosing } from "./Closing";
+import { liveWhile, useClosing } from "./Closing";
 
 export function CheckTarget({
   value,
@@ -22,14 +22,15 @@ export function CheckTarget({
   children: ReactNode;
 }) {
   const closing = useClosing();
-  const live = !disabled && !closing;
+  const active = !disabled && !closing;
+  const live = liveWhile(closing);
   const toggle = () => onChange(!value);
   return (
     <Pressable
-      disabled={!live}
-      focusable={live}
-      onPress={toggle}
-      onKeyDown={live ? spaceActivates(toggle) : undefined}
+      disabled={!active}
+      focusable={active}
+      onPress={live(toggle)}
+      onKeyDown={active ? live(spaceActivates(toggle)) : undefined}
       {...checkboxA11y(value, disabled, label)}
       accessibilityHint={hint}
       style={style}

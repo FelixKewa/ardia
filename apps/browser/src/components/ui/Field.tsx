@@ -10,7 +10,7 @@ import { monoFace, opacity, perLook, proseLineHeight, radius, space, font as typ
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
-import { useClosing, useClosingField } from "./Closing";
+import { liveWhile, useClosing, useClosingField } from "./Closing";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -53,6 +53,7 @@ export function SearchField({
   const clearMotion = usePressScaleMotion(!!value && !bare, buttonMotion.iconPressScale);
   const field = useClosingField(inputRef);
   const closing = field.closing;
+  const live = liveWhile(closing);
   return (
     <View
       style={[
@@ -81,7 +82,7 @@ export function SearchField({
       <TextInput
         ref={field.ref}
         value={value}
-        onChangeText={closing ? undefined : onChangeText}
+        onChangeText={live(onChangeText)}
         editable={!closing}
         placeholder={placeholder}
         placeholderTextColor={bare ? theme.placeholder : theme.textTertiary}
@@ -91,20 +92,19 @@ export function SearchField({
         ardiaCentersCapitals
         onBlur={onBlur}
         keyDownEvents={keyDownEvents}
-        onKeyDown={(e) => {
-          if (closing) return;
+        onKeyDown={live((e) => {
           const { key, shiftKey } = e.nativeEvent;
           if (key === "Escape") (onEscape ?? (() => onChangeText("")))();
           else if (key === "Enter") onSubmit?.(!!shiftKey);
           else if (key === "ArrowDown") onArrow?.(1);
           else if (key === "ArrowUp") onArrow?.(-1);
           else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
-        }}
+        })}
         style={{ flex: 1, ...(bare ? typeScale.title : typeScale.body), color: theme.textPrimary, paddingVertical: 0 }}
       />
       {value && !bare ? (
         <View tooltip="Clear">
-          <Pressable disabled={closing} onPress={() => onChangeText("")} onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
+          <Pressable disabled={closing} onPress={live(() => onChangeText(""))} accessibilityRole="button" accessibilityLabel="Clear" onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
             <Animated.View style={[CLEAR_GLYPH, clearMotion.scale ? { transform: [{ scale: clearMotion.scale }] } : null]}>
               <Symbol name="xmark.circle.fill" size={12} color={theme.textTertiary} style={CLEAR_GLYPH} />
             </Animated.View>
@@ -154,6 +154,7 @@ export function TextField({
   const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
   const field = useClosingField();
   const locked = disabled || field.closing;
+  const live = liveWhile(field.closing);
   return (
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
@@ -171,7 +172,7 @@ export function TextField({
         <TextInput
           ref={field.ref}
           value={value}
-          onChangeText={locked ? undefined : onChangeText}
+          onChangeText={disabled ? undefined : live(onChangeText)}
           editable={!locked}
           placeholder={placeholder}
           placeholderTextColor={theme.textTertiary}
@@ -184,14 +185,13 @@ export function TextField({
           ardiaCentersCapitals={!multiline}
           autoCorrect={mono ? false : undefined}
           spellCheck={mono ? false : undefined}
-          onSubmitEditing={locked ? undefined : onSubmit}
+          onSubmitEditing={disabled ? undefined : live(onSubmit)}
           onBlur={onBlur}
           keyDownEvents={keyDownEvents}
-          onKeyDown={(e) => {
-            if (field.closing) return;
+          onKeyDown={live((e) => {
             if (e.nativeEvent.key === "Escape") onEscape?.();
             else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
-          }}
+          })}
           style={[{ ...typeScale.body, color: theme.textPrimary, paddingVertical: 0 }, multiline && multilineText(), mono && monoFace()]}
         />
       </View>
@@ -223,6 +223,7 @@ export function PopUp<T extends string>({
   const native = useNativeForm();
   const { hovered, hoverProps } = useHover();
   const closing = useClosing();
+  const live = liveWhile(closing);
   const pressMotion = usePressScaleMotion(!disabled && !native, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const current = options.find((o) => o.value === value);
@@ -238,7 +239,7 @@ export function PopUp<T extends string>({
   };
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled || closing} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
+      <Pressable disabled={disabled || closing} onPress={live(open)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
         {({ pressed }) =>
           native ? (
             <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>

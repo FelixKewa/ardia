@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, FlatList, Pressable, StyleSheet, View } from "react-native";
-import { Button, HoverFill, iconButton, radius, space, Symbol, Text, useClosing } from "../ui";
+import { Button, HoverFill, iconButton, radius, space, Symbol, Text, useClosing, useLiveAction } from "../ui";
 import { useTheme } from "../ui/theme";
 import { iconSymbol } from "../../lib/customIcon";
 import { sameIcon } from "../../lib/emoji";
@@ -125,13 +125,14 @@ const Cell = memo(function Cell({ icon, label, selected, onPress }: { icon: stri
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const closing = useClosing();
+  const live = useLiveAction();
   return (
     <Pressable
       disabled={closing}
       accessibilityRole="button"
       accessibilityLabel={label}
       aria-selected={selected}
-      onPress={() => onPress(icon)}
+      onPress={live(() => onPress(icon))}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
     >

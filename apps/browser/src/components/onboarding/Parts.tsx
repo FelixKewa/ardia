@@ -3,7 +3,7 @@ import { Animated, Image, Pressable, View, type StyleProp, type ViewStyle } from
 import { useTheme } from "../ui/theme";
 import { IconRing } from "./GlassBacking";
 import type { TileTheme } from "../../state/favicons/tileTheme";
-import { Button, Checkbox, checkboxA11y, Dot, radioA11y, spaceActivates, Text, useHover } from "../ui";
+import { Button, Checkbox, checkboxA11y, Dot, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction } from "../ui";
 import { activeSteps, cancelOnboarding, useOnboarding, type OnboardingStep } from "../../state/onboarding/onboarding";
 import { useQuestions } from "../../state/onboarding/questions";
 import { curve } from "../ui/motion";
@@ -167,9 +167,11 @@ const SEGMENT = { height: 22, minWidth: 34, imageBox: 30, image: 26 } as const;
 function Segment({ title, image, selected, onPress }: { title: string; image?: string | null; selected: boolean; onPress: () => void }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View {...hoverProps} tooltip={image ? title : undefined}>
-      <Pressable onPress={onPress} onKeyDown={spaceActivates(onPress)} {...radioA11y(selected, title)}>
+      <Pressable disabled={closing} onPress={live(onPress)} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
@@ -231,9 +233,11 @@ export function SelectTile({
   const a11y = role === "radio" ? radioA11y(selected, title) : checkboxA11y(selected, false, title);
   const ringed = selected && !!ring;
   const border = selected ? SELECTED_BORDER : CARD_BORDER;
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onKeyDown={spaceActivates(onPress)} {...a11y}>
+      <Pressable disabled={closing} onPress={live(onPress)} onKeyDown={live(spaceActivates(onPress))} {...a11y}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}

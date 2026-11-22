@@ -9,7 +9,7 @@ import { currentTab } from "../../state/browser/current";
 import { setFind as setTabFind } from "../../state/windows/actions";
 import { closeFind, findStep, noteFind, submitRepeatsKey, takeFindFocusRequest } from "../../state/find/actions";
 import type { FindState } from "../../state/browser/types";
-import { Button, ClosingView, Divider, font, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
+import { Button, ClosingView, Divider, font, liveWhile, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { replaceInField } from "../../state/site/selection";
 import { FIND_WIDTH } from "./tokens";
 
@@ -39,7 +39,8 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
   const input = useRef<TextInput>(null);
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, "top right");
-  const live = whileOpen(closing, useStillOpen(!closing));
+  const act = whileOpen(closing, useStillOpen(!closing));
+  const live = liveWhile(closing);
   useEffect(() => {
     if (!find.focusRequest) return;
     takeFindFocusRequest(tabId);
@@ -57,7 +58,7 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
     if (findNext && query) noteFind("stepped");
     void webviews.get(tabId)?.find(query, !backwards, findNext);
   };
-  const close = live(() => closeFind(tabId));
+  const close = act(() => closeFind(tabId));
   const [replacement, setReplacement] = useState("");
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
   useEffect(() => {
@@ -65,7 +66,7 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
     const timer = setTimeout(() => setNote(null), 2200);
     return () => clearTimeout(timer);
   }, [note]);
-  const replace = live(async (all: boolean) => {
+  const replace = act(async (all: boolean) => {
     if (!find.query) return;
     const { field, count } = await replaceInField(tabId, find.query, replacement, all);
     if (!field) return setNote({ text: "Not in a text field", error: true });
@@ -92,26 +93,26 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
             autoFocus
             editable={!closing}
             value={find.query}
-            onChangeText={live((query: string) => {
+            onChangeText={live(act((query: string) => {
               setFind({ query });
               run(false, query, false);
-            })}
+            }))}
             placeholder="Find on Page"
             placeholderTextColor={theme.placeholder}
             selectionColor={theme.selection}
             enableFocusRing={false}
-            onSubmitEditing={() => {
-              if (!closing && !submitRepeatsKey(enterAt.current, Date.now())) run(false);
-            }}
+            onSubmitEditing={live(() => {
+              if (!submitRepeatsKey(enterAt.current, Date.now())) run(false);
+            })}
             keyDownEvents={FIND_KEYS}
-            onKeyDown={live((e) => {
+            onKeyDown={live(act((e) => {
               const { key, shiftKey, ctrlKey, metaKey } = e.nativeEvent;
               if (key === "Escape") close();
               else if (key === "Enter" && !ctrlKey && !metaKey) {
                 enterAt.current = Date.now();
                 run(!!shiftKey);
               }
-            })}
+            }))}
             style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
           />
           {none ? (
@@ -129,8 +130,8 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
               </Text>
             </View>
           ) : null}
-          <Button variant="icon" icon="chevron.up" size="l" disabled={!find.count} onPress={live(() => findStep(tabId, true))} tooltip={withShortcut("Previous", previousHint)} />
-          <Button variant="icon" icon="chevron.down" size="l" disabled={!find.count} onPress={live(() => findStep(tabId, false))} tooltip={withShortcut("Next", nextHint)} />
+          <Button variant="icon" icon="chevron.up" size="l" disabled={!find.count} onPress={act(() => findStep(tabId, true))} tooltip={withShortcut("Previous", previousHint)} />
+          <Button variant="icon" icon="chevron.down" size="l" disabled={!find.count} onPress={act(() => findStep(tabId, false))} tooltip={withShortcut("Next", nextHint)} />
           <Divider vertical thick length={18} style={CLOSE_GAP} />
           <Button variant="icon" icon="xmark" size="l" onPress={close} tooltip="Done (Esc)" />
         </View>
@@ -141,14 +142,14 @@ function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find:
             <TextInput
               value={replacement}
               editable={!closing}
-              onChangeText={live(setReplacement)}
+              onChangeText={live(act(setReplacement))}
               placeholder="Replace"
               placeholderTextColor={theme.placeholder}
               selectionColor={theme.selection}
               enableFocusRing={false}
-              onSubmitEditing={() => void replace(false)}
+              onSubmitEditing={live(() => void replace(false))}
               keyDownEvents={[{ key: "Escape" }]}
-              onKeyDown={live((e) => e.nativeEvent.key === "Escape" && close())}
+              onKeyDown={live(act((e) => e.nativeEvent.key === "Escape" && close()))}
               style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
             />
             {note && (

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { cancelChooser, chooseDevice, openChooserBluetoothSettings, rescanDevices, useDeviceChooser } from "../../state/site/deviceChoosers";
-import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
+import { ActivitySpinner, Box, Button, capsule, liveWhile, MenuRow, PANEL, Popover, POPOVER_WIDTH, Symbol, Text, useLiveAction, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { usePromptInputGuard } from "./PromptParts";
 import { PromptBody } from "./Prompts";
 import { noticeType } from "./tokens";
@@ -21,8 +21,9 @@ function Signal({ level, color }: { level: number; color: string }) {
 
 function OptionRow({ name, detail, signal, selected, onSelect, onChoose }: { name: string; detail: string | null; signal: number | null; selected: boolean; onSelect(): void; onChoose(): void }) {
   const theme = useTheme();
+  const live = useLiveAction();
   return (
-    <View onDoubleClick={onChoose}>
+    <View onDoubleClick={live(onChoose)}>
       <MenuRow
         checked={selected}
         leading={signal === null ? undefined : signal >= 0 ? <Signal level={signal} color={theme.icon} /> : <View />}
@@ -43,17 +44,18 @@ function OptionRow({ name, detail, signal, selected, onSelect, onChoose }: { nam
 export const DEVICE_CHOOSER_WIDTH = POPOVER_WIDTH.m;
 
 export function DeviceChooser({ tabId, left, top }: { tabId: string; left: number; top: number }) {
-  const live = useDeviceChooser(tabId) ?? null;
-  const { shown: chooser, closing, onClosed } = usePopoverPresenceOf(live);
+  const pending = useDeviceChooser(tabId) ?? null;
+  const { shown: chooser, closing, onClosed } = usePopoverPresenceOf(pending);
   const [selected, setSelected] = useState<number | null>(null);
   useEffect(() => setSelected(null), [chooser?.id]);
-  const guard = usePromptInputGuard(live?.id);
-  const stillOpen = useStillOpen(!!live && live.id === chooser?.id);
+  const guard = usePromptInputGuard(pending?.id);
+  const stillOpen = useStillOpen(!!pending && pending.id === chooser?.id);
   if (!chooser) return null;
   const scanning = chooser.bothButtonsEnabled;
   const blocked = chooser.adapterOff || chooser.unauthorized;
   const valid = scanning || (selected !== null && selected < chooser.options.length);
   const act = whileOpen(closing, stillOpen);
+  const live = liveWhile(closing);
   const choose = act(
     guard((index: number | null = selected) => {
       if (scanning) return chooseDevice(chooser.id, -1);
@@ -124,7 +126,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
         focusable
         enableFocusRing={false}
         keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
-        onKeyDown={closing ? undefined : (e) => (e.nativeEvent.key === "Escape" ? cancel() : valid && !blocked && choose())}
+        onKeyDown={live((e) => (e.nativeEvent.key === "Escape" ? cancel() : valid && !blocked && choose()))}
       >
         <PromptBody icons={[chooser.showSignal || scanning ? "dot.radiowaves.left.and.right" : "cable.connector"]} title={chooser.title} detail={body}>
           <Button variant="pill" title={chooser.cancelLabel || "Cancel"} onPress={cancel} />

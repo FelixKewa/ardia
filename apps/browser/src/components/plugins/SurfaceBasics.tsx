@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { Pressable, ScrollView, View, type ViewStyle } from "react-native";
 import type { PluginNode } from "../../lib/pluginProtocol";
-import { ActivitySpinner, Badge, Box, Button, Divider, EmptyState, monoFace, ProgressTrack, space, Symbol, Text, useClosing, useTheme } from "../ui";
+import { ActivitySpinner, Badge, Box, Button, Divider, EmptyState, monoFace, ProgressTrack, space, Symbol, Text, useClosing, useLiveAction, useTheme } from "../ui";
 import { ActionButtons, useRunAction, WithShortcutHint } from "./SurfaceActions";
 import { PluginFileView } from "./PluginFileView";
 import { SurfaceMarkdown } from "./SurfaceMarkdown";
@@ -23,6 +23,7 @@ export function Children({ node }: NodeProps) {
 export function BoxNode({ node }: NodeProps) {
   const { fire } = useSurface();
   const closing = useClosing();
+  const live = useLiveAction();
   const p = node.props;
   const radiusSpace = spaceOf(p.radius);
   const fill = FILLS[str(p.background) as keyof typeof FILLS];
@@ -40,7 +41,7 @@ export function BoxNode({ node }: NodeProps) {
     </Box>
   );
   if (!isHandlerRef(p.onPress)) return box;
-  return <Pressable disabled={closing} onPress={() => fire(p.onPress)}>{box}</Pressable>;
+  return <Pressable disabled={closing} onPress={live(() => fire(p.onPress))}>{box}</Pressable>;
 }
 
 export function TextNode({ node }: NodeProps) {

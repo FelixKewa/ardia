@@ -26,6 +26,15 @@ export function ClosingView({ closing, pointerEvents, children, ...props }: Omit
   );
 }
 
+export type Live = <H>(handler: H) => H | undefined;
+
+const KEPT: Live = (handler) => handler;
+const DROPPED: Live = () => undefined;
+
+export const liveWhile = (closing: boolean): Live => (closing ? DROPPED : KEPT);
+
+export const useLiveAction = () => liveWhile(useClosing());
+
 const IGNORED = () => {};
 const ALWAYS_OPEN = () => true;
 

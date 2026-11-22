@@ -13,7 +13,7 @@ import { useHover } from "./useHover";
 import { Panel, type PanelProps } from "./Panel";
 import { OutsidePressArea } from "./native";
 import { useGlass } from "./Glass";
-import { ClosingView, useClosing } from "./Closing";
+import { ClosingView, liveWhile, useClosing } from "./Closing";
 
 export const POPOVER_MARGIN = space.m;
 
@@ -138,12 +138,13 @@ export function Popover({
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, right !== undefined ? "top right" : "top left");
   const [room, setRoom] = useState<number | null>(null);
+  const live = liveWhile(useClosing() || closing);
   return (
     <>
       {fitHeight && <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setRoom(e.nativeEvent.layout.height)} />}
-      {modal && onDismiss && !closing && <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />}
+      {modal && onDismiss && !closing && <Pressable style={StyleSheet.absoluteFill} onPress={live(onDismiss)} />}
       <ClosingView closing={closing} style={{ position: "absolute", top, right, left, width: typeof width === "number" ? width : POPOVER_WIDTH[width], ...motion }}>
-        <OutsidePressArea onOutsidePress={onDismiss && !closing ? onDismiss : undefined}>
+        <OutsidePressArea onOutsidePress={live(onDismiss)}>
           <PopoverSurface glass={glass}>
             {fitHeight ? <ScrollView showsVerticalScrollIndicator={false} style={room === null ? undefined : { maxHeight: Math.max(0, room - top - POPOVER_MARGIN) }}>{children}</ScrollView> : children}
           </PopoverSurface>
@@ -226,9 +227,10 @@ export function PopoverValue({ title, onPress, chevron = "chevron.up.chevron.dow
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const closing = useClosing();
+  const live = liveWhile(closing);
   return (
     <View {...hoverProps} tooltip={tooltip} style={{ marginRight: -VALUE_PAD }}>
-      <Pressable disabled={closing} onPress={onPress}>
+      <Pressable disabled={closing} onPress={live(onPress)} accessibilityRole="button">
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs, height: 22, paddingLeft: space.m, paddingRight: VALUE_PAD, borderRadius: radius.control, backgroundColor: hovered ? theme.toolbarHover : undefined }}>
           <Text style={{ fontSize: PANEL.valueSize, color: theme.textSecondary, ...typeFace() }}>{title}</Text>
           <Symbol name={chevron} size={9} weight={chevron === "chevron.down" ? "semibold" : undefined} color={theme.textSecondary} style={{ width: 8, height: 14 }} />

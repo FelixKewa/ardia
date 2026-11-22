@@ -9,7 +9,7 @@ import { useTheme, type Theme } from "./theme";
 import { opacity, space, typeFace } from "./tokens";
 import { useHover } from "./useHover";
 import { radioA11y, spaceActivates } from "./a11y";
-import { useClosing } from "./Closing";
+import { liveWhile, useClosing } from "./Closing";
 
 export const menuRowFill = (theme: Theme, pressed = false) => (pressed ? theme.popoverRowPressed : theme.rowHover);
 
@@ -102,14 +102,15 @@ export function MenuRow({
       </View>
     );
   const choosable = checked !== undefined;
-  const live = !disabled && !closing;
+  const active = !disabled && !closing;
+  const live = liveWhile(closing);
   return (
     <View {...hoverProps} tooltip={tooltip}>
       <Pressable
-        onPress={onPress}
-        disabled={!live}
+        onPress={live(onPress)}
+        disabled={!active}
         {...(choosable
-          ? { ...radioA11y(!!checked), onKeyDown: live ? spaceActivates((e) => onPress(e as unknown as GestureResponderEvent)) : undefined }
+          ? { ...radioA11y(!!checked), onKeyDown: active ? live(spaceActivates((e) => onPress(e as unknown as GestureResponderEvent))) : undefined }
           : { accessibilityRole: "button" as const, accessibilityState: { disabled: !!disabled }, "aria-selected": selected === undefined ? undefined : !!selected })}
       >
         {({ pressed }) => content(pressed)}

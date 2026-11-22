@@ -2,14 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire, registerHooks } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const shims = new URL("./shims/", import.meta.url);
 const packages = new URL("../../../packages/", import.meta.url);
+const reactUrl = pathToFileURL(createRequire(import.meta.url).resolve("react")).href;
+const recording = (real, names) =>
+  "data:text/javascript," +
+  encodeURIComponent(
+    `import React from ${JSON.stringify(reactUrl)}; import * as real from ${JSON.stringify(real)}; export * from ${JSON.stringify(real)};
+const seen = (globalThis.hostProps ??= { on: false, list: [] });
+const wrap = (name) => React.forwardRef(function Recorded(props, ref) { if (seen.on) seen.list.push({ name, props }); return React.createElement(real[name], { ...props, ref }); });
+${names.map((name) => `export const ${name} = wrap(${JSON.stringify(name)});`).join("\n")}`,
+  );
 const aliases = new Map([
-  ["react-native", new URL("react-native.tsx", shims).href],
+  ["react-native", recording(new URL("react-native.tsx", shims).href, ["Pressable", "TextInput", "View", "ScrollView", "Text"])],
+  ["@ardia/shell", recording(new URL("shell.tsx", shims).href, ["MouseArea", "ContextMenuArea", "OutsidePressArea"])],
   ["expo-modules-core", new URL("expo-modules-core.ts", shims).href],
-  ...["shell", "ardiacore", "shaders", "sync", "import"].map((name) => [`@ardia/${name}`, new URL(`${name}.tsx`, shims).href]),
+  ...["ardiacore", "shaders", "sync", "import"].map((name) => [`@ardia/${name}`, new URL(`${name}.tsx`, shims).href]),
   ...[["shell", "index.tsx"], ["ardiacore", "index.ts"], ["shaders", "index.tsx"], ["sync", "index.ts"], ["import", "index.ts"]].map(([name, file]) => [`@ardia-real/${name}`, new URL(`${name}/src/${file}`, packages).href]),
 ]);
 const PLATFORM_FIRST = [".linux.tsx", ".linux.ts", ".web.tsx", ".web.ts"];
@@ -18,6 +28,7 @@ const typescript = createRequire(import.meta.url)("typescript");
 
 registerHooks({
   resolve(specifier, context, next) {
+    if (specifier === "react-native" && context.parentURL?.startsWith(shims.href)) return { url: new URL("react-native.tsx", shims).href, shortCircuit: true };
     if (aliases.has(specifier)) return { url: aliases.get(specifier), shortCircuit: true };
     if (specifier.startsWith(".") && context.parentURL?.startsWith("file:")) {
       for (const ext of PLATFORM_FIRST) {
@@ -176,4 +187,169 @@ test("whileOpen drops an action once closing starts and checks the live open sta
   act(2);
   ui.whileOpen(true)((n) => calls.push(n))(3);
   assert.deepEqual(calls, [1]);
+});
+
+const ACTIONS = ["onPress", "onLongPress", "onPressIn", "onKeyDown", "onKeyUp", "onContextMenu", "onDoubleClick", "onMiddleClick", "onChangeText", "onSubmitEditing", "onAccessibilityAction", "onAccessibilityTap", "onOutsidePress", "onStartShouldSetResponder", "onMoveShouldSetResponder"];
+const KEYS = [" ", "Enter", "Escape", "ArrowDown"].map((key) => ({ nativeEvent: { key, actionName: "activate", text: "typed" }, preventDefault: noop, stopPropagation: noop }));
+
+function hosts(node) {
+  const seen = globalThis.hostProps;
+  seen.list = [];
+  seen.on = true;
+  try {
+    render(node);
+  } finally {
+    seen.on = false;
+  }
+  return seen.list;
+}
+
+const handlersOf = (recorded) => recorded.flatMap(({ name, props }) => ACTIONS.filter((key) => typeof props[key] === "function").map((key) => ({ at: `${name}.${key}`, run: props[key] })));
+
+function fireAll(handlers) {
+  for (const { run } of handlers)
+    for (const event of KEYS) {
+      try {
+        run(event);
+      } catch {}
+    }
+}
+
+function spies() {
+  const calls = [];
+  return { calls, spy: (name) => (...args) => void calls.push(name) };
+}
+
+const SPIED = {
+  "push button": (s) => h(ui.Button, { title: "Allow", onPress: s("press") }),
+  "icon button": (s) => h(ui.Button, { variant: "icon", icon: "xmark", tooltip: "Close", focusable: true, onPress: s("press"), onPressIn: s("pressIn") }),
+  "toolbar icon button": (s) => h(ui.Button, { variant: "icon", toolbar: true, icon: "xmark", tooltip: "Back", onPress: s("press"), onLongPress: s("long"), onContextMenu: s("menu") }),
+  "link text button": (s) => h(ui.Button, { variant: "text", look: "link", title: "Scan Again", focusable: true, onPress: s("press") }),
+  "plated text button": (s) => h(ui.Button, { variant: "text", look: "panel", title: "Keep", focusable: true, onPress: s("press") }),
+  "prompt pill": (s) => h(ui.Button, { variant: "pill", title: "Reset", onPress: s("press") }),
+  "chip pill": (s) => h(ui.Button, { variant: "pill", tone: "chip", title: "No Icon", onPress: s("press") }),
+  "stepper": (s) => h(ui.Button, { variant: "stepper", icon: "plus", tooltip: "Zoom In", onPress: s("press") }),
+  "panel close": (s) => h(ui.Button, { variant: "close", look: "panel", onPress: s("press") }),
+  "hud close": (s) => h(ui.Button, { variant: "close", look: "hud", onPress: s("press") }),
+  "art close": (s) => h(ui.Button, { variant: "close", look: "art", onPress: s("press") }),
+  "menu row": (s) => h(ui.MenuRow, { title: "Open", onPress: s("press") }),
+  "radio menu row": (s) => h(ui.MenuRow, { title: "Speaker", checked: false, onPress: s("press") }),
+  "list row": (s) => h(ui.ListRow, { onPress: s("press"), onPressIn: s("pressIn") }, null),
+  "settings row": (s) => h(ui.Row, { title: "Passwords", onPress: s("press") }),
+  "form checkbox": (s) => h(ui.Checkbox, { value: false, label: "Share audio", onChange: s("change") }),
+  "ring checkbox": (s) => h(ui.Checkbox, { look: "ring", value: false, label: "Pin", onChange: s("change") }),
+  "check target": (s) => h(ui.CheckTarget, { value: false, label: "Include pages", onChange: s("change") }, h(ui.CheckMark, { value: false })),
+  "toggle": (s) => h(ui.Toggle, { value: false, onChange: s("change"), look: "panel", asksFirst: true }),
+  "segmented": (s) => h(ui.Segmented, { value: "a", onChange: s("change"), options: [{ value: "a", title: "A" }, { value: "b", title: "B" }] }),
+  "pop-up": (s) => h(ui.PopUp, { value: "a", onChange: s("change"), options: [{ value: "a", title: "A" }] }),
+  "popover value": (s) => h(ui.PopoverValue, { title: "Sources", onPress: s("press") }),
+  "text field": (s) => h(ui.TextField, { value: "x", onChangeText: s("text"), onSubmit: s("submit"), onEscape: s("escape") }),
+  "search field": (s) => h(ui.SearchField, { value: "x", placeholder: "Search", onChangeText: s("text"), onSubmit: s("submit"), onEscape: s("escape"), onArrow: s("arrow") }),
+  "popover": (s) => h(ui.Popover, { width: "s", top: 0, right: 0, closing: false, onDismiss: s("dismiss") }, h(ui.Button, { title: "Allow", onPress: s("press") })),
+};
+const ACTS_LATER = new Set(["pop-up"]);
+
+for (const [name, piece] of Object.entries(SPIED))
+  test(`a ${name} passes its actions while open and none at all while its panel closes`, () => {
+    const open = spies();
+    const live = handlersOf(hosts(piece(open.spy)));
+    assert.ok(live.length > 0, `${name} has handlers to strip`);
+    fireAll(live);
+    if (!ACTS_LATER.has(name)) assert.ok(open.calls.length > 0, `${name}: the harness reaches the action while open`);
+    const shut = spies();
+    const node = name === "popover" ? h(ui.Popover, { width: "s", top: 0, right: 0, closing: true, onDismiss: shut.spy("dismiss") }, h(ui.Button, { title: "Allow", onPress: shut.spy("press") })) : closing(piece(shut.spy));
+    const dead = handlersOf(hosts(node));
+    assert.deepEqual(dead.filter((d) => d.at !== "Pressable.onPressIn").map((d) => d.at), [], `${name} hands no action to the host while closing; onPressIn stays only for the press look`);
+    fireAll(dead);
+    assert.deepEqual(shut.calls, [], `${name}: Enter, Space, a press, a release or an accessibility action reach nothing while closing`);
+  });
+
+test("a toast's action is dead while the toast fades out", () => {
+  const open = spies();
+  fireAll(handlersOf(hosts(h(ui.Toast, { title: "Moved", action: "Undo", onAction: open.spy("undo") }))));
+  assert.deepEqual(open.calls.slice(0, 1), ["undo"]);
+  const shut = spies();
+  const dead = handlersOf(hosts(h(ui.Toast, { title: "Moved", action: "Undo", onAction: shut.spy("undo"), closing: true }))).filter((d) => d.at !== "Pressable.onPressIn");
+  assert.deepEqual(dead.map((d) => d.at), []);
+});
+
+test("useLiveAction keeps a handler while open and drops it while the scope closes", () => {
+  const seen = [];
+  const Probe = () => (seen.push(ui.useLiveAction()(noop)), null);
+  render(h(Probe));
+  render(closing(h(Probe)));
+  assert.deepEqual(seen, [noop, undefined]);
+  assert.equal(ui.liveWhile(false)(noop), noop);
+  assert.equal(ui.liveWhile(true)(noop), undefined);
+});
+
+test("every shared button is a button, so Space and Enter both activate it on Linux", () => {
+  const buttons = {
+    "unlabelled text button": h(ui.Button, { variant: "text", look: "panel", title: "Keep", focusable: true, onPress: noop }),
+    "unlabelled link": h(ui.Button, { variant: "text", look: "link", title: "Scan Again", focusable: true, onPress: noop }),
+    "toolbar icon button": h(ui.Button, { variant: "icon", toolbar: true, icon: "xmark", tooltip: "Back", focusable: true, onPress: noop }),
+    "chip pill": h(ui.Button, { variant: "pill", tone: "chip", title: "No Icon", onPress: noop }),
+    "stepper": h(ui.Button, { variant: "stepper", icon: "plus", tooltip: "Zoom In", onPress: noop }),
+    "panel close": h(ui.Button, { variant: "close", look: "panel", onPress: noop }),
+    "popover value": h(ui.PopoverValue, { title: "Sources", onPress: noop }),
+    "list row": h(ui.ListRow, { onPress: noop }, null),
+    "settings row": h(ui.Row, { title: "Passwords", onPress: noop }),
+    "search field clear": h(ui.SearchField, { value: "x", placeholder: "Search", onChangeText: noop }),
+  };
+  for (const [name, node] of Object.entries(buttons)) {
+    const html = render(node);
+    const pressables = tags(html).filter((t) => t.tabindex !== undefined && t.tag !== "input");
+    assert.ok(pressables.length > 0, `${name}: ${html}`);
+    assert.ok(pressables.every((t) => t.role === "button" || t.tag === "button"), `${name}: ${html}`);
+  }
+  const [keep] = tags(render(buttons["unlabelled text button"])).filter((t) => t.tabindex === "0");
+  assert.deepEqual([keep.tag, keep["aria-label"]], ["button", "Keep"]);
+});
+
+const { ZoomStepper } = await import("../../browser/src/components/site/ZoomControls.tsx");
+const { OptionCard } = await import("../../browser/src/components/onboarding/OptionCard.tsx");
+const { IconPickerLayer } = await import("../../browser/src/components/iconPicker/IconPickerPanel.tsx");
+const { FooterButton } = await import("../../browser/src/components/downloads/FooterButton.tsx");
+const { DirectionDial, Slider } = await import("../../browser/src/components/settings/ThemeControls.tsx");
+
+const PANEL_PARTS = {
+  "Zoom stepper and its Reset": () => h(ZoomStepper, { tabId: "t", zoom: 1.1 }),
+  "Recent Downloads footer": (s) => h(FooterButton, { title: "View all downloads", onPress: s("footer") }),
+  "Personalize layout card": (s) => h(OptionCard, { control: "radio", title: "Classic", selected: false, onPress: s("layout"), preview: h(ui.Text, null, "preview") }),
+  "plain option card": (s) => h(OptionCard, { control: "radio", title: "Classic", selected: false, onPress: s("layout") }),
+  "check option card": (s) => h(OptionCard, { control: "check", title: "Dock", selected: false, onPress: s("check") }),
+  "theme direction dial": (s) => h(DirectionDial, { angle: 0, onChange: s("angle") }),
+  "theme slider": (s) => h(Slider, { label: "Noise", value: 0.5, onChange: s("slide") }),
+};
+
+for (const [name, part] of Object.entries(PANEL_PARTS))
+  test(`${name} hands no action to the host while its panel closes`, () => {
+    const open = spies();
+    assert.ok(handlersOf(hosts(part(open.spy))).length > 0, name);
+    const shut = spies();
+    const dead = handlersOf(hosts(closing(part(shut.spy))));
+    assert.deepEqual(dead.filter((d) => d.at !== "Pressable.onPressIn").map((d) => d.at), [], name);
+    fireAll(dead);
+    assert.deepEqual(shut.calls, [], name);
+  });
+
+test("a Personalize layout card is disabled while the panel closes", () => {
+  const card = (isClosing) => tags(render(h(ui.ClosingScope, { closing: isClosing }, h(OptionCard, { control: "radio", title: "Sidebar", selected: true, onPress: noop, preview: h(ui.Text, null, "preview") })))).filter((t) => t.role === "radio");
+  assert.equal(card(false)[0]["aria-disabled"], undefined);
+  assert.deepEqual([card(true)[0].tabindex, card(true)[0]["aria-disabled"]], ["-1", "true"]);
+});
+
+test("the Icon Picker drops its outside-dismiss target the moment it starts closing and keeps its measured room", () => {
+  const picker = (isClosing, s) => h(IconPickerLayer, { current: null, symbols: [], actions: [], onChoose: s("choose"), onClose: s("close"), closing: isClosing, placeIn: () => ({ top: 0, left: 0 }) });
+  const open = spies();
+  const live = hosts(picker(false, open.spy));
+  assert.ok(handlersOf(live).some((d) => d.at === "Pressable.onPress"), "the backdrop dismisses while open");
+  assert.ok(live.some(({ name, props }) => name === "View" && props.pointerEvents === "none" && typeof props.onLayout === "function"), "the room is measured by a view that takes no presses");
+  const shut = spies();
+  const dead = hosts(picker(true, shut.spy));
+  assert.ok(dead.some(({ name, props }) => name === "View" && typeof props.onLayout === "function" && props.pointerEvents === "none"), "the room stays measured while closing");
+  const handlers = handlersOf(dead).filter((d) => d.at !== "Pressable.onPressIn");
+  assert.deepEqual(handlers.map((d) => d.at), []);
+  fireAll(handlersOf(dead));
+  assert.deepEqual(shut.calls, []);
 });

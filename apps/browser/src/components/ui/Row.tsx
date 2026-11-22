@@ -7,13 +7,14 @@ import { lineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { HoverFill } from "./HoverFill";
 import { useNativeForm } from "./nativeForm";
-import { useClosing } from "./Closing";
+import { liveWhile, useClosing } from "./Closing";
 
 export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
   const closing = useClosing();
+  const live = liveWhile(closing);
   const body = (
     <View
       style={{
@@ -44,7 +45,7 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={onPress}>{body}</Pressable>
+      <Pressable disabled={closing} onPress={live(onPress)} accessibilityRole="button">{body}</Pressable>
     </View>
   );
 }

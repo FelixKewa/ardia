@@ -21,6 +21,8 @@ import {
   useGlassLook,
   useClosing,
   useHover,
+  useLiveAction,
+  liveWhile,
   usePopoverMotion,
   usePopoverMotionStyle,
   usePopoverPresence,
@@ -96,6 +98,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const { root, placement: p, onLayout } = useDownloadsPlacement(windowId, closing, { topStrip, footer: addressBar, footerBottom: PROFILE_DOTS_HEIGHT + 2, sidebarRight });
   const placed = p !== null;
   const appear = usePopoverMotion(closing, onClosed, placed);
+  const live = liveWhile(closing);
 
   const upward = p?.bottom !== undefined;
   const arrowX = p?.arrowX;
@@ -117,7 +120,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
             ...motion,
           }}
         >
-          <OutsidePressArea onOutsidePress={closing ? undefined : (press) => dismissDownloadsByPress(windowId, press)}>
+          <OutsidePressArea onOutsidePress={live((press) => dismissDownloadsByPress(windowId, press))}>
             <PanelBackground placement={p} />
             <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
               <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
@@ -231,6 +234,7 @@ export function DownloadRowActions({ d, done, blocked, revealed }: { d: Download
 
 export function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
   const closing = useClosing();
+  const live = useLiveAction();
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const { focused, focusProps } = useFocusWithin(d.id);
@@ -239,8 +243,8 @@ export function DownloadRow({ d, windowId }: { d: Download; windowId: string }) 
   return (
     <View {...hoverProps} {...focusProps}>
       <MouseArea path={done && !closing ? d.path : null}>
-        <ContextMenuArea onContextMenu={closing ? undefined : () => void downloadMenu(d, windowId)}>
-          <Pressable disabled={closing} focusable={done && !closing} onPress={() => done && void openDownload(d.path)}>
+        <ContextMenuArea onContextMenu={live(() => void downloadMenu(d, windowId))}>
+          <Pressable disabled={closing} focusable={done && !closing} onPress={live(() => done && void openDownload(d.path))}>
             {({ pressed }) => (
               <View
                 style={{

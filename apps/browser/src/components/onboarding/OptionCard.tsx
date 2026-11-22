@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { Checkbox, checkboxA11y, IconTile, Radio, radioA11y, spaceActivates, Text, useHover } from "../ui";
+import { Checkbox, checkboxA11y, IconTile, Radio, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction } from "../ui";
 import { radius, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { useOnboardingColors } from "./Parts";
@@ -36,6 +36,8 @@ export function OptionCard({
 }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveAction();
   const pressMotion = usePressScaleMotion(!disabled, preview ? 0.98 : 0.99);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const first = useRef(true);
@@ -51,11 +53,11 @@ export function OptionCard({
     return (
       <View {...hoverProps} style={{ opacity: disabled ? DISABLED_OPACITY : 1 }}>
         <Pressable
-          disabled={disabled}
-          onPress={onPress}
+          disabled={disabled || closing}
+          onPress={live(onPress)}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
-          onKeyDown={disabled ? undefined : spaceActivates(onPress)}
+          onKeyDown={disabled ? undefined : live(spaceActivates(onPress))}
           {...checkboxA11y(selected, disabled, title)}
         >
           <Animated.View style={scaleStyle}>
@@ -89,7 +91,7 @@ export function OptionCard({
   if (preview)
     return (
       <View {...hoverProps} style={{ flex: 1 }}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={spaceActivates(onPress)} {...radioA11y(selected, title)}>
+        <Pressable disabled={closing} onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
           <Animated.View style={scaleStyle}>
             <ChoiceCard mouseDownCanMoveWindow={false} radius={radius.panel} selected={selected} hovered={hovered} style={{ padding: space.ml, gap: space.ml }}>
               {preview}
@@ -114,7 +116,7 @@ export function OptionCard({
 
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={spaceActivates(onPress)} {...radioA11y(selected, title)}>
+      <Pressable disabled={closing} onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         <Animated.View style={scaleStyle}>
           <ChoiceCard
             mouseDownCanMoveWindow={false}

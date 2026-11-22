@@ -10,7 +10,7 @@ import {
   shareTab,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, radioA11y, spaceActivates, Text, useClosing, useHover, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
+import { Symbol, Button, Checkbox, MenuRow, PANEL, Popover, POPOVER_MARGIN, radioA11y, spaceActivates, Text, liveWhile, useClosing, useHover, useLiveAction, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { PromptHeader } from "../site/PromptParts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
@@ -88,6 +88,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const selectedKind = kindOf(selected);
   const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
   const act = whileOpen(closing, stillOpen);
+  const live = liveWhile(closing);
   const share = act((id: string | null = selected) => {
     const kind = kindOf(id);
     if (!id || !kind) return;
@@ -122,7 +123,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           focusable
           enableFocusRing={false}
           keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
-          onKeyDown={closing ? undefined : (e) => (e.nativeEvent.key === "Escape" ? cancel() : share())}
+          onKeyDown={live((e) => (e.nativeEvent.key === "Escape" ? cancel() : share()))}
           style={{ maxHeight: 340, marginTop: space.xs }}
         >
           {tabs.length ? (
@@ -219,9 +220,10 @@ function ScreenTile({ source, width, selected, onSelect, onShare }: { source: Di
   const aspect = source.width && source.height ? source.height / source.width : 10 / 16;
   const previewWidth = width - 2 * space.m;
   const closing = useClosing();
+  const live = useLiveAction();
   return (
-    <View {...hoverProps} onDoubleClick={closing ? undefined : onShare}>
-      <Pressable disabled={closing} onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={closing ? undefined : spaceActivates(onSelect)} {...radioA11y(selected, source.name)}>
+    <View {...hoverProps} onDoubleClick={live(onShare)}>
+      <Pressable disabled={closing} onPress={live(onSelect)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} onKeyDown={live(spaceActivates(onSelect))} {...radioA11y(selected, source.name)}>
         <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? theme.rowSelected : hovered ? theme.rowHover : undefined }}>
           <View
             style={{
@@ -291,8 +293,9 @@ function SourceRow({
   onSelect(): void;
   onShare(): void;
 }) {
+  const live = useLiveAction();
   return (
-    <View onDoubleClick={onShare}>
+    <View onDoubleClick={live(onShare)}>
       <MenuRow
         checked={selected}
         leading={leading}

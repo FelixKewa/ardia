@@ -25,7 +25,7 @@ export { GradientFill, type GradientStop } from "./GradientFill";
 export { curve, duration, legsEasing, nativeLoop, period, spring, springs, springSpec, usePresence, type Fade, type LoopLeg, type SpringSpec } from "./motion";
 export { reduceMotion, reduceMotionKnown } from "./reduceMotion";
 export { PANEL, PanelCloseButton, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_MOTION, PopoverSurface, PopoverValue, usePopoverMotion, usePanelsPresence, usePopoverMotionStyle, usePopoverPresence, usePopoverPresenceOf, type PanelPresence } from "./Popover";
-export { ClosingScope, ClosingView, useClosing, useStillOpen, whileOpen } from "./Closing";
+export { ClosingScope, ClosingView, liveWhile, useClosing, useLiveAction, useStillOpen, whileOpen, type Live } from "./Closing";
 export { Radio } from "./Radio";
 export { Segmented, type SegmentOption } from "./Segmented";
 export { SlidingThumb, useSlidingThumb } from "./SlidingThumb";

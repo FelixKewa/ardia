@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, View } from "react-native";
 import { Button } from "./Button";
+import { ClosingScope } from "./Closing";
 import { curve, duration } from "./motion";
 import { Symbol } from "./native";
 import { Panel } from "./Panel";
@@ -53,7 +54,11 @@ export function Toast({
               </Text>
             ) : null}
           </View>
-          {action && onAction ? <Button variant="pill" tone="chip" title={action} onPress={onAction} /> : null}
+          {action && onAction ? (
+            <ClosingScope closing={closing}>
+              <Button variant="pill" tone="chip" title={action} onPress={onAction} />
+            </ClosingScope>
+          ) : null}
         </Panel>
       </Animated.View>
     </View>

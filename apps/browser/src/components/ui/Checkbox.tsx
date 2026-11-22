@@ -6,7 +6,7 @@ import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
 import { useTheme } from "./theme";
 import { capsule, lineHeight, opacity, radius, space, font as typeScale } from "./tokens";
 import { checkboxA11y, spaceActivates } from "./a11y";
-import { useClosing } from "./Closing";
+import { liveWhile, useClosing } from "./Closing";
 
 const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
 const CHECK_RING_BORDER = 1.5;
@@ -52,22 +52,23 @@ export function Checkbox({ value, onChange, label, accessibilityLabel, disabled,
   const theme = useTheme();
   const closing = useClosing();
   const on = value || mixed;
-  const live = !!onChange && !disabled && !closing;
+  const active = !!onChange && !disabled && !closing;
+  const live = liveWhile(closing);
   const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const toggle = () => onChange?.(!value);
   const press = {
-    disabled: !live,
-    focusable: focusable && live,
+    disabled: !active,
+    focusable: focusable && active,
     onPressIn: pressMotion.onPressIn,
     onPressOut: pressMotion.onPressOut,
-    onKeyDown: live ? spaceActivates(toggle) : undefined,
+    onKeyDown: active ? live(spaceActivates(toggle)) : undefined,
     ...checkboxA11y(mixed && !value ? "mixed" : value, disabled, accessibilityLabel ?? label),
   };
   if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
   if (look === "ring")
     return (
-      <Pressable {...press} onPress={toggle} style={{ opacity: disabled ? opacity.disabled : 1 }}>
+      <Pressable {...press} onPress={live(toggle)} style={{ opacity: disabled ? opacity.disabled : 1 }}>
         <Animated.View style={[CHECK_RING_FRAME[size], scaleStyle]}>
           <RingCheck on={!!on} size={size} />
         </Animated.View>
@@ -76,7 +77,7 @@ export function Checkbox({ value, onChange, label, accessibilityLabel, disabled,
   return (
     <Pressable
       {...press}
-      onPress={(e) => onChange?.(!value, modifiersOf(e))}
+      onPress={live((e) => onChange?.(!value, modifiersOf(e)))}
       style={{ flexDirection: "row", alignItems: labelSize === "small" ? "flex-start" : "center", gap: space.m, opacity: disabled ? opacity.disabled : 1 }}
     >
       <Animated.View style={[CHECK_BOX_FRAME, scaleStyle]}>

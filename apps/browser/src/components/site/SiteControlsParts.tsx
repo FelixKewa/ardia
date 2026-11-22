@@ -1,7 +1,7 @@
 import { Children, forwardRef, type ReactNode } from "react";
 import { Animated, Image, Pressable, View, type AccessibilityActionEvent, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { capsule, ContextMenuArea, Dot, GlassFill, hairline, HoverFill, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useClosing, useGlass, useHover } from "../ui";
+import { capsule, ContextMenuArea, Dot, GlassFill, hairline, HoverFill, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useClosing, useGlass, useHover, useLiveAction } from "../ui";
 import { useSiteTokens } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
@@ -103,18 +103,19 @@ export const ActionTile = forwardRef<
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View ref={ref} collapsable={false} tooltip={caption ? undefined : label} accessibilityLabel={label} style={{ flex: 1 }} {...hoverProps}>
       <Pressable
         disabled={closing}
-        onPress={onPress}
+        onPress={live(onPress)}
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
         accessibilityRole="button"
         accessibilityLabel={label}
         aria-selected={active}
         accessibilityActions={ACTIVATE}
-        onAccessibilityAction={(event) => !closing && event.nativeEvent.actionName === "activate" && onPress(event)}
+        onAccessibilityAction={live((event: AccessibilityActionEvent) => event.nativeEvent.actionName === "activate" && onPress(event))}
       >
         {({ pressed }) => (
           <Tile shape="tile" height={caption ? SITE_PANEL.captionHeight : SITE_PANEL.actionHeight} hovered={hovered} pressed={pressed} stroke style={[caption ? CAPTIONED : CENTERED, scaleStyle]}>
@@ -147,8 +148,9 @@ export const ExtensionTile = forwardRef<
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const closing = useClosing();
+  const live = useLiveAction();
   const button = (
-    <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={name}>
+    <Pressable disabled={closing} onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={name}>
       {({ pressed }) => (
         <Tile shape="tile" height={SITE_PANEL.extensionHeight} hovered={hovered} pressed={pressed} style={[CENTERED, scaleStyle]}>
           {icon ? (
@@ -164,7 +166,7 @@ export const ExtensionTile = forwardRef<
   );
   return (
     <View ref={ref} collapsable={false} tooltip={name} style={{ flex: 1 }} {...hoverProps}>
-      {onContextMenu && !closing ? <ContextMenuArea onContextMenu={onContextMenu}>{button}</ContextMenuArea> : button}
+      {onContextMenu && !closing ? <ContextMenuArea onContextMenu={live(onContextMenu)}>{button}</ContextMenuArea> : button}
     </View>
   );
 });
@@ -189,6 +191,7 @@ export function SettingRow({
   const iconPress = usePressScaleMotion(!!onPress, buttonMotion.iconPressScale);
   const iconScaleStyle = iconPress.scale ? { transform: [{ scale: iconPress.scale }] } : undefined;
   const closing = useClosing();
+  const live = useLiveAction();
   const content = (pressed: boolean) => (
     <Tile shape="row" height={SITE_PANEL.settingHeight} hovered={!!onPress && hovered} pressed={!!onPress && pressed} style={SETTING_ROW}>
       <Animated.View pointerEvents="none" style={iconScaleStyle}>
@@ -209,7 +212,7 @@ export function SettingRow({
   if (!onPress) return <View {...hoverProps}>{content(false)}</View>;
   return (
     <View {...hoverProps}>
-      <Pressable disabled={closing} onPress={onPress} onPressIn={iconPress.onPressIn} onPressOut={iconPress.onPressOut} accessibilityRole="button" accessibilityLabel={`${title}: ${value}`}>
+      <Pressable disabled={closing} onPress={live(onPress)} onPressIn={iconPress.onPressIn} onPressOut={iconPress.onPressOut} accessibilityRole="button" accessibilityLabel={`${title}: ${value}`}>
         {({ pressed }) => content(pressed)}
       </Pressable>
     </View>
@@ -240,9 +243,10 @@ export function ChipButton({
   const pressMotion = usePressScaleMotion(!!onPress, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View {...hoverProps} tooltip={tooltip}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={!onPress || closing} accessibilityRole="button" accessibilityLabel={label ?? title}>
+      <Pressable onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={!onPress || closing} accessibilityRole="button" accessibilityLabel={label ?? title}>
         {({ pressed }) => (
           <Tile shape="tile" quiet={quiet} height={SITE_PANEL.footerControl} hovered={!!onPress && hovered} pressed={pressed} open={open} style={[CHIP, scaleStyle]}>
             <Symbol name={icon} size={quiet ? 12 : 11} weight="medium" color={color ?? theme.icon} style={quiet ? QUIET_GLYPH : CHIP_GLYPH} />
@@ -267,9 +271,10 @@ export function MoreButton({ open, onPress }: { open: boolean; onPress: () => vo
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const label = open ? "Fewer Site Controls" : "More Site Controls";
   const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View {...hoverProps} tooltip={label}>
-      <Pressable disabled={closing} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
+      <Pressable disabled={closing} onPress={live(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
         {({ pressed }) => (
           <Tile shape="capsule" height={SITE_PANEL.footerControl} hovered={hovered} pressed={pressed} open={open} style={[MORE, scaleStyle]}>
             <Symbol name="ellipsis" size={12} weight="semibold" color={theme.icon} style={{ width: 18, height: 18 }} />

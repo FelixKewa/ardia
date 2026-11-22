@@ -14,7 +14,7 @@ import { currentBookmarks } from "../../state/browser/current";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { modifiersOf } from "../../lib/keys";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { ClosingView, ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosing, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
+import { ClosingView, ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosing, useLiveAction, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -256,6 +256,7 @@ function FolderRow({
   edge.current = sidebarEdge;
   const shift = useSlide(offset);
   const closing = useClosing();
+  const live = useLiveAction();
   const responder = useBookmarkDragResponder(view, () => ({ windowId, id, panel: panel.key, sidebarEdge: edge.current }), [windowId, id, panel.key]);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
   useEffect(() => {
@@ -284,6 +285,8 @@ function FolderRow({
       }}
       collapsable={false}
       {...responder.panHandlers}
+      onStartShouldSetResponder={live(responder.panHandlers.onStartShouldSetResponder)}
+      onMoveShouldSetResponder={live(responder.panHandlers.onMoveShouldSetResponder)}
       onMouseEnter={enter}
       onMouseLeave={() => {
         setHovered(false);
@@ -291,10 +294,10 @@ function FolderRow({
       }}
       style={{ opacity: dragging ? 0 : 1, transform: [{ translateY: shift }] }}
     >
-      <ContextMenuArea onContextMenu={closing ? undefined : () => void openBarMenu(windowId, profileId, node)}>
-        <MouseArea onMiddleClick={(e) => press({ ...e, middle: true })}>
+      <ContextMenuArea onContextMenu={live(() => void openBarMenu(windowId, profileId, node))}>
+        <MouseArea onMiddleClick={live((e) => press({ ...e, middle: true }))}>
           <View tooltip={node.kind === "url" ? node.url : undefined}>
-            <Pressable disabled={closing} accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={(e) => press(modifiersOf(e))}>
+            <Pressable disabled={closing} accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={live((e) => press(modifiersOf(e)))}>
               {({ pressed }) => (
                 <RowFrame size={size} plate={(hovered && !anyDrag) || open || dropInto} pressed={pressed} ring={dropInto}>
                   <View style={ICON_SLOT}>

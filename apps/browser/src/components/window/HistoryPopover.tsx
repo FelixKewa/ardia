@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { useTab } from "../../state/browser/hooks";
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import { openInternalPage } from "../../state/pages/urls";
-import { MenuRow, MenuSeparator, MouseArea, PANEL, Popover, POPOVER_MARGIN, POPOVER_WIDTH, useClosing, usePopoverPresenceOf } from "../ui";
+import { MenuRow, MenuSeparator, MouseArea, PANEL, Popover, POPOVER_MARGIN, POPOVER_WIDTH, useLiveAction, usePopoverPresenceOf } from "../ui";
 import { Favicon, NewTabIcon } from "../favicon/Favicon";
 import { modifiersOf } from "../../lib/keys";
 import { closeHistoryMenu, closeHistoryMenuOf, goToHistoryItem, historyFavicons, useHistoryMenu, type HistoryItem } from "../../state/tabs/navigation";
@@ -63,9 +63,9 @@ function Row({
   favicon: string | null;
   onOpen: (e: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean }) => void;
 }) {
-  const closing = useClosing();
+  const live = useLiveAction();
   return (
-    <MouseArea onMiddleClick={closing ? undefined : (e) => onOpen({ ...e, middle: true })}>
+    <MouseArea onMiddleClick={live((e) => onOpen({ ...e, middle: true }))}>
       <MenuRow
         leading={item.offset === "newTab" ? <NewTabIcon /> : <Favicon url={item.url} favicon={favicon} />}
         title={item.title}
