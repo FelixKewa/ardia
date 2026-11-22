@@ -363,7 +363,7 @@ export const TabDeck = memo(function TabDeck() {
     const tile = gridFocus.current;
     if (!pulls || !heldSelected || standbyIndex < 0) publishDeckStandby(null);
     else if (grid) publishDeckStandby(tile?.id === heldSelected ? pullTarget(heldSelected, g.width, g.height, tile.frame, tabsLayout.cardRadius, g.screenCorner) : null);
-    else publishDeckStandby(stackPullTarget(g, heldSelected, standbyIndex, standbyScroll, 0));
+    else publishDeckStandby(stackPullTarget(g, heldSelected, standbyIndex, standbyScroll, 0), { ids: order, scroll: standbyScroll, g });
   }, [shown, order, heldSelected, pulls, grid, g]);
 
   const gridFocus = useRef<{ id: string; frame: GridFrame } | null>(null);
@@ -587,7 +587,10 @@ export const TabDeck = memo(function TabDeck() {
     }
     else if (command.kind === "closeFocused") close(focused, 0);
     else if (command.kind === "openFocused") open(focused);
-    else if (command.kind === "openSelected") {
+    else if (command.kind === "open") {
+      const at = order.indexOf(command.tabId);
+      if (at >= 0) open(at, command.tappedAt);
+    } else if (command.kind === "openSelected") {
       const selected = currentTabs().selectedId;
       const at = selected ? order.indexOf(selected) : -1;
       open(at >= 0 ? at : focused);
@@ -600,11 +603,11 @@ export const TabDeck = memo(function TabDeck() {
   }, [command, phase.kind, shown]);
 
   useEffect(() => () => void (openingId.current = null), []);
-  const open = (index: number) => {
+  const open = (index: number, tappedAt?: number) => {
     beginInteraction("card open", INTERACTION_WINDOW_MS.cardOpen);
     const id = order[index];
     if (!id || phase.kind !== "settled" || dragIndex.value === index || openingId.current !== null) return;
-    markTiming("card tap");
+    markTiming("card tap", tappedAt);
     runOnUI(markNextUiFrame)("card motion");
     if (searchChrome) Keyboard.dismiss();
     if (grid || (reduceMotion && !pulls)) {

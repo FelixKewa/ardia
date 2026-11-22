@@ -62,6 +62,7 @@ import { hideArchiveCard } from "./archiveCard";
 import { cutDeckPullFromRest, deckPull, deckPullArmed, deckPullFades, deckPullGrowing, deckStandbyId, endDeckPull, fadeDeckPullFromRest, landDeckPullFromRest, noteDeckPullEntrance, PULL_STAGE, showPulledPage, whenDeckStandby } from "./deckPull";
 import { beginInteraction, cutInteraction, INTERACTION_WINDOW_MS, markNextUiFrame, markTiming } from "../app/interactionPerf";
 import { refreshHiddenDeck, wantDeckStandby } from "./deckStandby";
+import { sendDeckCommand } from "./deckCommands";
 import { countUsage } from "../telemetry/telemetry";
 import { startBrowseForMe } from "../browseForMe/store";
 import { rememberPageTones, restorePageTones } from "../pages/toneMemory";
@@ -98,7 +99,7 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
   archiveDueTabs();
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
   listenToPages(pageEvent);
-  watchFrontScroll(frontPageId);
+  watchFrontScroll(frontPageId, keepFrontPictureCurrent);
   if (!currentPreferences().hasFinishedOnboarding) showOnboarding();
   else if (currentPreferences().autoOpensKeyboard) presentSearch("home", "", useTabs.getState().incognito, null, "atRest");
 }
@@ -418,9 +419,18 @@ const PULL_LANDING_PERF = "deck pull landing";
 
 const pictureIsCurrent = (id: string) => Boolean(findTab(currentTabs(), id)?.snapshotFileName) && snapshotIsCurrent(id) === true;
 
+export function keepFrontPictureCurrent() {
+  const id = currentTabs().selectedId;
+  if (!id || useBrowse.getState().surface !== "browsing" || deckPullInFlight() || deckPullGrowing() !== null) return;
+  if (!coverIsCapturable(loading.get(id) === false, pageCovered()) || !snapshotAllowed(id) || pictureIsCurrent(id)) return;
+  labTrace(`PAGELAB snapshot ${id} taken while the page is quiet`);
+  void captureSnapshot(id);
+}
+
 function latchDeckCapture(id: string, covered: boolean, pageTop: number | null, afterMotion: boolean) {
   deckCapture = null;
   if (!coverIsCapturable(loading.get(id) === false, covered) || !snapshotAllowed(id) || pictureIsCurrent(id)) return;
+  if (pullCounts(id)) countUsage("deck_pictures_at_press");
   const latched: DeckCapture = { id, pageTop, done: null };
   deckCapture = latched;
   if (!afterMotion) void takeDeckCapture(latched);
@@ -514,6 +524,7 @@ function landDeckFromRest(id: string) {
     beginInteraction(PULL_LANDING_PERF, INTERACTION_WINDOW_MS.deckPullLanding);
     runOnUI(deckPullFades() ? (cardShowsPicture(id) ? fadeDeckPullFromRest : cutDeckPullFromRest) : landDeckPullFromRest)(id, deckPullSettled, deckPullRefused);
     runOnUI(markNextUiFrame)("deck motion");
+    runOnUI(markNextUiFrame)("deck takes taps");
     if (deckCapture?.id === id && !deckCapture.done) runOnUI(afterFirstMotionFrame)(takeLatchedCapture, id);
   });
 }
@@ -532,7 +543,15 @@ function deckPullRefused(id: string) {
   enterDeck();
 }
 
-export function deckPullSettled(id: string, landed: boolean, worstFrameMs = 0) {
+let landingTapAt: number | null = null;
+
+export function noteDeckTapWhileLanding(at: number) {
+  landingTapAt = at;
+}
+
+export function deckPullSettled(id: string, landed: boolean, worstFrameMs = 0, openAfter = "") {
+  const tappedAt = landingTapAt;
+  landingTapAt = null;
   labTrace(`PAGELAB deck pull animation ${landed ? "landed" : "returned"}`);
   if (landingFromRest === id) landingFromRest = null;
   if (trackedPull === id) trackedPull = null;
@@ -556,6 +575,10 @@ export function deckPullSettled(id: string, landed: boolean, worstFrameMs = 0) {
   labTrace(`PAGELAB deck shown with ${currentTabs().open.length} tabs, ${currentTabs().privates.length} private`);
   markTiming("deck taps");
   useBrowse.setState({ surface: "deck", deckEntrance: null, frozenOrder: null, opening: null, veiled: null, covered: null, leaving: null });
+  if (!openAfter || !findTab(currentTabs(), openAfter)) return;
+  labTrace("PAGELAB deck card tapped while the deck landed opens as it lands");
+  if (pullCounts(openAfter)) countUsage("deck_opens_while_landing");
+  sendDeckCommand({ kind: "open", tabId: openAfter, tappedAt: tappedAt ?? Date.now() });
 }
 
 const pullBusy = () => {

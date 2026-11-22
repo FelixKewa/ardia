@@ -1,7 +1,7 @@
 import { cancelAnimation, makeMutable, ReduceMotion, runOnJS, runOnUI, withSpring, withTiming } from "react-native-reanimated";
 import { create } from "zustand";
 import { labTrace } from "../../platform/lab";
-import { DECK_PULL, DECK_PULL_SPRING, landingVelocity, pullLands, pullShrink, pullSpeed, type PullTarget } from "../../lib/deckPull";
+import { DECK_PULL, DECK_PULL_SPRING, deckCardAt, landingVelocity, pullLands, pullShrink, pullSpeed, type DeckHit, type PullTarget } from "../../lib/deckPull";
 
 export const PULL_STAGE = { idle: 0, tracking: 1, landing: 2, returning: 3, landed: 4, handed: 5, fading: 6, faded: 7, growing: 8 } as const;
 
@@ -28,9 +28,12 @@ export const deckPull = {
   from: makeMutable(0),
   travel: makeMutable(0),
   target: makeMutable<PullTarget | null>(null),
+  hit: makeMutable<DeckHit | null>(null),
+  landing: makeMutable(0),
+  openAfter: makeMutable(""),
 };
 
-export type PullSettled = (id: string, landed: boolean, worstFrameMs: number) => void;
+export type PullSettled = (id: string, landed: boolean, worstFrameMs: number, openAfter?: string) => void;
 
 function watchPullFrames() {
   "worklet";
@@ -77,6 +80,7 @@ export function resetDeckPull() {
   deckPull.shrink.value = 0;
   deckPull.reveal.value = 0;
   deckPull.fade.value = 0;
+  deckPull.openAfter.value = "";
 }
 
 export function handOverDeckPull() {
@@ -84,6 +88,39 @@ export function handOverDeckPull() {
   if (deckPull.stage.value !== PULL_STAGE.landed && deckPull.stage.value !== PULL_STAGE.faded) return;
   deckPull.awayId.value = deckPull.id.value;
   deckPull.stage.value = PULL_STAGE.handed;
+}
+
+function landingEnded(id: string, landing: number, finished: boolean | undefined, settled: PullSettled) {
+  "worklet";
+  if (deckPull.stage.value !== PULL_STAGE.landing || deckPull.id.value !== id || deckPull.landing.value !== landing) return;
+  if (!finished) {
+    resetDeckPull();
+    runOnJS(settled)(id, false, 0);
+    return;
+  }
+  const openAfter = deckPull.openAfter.value;
+  deckPull.openAfter.value = "";
+  deckPull.stage.value = PULL_STAGE.landed;
+  handOverDeckPull();
+  runOnJS(settled)(id, true, deckPull.worstFrame.value, openAfter);
+}
+
+export function hurryDeckPull(x: number, y: number, settled: PullSettled): boolean {
+  "worklet";
+  const id = deckPull.id.value;
+  if (deckPull.stage.value !== PULL_STAGE.landing || !id) return false;
+  const hit = deckPull.hit.value;
+  const tapped = hit ? deckCardAt(hit, x, y) : null;
+  if (deckPull.openAfter.value !== "" || !tapped) return false;
+  deckPull.openAfter.value = tapped;
+  const landing = deckPull.landing.value + 1;
+  deckPull.landing.value = landing;
+  deckPull.reveal.value = withSpring(DECK_PULL.hurryLanding, DECK_PULL_SPRING.hurry);
+  deckPull.shrink.value = withSpring(DECK_PULL.hurryLanding, DECK_PULL_SPRING.hurry, (finished) => {
+    "worklet";
+    landingEnded(id, landing, finished, settled);
+  });
+  return true;
 }
 
 export function settleDeckPull(lands: boolean, velocityY: number, settled: PullSettled) {
@@ -97,19 +134,13 @@ export function settleDeckPull(lands: boolean, velocityY: number, settled: PullS
   const velocity = pullSpeed(velocityY, target.pull);
   if (lands) {
     deckPull.stage.value = PULL_STAGE.landing;
+    const landing = deckPull.landing.value + 1;
+    deckPull.landing.value = landing;
     cancelAnimation(deckPull.shrink);
     deckPull.reveal.value = withSpring(1, DECK_PULL_SPRING.land);
     deckPull.shrink.value = withSpring(1, { ...DECK_PULL_SPRING.land, velocity: landingVelocity(deckPull.shrink.value, velocity) }, (finished) => {
       "worklet";
-      if (deckPull.stage.value !== PULL_STAGE.landing || deckPull.id.value !== id) return;
-      if (!finished) {
-        resetDeckPull();
-        runOnJS(settled)(id, false, 0);
-        return;
-      }
-      deckPull.stage.value = PULL_STAGE.landed;
-      handOverDeckPull();
-      runOnJS(settled)(id, true, deckPull.worstFrame.value);
+      landingEnded(id, landing, finished, settled);
     });
     return;
   }
@@ -347,12 +378,13 @@ let armedFades = false;
 let entrance: string | null = null;
 const standbyWaiters = new Set<(id: string | null) => void>();
 
-export function publishDeckStandby(target: PullTarget | null) {
+export function publishDeckStandby(target: PullTarget | null, hit: DeckHit | null = null) {
   standbyId = target?.id ?? null;
-  runOnUI((next: PullTarget | null) => {
+  runOnUI((next: PullTarget | null, cards: DeckHit | null) => {
     "worklet";
     deckPull.target.value = next;
-  })(target);
+    deckPull.hit.value = next ? cards : null;
+  })(target, hit);
   for (const waiter of [...standbyWaiters]) waiter(standbyId);
 }
 

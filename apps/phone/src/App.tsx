@@ -36,7 +36,7 @@ import { startLinks } from "./state/links/links";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
 import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
-import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, startBrowser, type Surface } from "./state/browse/store";
+import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, keepFrontPictureCurrent, startBrowser, type Surface } from "./state/browse/store";
 import { refreshHiddenDeck, resizeRoot } from "./state/browse/deckHold";
 import { useDeckStandbyWanted } from "./state/browse/deckStandby";
 import { deckPullGrowing } from "./state/browse/deckPull";
@@ -258,6 +258,7 @@ function useDeckStandby(surface: Surface, pageSettled: boolean, pageId: string |
   useEffect(() => {
     if (!pageSettled) return;
     return whenIdle(() => {
+      keepFrontPictureCurrent();
       if (!standby) startTransition(() => setStandby(true));
       else if (!deckPullInFlight()) refreshHiddenDeck();
     }, tabsMotion.deckStandby, tabsMotion.deckStandbyIdle);

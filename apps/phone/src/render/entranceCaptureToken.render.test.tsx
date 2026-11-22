@@ -16,6 +16,7 @@ beforeEach(() => {
   browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null });
   jest.spyOn(system, "prefetchImage").mockImplementation(async () => true);
   jest.spyOn(pages, "close").mockImplementation(async () => undefined);
+  jest.spyOn(browse, "keepFrontPictureCurrent").mockImplementation(() => undefined);
 });
 
 afterEach(() => {

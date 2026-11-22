@@ -274,6 +274,73 @@ test("a tap on the tabs button ends in the same landing as a released swipe, sta
   expect(counted).not.toHaveBeenCalledWith("deck_bar_swipes");
 });
 
+const landingFrames = (root: Root, tapAfter: number | null) => {
+  const button = root.root.findAll((node) => node.props.accessibilityLabel === "Tabs" && typeof node.props.onPress === "function")[0]!;
+  act(() => void button.props.onPress());
+  let frames = 0;
+  while (surface() !== "deck" && frames < 120) {
+    frame();
+    frames += 1;
+    if (frames === tapAfter) {
+      const hit = deckPull.hit.value!;
+      const point = { absoluteX: deckLeading(hit.g, -1) + 4, absoluteY: hit.g.cardCenterY, x: 0, y: 0 };
+      act(() => fireGestureHandler(getByGestureTestId("landingTap"), [{ state: State.BEGAN, ...point }, { state: State.ACTIVE, ...point }, { state: State.END, ...point }]));
+    }
+  }
+  return frames;
+};
+
+test("a tap on a card while the deck is still landing is taken at once: the landing hurries to its end without a jump, the tapped card opens as it lands, the open is counted, and the hurried landing's first callback never acts", () => {
+  const root = app();
+  const plain = landingFrames(root, null);
+  act(() => browse.openTab(currentTabs().selectedId!));
+  for (let at = 0; at < 60; at++) frame();
+  unmount(mounted.pop()!);
+  const again = app();
+  const leaving = currentTabs().selectedId!;
+  const neighbour = currentTabs().open[currentTabs().open.findIndex((tab) => tab.id === leaving) - 1]!.id;
+  counted.mockClear();
+  let last = -1;
+  const jumps: number[] = [];
+  const watch = setInterval(() => {
+    const now = deckPull.shrink.value;
+    if (last >= 0 && deckPull.stage.value === PULL_STAGE.landing) jumps.push(Math.abs(now - last));
+    last = now;
+  }, 16);
+  const hurried = landingFrames(again, 2);
+  clearInterval(watch);
+  expect(hurried).toBeLessThan(plain);
+  expect(Math.max(...jumps)).toBeLessThan(0.35);
+  expect(counted).toHaveBeenCalledWith("deck_opens_while_landing");
+  framesUntil(() => browse.useBrowse.getState().surface === "browsing" && currentTabs().selectedId === neighbour, 240);
+  expect(currentTabs().selectedId).toBe(neighbour);
+  expect(browse.useBrowse.getState().surface).toBe("browsing");
+});
+
+test("once the page in front goes quiet its picture is made current, so a Tabs tap finds it current and copies nothing at the press; a picture still current isn't taken again", async () => {
+  const id = currentTabs().selectedId!;
+  act(() => browse.pageStateChanged(id, { url: "https://site0.example/", title: "Site 0", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
+  let taken = 0;
+  jest.spyOn(pages, "snapshotIsCurrent").mockImplementation(() => taken > 0);
+  const snapped = jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: `file:///snapshots/quiet-${++taken}.jpg`, width: 600, height: 1333 }) as never);
+  const root = app();
+  await promisesSettled();
+  frame();
+  await promisesSettled();
+  expect(snapped).toHaveBeenCalledTimes(1);
+  act(() => browse.keepFrontPictureCurrent());
+  await promisesSettled();
+  expect(snapped).toHaveBeenCalledTimes(1);
+  const button = root.root.findAll((node) => node.props.accessibilityLabel === "Tabs" && typeof node.props.onPress === "function")[0]!;
+  act(() => void button.props.onPress());
+  for (let at = 0; at < 4; at++) {
+    frame();
+    await promisesSettled();
+  }
+  expect(snapped).toHaveBeenCalledTimes(1);
+  expect(counted).not.toHaveBeenCalledWith("deck_pictures_at_press");
+});
+
 test("the handover never waits for the fresh picture of the page: the capture starts with the pull, the deck takes over the frame after the landing, the page is gone with it, and the leaving card keeps its earlier picture under the fresh one until that has loaded", async () => {
   const EARLIER = "file:///snapshots/pulled-earlier.jpg";
   const FRESH = "file:///snapshots/pulled-fresh.jpg";
@@ -366,7 +433,7 @@ test("the bar is one bar throughout: its three glass shapes stay while the brows
 
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 
-const PULL_SETTLE_STARTED_MS = 150;
+const PULL_SETTLE_STARTED_MS = 100;
 const PULL_SETTLE_CAP_MS = 1000;
 
 for (const lands of [true, false]) {
@@ -384,7 +451,7 @@ for (const lands of [true, false]) {
     act(() => void jest.advanceTimersByTime(PULL_SETTLE_STARTED_MS));
     expect(settled).not.toHaveBeenCalled();
     act(() => void jest.advanceTimersByTime(PULL_SETTLE_CAP_MS));
-    expect(settled).toHaveBeenCalledWith(id, lands, expect.any(Number));
+    expect(settled).toHaveBeenCalledWith(id, lands, expect.any(Number), ...(lands ? [""] : []));
   });
 }
 
@@ -442,6 +509,7 @@ const covered = (root: Root) => hosts(root, "deckCard").filter((card) => opacity
 
 function reducedMotionPage() {
   mockMotion.reduced = true;
+  jest.spyOn(browse, "keepFrontPictureCurrent").mockImplementation(() => undefined);
   const id = currentTabs().selectedId!;
   act(() => browse.pageStateChanged(id, { url: "https://site0.example/", title: "Site 0", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
   return { id, snapped: jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1333 }) as never) };
