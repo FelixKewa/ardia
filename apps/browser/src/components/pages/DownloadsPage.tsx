@@ -30,7 +30,7 @@ export function DownloadsPage({ tabId }: { tabId: string }) {
         title="Downloads"
         query={query}
         onQuery={setQuery}
-        actions={downloads.some((d) => d.state !== "downloading") ? <Button title="Clear Download List" onPress={() => clearDownloads(windowId)} /> : null}
+        actions={downloads.some((d) => d.state !== "downloading") ? <Button title="Clear All" onPress={() => clearDownloads(windowId)} /> : null}
       />
       {shown.length === 0 ? (
         <EmptyState
