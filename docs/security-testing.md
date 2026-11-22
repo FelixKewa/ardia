@@ -21,40 +21,49 @@ wrong for an awkward one fails here and not in a release.
 | Real browser | `apps/browser/src/state/site/elementPicker.test.mjs`, `packages/ardiacore/tests/page-script-synthetic-input.test.mjs` | Headless Chromium. Every element the real picker picks on a varied page (ids, test ids, classes, custom and non-ASCII tag names, tables, deep paths) saves; the picker refuses a planted picker object and ignores synthetic input; a page that rewrites the helpers the picker calls still gets only inert rules saved. The real `page_script.js`, with the screen-share picker shim on, sends no gesture-gated message (new-tab link notes, Peek, link drops, screen share) or Hide Element message for dispatched events, scripted clicks, `window.open` or `getDisplayMedia` without activation, or the old Hide Element event; the same harness sees a real click, a real share request and a real link drag get through |
 
 `scripts/lib/test-chromium.mjs` finds the browser: Playwright's own download, `ARDIA_TEST_CHROMIUM`, or the system
-Chrome GitHub's Linux runners ship. `scripts/lib/ublock-pinned.mjs` checks the uBlock zip's SHA-256 on every run, keeps
-the unpacked tree under a directory named by that SHA (published only once complete), and retries a download that
-fails on the network; CI restores both from its cache. Locally, a missing browser or no network skips those cases. A
+Chrome GitHub's Linux runners ship. `scripts/lib/ublock-pinned.mjs` keeps only the uBlock zip in its cache (CI caches
+the same zip), checks its SHA-256 on every run, unpacks it into a fresh temporary folder that the test removes when it
+ends, and retries a download that fails on the network. Locally, a missing browser or no network skips those cases. A
 checksum mismatch, a broken archive or an import error fails everywhere, and in CI everything fails.
 
 ## What the table detects
 
-The guarantee covers these forms and no others. Anything written another way isn't guaranteed to be found: give it a
-hand-kept row (`"detected": false`) or rewrite it in a detected form. `boundaries.test.mjs` has one fixture per form
-below, and each must raise a missing row or a changed count.
+The table catches entry points added in the forms below, the way this codebase writes them. It's a tripwire for review,
+not a proof: code written to slip past the detector is a review problem, not something the test tries to win.
 
-**TypeScript in `apps/browser/src`**, parsed by `scripts/security/boundary-detectors.mjs` with the TypeScript compiler
-(so generics, optional chaining, casts and parentheses don't matter): calls to `evaluate` as a
-member (`web.evaluate(…)`, `web?.evaluate(…)`, `web.evaluate?.(…)`, `web["evaluate"](…)`), through `.call`/`.apply`, and
-through any alias the file binds: a variable set to `….evaluate`, a destructured `{ evaluate }` or `{ evaluate: run }`, or
-an object property set to an alias and destructured again. Counted per file.
+Anything written another way isn't guaranteed to be found: give it a hand-kept row (`"detected": false`) or rewrite it
+in a detected form. `boundaries.test.mjs` has one fixture per form below; each must raise a missing row, a changed
+count or a grammar failure, and the shadowing fixture must raise nothing.
+
+**Kind grammar.** A message kind, a literal event name and a plugin method name are one or more of `A–Z a–z 0–9 _ . : -`.
+The test fails, naming the value, when a detected kind is outside that, including an empty kind or one with a space.
+
+**TypeScript in `apps/browser/src`**, parsed by `scripts/security/boundary-detectors.mjs` with the TypeScript compiler,
+which also resolves each name to its declaration, so a local that happens to share an alias's name doesn't count.
+Generics (including an instantiation expression held in a variable), optional chaining, casts and parentheses don't
+matter. Calls to `evaluate` as a member (`web.evaluate(…)`, `web?.evaluate(…)`, `web.evaluate?.(…)`,
+`web["evaluate"](…)`), through `.call`/`.apply`, and through an alias bound in the same file: a variable set to
+`….evaluate`, a destructured `{ evaluate }` or `{ evaluate: run }`, a property of a locally declared object literal
+(`kit.look(…)`, or destructured from it), or a key of an object literal passed elsewhere and destructured by that key.
+Counted per file.
 
 **`page_script.js`, parsed the same way:**
-- listeners: `addEventListener` called as a member, optionally, or through any alias the file binds to it (variable,
-  destructuring such as `const { addEventListener: listen } = EventTarget.prototype`, or an object property passed on and
-  destructured), called directly, with `.call`, or with `apply(alias, target, [name, …])`/`Reflect.apply`. A literal event
-  name gets its own row; every call, computed names included, counts toward the pinned total.
-- messages: calls to `send` or `post`, or an alias of them. A literal kind (any characters, string or template
-  literal) gets its own row; every call counts toward the pinned total.
+- listeners: `addEventListener` called as a member, optionally, as the global `addEventListener(…)`, or through an
+  alias bound as above (for example `const { addEventListener: listen } = EventTarget.prototype`), called directly, with
+  `.call`, or with `apply(alias, target, [name, …])`/`Reflect.apply`. A literal event name gets its own row; every call,
+  computed names included, counts toward the pinned total.
+- messages: calls to a function named `send` or `post`, or to an alias of one bound as above, including a property of
+  a locally declared object (`const bridge = { publish: send }; bridge.publish(…)`). A literal kind (string or template
+  literal without substitutions) gets its own row; every call counts toward the pinned total.
 
-**Objective-C++ (`.mm` files that receive page messages), by pattern:** `[kind isEqualToString:@"…"]` with any
-characters in the kind.
+**Objective-C++ (`.mm` files that receive page messages), by pattern:** `[kind isEqualToString:@"…"]` on one line.
 
 **Swift, by pattern** (WebKit's page scripts are JavaScript inside Swift strings, so they aren't parsed):
-`post(`/`send(` with a quoted kind, any characters, in `WebKit*.swift`; `case "…":` in `WebKitTab.pageMessage`,
-`WebKitTab+Site.swift` and `WebKitTab+FieldProviders.swift`; a per-script count of `addEventListener(` and of
-`apply(alias, …)` for the aliases a script binds to `EventTarget.prototype.addEventListener` by assignment (plus `listen`
-and `addListener`); every `userContentController(` handler. Destructured aliases and computed names in these scripts
-are not guaranteed.
+`post(`/`send(` with a single- or double-quoted kind on one line in `WebKit*.swift`; `case "…":` in
+`WebKitTab.pageMessage`, `WebKitTab+Site.swift` and `WebKitTab+FieldProviders.swift`; a per-script count of
+`addEventListener(` and of `apply(alias, …)` for the aliases a script binds to `EventTarget.prototype.addEventListener` by
+assignment (plus `listen` and `addListener`); every `userContentController(` handler. Names here are matched by text, not
+resolved, and destructured aliases and computed names in these scripts are not guaranteed.
 
 **Other tables, by pattern:** `ShellEvents.Channel` cases, exported sync adapters, `case "…":` in the plugin channel,
 `SOCKET_FAMILIES`, and spreads of the settings object outside the settings writer.

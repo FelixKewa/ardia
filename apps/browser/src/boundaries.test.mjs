@@ -34,10 +34,11 @@ function bodyOf(text, signature) {
   return text.slice(start, end < 0 ? undefined : end);
 }
 
-const MESSAGE = String.raw`([^"'\s]+)`;
-const SENT = new RegExp(String.raw`\b(?:send|post)\(\s*["']` + MESSAGE + `["']`, "g");
-const RECEIVED_NATIVE = new RegExp(String.raw`\[kind isEqualToString:@"` + MESSAGE + `"\]`, "g");
-const RECEIVED_SWIFT = new RegExp(String.raw`case "` + MESSAGE + `":`, "g");
+const KIND = /^[A-Za-z0-9_.:-]+$/;
+const SENT = /\b(?:send|post)\(\s*"([^"\n]*)"|\b(?:send|post)\(\s*'([^'\n]*)'/g;
+const RECEIVED_NATIVE = /\[kind isEqualToString:@"([^"\n]*)"\]/g;
+const RECEIVED_SWIFT = /case "([^"\n]*)":/g;
+const quoted = (text, pattern) => [...text.matchAll(pattern)].map((m) => m[1] ?? m[2]);
 const NATIVE_ADD_LISTENER = /(?:const|let|var)\s+(\w+)\s*=\s*(?:[\w.]+\s*&&\s*)?(?:window\.)?EventTarget\.prototype\.addEventListener\b|(\w+):\s*(?:window\.)?EventTarget\.prototype\.addEventListener\b/g;
 
 function listenerAliases(text) {
@@ -61,26 +62,34 @@ const listenerCalls = (text) => count(text, listenerPatterns(text).calls);
 
 function detectedEntries(read = readFromDisk) {
   const entries = [];
+  const outside = [];
+  entries.outside = outside;
   const add = (surface, key, extra = {}) => entries.push({ id: `${surface}:${key}`, ...extra });
+  const addKinds = (surface, kinds, where) => {
+    for (const kind of unique(kinds)) {
+      if (KIND.test(kind)) add(surface, kind);
+      else outside.push(`${where}: ${JSON.stringify(kind)}`);
+    }
+  };
 
   const pageScript = read(PAGE_SCRIPT);
   const pageListeners = parsedListenerCalls(PAGE_SCRIPT, pageScript);
   const pageMessages = messageCalls(PAGE_SCRIPT, pageScript);
   const pageMessageFiles = filesIn(IOS, (n) => n.endsWith(".mm")).filter((f) => /didReceivePageMessage:\(NSString \*\)kind|holdPageMessage:\(NSString \*\)kind/.test(read(f)));
-  const nativeReceivers = pageMessageFiles.flatMap((f) => matches(read(f), RECEIVED_NATIVE));
-  for (const kind of unique([...pageMessages.map((m) => m.name).filter(Boolean), ...nativeReceivers])) add("chromium-page-message", kind);
+  const nativeReceivers = pageMessageFiles.flatMap((f) => quoted(read(f), RECEIVED_NATIVE));
+  addKinds("chromium-page-message", [...pageMessages.filter((m) => !m.computed).map((m) => m.name), ...nativeReceivers], "a Chromium page message kind");
   add("page-script-message-count", "page_script.js", { count: pageMessages.length });
-  for (const event of unique(pageListeners.map((l) => l.name).filter(Boolean))) add("page-script-listener", event);
+  addKinds("page-script-listener", pageListeners.filter((l) => !l.computed).map((l) => l.name), "a page script event name");
   add("page-script-listener-count", "page_script.js", { count: pageListeners.length });
 
   const webkitScripts = filesIn(IOS, (n) => /^WebKit.*\.swift$/.test(n));
-  const webkitPosted = webkitScripts.flatMap((f) => matches(read(f), SENT)).filter((k) => !["close", "show", "showConsole", "toggleElementSelection"].includes(k));
+  const webkitPosted = webkitScripts.flatMap((f) => quoted(read(f), SENT)).filter((k) => !["close", "show", "showConsole", "toggleElementSelection"].includes(k));
   const webkitReceived = [
-    ...matches(bodyOf(read(`${IOS}/WebKitTab.swift`), "func pageMessage("), RECEIVED_SWIFT),
-    ...matches(read(`${IOS}/WebKitTab+Site.swift`), RECEIVED_SWIFT),
-    ...matches(read(`${IOS}/WebKitTab+FieldProviders.swift`), RECEIVED_SWIFT),
+    ...quoted(bodyOf(read(`${IOS}/WebKitTab.swift`), "func pageMessage("), RECEIVED_SWIFT),
+    ...quoted(read(`${IOS}/WebKitTab+Site.swift`), RECEIVED_SWIFT),
+    ...quoted(read(`${IOS}/WebKitTab+FieldProviders.swift`), RECEIVED_SWIFT),
   ];
-  for (const kind of unique([...webkitPosted, ...webkitReceived])) add("webkit-page-message", kind);
+  addKinds("webkit-page-message", [...webkitPosted, ...webkitReceived], "a WebKit page message kind");
   for (const f of webkitScripts) {
     const n = listenerCalls(read(f));
     if (n) add("webkit-page-listener-count", f.slice(IOS.length + 1), { count: n });
@@ -104,7 +113,7 @@ function detectedEntries(read = readFromDisk) {
   }
 
   const channelApi = read("apps/browser/src/state/plugins/channelApi.ts");
-  for (const method of unique(matches(channelApi, RECEIVED_SWIFT))) add("plugin-method", method);
+  addKinds("plugin-method", quoted(channelApi, RECEIVED_SWIFT), "a plugin method name");
 
   const catalog = read("apps/browser/src/state/automation/socketCatalog.ts");
   const families = /SOCKET_FAMILIES = \[([^\]]+)\]/.exec(catalog)[1];
@@ -146,11 +155,13 @@ function unlisted(found) {
     missing: found.filter((e) => !rowById.has(e.id)).map((e) => e.id),
     changed: found.filter((e) => rowById.has(e.id) && e.count !== undefined && rowById.get(e.id).count !== e.count).map((e) => `${e.id}: ${rowById.get(e.id).count} -> ${e.count}`),
     gone: rows.filter((r) => r.detected !== false && !detectedIds.has(r.id)).map((r) => r.id),
+    outside: found.outside ?? [],
   };
 }
 
 test("every place page, sync, plugin, socket or other-app data enters the browser is in the boundary table", () => {
-  const { missing, changed, gone } = unlisted(detectedEntries());
+  const { missing, changed, gone, outside } = unlisted(detectedEntries());
+  assert.deepEqual(outside, [], "a kind or event name outside the inventory's grammar (letters, digits, _ . : -): rename it, or the table can't hold its row");
   const advice = "Add or update its row in apps/browser/src/boundaries.json and name the check that guards it (docs/security-testing.md).";
   assert.deepEqual(missing, [], `new entry points with no row. ${advice}`);
   assert.deepEqual(changed, [], `entry points whose call count changed. ${advice}`);
@@ -177,6 +188,8 @@ const PROMISED_FORMS = {
     { form: "call and apply", code: "void web.evaluate.call(web, code);\nvoid web.evaluate.apply(web, [code]);" },
     { form: "a cast callee", code: "void (web.evaluate as (c: string) => Promise<unknown>)(code);" },
     { form: "an alias passed through an object and destructured", code: "const kit = { look: web.evaluate };\nconst { look } = kit;\nvoid look(code);" },
+    { form: "an instantiation expression held in a variable", code: "const runFixture = web.evaluate<unknown>;\nvoid runFixture(code);" },
+    { form: "a parenthesized computed key", code: 'void web[("evaluate")](code);' },
   ].map((f) => ({ ...f, file: NO_ROW_TS, missing: NEW_EVALUATE })).concat([{ form: "one more call in a file with a row", file: ROW_TS, code: "void webviews.get(tabId)?.evaluate?.(code);", changed: "evaluate-result:state/site/translate.ts" }]),
   "page_script.js (parsed): listeners": [
     { form: "addEventListener", code: 'window.addEventListener("fixture-a", f);', missing: "page-script-listener:fixture-a" },
@@ -187,7 +200,11 @@ const PROMISED_FORMS = {
     { form: "an alias's call", code: 'const { addEventListener: hearFixture } = EventTarget.prototype;\nhearFixture.call(window, "fixture-f", f);', missing: "page-script-listener:fixture-f" },
     { form: "Reflect.apply", code: 'Reflect.apply(EventTarget.prototype.addEventListener, window, ["fixture-g", f]);', missing: "page-script-listener:fixture-g" },
     { form: "an alias passed through an object and destructured", code: 'const kitFixture = { onFixture: EventTarget.prototype.addEventListener };\nconst { onFixture } = kitFixture;\napply(onFixture, document, ["fixture-h", f]);', missing: "page-script-listener:fixture-h" },
+    { form: "the global addEventListener", code: 'addEventListener("fixture-i", f);', missing: "page-script-listener:fixture-i" },
+    { form: "a key of an object passed to a function and destructured there", code: 'kitFixture({ hearKey: EventTarget.prototype.addEventListener });\nfunction kitFixture(env) {\n  const { hearKey } = env;\n  apply(hearKey, document, ["fixture-j", f]);\n}', missing: "page-script-listener:fixture-j" },
     { form: "a computed event name", code: "window.addEventListener(fixtureType, f);", changed: "page-script-listener-count:page_script.js" },
+    { form: "a local function that shares an alias's name doesn't count", code: "function shadowFixture() {\n  const listen = () => 1;\n  listen();\n}", unchanged: "page-script-listener-count:page_script.js" },
+    { form: "an event name outside the grammar fails", code: 'window.addEventListener("has space", f);', outside: '"has space"' },
   ].map((f) => ({ ...f, file: PAGE_SCRIPT })),
   "page_script.js (parsed): messages": [
     { form: "send", code: 'send("fixtureKind", {});', missing: "chromium-page-message:fixtureKind" },
@@ -196,12 +213,18 @@ const PROMISED_FORMS = {
     { form: "a template literal", code: "send(`fixture.dotted`, {});", missing: "chromium-page-message:fixture.dotted" },
     { form: "an alias of send", code: 'const sendFixture = send;\nsendFixture("aliasedKind", {});', missing: "chromium-page-message:aliasedKind" },
     { form: "a computed kind", code: "send(fixtureKind, {});", changed: "page-script-message-count:page_script.js" },
+    { form: "a call through a locally assigned object property", code: 'const bridgeFixture = { publish: send };\nbridgeFixture.publish("bridgedKind", {});', missing: "chromium-page-message:bridgedKind" },
+    { form: "a kind with a space fails", code: 'send("has space", {});', outside: '"has space"' },
+    { form: "an empty kind fails", code: 'send("", {});', outside: '""' },
   ].map((f) => ({ ...f, file: PAGE_SCRIPT })),
   "Objective-C++ receivers (pattern)": [
-    { form: "[kind isEqualToString:@\"…\"] with any characters", file: "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", code: '} else if ([kind isEqualToString:@"2fa.pick-done"]) {', missing: "chromium-page-message:2fa.pick-done" },
+    { form: "[kind isEqualToString:@\"…\"] with every grammar character", file: "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", code: '} else if ([kind isEqualToString:@"2fa.pick-done:x_y"]) {', missing: "chromium-page-message:2fa.pick-done:x_y" },
+    { form: "a kind with a space fails", file: "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", code: '} else if ([kind isEqualToString:@"has space"]) {', outside: '"has space"' },
   ],
   "Swift (pattern)": [
     { form: 'a receiver case "…":', file: "packages/ardiacore/ios/WebKitTab+Site.swift", code: 'case "2fa-done": break', missing: "webkit-page-message:2fa-done" },
+    { form: "a receiver kind with a space fails", file: "packages/ardiacore/ios/WebKitTab+Site.swift", code: 'case "has space": break', outside: '"has space"' },
+    { form: "a WebKit post with a space fails", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: "post('has space', {})", outside: '"has space"' },
     { form: "post or send with a quoted kind in a WebKit script", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: "post('9fixture', {})", missing: "webkit-page-message:9fixture" },
     { form: "an addEventListener call in a WebKit script", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: 'document.addEventListener("fixture", f)', changed: "webkit-page-listener-count:WebKitPageScript.swift" },
     { form: "apply through an alias a WebKit script assigns", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: 'const hearFixture = EventTarget.prototype.addEventListener; apply(hearFixture, document, ["fixture", f])', changed: "webkit-page-listener-count:WebKitPageScript.swift" },
@@ -214,8 +237,10 @@ const PROMISED_FORMS = {
 
 for (const [group, forms] of Object.entries(PROMISED_FORMS))
   test(`${group}: each promised form raises a missing row or a changed count when it appears in new code`, () => {
-    for (const { form, file, code, missing, changed } of forms) {
+    for (const { form, file, code, missing, changed, unchanged, outside } of forms) {
       const found = unlisted(detectedEntries(withAdded({ [file]: code })));
+      if (unchanged) assert.ok(!found.changed.some((c) => c.startsWith(`${unchanged}:`)) && found.missing.length === 0, `${form}: expected nothing new, got ${JSON.stringify([...found.changed, ...found.missing])}`);
+      if (outside) assert.ok(found.outside.some((o) => o.endsWith(`: ${outside}`)), `${form}: expected ${outside} to fail the grammar, got ${JSON.stringify(found.outside)}`);
       if (missing) assert.ok(found.missing.includes(missing), `${form}: expected ${missing} to be reported, got ${JSON.stringify(found.missing)}`);
       if (changed) assert.ok(found.changed.some((c) => c.startsWith(`${changed}:`)), `${form}: expected ${changed} to be reported as changed, got ${JSON.stringify(found.changed)}`);
     }
