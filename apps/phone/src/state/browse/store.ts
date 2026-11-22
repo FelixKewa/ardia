@@ -796,9 +796,9 @@ export async function captureSnapshot(id: string, pageTop: number | null = null)
 
 function pictureScrolledPage(id: string) {
   if (Platform.OS !== "android" || loading.get(id) !== true || !coverIsCapturable(true, pageCovered())) return;
-  const counts = pictureCountable(id);
+  const countable = pictureCountable(id);
   void captureSnapshot(id).then((published) => {
-    if (published && counts) countUsage("page_pictures_scrolled");
+    if (published && countable && pictureCountable(id)) countUsage("page_pictures_scrolled");
   });
 }
 

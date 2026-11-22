@@ -5,7 +5,7 @@ import { saveTabPosition } from "../state/browse/positions";
 import * as browse from "../state/browse/store";
 import { useOnboarding } from "../state/onboarding/store";
 import { dismissSearch } from "../state/search/store";
-import { closeTabById, currentTabs, updateTabById } from "../state/tabs/store";
+import { closeTabById, currentTabs, selectTabById, updateTabById, useTabs } from "../state/tabs/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { withTabs } from "../../test/render/harness";
 
@@ -22,6 +22,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   withTabs(2);
+  useTabs.setState({ incognito: false });
   act(() => dismissSearch());
   useOnboarding.setState({ showing: false });
   browse.useBrowse.setState({ surface: "browsing", sheet: null, opening: null, veiled: null, covered: null, arriving: null, leaving: null });
@@ -165,5 +166,45 @@ test("a refused capture isn't counted even when another capture changes the tab'
   });
   scrollY = 2700;
   await scrollWatchTicks(2);
+  expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
+});
+
+test("a rest the watch couldn't act on, because another tab came to the front while the position saved, is pictured once the page is back", async () => {
+  const id = front();
+  const other = currentTabs().open.find((tab) => tab.id !== id)!.id;
+  pageIs(id, true);
+  await scrollWatchTicks(2);
+  snapshot.mockClear();
+  let switched = false;
+  jest.spyOn(pages, "saveState").mockImplementation(async () => {
+    if (!switched) {
+      switched = true;
+      selectTabById(other);
+    }
+    return `state-at-${scrollY}`;
+  });
+  scrollY = 1900;
+  await scrollWatchTicks(2);
+  expect(switched).toBe(true);
+  expect(snapshot).not.toHaveBeenCalled();
+  act(() => selectTabById(id));
+  await scrollWatchTicks(2);
+  expect(snapshot).toHaveBeenCalledTimes(Platform.OS === "android" ? 1 : 0);
+});
+
+test("a capture that finishes after Incognito came on isn't counted", async () => {
+  const id = front();
+  pageIs(id, true);
+  await scrollWatchTicks(2);
+  counted.mockClear();
+  snapshot.mockClear();
+  snapshot.mockImplementation(async (tab: string) => {
+    useTabs.setState({ incognito: true });
+    generation += 1;
+    return { path: "", uri: `file:///p/${tab}-${generation}.jpg`, width: 600, height: 1333, durable: true, generation } as never;
+  });
+  scrollY = 3300;
+  await scrollWatchTicks(2);
+  expect(snapshot).toHaveBeenCalledTimes(Platform.OS === "android" ? 1 : 0);
   expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
 });
