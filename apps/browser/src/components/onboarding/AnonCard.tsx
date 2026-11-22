@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";
-import { reduceMotion, Text, ThemeSwatch, useTheme } from "../ui";
+import { ink, reduceMotion, Text, ThemeSwatch, useTheme } from "../ui";
 import { nativeLoop } from "../ui/motion";
 import { monoFace, radius, space, tracking } from "../ui/tokens";
 import { flatColors } from "../../lib/profileLook";
 import { parseColor } from "../../lib/color";
 import { upcomingInstallId, useTelemetry } from "../../state/telemetry/client";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { anonIdentity } from "./anonIdentity";
 import { useOnboardingColors } from "./Parts";
 import { anonCard } from "./tokens";
 
-const SHARED = "Crash reports, error types, feature counts, speed and memory, daily opens";
-const SHARED_OFF = "Only how many days Ardia opens";
-const NEVER = "Sites you visit, what you type, your tabs, your name";
+const SHARED = "Crash reports and usage counts. Nothing personal.";
+const SHARED_OFF = "Off. Only a daily open count.";
+const NEVER = `Your browsing never leaves your ${PLATFORM_TERMS.computer}.`;
 
 const floats = (color: string) => {
   const [r, g, b, a] = parseColor(color);
@@ -53,14 +54,41 @@ function useFloat() {
   return t;
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Move({ badge, energy, title, body, dim }: { badge?: string; energy?: number; title: string; body: string; dim?: boolean }) {
+  const theme = useTheme();
   const colors = useOnboardingColors();
   return (
-    <View style={{ gap: space.xs }}>
-      <Text size="tiny" weight="bold" color={colors.subtitle} style={[monoFace(), { letterSpacing: tracking.wide }]}>
-        {label.toUpperCase()}
+    <View style={{ gap: space.xs, opacity: dim ? anonCard.offOpacity : 1 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
+        {badge ? (
+          <View style={{ paddingHorizontal: space.s, paddingVertical: anonCard.hairline, borderRadius: radius.hair, backgroundColor: theme.accent }}>
+            <Text size="badge" weight="bold" color={ink.white} style={[monoFace(), { letterSpacing: tracking.wide }]}>
+              {badge}
+            </Text>
+          </View>
+        ) : null}
+        {Array.from({ length: energy ?? 0 }, (_, i) => (
+          <View key={i} style={{ width: anonCard.energy, height: anonCard.energy, borderRadius: anonCard.energy / 2, backgroundColor: theme.accent, borderWidth: 1, borderColor: ink.white }} />
+        ))}
+        <Text size="body" weight="semibold" color={colors.title}>
+          {title}
+        </Text>
+      </View>
+      <Text size="caption" color={colors.subtitle} lines={2}>
+        {body}
       </Text>
-      <Text size="small" color={colors.title} lines={3}>
+    </View>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  const colors = useOnboardingColors();
+  return (
+    <View style={{ alignItems: "center", gap: anonCard.hairline }}>
+      <Text size="badge" weight="bold" color={colors.subtitle} style={[monoFace(), { letterSpacing: tracking.wide }]}>
+        {label}
+      </Text>
+      <Text size="caption" weight="semibold" color={colors.title}>
         {value}
       </Text>
     </View>
@@ -111,9 +139,19 @@ export function AnonCard({ on }: { on: boolean }) {
             <Text style={{ fontSize: anonCard.artGlyph, lineHeight: anonCard.artGlyph * 1.2 }}>{me.art}</Text>
           </View>
           <View style={{ gap: space.xs }}>
-            <Text size="large" weight="semibold" color={colors.title} lines={1}>
-              {on ? me.name : "Anonymous"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.s }}>
+              <Text size="large" weight="semibold" color={colors.title} lines={1} style={{ flexShrink: 1 }}>
+                {on ? me.name : "Anonymous"}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: space.xs }}>
+                <Text size="badge" weight="bold" color={colors.subtitle} style={[mono, { letterSpacing: tracking.wide }]}>
+                  PRIVACY
+                </Text>
+                <Text size="large" weight="bold" color={theme.accent}>
+                  100
+                </Text>
+              </View>
+            </View>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <Text size="tiny" color={colors.subtitle} style={mono}>
                 {on ? `№ ${me.serial}` : "№ ----·----"}
@@ -124,15 +162,14 @@ export function AnonCard({ on }: { on: boolean }) {
             </View>
           </View>
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.rowBorder }} />
-          <Row label="Shares" value={on ? SHARED : SHARED_OFF} />
-          <Row label="Never shares" value={NEVER} />
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
-            <Text size="tiny" weight="bold" color={colors.title} style={mono}>
-              PERSONAL DATA
-            </Text>
-            <Text size="tiny" weight="bold" color={colors.title} style={mono}>
-              0.00
-            </Text>
+          <Move badge="ABILITY" title="Ghost Mode" body={NEVER} />
+          <Move energy={2} title="Bug Report" body={on ? SHARED : SHARED_OFF} dim={!on} />
+          <View style={{ flex: 1, justifyContent: "flex-end" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.rowBorder }}>
+              <Stat label="WEAKNESS" value="—" />
+              <Stat label="RESISTS" value="Trackers" />
+              <Stat label="DATA SOLD" value="0" />
+            </View>
           </View>
         </View>
         {on ? <Glare t={t} /> : null}

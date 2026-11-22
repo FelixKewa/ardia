@@ -120,6 +120,8 @@ export const anonCard = {
   swing: ["-14deg", "0deg", "14deg"],
   lift: ["-6deg", "0deg", "6deg"],
   offOpacity: 0.55,
+  energy: 11,
+  hairline: 1,
   foil: ["#E1E1FE", "#FD02F5"],
   sheen: "#FFFFFF33",
   panel: { dark: "#121214EB", light: "#FFFFFFEB" },
