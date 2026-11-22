@@ -108,6 +108,27 @@ export const trafficLights = ["#FF5F57", "#FEBC2E", "#28C840"] as const;
 
 export const receiptStamp = "#2F9E5B";
 
+export const anonCard = {
+  width: 300,
+  height: 430,
+  radius: 18,
+  inset: 8,
+  artHeight: 150,
+  artGlyph: 76,
+  sheenWidth: 90,
+  floatMs: 7000,
+  floatEase: Easing.linear,
+  perspective: 900,
+  swing: ["-14deg", "0deg", "14deg"],
+  lift: ["-6deg", "0deg", "6deg"],
+  stampTilt: "-8deg",
+  offOpacity: 0.55,
+  foil: ["#E1E1FE", "#FD02F5"],
+  sheen: "#FFFFFF33",
+  panel: { dark: "#121214EB", light: "#FFFFFFEB" },
+  stamp: receiptStamp,
+} as const;
+
 export const tourRing = "#FFFFFFB3";
 
 export const onboardingTile = {
