@@ -427,3 +427,63 @@ test("release.sh packs the archive's dSYM from the exported app before packaging
   assert.match(publishScript, /^app_uuids="\$dist\/\$\(app_uuids_name "\$version"\)"$/m);
   assert.match(publishScript, /for file in "\$app_symbols" "\$app_uuids"; do\n\s+\[ -f "\$file" \] \|\| die [^\n]+\n\s+assets\+=\("\$file"\)/);
 });
+
+const workflowJobs = (text) => {
+  const jobs = {};
+  const body = text.slice(text.indexOf("\njobs:\n") + 7);
+  for (const chunk of body.split(/\n(?=  [a-z][a-z0-9-]*:\n)/)) {
+    const name = chunk.match(/^\s*([a-z][a-z0-9-]*):\n/)?.[1];
+    if (name) jobs[name] = chunk;
+  }
+  return jobs;
+};
+
+const artifactPaths = (job, verb, artifact) => {
+  const steps = job.split(/\n(?=      - )/).filter((step) => step.includes(`actions/${verb}-artifact@`));
+  const step = steps.find((candidate) => new RegExp(`\\n\\s+name: ${artifact}\\n`).test(`${candidate}\n`));
+  assert.ok(step, `no ${verb}-artifact step for ${artifact}`);
+  const block = step.match(/\n\s+path: \|\n((?:\s{12}\S[^\n]*\n?)+)/);
+  if (block) return block[1].trim().split("\n").map((line) => line.trim());
+  return [step.match(/\n\s+path: ([^\n]+)/)[1].trim()];
+};
+
+test("the Release workflow carries the app's dSYM from the build job's archive through sign's release artifact to publish", () => {
+  const workflow = readFileSync(join(scripts, "../.github/workflows/release.yml"), "utf8");
+  const jobs = workflowJobs(workflow);
+  assert.match(jobs.build, /--phase build/);
+  assert.match(jobs.build, /tar --no-mac-metadata -cf "\$RUNNER_TEMP\/build\.tar" -C "\$DIST" Ardia\.xcarchive provenance\.txt/);
+  assert.deepEqual(artifactPaths(jobs.build, "upload", "build"), ["${{ runner.temp }}/build.tar"]);
+
+  assert.deepEqual(artifactPaths(jobs.sign, "download", "build"), ["${{ runner.temp }}/build-download"]);
+  assert.match(jobs.sign, /unpack-build\.py "\$RUNNER_TEMP\/build-download\/build\.tar" "\$RUNNER_TEMP\/build-in"/);
+  assert.match(jobs.sign, /RELEASE_BUILD_INPUT="\$RUNNER_TEMP\/build-in"\n\s+args=\("\$VERSION" --phase sign\)/);
+  const release = artifactPaths(jobs.sign, "upload", "release");
+  const dist = "${{ steps.paths.outputs.dist }}";
+  for (const name of ["Ardia-${{ inputs.version }}-symbols.tar.xz", "Ardia-${{ inputs.version }}-uuids.txt"]) {
+    assert.ok(release.includes(`${dist}/${name}`), `the release artifact doesn't list ${name}:\n${release.join("\n")}`);
+  }
+  assert.deepEqual(artifactPaths(jobs.publish, "download", "release"), ["dist/${{ inputs.version }}"]);
+  assert.match(jobs.publish, /RELEASE_DIST="\$GITHUB_WORKSPACE\/dist\/\$VERSION"/);
+
+  const releaseScript = readFileSync(join(scripts, "release.sh"), "utf8");
+  assert.match(releaseScript, /^\[ "\$phase" = sign \] && \[ -n "\$build_input" \] && archive="\$build_input\/Ardia\.xcarchive"$/m);
+});
+
+test("unpack-build.py keeps the archive's dSYMs, so the sign job packs the app's symbols from them", () => {
+  const version = "0.2.47-nightly.5";
+  const tree = join(work, "build-tree");
+  const contents = join(tree, "Ardia.xcarchive/Products/Applications/Ardia.app/Contents");
+  mkdirSync(contents, { recursive: true });
+  writeFileSync(
+    join(contents, "Info.plist"),
+    `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.ardia.browser</string><key>CFBundleExecutable</key><string>Ardia</string><key>CFBundleShortVersionString</key><string>${version}</string></dict></plist>\n`,
+  );
+  writeImage(join(tree, "Ardia.xcarchive/dSYMs"), APP_DWARF, APP_UUID);
+  writeFileSync(join(tree, "provenance.txt"), `version ${version}\n`);
+  const tarball = join(work, "build.tar");
+  execFileSync("tar", ["-cf", tarball, "-C", tree, "Ardia.xcarchive", "provenance.txt"], { env: { ...env, COPYFILE_DISABLE: "1" } });
+  const unpacked = join(work, "build-in");
+  const result = spawnSync("python3", ["-I", join(scripts, "../.github/release/unpack-build.py"), tarball, unpacked, version], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(existsSync(join(unpacked, "Ardia.xcarchive/dSYMs", APP_DWARF)));
+});

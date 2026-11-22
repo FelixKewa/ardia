@@ -293,6 +293,8 @@ jobs:
             ${{ steps.paths.outputs.dist }}/appcast.xml
             ${{ steps.paths.outputs.dist }}/release-notes.md
             ${{ steps.paths.outputs.dist }}/provenance.txt
+            ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}-symbols.tar.xz
+            ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}-uuids.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

@@ -335,8 +335,9 @@ the engine if `engine/` changed (below).
   run if the checkout changed, and only then it runs the launch check (`--phase check`, the final app opened hidden, uBO
   must be ready, the signature must survive), checks the zip's EdDSA signature against the app's `SUPublicEDKey`
   (`.github/release/check-sparkle.sh <dist> <version>`, so a `SPARKLE_ED_PRIVATE_KEY` that doesn't match the app
-  fails here instead of on every update) and uploads the DMG, zip, appcast and notes. A failed launch check
-  fails the run, so nothing publishes.
+  fails here instead of on every update) and uploads the DMG, zip, appcast, notes and the app's symbols
+  (`Ardia-<version>-symbols.tar.xz` and `-uuids.txt`, which `release.sh --phase sign` packs from the build artifact's
+  `Ardia.xcarchive/dSYMs`). A failed launch check fails the run, so nothing publishes.
   Every `actions/*` step is pinned by commit SHA.
 - **publish** tags the commit and runs `publish.sh`. Before creating anything, `publish.sh` refuses a build that isn't
   above every other build in the merged feed, and a stable whose version isn't above the
@@ -398,9 +399,11 @@ Ardia. The script searches the app releases (`v<version>`, nightlies included) a
 first, and `--tag v<version>` goes straight to one. `release.sh` packs `Ardia.app.dSYM` from the archive's `dSYMs`
 through `scripts/lib/pack-symbols.sh --app` after `verify.sh`, and refuses an app whose executable's UUID no dSYM in the
 archive carries. `publish.sh` uploads the two files whenever `dist` holds them (refusing a half pair, and noting it when there are
-none). A local release always has them; the CI publish job has only what the sign job's `release` artifact (in
-`.github/workflows/release.yml`) lists, so that list has to name both. Releases from before the app's symbols were uploaded have none: the build artifact that
-held their archive has expired, so their `Ardia + 0x…` frames stay unnamed.
+none). A local release always has them. In CI the build job's `build.tar` carries the whole `Ardia.xcarchive`, dSYMs
+included, `unpack-build.py` keeps them, the sign job packs the pair and its `release` artifact lists both, so the publish
+job finds them in `dist`; `scripts/symbolicate-crash.test.mjs` fails if that chain loses them. Releases from before the
+app's symbols were uploaded have none: the build artifact that held their archive has expired, so their `Ardia + 0x…`
+frames stay unnamed.
 
 Engines published before the symbols were uploaded have none: the next build
 overwrites `out/`'s dSYMs. To backfill one, rebuild its engine key; if the framework comes back with the published UUID,
