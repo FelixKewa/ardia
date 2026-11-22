@@ -66,6 +66,23 @@ holds the rest.
 | Native perf | `node apps/browser/scripts/perf/native-bench.mjs --app <Release app> --out <dir>` | Launch, idle, memory, tab and window latency; the release perf gate (`docs/perf/README.md`) |
 | JS perf | `node apps/browser/scripts/perf/js-bench.mjs run --app <Release app> --bundle <main.jsbundle> --label <name>` | What each interaction costs the JS thread (`docs/perf/README.md`) |
 
+## CI
+
+- `checks.yml` runs four `ubuntu-latest` jobs: typecheck, the portable tests and the Mac bundle (Metro, then
+  Hermes) in one, and the browser's tests in three shares (`--test-shard=I/3`). Each share restores the TSX it
+  transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to `main` save it, so pull requests add no caches.
+  A newer push cancels the run before it, on `main` too.
+- `mac.yml` compiles the Mac app (Debug, unsigned, `xcode-27`) on pull requests and pushes that touch its native code:
+  `apps/browser/macos`, the packages' `ios` folders, the Dock tile and plugin host, the engine's public headers, the
+  patches and the lockfile. It builds against this commit's engine, or the nearest published one before it. Against
+  an older engine the build is strict while `engine/ardiacore/src/ardia/core/public` is unchanged since that engine,
+  and only warns when it changed, since the app may then need engine API that is not published yet.
+- The heavy workflows (`ios.yml`, `android.yml`, `linux.yml`, `windows.yml`, `mac.yml`) run their vouch `gate` job
+  only for pull requests from forks. Pushes, manual runs and branches of this repository skip it and start the build
+  at once.
+- Caches that would fill the 10 GB limit are saved on pushes to `main` only and pruned to the newest per branch by
+  `caches.yml`: Gradle (`gradle-phone-`), Xcode compilation caches (`xcode-cas-`), Pods (`mac-pods-`, `phone-pods-`).
+
 ## ArdiaCore acceptance
 
 The acceptance run's checks and what each proves are listed in `docs/ardiacore-parity.md` › "Acceptance (hidden instance)".

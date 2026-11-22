@@ -55,10 +55,11 @@ permissions:
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -95,7 +96,7 @@ jobs:
 
   identity:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -123,7 +124,7 @@ jobs:
 
   source:
     needs: identity
-    if: inputs.version
+    if: ${{ !cancelled() && needs.identity.result == 'success' && inputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -152,7 +153,7 @@ jobs:
 
   javascript:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -187,7 +188,7 @@ jobs:
 
   app:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 75
     env:
@@ -195,7 +196,7 @@ jobs:
       SLUG: x64
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
     outputs:
       compiled: ${{ steps.built.outputs.cache-hit != 'true' }}
       key: ${{ steps.native.outputs.key }}
@@ -307,7 +308,7 @@ jobs:
 
   arm64-app:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
     runs-on: windows-11-arm
     timeout-minutes: 90
     env:
@@ -315,7 +316,7 @@ jobs:
       SLUG: arm64
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
     outputs:
       compiled: ${{ steps.built.outputs.cache-hit != 'true' }}
       key: ${{ steps.native.outputs.key }}
@@ -323,7 +324,7 @@ jobs:
 
   x64:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -335,7 +336,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -554,7 +555,7 @@ jobs:
 
   x64-tour:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.full == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && (needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))) }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -566,7 +567,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -575,7 +576,7 @@ jobs:
 
   x64-tour-first-run:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.full == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && (needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')))) }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -587,7 +588,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -596,7 +597,7 @@ jobs:
 
   x64-gate:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -608,7 +609,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -617,7 +618,7 @@ jobs:
 
   arm64:
     needs: [gate, identity, javascript, arm64-app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.arm64-app.result == 'success' }}
     runs-on: windows-11-arm
     timeout-minutes: 60
     permissions:
@@ -629,7 +630,7 @@ jobs:
       NO_INPUT: "true"
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
       COMPILED: ${{ needs.arm64-app.outputs.compiled }}
       KEY: ${{ needs.arm64-app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -638,7 +639,7 @@ jobs:
 
   arm64-gate:
     needs: [gate, identity, javascript, arm64-app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.arm64-app.result == 'success' }}
     runs-on: windows-11-arm
     timeout-minutes: 45
     permissions:
@@ -650,7 +651,7 @@ jobs:
       NO_INPUT: "true"
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.gate.outputs.full == 'true' || (needs.gate.result == 'skipped' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci'))) }}
       COMPILED: ${{ needs.arm64-app.outputs.compiled }}
       KEY: ${{ needs.arm64-app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
