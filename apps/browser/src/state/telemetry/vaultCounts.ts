@@ -5,15 +5,19 @@ import { percentile } from "./transport";
 export const VAULT_REFUSALS = ["not_granted", "no_login", "no_form", "needs_passkey", "needs_human", "password_manager_plugin", "task_expired", "denied", "locked", "conflict", "busy", "failed", "bad_request"] as const;
 export type VaultRefusal = (typeof VAULT_REFUSALS)[number];
 export type VaultGrantVia = "sheet" | "phone" | "always";
-export type VaultTiming = "login" | "autofill" | "unlock" | "sheet" | "ready" | "fill" | "profile" | "seed" | "load" | "scan" | "transfer";
+export type VaultTiming = "login" | "autofill" | "unlock" | "sheet" | "ready" | "fill" | "decide" | "profile" | "seed" | "load" | "scan" | "transfer";
+export const VAULT_FAILURES = ["unreachable", "field_missing", "field_changed", "steps"] as const;
+export const noteVaultFailure = (reason: string | undefined, consent?: ConsentToken | null) => {
+  if (reason && (VAULT_FAILURES as readonly string[]).includes(reason)) bump(`vault_failures_${reason}`, consent);
+};
 export const VAULT_TRANSFERS = ["none", "complete", "partial", "sent", "timed_out"] as const;
 export type VaultTransferOutcome = (typeof VAULT_TRANSFERS)[number];
 
 const MAX_SAMPLES = 200;
-const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_filled", "vault_codes_kept", "vault_always_added", ...VAULT_REFUSALS.map((code) => `vault_refusals_${code}`), "vault_grants_sheet", "vault_grants_phone", "vault_grants_always", "vault_phone_approvals", ...VAULT_TRANSFERS.map((t) => `vault_transfers_${t}`), "vault_conflict_keys", "vault_transfer_failures", "vault_blocked_requests"] as const;
+const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_filled", "vault_codes_kept", "vault_always_added", ...VAULT_REFUSALS.map((code) => `vault_refusals_${code}`), "vault_grants_sheet", "vault_grants_phone", "vault_grants_always", "vault_phone_approvals", ...VAULT_TRANSFERS.map((t) => `vault_transfers_${t}`), ...VAULT_FAILURES.map((r) => `vault_failures_${r}`), "vault_conflict_keys", "vault_transfer_failures", "vault_blocked_requests"] as const;
 
 let counts: Record<string, number> = {};
-let samples: Record<VaultTiming, number[]> = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
+let samples: Record<VaultTiming, number[]> = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], decide: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
 
 const bump = (field: string, consent?: ConsentToken | null) => countFor(consent, () => void (counts[field] = (counts[field] ?? 0) + 1), { [field]: 1 });
 
@@ -54,6 +58,6 @@ export function takeVaultCounts(): Record<string, number> {
     taken[`vault_${kind}_ms_max`] = sorted.at(-1)!;
   }
   counts = {};
-  samples = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
+  samples = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], decide: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
   return taken;
 }

@@ -8,7 +8,7 @@ import { cancelVaultSignIn, onLoginFormSeen, vaultSignIn, type VaultSignIn } fro
 import { onAppEvent } from "../../platform/app";
 import { secureRandomHex } from "../../platform/secureRandom";
 import { consentToken } from "../telemetry/client";
-import { noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
+import { noteVaultFailure, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
 import { dropApprovals } from "./approval";
 import { programLabel } from "./programs";
@@ -49,6 +49,13 @@ const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
   cancelled: "The task ended before the sign-in finished.",
   busy: "Another sign-in is running for this site or profile; retry shortly.",
   failed: "The sign-in didn't finish.",
+};
+
+const FAILURE_MESSAGES: Record<NonNullable<VaultSignIn["reason"]>, string> = {
+  unreachable: "The sign-in didn't finish: the site couldn't be reached (reason: unreachable).",
+  field_missing: "The sign-in didn't finish: a sign-in field Ardia filled was gone when it submitted (reason: field_missing).",
+  field_changed: "The sign-in didn't finish: the form changed while Ardia filled it (reason: field_changed).",
+  steps: "The sign-in didn't finish: the site wanted more sign-in steps than Ardia follows (reason: steps).",
 };
 
 const TRANSFER_REFUSALS: Partial<Record<NonNullable<VaultSignIn["transfer"]>, [VaultRefusal, string]>> = {
@@ -155,7 +162,8 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     for (const [kind, value] of [["profile", result.profileMs], ["seed", result.seedMs], ["load", result.loadMs], ["scan", result.scanMs]] as const) noteVaultTiming(kind, value, consent);
     noteVaultTiming("transfer", result.transferMs, consent);
     const code = STATUS_CODES[result.status];
-    if (code) throw new VaultError(code, STATUS_MESSAGES[result.status] ?? "The sign-in didn't finish.");
+    if (result.status === "failed") noteVaultFailure(result.reason, consent);
+    if (code) throw new VaultError(code, result.status === "failed" && result.reason ? FAILURE_MESSAGES[result.reason] : (STATUS_MESSAGES[result.status] ?? "The sign-in didn't finish."));
     const transfer = TRANSFER_REFUSALS[result.transfer ?? "none"];
     if (transfer) throw new VaultError(...transfer);
     if (tabId) driveTab(task, tabId);
@@ -166,6 +174,7 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     noteVaultTiming(auto ? "autofill" : "login", ms, consent);
     noteVaultTiming("ready", result.readyMs, consent);
     noteVaultTiming("fill", result.fillMs, consent);
+    noteVaultTiming("decide", result.decideMs, consent);
     recordVaultEvent({ ...base, time: Date.now(), kind: "fill", account: username, outcome: result.status, ms });
     const timing = (value: number | undefined) => (typeof value === "number" && value >= 0 ? value : null);
     return {
@@ -175,6 +184,7 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
       readyMs: timing(result.readyMs),
       fillMs: timing(result.fillMs),
       totalMs: timing(result.totalMs),
+      decideMs: timing(result.decideMs),
       profileMs: timing(result.profileMs),
       seedMs: timing(result.seedMs),
       loadMs: timing(result.loadMs),

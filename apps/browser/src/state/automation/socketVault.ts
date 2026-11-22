@@ -182,7 +182,7 @@ export const VAULT_METHODS: MethodSpec[] = [
     description:
       "Sign in to a granted site with its saved login (and its verification code, if Ardia keeps one) in a page the agent can't reach, move the session into the profile, then reload the tab. The site must be the saved login's own: for single sign-on, sign in to the identity provider's site, then reload. Never returns the password, the code or any field value. Errors: not_granted, no_login, no_form, needs_passkey, needs_human, password_manager_plugin, task_expired, denied, locked, conflict, busy, failed, bad_request",
     params: obj({ task: id("The token vault.taskStart gave"), site: text("A site the task was granted"), tab: id("A tab to reload once signed in; it joins the tabs the task drives"), account: text("The username, when the site has several saved logins"), why: WHY }, ["task", "site"]),
-    result: "{status, transfer, conflicts, ms, readyMs, fillMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}",
+    result: "{status, transfer, conflicts, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}",
     run: login,
   },
   {

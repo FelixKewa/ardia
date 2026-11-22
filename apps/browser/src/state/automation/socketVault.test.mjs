@@ -484,3 +484,24 @@ test("the session's move into the profile decides the answer: keys the person ch
     tabReloads.reload = real;
   }
 });
+
+test("a failed sign-in names the engine's reason, and decideMs comes back with a success", async () => {
+  const { tab } = await freshWindow("https://one.example/login");
+  stub.controlSocket.peers[724] = NODE;
+  const { call } = socketClient(724);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  takeVaultCounts();
+  for (const reason of ["unreachable", "field_missing", "field_changed", "steps"]) {
+    stub.vaultFake.signInResult = { status: "failed", reason };
+    const failed = await call("vault.login", { task: reply.result.task, site: "one.example", tab });
+    assert.equal(failed.error.code, "failed");
+    assert.match(failed.error.message, new RegExp(`reason: ${reason}`));
+  }
+  stub.vaultFake.signInResult = { status: "signed_in", transfer: "complete", decideMs: 12 };
+  const ok = await call("vault.login", { task: reply.result.task, site: "one.example", tab });
+  assert.equal(ok.result.decideMs, 12);
+  const counts = takeVaultCounts();
+  assert.equal(counts.vault_failures_steps, 1);
+  assert.equal(counts.vault_failures_unreachable, 1);
+  assert.equal(counts.vault_decide_ms_count, 1);
+});
