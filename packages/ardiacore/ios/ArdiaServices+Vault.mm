@@ -35,6 +35,7 @@
       });
       return;
     }
+    if (NSString *hold = [ArdiaLaunchConfig.shared testValue:@"vaultTransferHoldMs"]) [ArdiaCoreProfile setVaultTransferHoldForTesting:hold.doubleValue / 1000.0];
     void (^asked)(ArdiaCoreVaultCodeReply) = nil;
     if (codeProvider) asked = ^(ArdiaCoreVaultCodeReply reply) {
       if (cancelled) return reply(nil);

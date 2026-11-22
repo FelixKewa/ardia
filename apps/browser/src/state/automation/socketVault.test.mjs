@@ -967,6 +967,20 @@ test("signals reach the caller as the engine's booleans and are counted, and get
   assert.equal(counts.vault_failures_error_page, 1);
 });
 
+test("cancelRequested reaches the caller and is counted when the engine finished a move it was asked to stop", async () => {
+  stub.controlSocket.peers[749] = NODE;
+  const { call } = socketClient(749);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  takeVaultCounts();
+  stub.vaultFake.signInResult = { status: "signed_in", transfer: "complete", cancelRequested: true, cookies: 7 };
+  const stopped = await call("vault.login", { task: reply.result.task, site: "one.example" });
+  assert.equal(stopped.result.cancelRequested, true);
+  assert.equal(stopped.result.transfer, "complete");
+  stub.vaultFake.signInResult = { status: "signed_in", transfer: "complete" };
+  assert.equal((await call("vault.login", { task: reply.result.task, site: "one.example" })).result.cancelRequested, false);
+  assert.equal(takeVaultCounts().vault_stops_after_move, 1);
+});
+
 test("failed with no_submit_control names it", async () => {
   stub.controlSocket.peers[745] = NODE;
   const { call } = socketClient(745);

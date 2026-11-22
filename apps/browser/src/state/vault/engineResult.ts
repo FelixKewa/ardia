@@ -1,6 +1,6 @@
 import type { VaultSignIn } from "../../platform/vault";
 import type { ConsentToken } from "../telemetry/client";
-import { noteVaultEvidence, noteVaultFailure, noteVaultSignals, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
+import { noteVaultEvidence, noteVaultFailure, noteVaultSignals, noteVaultStopAfterMove, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
 import type { SignInAnswer } from "./tasks";
 
@@ -100,6 +100,7 @@ export function judge(result: VaultSignIn, auto: boolean, username: string, base
   if (result.status !== "signed_in") noteVaultFailure(result.reason, consent);
   if (result.status === "submitted") noteVaultEvidence(result.evidence, consent);
   noteVaultSignals(signalsOf(result), consent);
+  if (result.cancelRequested === true) noteVaultStopAfterMove(consent);
   const refuse = (error: VaultError, drive = false, reload = false) => runRefusal(error, username, base, consent, drive, reload);
   const code = STATUS_CODES[result.status];
   if (code) return refuse(new VaultError(code, engineMessage(result)));
@@ -121,6 +122,7 @@ export function judge(result: VaultSignIn, auto: boolean, username: string, base
     transfer: result.transfer ?? "none",
     evidence: result.evidence ?? null,
     signals: signalsOf(result),
+    cancelRequested: result.cancelRequested === true,
     reason: result.reason ?? null,
     ms,
     readyMs: timing(result.readyMs),
