@@ -138,3 +138,9 @@ test("the scanner sees the handlers it guards", () => {
   const guarded = CLOSING_PANELS.flatMap((file) => openingTags(source(file)).flatMap((t) => t.attributes.filter((a) => ACTIONS.test(a.name))));
   assert.ok(guarded.length > 60, `${guarded.length} guarded handlers`);
 });
+
+test("a pop-up's menu choice that arrives after its panel started closing is dropped", () => {
+  const field = source("ui/Field.tsx");
+  assert.match(field, /const stillOpen = useStillOpen\(!closing\);/);
+  assert.match(field, /const choice = await showMenu\([^\n]*\);\n\s*if \(choice !== null && choice !== value && stillOpen\(\)\) onChange\(choice as T\);/);
+});

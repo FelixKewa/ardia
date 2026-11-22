@@ -11,7 +11,7 @@ import { monoFace, opacity, perLook, proseLineHeight, radius, space, font as typ
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
-import { useLiveWhile, useClosing, useClosingField } from "./Closing";
+import { useLiveWhile, useClosing, useClosingField, useStillOpen } from "./Closing";
 import { useControlSize } from "./controlSize";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
@@ -227,6 +227,7 @@ export function PopUp<T extends string>({
   const { hovered, hoverProps } = useHover();
   const closing = useClosing();
   const live = useLiveWhile(closing);
+  const stillOpen = useStillOpen(!closing);
   const pressMotion = usePressScaleMotion(!disabled && !native, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const current = options.find((o) => o.value === value);
@@ -238,7 +239,7 @@ export function PopUp<T extends string>({
     ]);
     if (closing) return;
     const choice = await showMenu(withIconNames(items));
-    if (choice !== null && choice !== value) onChange(choice as T);
+    if (choice !== null && choice !== value && stillOpen()) onChange(choice as T);
   };
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
