@@ -106,10 +106,15 @@ One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms
 engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
 `pnpm -C apps/linux typecheck`, `test:graph` and `test:host`, and the Windows workflow, which runs on any pull
 request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
-wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in):
-`boat new --type xlarge --no-auto-stop`, an idle-stop watchdog that stops it after 20 idle minutes, `boat desktop`
-or an X11 display for real input and screen recordings. A Boat VM's desktop is yours: the hidden-instance and focus
-rules are for the owner's Mac.
+wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in) sized
+to the job: `--type small` (2 vCPU / 4 GB, half rate) for quick Linux scripts and unit tests, `--type default`
+(4 vCPU / 8 GB, 1× rate) for Linux UI checks, `boat desktop`, X11 real-input runs and screen recordings, `--type large`
+(8 vCPU / 16 GB, 2× rate) for heavier test suites, and `--type xlarge` (16 vCPU / 32 GB, $0.20/hr, 5.56× `default`)
+**only** for Chromium engine builds or Windows 11 QEMU. Leave Boat's built-in auto-stop on (never pass
+`--no-auto-stop`), set `--ttl` (`7200` for normal tasks, `21600` for engine builds), pass `--no-snapshots` on
+throwaway VMs so stopping erases them cleanly, and stop or delete VMs as soon as you finish — keep named
+`boat snapshot`s only for reusable Chromium builders and keep them stopped between builds. A Boat VM's desktop is
+yours: the hidden-instance and focus rules are for the owner's Mac.
 - **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
   of this file is written for it.
 - **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;

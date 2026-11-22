@@ -53,11 +53,11 @@ took hours. When the Chromium version moves, take the new versions from a full `
 
 ## On a Linux host
 
-Windows engines are built on a Boat VM, which runs the idle-stop watchdog like every VM: `ardia-linux` (`bx_x7n4g59u`,
-xlarge: 16 vCPU, 32 GB, 294 GB, Ubuntu 24.04). x64 and arm64 each need their own tree (about 85 GB with one out dir), so
-to build both at once take a second xlarge VM for the other CPU, give it the watchdog, and delete it once the engine is
-published. The toolchain, the Helium checkouts and the trees stay on the VMs; nothing from Microsoft's packages leaves
-them except inside the built engine.
+Windows engines are built on an `xlarge` Boat VM (16 vCPU, 32 GB, 294 GB, Ubuntu 24.04) created with `--ttl 21600`
+and Boat's built-in auto-stop left enabled (never `--no-auto-stop`), or resumed from a saved builder snapshot and
+stopped as soon as the engine is published. x64 and arm64 each need their own tree (about 85 GB with one out dir), so
+to build both at once take a second `xlarge` VM with `--ttl 21600 --no-snapshots` for the other CPU and delete it
+once the engine is published. Nothing from Microsoft's packages leaves the VM except inside the built engine.
 
 Once per VM:
 
