@@ -1,11 +1,25 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { chromium } from "playwright";
-const { pickerCall } = await import("./elementPicker.ts");
-const { hidingFilter, savablePickedSelector } = await import("./hiddenElements.ts");
+const { pickerCall, trustedPickerCall, pickerCallFor, REFUSED_PICKER } = await import("./elementPicker.ts");
+const { acceptedPick, hidingFilter, savablePickedSelector } = await import("./hiddenElements.ts");
 
-const BROWSER_MISSING = !existsSync(chromium.executablePath()) && "Playwright's Chromium isn't installed";
+function headlessShell() {
+  const cache = join(homedir(), "Library/Caches/ms-playwright");
+  if (!existsSync(cache)) return null;
+  for (const dir of readdirSync(cache).filter((d) => d.startsWith("chromium_headless_shell-")).sort().reverse()) {
+    const path = join(cache, dir, "chrome-headless-shell-mac-arm64/chrome-headless-shell");
+    if (existsSync(path)) return path;
+  }
+  return null;
+}
+
+const executablePath = existsSync(chromium.executablePath()) ? undefined : headlessShell();
+const BROWSER_MISSING = executablePath === null && "Playwright's Chromium isn't installed";
+const launch = () => chromium.launch(executablePath ? { executablePath } : {});
 
 const FIXTURE = `<!doctype html><body>
 <main>
@@ -29,7 +43,8 @@ async function pick(page, target) {
     return [box.left + box.width / 2, box.top + box.height / 2];
   }, target);
   const result = run(page, pickerCall("start", point));
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" })));
+  await page.waitForFunction(() => !!window[Symbol.for("ardia.elementPicker")]?.session);
+  await page.keyboard.press("Enter");
   return (await result).selector;
 }
 
@@ -41,7 +56,7 @@ const state = (page, selector) =>
   }, selector);
 
 test("a picked element saves as a rule that finds only it, and the page keeps the saved form live", { skip: BROWSER_MISSING, timeout: 30_000 }, async (t) => {
-  const browser = await chromium.launch();
+  const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
   for (const target of ["plain", "comment opener", "tab", "line separator", "next line"]) {
@@ -64,4 +79,78 @@ test("a picked element saves as a rule that finds only it, and the page keeps th
   await page.setContent(FIXTURE);
   const oddTag = await pick(page, "tag with a next line");
   assert.equal(hidingFilter("example.com", savablePickedSelector(oddTag) ?? ""), null, "a tag name the rule can't hold isn't saved");
+});
+
+const TRUST_FIXTURE = `<!doctype html><body style="margin:0">
+<div id="fixture-banner" style="position:absolute;left:0;top:0;width:400px;height:100px">banner</div>
+<div id="fixture-other" style="position:absolute;left:0;top:200px;width:400px;height:100px">other</div>
+</body>`;
+
+const freshPage = (page) => page.goto("data:text/html," + encodeURIComponent(TRUST_FIXTURE));
+
+const pending = (promise, ms = 400) => Promise.race([promise.then(() => "settled"), new Promise((r) => setTimeout(() => r("pending"), ms))]);
+
+test("a page's own picker object is refused, whether it was set plainly or locked in place", { skip: BROWSER_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  for (const plant of [
+    () => (window[Symbol.for("ardia.elementPicker")] = { start: () => ({ selector: "#fixture-banner" }), ensure() {}, prove: () => 1 }),
+    () => Object.defineProperty(window, Symbol.for("ardia.elementPicker"), { value: { start: () => ({ selector: "#fixture-banner" }), ensure() {} }, configurable: false }),
+    () => Object.defineProperty(window, Symbol.for("ardia.elementPicker"), { get: () => undefined, configurable: false }),
+  ]) {
+    await freshPage(page);
+    await page.evaluate(plant);
+    assert.deepEqual(await run(page, trustedPickerCall("start", [10, 10])), REFUSED_PICKER);
+  }
+  await freshPage(page);
+  assert.deepEqual(await run(page, trustedPickerCall("apply", [])), true, "the real picker installs on a clean page");
+  const replaced = await page.evaluate(() => {
+    try {
+      Object.defineProperty(window, Symbol.for("ardia.elementPicker"), { value: {} });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  assert.equal(replaced, false, "an installed picker can't be swapped out");
+});
+
+test("an armed picker ignores synthetic clicks, keys and moves, and takes a real click", { skip: BROWSER_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+  await page.setContent(TRUST_FIXTURE);
+  const result = run(page, trustedPickerCall("start", [50, 50]));
+  await page.waitForFunction(() => !!window[Symbol.for("ardia.elementPicker")]?.session);
+  await page.evaluate(() => {
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 50, clientY: 250, bubbles: true }));
+    window.dispatchEvent(new MouseEvent("click", { clientX: 50, clientY: 250, button: 0, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    document.getElementById("fixture-other").click();
+  });
+  assert.equal(await pending(result), "pending", "no synthetic event finishes the pick");
+  await page.keyboard.press("Enter");
+  assert.deepEqual(await result, { selector: "#fixture-banner" }, "a real Enter picks the element the real pointer chose, not the one the page aimed at");
+  const second = run(page, trustedPickerCall("start", null));
+  await page.waitForFunction(() => !!window[Symbol.for("ardia.elementPicker")]?.session);
+  await page.mouse.click(50, 250);
+  assert.deepEqual(await second, { selector: "#fixture-other" }, "a real click picks");
+});
+
+test("a pick is saved only when the browser saw the confirming input on the same page", () => {
+  const offered = { selector: "#fixture-banner" };
+  assert.equal(acceptedPick(offered, true, true), "#fixture-banner");
+  assert.equal(acceptedPick(offered, false, true), null, "no real click or Return reached the tab");
+  assert.equal(acceptedPick(offered, true, false), null, "the tab moved to another page or profile");
+  assert.equal(acceptedPick(REFUSED_PICKER, true, true), null, "the page had its own picker");
+  assert.equal(acceptedPick({ cancelled: true }, true, true), null);
+  assert.equal(acceptedPick(null, true, true), null);
+});
+
+test("only a page with the native pick check gets the hardened picker; elsewhere the picker text stays the one the Linux host pins", () => {
+  assert.equal(pickerCallFor({ armElementPick: () => Promise.resolve(1) }), trustedPickerCall);
+  assert.equal(pickerCallFor({}), pickerCall);
+  assert.equal(pickerCallFor(undefined), pickerCall);
+  assert.notEqual(trustedPickerCall("start", null), pickerCall("start", null));
 });

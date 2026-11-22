@@ -80,11 +80,7 @@ patch("js/contextmenu.js",
       "const onEntryClicked = function(details, tab) {\n"
       "    if ( details.menuItemId === 'ardia-hideElement' ) {\n"
       "        if ( tab === undefined || /^https?:\\/\\//.test(tab.url) === false ) { return; }\n"
-      "        if ( details.frameId !== 0 ) {\n"
-      "            µb.ardiaHideElementFrameClick = { tabId: tab.id, pageUrl: details.pageUrl || tab.url, at: Date.now() };\n"
-      "            return;\n"
-      "        }\n"
-      "        vAPI.tabs.executeScript(tab.id, { frameId: 0, code: \"document.dispatchEvent(new CustomEvent('ardia-hide-element'))\" });\n"
+      "        µb.ardiaHideElementFrameClick = { tabId: tab.id, pageUrl: tab.url, frameId: details.frameId, at: Date.now() };\n"
       "        return;\n"
       "    }\n")
 patch("js/contextmenu.js",
