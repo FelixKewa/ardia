@@ -2,7 +2,6 @@ import { floatingBarLayout, space } from "../ui";
 
 export const hostPillLayout = {
   glassMs: 200,
-  foldSettleMs: 300,
   height: 30,
   maxWidth: 240,
   sideInset: space.m,

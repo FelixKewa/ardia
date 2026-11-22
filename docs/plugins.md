@@ -133,9 +133,15 @@ is the only source of which version may be fetched.
     read-only (folders 0555, files 0555 or 0444), and keeps the download beside it as `<sha256>.tar.gz` (0444). Program
     copies in `Programs/<name>/<version>/` are sealed the same way once they verify, except their top folder, where
     Ardia keeps its leases and after-update marks; removing either unseals it first.
-- **What makes a copy official.** A copy counts only while its download still has the pinned SHA-256 and the payload
-  digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that download's tar
-  (`OfficialArchive.payloadDigest`, `OfficialVerification`).
+- **What makes a copy official.** A copy counts only while its download still has a SHA-256 the signed app vouches
+  for, and the payload digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that
+  download's tar (`OfficialArchive.payloadDigest`, `OfficialVerification`).
+  - The SHA-256s the app vouches for are the current pin's and those of earlier pinned artifacts listed in
+    `apps/browser/official-plugins-history.json`, which `export-sign.sh` writes into Info.plist with the pin (each
+    plugin's `trusted.artifacts`, `OfficialTrust`). `OfficialPlugins/<name>/active` only selects among copies that pass,
+    and `plugins.json` plays no part in it: a copy no signed pin names is never official, whatever the record says.
+  - `official-plugins.py history-check` fails when a `v*` tag that pinned a plugin still in the pin has no history entry,
+    and the release-script tests run it, so a pin bump has to add the release it replaces.
   - Each lookup re-checks the stamps of the download and of every file in the copy, the digests are recomputed whenever
     one changed, and promotion always re-checks from scratch.
   - A replaced or damaged copy isn't listed as official, can't be promoted, and can't be linked. Linking stages the
@@ -170,7 +176,10 @@ is the only source of which version may be fetched.
 - **0.2.47 installs.** 0.2.47 bundled Command Line 0.4.0, approved as `sha256(manifest + "\0bundled")` and copied to
   `Programs/cli/<version>` with `ardia` linked to `Programs/cli/current/bin/ardia`.
   - Until a fetched copy is active, the scan lists that copy as the plugin (folder identity `bundled`, `legacy`), but
-    only while the record's old receipt approves it exactly. Its programs are kept linked in place
+    only while its payload digest is the one a release shipped (`trusted.bundledDigests`, one per release, since each
+    re-signed its bundled copy) and the record's old receipt approves it exactly. The history covers every release that
+    bundled Command Line: 0.2.47-nightly.7 (0.3.0), 0.2.47-nightly.8, 0.2.47-nightly.9 and 0.2.47 (0.4.0). A copy from
+    anywhere else stops counting as official: its `ardia` is taken off PATH and Install… is offered. Its programs are kept linked in place
     (`PluginPrograms.keepLegacy`), with nothing restaged or switched.
   - The launch sweep keeps every installed official plugin's link, listing or not (`programsKeptAtLaunch`).
   - The fetched replacement switches over silently when its `plugin.json` is the one already approved (it carries
@@ -633,8 +642,9 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   read it.
 - **Not sandboxed.** A program isn't a helper: you, or a program you use, run it from a shell, as you, so neither the
   sandbox nor the plugin's other permissions apply to it, and the consent sheet says so ("Adds ardia to your PATH. It runs as you,
-  outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does: the control socket
-  and the token server, while "Let the ardia command control Ardia" is on (`docs/automation.md`, `docs/cli.md`).
+  outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
+  control socket, which checks only that its peer runs as the same user, and the engine's token connection, whose token
+  sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`).
 
 Code: `PluginCore/PluginPrograms.swift` (the store, links and leases; `plugin-tests/PluginProgramsTests.swift`),
 `PluginCore/PluginProgramRegistry.swift` (claims and legacy installs; `plugin-tests/PluginProgramRegistryTests.swift`),
