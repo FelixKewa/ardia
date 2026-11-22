@@ -3,7 +3,7 @@ import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { StartScreen } from "../components/search/StartScreen";
 import { DeckBar } from "../components/tabs/DeckBar";
-import { AppIcon, ArdiaLogo, BarPlusGlyph, ChromeSurface, controlSize, DesignProvider, PressInPlace } from "../components/ui";
+import { AppIcon, ArdiaLogo, BarPlusGlyph, ChromeSurface, controlSize, DesignProvider, PressInPlace, startLayout } from "../components/ui";
 import { redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import type { Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
@@ -234,6 +234,30 @@ test("tapping the mark opens Search through New Tab with a bar tick on the press
   expect(opened).toHaveBeenCalledTimes(1);
   expect(counted.mock.calls.filter((call) => call[0] === "start_logo_taps")).toHaveLength(Platform.OS === "android" ? 1 : 0);
   unmount(root);
+});
+
+test("an ordinary tap on the mark dims it at once and never scales it, with or without Reduce Motion", () => {
+  jest.spyOn(browseStore, "newTab").mockImplementation(() => undefined);
+  jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
+  for (const reduced of [false, true]) {
+    mockMotion.reduced = reduced;
+    const root = start();
+    const mark = () => getAnimatedStyle(host(root, "startLogo")!) as { opacity: number; transform: Record<string, number | string>[] };
+    const scaleOf = () => (Object.assign({}, ...mark().transform) as { scale: number }).scale;
+    const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.onPress === "function")[0]!;
+    expect(mark().opacity).toBe(1);
+    act(() => logo.props.onPressIn());
+    expect(mark().opacity).toBe(startLayout.logoPressOpacity);
+    expect(scaleOf()).toBe(1);
+    for (let frame = 0; frame < 30; frame++) act(() => jest.advanceTimersByTime(16));
+    expect(mark().opacity).toBe(startLayout.logoPressOpacity);
+    expect(scaleOf()).toBe(1);
+    act(() => logo.props.onPressOut());
+    expect(mark().opacity).toBe(1);
+    expect(scaleOf()).toBe(1);
+    unmount(root);
+  }
+  mockMotion.reduced = false;
 });
 
 const content = (root: Root) => getAnimatedStyle(host(root, "startContent")!) as { opacity: number; transform: { scale: number }[] };

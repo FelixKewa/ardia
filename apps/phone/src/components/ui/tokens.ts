@@ -738,10 +738,8 @@ export const browseLayout = {
   barCollapseTravel: 30,
   barSwipeUp: 22,
   searchFieldHeight: 47.5,
-  searchFieldInset: 15,
   fieldLeading: 18,
   fieldTrailing: 10,
-  trayFieldTop: 15,
   suggestionPitch: 58.5,
   suggestionIconSlot: 22,
   rowLeading: 12,
@@ -805,7 +803,7 @@ export const nativeClassicChrome = {
   shadow: dynamicColor(elevation.control.light, elevation.control.dark),
 } as const;
 
-export const overlayInk = { fill: ink.white, onFill: ink.black, glass: "rgba(255,255,255,0.18)", label: ink.white, edge: "rgba(255,255,255,0.55)" } as const;
+export const overlayInk = { fill: ink.white, onFill: ink.black, glass: "rgba(255,255,255,0.18)", solidGlass: "#3A3A3C", label: ink.white, edge: "rgba(255,255,255,0.55)" } as const;
 
 export type ActionSize = "hero" | "regular" | "compact";
 

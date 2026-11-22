@@ -24,7 +24,7 @@ import { Backdrop } from "./Backdrop";
 import type { ChromeStyle } from "../../lib/appearance";
 import { useChromeStyle } from "../../state/settings/appearance";
 import { useReduceTransparency } from "./contrast";
-import { useProfileLook, useTheme } from "./theme";
+import { useIncognitoLook, useProfileLook, useTheme } from "./theme";
 import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
 import { chromeInk, chromeLayout, controlRadius, nativeClassicChrome, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
@@ -231,8 +231,9 @@ export function LookFrost({
   );
 }
 
-export function ChromeFrost(props: Omit<FrostProps, "solid">) {
-  return <LookFrost {...props} solid={useSolidChrome()} />;
+export function ChromeFrost({ solidFill, ...props }: Omit<FrostProps, "solid"> & { solidFill?: string }) {
+  const solid = useSolidChrome();
+  return <LookFrost {...props} fill={solid && solidFill !== undefined ? solidFill : props.fill} solid={solid} />;
 }
 
 export const usesGlass = () => glassIsNative();
@@ -240,7 +241,7 @@ export const usesGlass = () => glassIsNative();
 export function ChromeSurface({
   shape,
   cornerRadius,
-  incognito = false,
+  incognito: incognitoChosen,
   barShadow = false,
   interactive = true,
   tinted = false,
@@ -267,6 +268,8 @@ export function ChromeSurface({
   const look = useProfileLook();
   const theme = useTheme();
   const surface = useChromeStyle();
+  const privateContext = useIncognitoLook();
+  const incognito = incognitoChosen ?? privateContext;
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
     return (
@@ -324,7 +327,7 @@ type OverlayFace = { frostSource?: string };
 function OverlayPlate({ frostSource, cornerRadius, style, children }: OverlayFace & { cornerRadius: number; style: StyleProp<ViewStyle>; children: ReactNode }) {
   if (frostSource)
     return (
-      <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={overlayInk.glass} style={style}>
+      <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={overlayInk.glass} solidFill={overlayInk.solidGlass} style={style}>
         {children}
       </ChromeFrost>
     );

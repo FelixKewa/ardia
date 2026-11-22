@@ -7,6 +7,8 @@ export const listRowLayout = {
   titleLines: 1,
   largeTextTitleLines: 3,
   largeTextScale: 1.35,
+  narrowTitleWidth: 240,
+  narrowTitleLines: 2,
   subtitleLines: 1,
 } as const;
 
@@ -30,4 +32,10 @@ export const libraryLayout = {
 
 export const listRowIconSide = (fontScale: number) => listRowLayout.icon * Math.min(fontScale, listRowLayout.iconScaleCap);
 
-export const listRowTitleLines = (fontScale: number) => (fontScale >= listRowLayout.largeTextScale ? listRowLayout.largeTextTitleLines : listRowLayout.titleLines);
+export type ListRowTitleSpace = { fontScale: number; titleWidth: number | null };
+
+export const listRowTitleLines = ({ fontScale, titleWidth }: ListRowTitleSpace) => {
+  if (fontScale >= listRowLayout.largeTextScale) return listRowLayout.largeTextTitleLines;
+  if (titleWidth !== null && titleWidth < listRowLayout.narrowTitleWidth * fontScale) return listRowLayout.narrowTitleLines;
+  return listRowLayout.titleLines;
+};

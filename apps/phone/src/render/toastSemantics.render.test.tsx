@@ -3,6 +3,8 @@ import { ChromeSurface, chromeLayout, press } from "../components/ui";
 import { act } from "react-test-renderer";
 import { ToastHost } from "../components/toasts/ToastHost";
 import { showToast, useToasts } from "../state/toasts/store";
+import { useTabs } from "../state/tabs/store";
+import { chromeInk, rolesFor } from "../components/ui";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 beforeEach(() => {
@@ -100,4 +102,34 @@ test("Material You keeps its own snackbar plate, the inverse surface, with the n
   expect(StyleSheet.flatten(plate.props.style).borderWidth).toBe(stroke.hairline);
   expect(StyleSheet.flatten(plate.props.style).backgroundColor).toBeDefined();
   unmount(root);
+});
+
+test("in Incognito the toast's shared plate and ink take the private look, never the profile tint, though the host sits outside the deck", () => {
+  const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
+  const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
+  const plate = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "toastPlate" && node.props.source !== undefined)[0]!;
+  const label = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Copied Link")[0]!.props.style).color;
+  const regular = renderSurface(<ToastHost />);
+  act(() => showToast("Copied Link", "link"));
+  expect(plate(regular).props.color).not.toBe(nativeModule.INCOGNITO_LOOK);
+  unmount(regular);
+  act(() => useToasts.setState({ toast: null }));
+  act(() => useTabs.setState({ incognito: true }));
+  const privately = renderSurface(<ToastHost />);
+  act(() => showToast("Copied Link", "link"));
+  expect(plate(privately).props).toMatchObject({ color: nativeModule.INCOGNITO_LOOK, dark: true });
+  expect(plate(privately).props.tint).toBeUndefined();
+  expect(label(privately)).toBe(rolesFor(true).toastLabel);
+  expect(rolesFor(true).toastLabel).not.toBe(rolesFor(false).toastLabel);
+  unmount(privately);
+  glass.mockRestore();
+  act(() => useToasts.setState({ toast: null }));
+  act(() => useTabs.setState({ incognito: false }));
+  const drawn = renderSurface(<ToastHost />);
+  act(() => useTabs.setState({ incognito: true }));
+  act(() => showToast("Copied Link", "link"));
+  const face = drawn.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!;
+  expect(StyleSheet.flatten(face.props.style).backgroundColor).toBe(chromeInk.dark.surface);
+  unmount(drawn);
+  act(() => useTabs.setState({ incognito: false }));
 });

@@ -386,6 +386,28 @@ test("on the Incognito side the selected card's edge takes the private accent, n
   unmount(root);
 });
 
+test("on the Incognito side the grid's Close plate inherits the deck's private look, as the deck bar does, and the profile side keeps the profile's colours", () => {
+  const lookModule = require("@ardia/phone-native") as typeof import("@ardia/phone-native");
+  jest.spyOn(lookModule, "glassIsNative").mockImplementation(() => true);
+  const plates = (root: Root) => byTestId(root, "tabGridClosePlate").filter((node) => node.props.source !== undefined);
+  const regular = deck();
+  toggle();
+  expect(plates(regular).length).toBeGreaterThan(0);
+  plates(regular).forEach((plate) => expect(plate.props.color).not.toBe(lookModule.INCOGNITO_LOOK));
+  unmount(regular);
+  const privates = someTabs(2, true);
+  act(() => tabStore.useTabs.setState((state) => ({ ...state, privates, selectedId: privates[1]!.id, incognito: true })));
+  const privately = deck();
+  pick(true);
+  settle();
+  expect(plates(privately).length).toBeGreaterThan(0);
+  plates(privately).forEach((plate) => {
+    expect(plate.props).toMatchObject({ color: lookModule.INCOGNITO_LOOK, dark: true });
+    expect(plate.props.tint).toBeUndefined();
+  });
+  unmount(privately);
+});
+
 onAndroid("a grid card's Tab Options action gives TalkBack the same drawn CardMenu, placed from the card as a long press with no touch point", () => {
   const root = deck();
   toggle();

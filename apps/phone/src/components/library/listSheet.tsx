@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { settingsUI } from "@ardia/phone-native";
 import { PlatformColor, useWindowDimensions, View } from "react-native";
 import { Button, ContentUnavailableView, HStack, Image, Label, ProgressView, RNHostView, ShareLink, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import { accessibilityAddTraits, accessibilityElement, accessibilityHint, accessibilityLabel, buttonStyle, font, foregroundStyle, frame, lineLimit, truncationMode } from "@expo/ui/swift-ui/modifiers";
@@ -42,6 +43,7 @@ type ListRowProps = {
 export function ListRow({ title, leading, subtitle, label, hint, titleTruncation, minHeight, rowModifiers = [], onPress }: ListRowProps) {
   const { fontScale } = useWindowDimensions();
   const side = listRowIconSide(fontScale);
+  const [titleWidth, setTitleWidth] = useState<number | null>(null);
   return (
     <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityHint(hint)]}>
       <HStack alignment="center" spacing={listRowLayout.gap} modifiers={[frame({ maxWidth: FILL, minHeight, alignment: "leading" }), ...rowModifiers, accessibilityElement("combine"), ...(label ? [accessibilityLabel(label)] : [])]}>
@@ -55,7 +57,7 @@ export function ListRow({ title, leading, subtitle, label, hint, titleTruncation
           <Image systemName={leading.symbol as never} size={side * listRowLayout.symbolShare} color={PlatformColor("secondaryLabel")} modifiers={[frame({ width: side, height: side }), accessibilityElement("ignore")]} />
         )}
         <VStack alignment="leading" spacing={listRowLayout.lineGap}>
-          <Text modifiers={[font({ textStyle: "body" }), lineLimit(listRowTitleLines(fontScale)), frame({ maxWidth: FILL, alignment: "leading" }), ...(titleTruncation ? [truncationMode(titleTruncation)] : [])]}>{title}</Text>
+          <Text modifiers={[font({ textStyle: "body" }), lineLimit(listRowTitleLines({ fontScale, titleWidth })), frame({ maxWidth: FILL, alignment: "leading" }), ...settingsUI.modifierList(settingsUI.onWidthChange(setTitleWidth)), ...(titleTruncation ? [truncationMode(titleTruncation)] : [])]}>{title}</Text>
           {typeof subtitle === "string" ? <ListRowSubtitle text={subtitle} /> : subtitle}
         </VStack>
         <Spacer />

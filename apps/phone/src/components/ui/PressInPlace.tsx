@@ -15,6 +15,7 @@ type Props = {
   onPressIn?: () => void;
   disabled?: boolean;
   checked?: boolean;
+  busy?: boolean;
   grow?: boolean;
   kind?: PressKind;
   ref?: Ref<ViewInstance>;
@@ -22,7 +23,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function PressInPlace({ label, hint, value, longPressLabel, actions, onPress, onLongPress, onPressIn, disabled, checked, grow, kind = "icon", ref, style, children }: Props) {
+export function PressInPlace({ label, hint, value, longPressLabel, actions, onPress, onLongPress, onPressIn, disabled, checked, busy, grow, kind = "icon", ref, style, children }: Props) {
   const { rowPressed } = useTheme();
   const exposed = actions
     ? screenReaderActions([{ name: "activate", run: onPress }, ...(onLongPress ? [{ name: "longpress", label: longPressLabel, run: onLongPress }] : []), ...actions])
@@ -35,7 +36,7 @@ export function PressInPlace({ label, hint, value, longPressLabel, actions, onPr
       accessibilityHint={hint}
       accessibilityValue={value ? { text: value } : undefined}
       {...exposed}
-      accessibilityState={checked === undefined ? { disabled: Boolean(disabled) } : { disabled: Boolean(disabled), checked }}
+      accessibilityState={{ disabled: Boolean(disabled), ...(checked === undefined ? null : { checked }), ...(busy === undefined ? null : { busy }) }}
       disabled={disabled}
       style={grow ? styles.grow : undefined}
       onPress={onPress}

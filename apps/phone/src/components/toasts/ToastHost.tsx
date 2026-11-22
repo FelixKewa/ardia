@@ -12,6 +12,8 @@ import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/t
 import { ChromeSurface, font, space, stroke, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
 import { toastGesture } from "./toastTokens";
 import { materialBottomBar } from "../ui/materialTokens";
+import { IncognitoLook } from "../ui/theme";
+import { useIncognito } from "../../state/tabs/hooks";
 
 const ICONS: Record<ToastIcon, SymbolName> = {
   checkmark: "checkmark",
@@ -28,6 +30,16 @@ const ICONS: Record<ToastIcon, SymbolName> = {
 };
 
 export function ToastHost() {
+  const material = useDesign() === "material";
+  const incognito = useIncognito();
+  return (
+    <IncognitoLook value={incognito && !material}>
+      <ToastLayer />
+    </IncognitoLook>
+  );
+}
+
+function ToastLayer() {
   const insets = useSafeAreaInsets();
   const { lift, keyboard } = useBottomLift();
   const surface = useSurface();

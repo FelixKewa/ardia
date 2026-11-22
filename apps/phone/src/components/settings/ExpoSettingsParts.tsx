@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { settingsUI } from "@ardia/phone-native";
 import { PlatformColor } from "react-native";
 import { Button, HStack, Image, ProgressView, Section, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import { accessibilityAddTraits, accessibilityHidden, accessibilityValue, buttonBorderShape, buttonStyle, controlSize, disabled, fixedSize, font, foregroundStyle, frame, labelStyle, listRowBackground, listRowInsets, tint } from "@expo/ui/swift-ui/modifiers";
@@ -62,23 +63,29 @@ export function useSettingsActionModifiers(size: SettingsActionSize, emphasis: S
   return [...fill, shape, ...sizing];
 }
 
-type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; systemImage?: string; isDisabled?: boolean; busy?: boolean; busyValue?: string };
+type ActionProps = { title: string; onPress: () => void; size: SettingsActionSize; emphasis?: SettingsActionEmphasis; systemImage?: string; isDisabled?: boolean; busy?: boolean; busyValue?: string; focusRequest?: number };
 
-export function ExpoSettingsAction({ title, onPress, size, emphasis = "primary", systemImage, isDisabled = false, busy = false, busyValue = listWords.loading }: ActionProps) {
-  const modifiers = [...useSettingsActionModifiers(size, emphasis), disabled(isDisabled || busy), ...(busy ? [accessibilityValue(busyValue)] : [])];
-  const button =
-    size === "full" ? (
-      <Button onPress={onPress} modifiers={modifiers}>
-        <Text modifiers={[frame({ maxWidth: FILL })]}>{title}</Text>
-      </Button>
-    ) : (
-      <Button label={title} systemImage={systemImage as never} onPress={onPress} modifiers={modifiers} />
-    );
-  if (!busy) return button;
+export const titleWhileBusy = (idleTitle: string, title: string, busy: boolean) => (busy ? idleTitle : title);
+
+function useTitleWhileBusy(title: string, busy: boolean) {
+  const idleTitle = useRef(title);
+  if (!busy) idleTitle.current = title;
+  return titleWhileBusy(idleTitle.current, title, busy);
+}
+
+export function ExpoSettingsAction({ title, onPress, size, emphasis = "primary", systemImage, isDisabled = false, busy = false, busyValue = listWords.loading, focusRequest = 0 }: ActionProps) {
+  const shownTitle = useTitleWhileBusy(title, busy);
+  const modifiers = [...useSettingsActionModifiers(size, emphasis), disabled(isDisabled || busy), ...(busy ? [accessibilityValue(busyValue)] : []), ...settingsUI.modifierList(settingsUI.accessibilityFocusRequest(focusRequest))];
   return (
     <HStack spacing={space.s}>
-      {button}
-      <ProgressView modifiers={[accessibilityHidden(true)]} />
+      {size === "full" ? (
+        <Button onPress={onPress} modifiers={modifiers}>
+          <Text modifiers={[frame({ maxWidth: FILL })]}>{shownTitle}</Text>
+        </Button>
+      ) : (
+        <Button label={shownTitle} systemImage={systemImage as never} onPress={onPress} modifiers={modifiers} />
+      )}
+      {busy ? <ProgressView modifiers={[accessibilityHidden(true)]} /> : null}
     </HStack>
   );
 }

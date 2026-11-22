@@ -68,7 +68,7 @@ export function ActionButton({ title, onPress, variant = "filled", tone = "accen
       onPress={onPress}
       style={pressStyle}
     >
-      {frosted ? <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={colors.fill} style={StyleSheet.absoluteFill} /> : null}
+      {frosted ? <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={colors.fill} solidFill={overlayInk.solidGlass} style={StyleSheet.absoluteFill} /> : null}
       <View style={[styles.content, busy ? styles.hidden : null]}>
         {icon ? <Symbol name={icon} size={actionLayout.icon[size]} color={colors.label} /> : null}
         <Text style={[actionLayout.label[size], styles.label, { color: colors.label }]}>{title}</Text>

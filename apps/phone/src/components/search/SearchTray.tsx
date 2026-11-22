@@ -27,7 +27,7 @@ import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage, reportLaunchTray } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, stroke, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
+import { browseLayout, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, stroke, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
 import { plateMaterial, SEARCH_PANEL_FACE, useSolidChrome, usesGlass, type PlateMaterial } from "../ui/LookViews";
 import { actionWords } from "../../lib/sharedWords";
 import { panelRowLayout, panelTitleLines, SuggestionRow } from "./SuggestionRow";
@@ -45,7 +45,6 @@ import { incognitoTheme, type Theme } from "../ui/theme";
 import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelPreferredHeight, searchPanelRadius, type SearchPanelCorners } from "./searchPanelTokens";
 import type { Point } from "../../lib/menuPlace";
 
-const SHEET_ABOVE_KEYBOARD = 274;
 
 type TrayList = { drag: GestureType; scroll: SheetScroll };
 
@@ -165,7 +164,6 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   const heldLift = useSharedValue(-1);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safeBottom = insets.bottom;
-  const preferred = SHEET_ABOVE_KEYBOARD + browseLayout.searchFieldHeight * (window.fontScale - 1);
   const panel = useDesign() === "redesigned";
   const commandPlacement = useCommandBar(Math.max(keyboard.target, safeBottom));
   const command = panel ? commandPlacement : null;
@@ -176,15 +174,13 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   const placement = searchPanelPlacement(arcPanel, command !== null);
   const place = searchPanelPlace(placement, resting, false);
   const corners = place.corners;
+  const [rowsHeight, setRowsHeight] = useState(ROWS_FALLBACK * browseLayout.suggestionPitch * window.fontScale);
+  const measuredRows = useCallback((height: number) => setRowsHeight((was) => (Math.abs(was - height) < 1 ? was : height)), []);
   useLayoutEffect(() => {
     if (arcPanel && !closing) clearPagePrefill();
   }, []);
-  const trayHeight = command
-    ? command.maxHeight
-    : panel
-      ? trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, window.fontScale, Number.POSITIVE_INFINITY), window.height - insets.top - place.gapAbove, resting, place.gapAboveKeyboard)
-      : trayMaxHeight(preferred, window.height - insets.top, resting, space.s);
-  const extend = window.height;
+  const trayHeight = command ? command.maxHeight : trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, window.fontScale, rowsHeight), window.height - insets.top - place.gapAbove, resting, place.gapAboveKeyboard);
+  const extend = placement === "underKeyboard" ? window.height : 0;
   const closedOnPressIn = useRef(false);
   const closeFromTouch = () => {
     if (searchState().open && searchState().session === session) cancelSearch();
@@ -391,9 +387,9 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
     if (command) return commandBarMotion(Math.max(landing.value, keyboardProgress(keyboard.height.value, keyboard.full.value, 0)), dim.value, reduceMotion, drag.value, back.value * trayBackTravel);
     return {
       opacity: reduceMotion ? dim.value : 1,
-      transform: [{ translateY: trayOffset(lift, drag.value, rise, trayHeight, panel ? panelRadius : radius.sheet) + back.value * trayBackTravel }],
+      transform: [{ translateY: trayOffset(lift, drag.value, rise, trayHeight, panelRadius) + back.value * trayBackTravel }],
     };
-  }, [trayHeight, safeBottom, reduceMotion, panel, command !== null, panelRadius]);
+  }, [trayHeight, safeBottom, reduceMotion, command !== null, panelRadius]);
 
   return (
     <DepartContext.Provider value={beginDeparture}>
@@ -435,10 +431,14 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
         </MotionView>
       ) : (
       <Animated.View
+        testID="traySheet"
         style={[
           styles.sheet,
+          panelCornerStyle(panelRadius, corners),
           {
-            bottom: -extend,
+            left: insets.left + place.cardInset,
+            right: insets.right + place.cardInset,
+            bottom: place.cardGap - extend,
             height: trayHeight + extend,
             backgroundColor: incognito ? theme.canvas : ink.clear,
             shadowColor: theme.trayShadow,
@@ -449,14 +449,16 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
           trayStyle,
         ]}
       >
-        {incognito ? null : <LookFrost source={SURFACES_FROST} variant="sheet" cornerRadius={radius.sheet} fill={theme.canvas} style={StyleSheet.absoluteFill} />}
+        {incognito ? null : <LookFrost source={SURFACES_FROST} variant="sheet" cornerRadius={panelRadius} fill={theme.canvas} style={StyleSheet.absoluteFill} />}
         <View style={{ height: trayHeight }}>
-          <GestureDetector gesture={dismissDrag}>
-            <View collapsable={false}>
-              <TrayField key={session} closing={closing} />
-            </View>
-          </GestureDetector>
-          <TrayRows dismissDrag={dismissDrag} />
+          <TrayContentContext.Provider value={measuredRows}>
+            <GestureDetector gesture={dismissDrag}>
+              <View collapsable={false}>
+                <TrayField key={session} closing={closing} />
+              </View>
+            </GestureDetector>
+            <TrayRows dismissDrag={dismissDrag} />
+          </TrayContentContext.Provider>
         </View>
       </Animated.View>
       )}
@@ -937,19 +939,19 @@ function FieldInput({ first, closing }: { first: boolean; closing: boolean }) {
   const { fontScale } = useWindowDimensions();
   const fieldHeight = searchFieldHeight(fontScale);
   const arcInk = searchPanelInk(incognitoField, theme.dark);
-  const areaStyle = panelField ? styles.searchPanelFieldArea : styles.fieldArea;
+  const outerField = { height: fieldHeight, borderRadius: searchFieldRadius(fieldHeight) };
   const capsuleStyle = panelField
-    ? [styles.searchPanelField, { height: fieldHeight, borderRadius: searchFieldRadius(fieldHeight), backgroundColor: arcInk.field, borderColor: arcInk.fieldEdge }]
-    : [styles.field, { backgroundColor: theme.fieldFill, borderColor: theme.fieldStroke }];
-  const inputHeight = searchFieldInnerHeight(fieldHeight);
-  const inputStyle = panelField ? [styles.searchPanelInput, { minHeight: inputHeight }] : styles.input;
+    ? [styles.searchPanelField, outerField, { backgroundColor: arcInk.field, borderColor: arcInk.fieldEdge }]
+    : [styles.field, outerField, { backgroundColor: theme.fieldFill, borderColor: theme.fieldStroke }];
+  const inputHeight = panelField ? searchFieldInnerHeight(fieldHeight) : fieldHeight - stroke.field * 2;
+  const inputStyle = [panelField ? styles.searchPanelInput : styles.input, { minHeight: inputHeight }];
 
   return (
-    <View testID={panelField ? "searchPanelFieldRow" : undefined} style={areaStyle}>
+    <View testID={panelField ? "searchPanelFieldRow" : "trayFieldRow"} style={styles.searchPanelFieldArea}>
       <View testID="trayFieldCapsule" onLayout={staged ? (event) => staged.onFieldHeight(event.nativeEvent.layout.height) : undefined} style={capsuleStyle}>
         <View testID="trayFieldReveal" nativeID={staged ? SEARCH_REVEAL_ID : undefined} collapsable={false} style={[styles.fieldContents, panelField ? styles.panelField : null]}>
         {fieldGone ? (
-          <Text testID="trayFieldLeaving" numberOfLines={1} maxFontSizeMultiplier={searchPanel.maxTextScale} style={[font.title3, styles.input, styles.leavingText, panelField ? [styles.searchPanelWeight, { minHeight: inputHeight, lineHeight: inputHeight }] : null, { color: lastText.current ? theme.foregroundPrimary : theme.foregroundTertiary }]}>
+          <Text testID="trayFieldLeaving" numberOfLines={1} maxFontSizeMultiplier={searchPanel.maxTextScale} style={[font.title3, styles.input, styles.leavingText, panelField ? styles.searchPanelWeight : null, { minHeight: inputHeight, lineHeight: inputHeight }, { color: lastText.current ? theme.foregroundPrimary : theme.foregroundTertiary }]}>
             {lastText.current || "Search…"}
           </Text>
         ) : (
@@ -1345,28 +1347,22 @@ const styles = StyleSheet.create({
   fabricCatchUp: { position: "absolute", width: 0, height: 0 },
   sheet: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
     elevation: trayShadow.elevation,
     overflow: "hidden",
   },
-  fieldArea: { paddingHorizontal: browseLayout.searchFieldInset, paddingTop: browseLayout.trayFieldTop, paddingBottom: space.s },
   clip: { overflow: "hidden" },
   panelField: { gap: space.s },
   field: {
-    minHeight: browseLayout.searchFieldHeight,
-    borderRadius: capsule(browseLayout.searchFieldHeight),
     borderWidth: stroke.field,
     flexDirection: "row",
     alignItems: "center",
     paddingLeft: browseLayout.fieldLeading,
     paddingRight: browseLayout.fieldTrailing,
+    ...smoothCorners,
   },
   fieldContents: { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" },
-  input: { flex: 1, paddingVertical: 0, minHeight: browseLayout.searchFieldHeight },
-  leavingText: { textAlignVertical: "center", lineHeight: browseLayout.searchFieldHeight },
+  input: { flex: 1, paddingVertical: 0 },
+  leavingText: { textAlignVertical: "center" },
   rows: { flex: 1 },
   stagePanel: { position: "absolute", left: 0, right: 0 },
   incognitoNote: { alignItems: "center", justifyContent: "center", paddingHorizontal: space.l },

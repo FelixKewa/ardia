@@ -127,6 +127,21 @@ test("the pill reads Show Toolbar with the host as its value, and a tap on it br
   unmount(root);
 });
 
+test("the collapsed pill carries the page's busy state while it loads, as the address it stands in for does, and the progress line stays hidden from screen readers", () => {
+  const root = page("redesigned");
+  scrolled("down");
+  settle();
+  const tab = currentTabs().open[0]!;
+  const loading = (isLoading: boolean) => act(() => storeNavigation(tab.id, { url: "https://site0.example/", title: "Site", isLive: true, isLoading, progress: isLoading ? 0.4 : 1, failure: null, canGoBack: false, canGoForward: false, scrollDirection: "down" } as unknown as PageState));
+  expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: false });
+  loading(true);
+  expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: true });
+  expect(host(root, "loadingLine")?.props.accessibilityElementsHidden ?? true).toBe(true);
+  loading(false);
+  expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: false });
+  unmount(root);
+});
+
 test("scrolling back up, opening another page or turning the preference off expands the bar again", () => {
   const root = page("redesigned");
   for (const expand of [() => scrolled("up"), () => scrolled("down", "https://other.example/"), () => act(() => setPreference("collapsesBottomBar", false))]) {

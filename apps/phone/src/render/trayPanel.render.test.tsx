@@ -1,7 +1,8 @@
 import { StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
-import { DesignProvider, MotionView, shadowCss } from "../components/ui";
+import { searchFieldHeight, searchFieldRadius, searchPanel, searchPanelPlace, searchPanelPreferredHeight, searchPanelRadius } from "../components/search/searchPanelTokens";
+import { DesignProvider, MotionView, shadowCss, space } from "../components/ui";
 import * as browse from "../state/browse/store";
 import { dismissSearch, presentSearch } from "../state/search/store";
 import { useTabs } from "../state/tabs/store";
@@ -41,9 +42,18 @@ test("in the redesign search is Arc's panel: edge to edge, sitting on the keyboa
   unmount(root);
 });
 
-test("in the original design search is still the sheet from the bottom edge", () => {
+test("in the original design the fallback tray is the floating above-keyboard card the placement rule picks: inset, rounded on all four corners concentric with the field, only as tall as its rows, with the shared field geometry", () => {
   const root = open("original");
   expect(host(root, "trayPanel")).toBeUndefined();
+  const fieldHeight = searchFieldHeight(1);
+  const place = searchPanelPlace("aboveKeyboard", 0, false);
+  const card = StyleSheet.flatten(host(root, "traySheet")!.props.style);
+  const panelRadius = searchPanelRadius(fieldHeight);
+  expect(card).toMatchObject({ position: "absolute", left: place.cardInset, right: place.cardInset, bottom: place.cardGap, borderRadius: panelRadius, borderCurve: "continuous" });
+  expect(card.borderTopLeftRadius).toBeUndefined();
+  expect(card.height).toBe(searchPanelPreferredHeight("aboveKeyboard", fieldHeight, 1, space.s));
+  expect(StyleSheet.flatten(host(root, "trayFieldRow")!.props.style)).toMatchObject({ paddingHorizontal: searchPanel.fieldInset, paddingTop: searchPanel.fieldInset, paddingBottom: searchPanel.rowsTop });
+  expect(StyleSheet.flatten(host(root, "trayFieldCapsule")!.props.style)).toMatchObject({ height: fieldHeight, borderRadius: searchFieldRadius(fieldHeight), borderCurve: "continuous" });
   unmount(root);
 });
 

@@ -15,6 +15,7 @@ import { privateMark } from "../ui/IncognitoSpecs";
 import { TabStack } from "./BottomBar";
 import { barReturnedToPage } from "../../state/browse/deckPull";
 import { useDeckOwnsBar } from "../../state/browse/hooks";
+import { usePageBusy } from "../../state/page/hooks";
 import { PullGhost, PullGlyphs } from "./PagePull";
 import { IncognitoGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
 import { DUO_PLUS_ABOVE, type DuoSqueeze } from "../../lib/bottomBarSpan";
@@ -86,6 +87,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
   const progress = duo?.progress ?? idle;
   const squeeze = duo?.squeeze ?? null;
   const squeezed = squeeze !== null && (duo?.collapsed ?? false);
+  const squeezedBusy = usePageBusy(squeezed ? address.tabId : null);
   const shut = (value: number) => {
     "worklet";
     return Math.min(Math.max(value, 0), 1);
@@ -115,7 +117,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
         <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} />
         </Animated.View>
-        <PressInPlace ref={menuButton} label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.menu}>
+        <PressInPlace ref={menuButton} label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} busy={squeezed ? squeezedBusy : undefined} onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
             <Symbol name="ellipsis" size={floatingBarLayout.menuSymbol} color={ink.foreground} />
           </Animated.View>

@@ -2267,8 +2267,19 @@ look changes in one place:
   - `IncognitoLook` and `incognitoTheme`: one private accent (`PRIVATE_ACCENT`) for Start, the deck and the search
     tray, never the profile's colour.
   - Focus return: `useModalOverlay` takes `returnFocusTo` and gives focus back after the cover clears; Reader returns
-    it to the page menu button that opened it (`openPageMenuFrom`), the scanner to Scan Code, Voice to its mic (on
-    Material You to the search bar, since Compose draws the mic).
+    it to the page menu button that opened it (`openPageMenuFrom`), the drawn scanner (Android) to Scan Code, Voice to
+    its mic (on Material You to the search bar, since Compose draws the mic). The iPhone scanner is a full-screen
+    React Native `Modal` over the SwiftUI connect page, so it settles focus from the modal's `onDismiss` instead
+    (`afterScanner`, `ExpoSyncConnectPage.tsx`): Cancel, VoiceOver's Escape and the system close go back to Scan Code;
+    a scanned code goes to "Recovery phrase added"; Enter Recovery Phrase pushes its page only then, so the pushed
+    page takes focus as any pushed page does. The native side is `accessibilityFocusRequest` (`settingsUI.tsx`,
+    `SettingsUIModule.swift`), a counter that moves VoiceOver focus to the view each time it goes up.
+  - The native busy action (`ExpoSettingsAction`) keeps one button mounted, idle or busy, with the spinner beside it
+    and hidden from VoiceOver, and keeps the title it had when the work began (Choose Folder stays Choose Folder
+    while the first pick connects).
+  - Native URL rows (`ListRow`, `listSheet.tsx`) measure their title's width (`onWidthChange`, width only, so
+    scrolling sends nothing) and `listRowTitleLines` gives a title narrower than 240 points per unit of text scale a
+    second line; large text keeps its three.
   - `plateMaterial`: one rule for a plate's material (glass, frost or solid); the search panel and its native morph
     both follow it, and a solid (Classic or Reduce Transparency) panel draws the bars' chrome edge on its face and in
     its morph (`classicChrome`, passed across the bridge as `morphClassicChrome`).

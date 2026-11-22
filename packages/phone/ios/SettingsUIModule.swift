@@ -403,6 +403,44 @@ struct LegibleInkResolver: ViewModifier {
   }
 }
 
+struct AccessibilityFocusRequestModifier: ViewModifier, Record {
+  @Field var request: Int = 0
+
+  func body(content: Content) -> some View {
+    content.modifier(AccessibilityFocusRequester(request: request))
+  }
+}
+
+struct AccessibilityFocusRequester: ViewModifier {
+  var request: Int
+  @AccessibilityFocusState private var isFocused: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .accessibilityFocused($isFocused)
+      .onChange(of: request) { _, value in
+        if value > 0 { isFocused = true }
+      }
+  }
+}
+
+struct WidthChangeModifier: ViewModifier, Record {
+  var eventDispatcher: EventDispatcher?
+
+  init() {}
+
+  init(from params: Dict, appContext: AppContext, eventDispatcher: EventDispatcher) throws {
+    try self = .init(from: params, appContext: appContext)
+    self.eventDispatcher = eventDispatcher
+  }
+
+  func body(content: Content) -> some View {
+    content.onGeometryChange(for: CGFloat.self, of: { proxy in proxy.size.width }, action: { width in
+      eventDispatcher?(["ardia.widthChange": ["width": width]])
+    })
+  }
+}
+
 struct MinListRowHeightModifier: ViewModifier, Record {
   @Field var height: Double = 44
 
@@ -450,7 +488,7 @@ struct ProfileLookModifier: ViewModifier, Record {
 }
 
 enum SettingsUIModifiers {
-  static let names = ["ardia.navigationBarBackButtonHidden", "ardia.minListRowHeight", "ardia.spaceBackdrop", "ardia.settingsChrome", "ardia.settingsPage", "ardia.chromeSurface", "ardia.settingsSwitchStyle", "ardia.pressableStyle", "ardia.legibleInk", "ardia.profileLook", "ardia.contentMargins"]
+  static let names = ["ardia.navigationBarBackButtonHidden", "ardia.minListRowHeight", "ardia.spaceBackdrop", "ardia.settingsChrome", "ardia.settingsPage", "ardia.chromeSurface", "ardia.settingsSwitchStyle", "ardia.pressableStyle", "ardia.legibleInk", "ardia.profileLook", "ardia.contentMargins", "ardia.accessibilityFocusRequest", "ardia.widthChange"]
 
   static func register() {
     ViewModifierRegistry.register("ardia.navigationBarBackButtonHidden") { params, context, _ in try BackButtonHiddenModifier(from: params, appContext: context) }
@@ -464,6 +502,8 @@ enum SettingsUIModifiers {
     ViewModifierRegistry.register("ardia.legibleInk") { params, context, _ in try LegibleInkModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.profileLook") { params, context, _ in try ProfileLookModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.contentMargins") { params, context, _ in try ContentMarginsModifier(from: params, appContext: context) }
+    ViewModifierRegistry.register("ardia.accessibilityFocusRequest") { params, context, _ in try AccessibilityFocusRequestModifier(from: params, appContext: context) }
+    ViewModifierRegistry.register("ardia.widthChange") { params, context, dispatcher in try WidthChangeModifier(from: params, appContext: context, eventDispatcher: dispatcher) }
   }
 
   static func unregister() {

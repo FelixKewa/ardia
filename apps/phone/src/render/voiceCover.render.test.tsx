@@ -7,14 +7,20 @@ import { ChromeFrost, OverlayCancelButton } from "../components/ui/LookViews";
 import { DICTATION_IDLE, type Dictation } from "../state/voice/dictation";
 import * as voiceStore from "../state/voice/store";
 import { useVoice } from "../state/voice/store";
+import { setAppearanceDesign } from "../state/settings/appearance";
+import { usePreferences } from "../state/settings/store";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
-const mockMotion = { reduced: false };
-jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
+const mockMotion = { reduced: false, reduceTransparency: false };
+jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced, useReduceTransparency: () => mockMotion.reduceTransparency }));
+
+const lookModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
 
 beforeEach(() => {
   jest.useFakeTimers();
   mockMotion.reduced = false;
+  mockMotion.reduceTransparency = false;
+  usePreferences.setState({ interfaceStyle: "glass" });
   withTabs(1);
 });
 
@@ -81,6 +87,29 @@ test("the voice actions are the shared action's glass face over the cover's fros
   const plate = root.root.findAll((node) => typeof node.type === "string" && flat(node).backgroundColor === voiceInk.transcript)[0]!;
   expect(flat(plate).borderCurve).toBe("continuous");
   unmount(root);
+});
+
+test("the voice actions and Cancel keep the frost tint in Glass and take the solid dark overlay face in Classic and under Reduce Transparency", () => {
+  jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
+  act(() => setAppearanceDesign("redesigned"));
+  const faces = (root: Root) =>
+    root.root
+      .findAll((node) => node.type === ChromeFrost)
+      .map((frost) => StyleSheet.flatten(frost.findAll((node) => typeof node.type === "string")[0]!.props.style).backgroundColor);
+  const glass = show({ phase: "finished", transcript: "otters" });
+  expect(faces(glass)).toHaveLength(2);
+  expect(faces(glass).every((fill) => fill === overlayInk.glass)).toBe(true);
+  unmount(glass);
+  act(() => usePreferences.setState({ interfaceStyle: "classic" }));
+  const classic = show({ phase: "finished", transcript: "otters" });
+  expect(faces(classic)).toEqual([overlayInk.solidGlass, overlayInk.solidGlass]);
+  unmount(classic);
+  act(() => usePreferences.setState({ interfaceStyle: "glass" }));
+  mockMotion.reduceTransparency = true;
+  const reduced = show({ phase: "finished", transcript: "otters" });
+  expect(faces(reduced)).toEqual([overlayInk.solidGlass, overlayInk.solidGlass]);
+  unmount(reduced);
+  act(() => setAppearanceDesign("original"));
 });
 
 test("the waveform follows the level, and holds still at its resting height under Reduce Motion", () => {
