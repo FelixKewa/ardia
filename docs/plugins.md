@@ -975,8 +975,8 @@ in the local copy. Hourly `usage_counts`:
   `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,
   `plugin_ui_prompts` (a quick pick, input box or confirm shown),
   `plugin_net_fetches`, `plugin_net_refusals` (a fetch outside `permissions.network` or to a private address),
-  `plugin_url_refusals_open`, `plugin_url_refusals_group_create` (an `apply` batch refused for an address that isn't http
-  or https, by the operation that held it),
+  `plugin_url_refusals_open`, `plugin_url_refusals_group_create` (an `apply` batch refused for an address outside the
+  plugin URL rules, such as one that isn't http or https or has a user name and password, by the operation that held it),
   `plugin_storage_writes`, `plugin_storage_cancels` (a storage request dropped because the plugin was being removed),
   `plugin_secret_writes`, `plugin_page_reads` (`activePage` reads), `plugin_decide_calls`,
   `plugin_decide_timeouts`.

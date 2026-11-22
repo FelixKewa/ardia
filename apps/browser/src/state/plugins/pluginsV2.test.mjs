@@ -1406,7 +1406,7 @@ test("an omnibox query cancelled while its lazy plugin starts never goes out, an
 });
 
 const ARRANGER = { manifest: 2, name: "arranger", title: "Arranger", main: "index.js", permissions: { tabs: "write", fullUrls: true, workspace: true } };
-const NOT_WEB = ["file:///etc/hosts", "chrome://settings/", "ardia://history", "javascript:alert(1)", "data:text/html,hi"];
+const NOT_WEB = ["file:///etc/hosts", "chrome://settings/", "ardia://history", "javascript:alert(1)", "data:text/html,hi", "https://user:pw@ok.example/"];
 const tabCount = () => Object.keys(S().tabs).length;
 
 test("a plugin's apply opens only http and https addresses, and a batch with one other address is refused whole", async () => {
