@@ -1141,9 +1141,11 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
   capture starts with the pull on iPhone: the on-screen copy is synchronous and holds the first frame about 33 ms
   on the simulator (first frame 48 ms). Moving that copy to the frame after the motion starts was tried and dropped:
   it became a 60 to 80 ms frame in the middle of the landing. Taps that copied at the press are counted as
-  `deck_pictures_at_press`. On Android it starts on the frame
-  after the landing begins for a tap (the draw runs on the main thread, 20 to 60 ms on the F4, and must not delay the
-  first frame) and with the pull for a swipe. A capture is skipped when the page reports its picture still current
+  `deck_pictures_at_press`. On Android a pull never copies the page: the card shows the picture kept current while
+  the page was quiet. Copying it once the landing had started (the draw runs on the main thread, 20 to 60 ms on the
+  F4, so it could not go before the first frame) dropped the moving page for one frame on the F4 when the page had
+  a video playing, showing the tucked card behind it: 5 in 45 landings with GitHub Explore in front, against none
+  in 30 without the copy and none on main. A capture is skipped when the page reports its picture still current
   (`snapshotIsCurrent`). A second request for the tabs while a landing is in flight is ignored; one whose landing
   never reported back stops being in flight after 1.5 s, so a lost callback can't leave the Tabs button dead.
   The live page and its picture agree to the point because the page
@@ -1726,7 +1728,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `duo_layout_shown` | a launch on a Duo in any pose (the probe reports a hinge), or in `wide` or `split` | Whether anyone runs Ardia on a Duo or a full-screen iPad; zero after a release reaching Duo owners means the layout probe stopped reporting. Since #2840 it counts the closed and open Duo too, which now take `phone` |
 | `landscape_shown` | landscape on both phones | How often people turn the phone; zero across testers after a release that rotates means the orientation lock came back |
 | `card_opens_waited` | the card open's hand-over | Whether the page laid out within 250 ms of being made, from when the card's growth lands (it no longer waits for its cover's picture, and an open whose page lays out in time isn't counted); a share of card opens that grows after a release means pages are again slow to lay out and the open is held at full size |
-| `deck_pictures_at_press` | a Tabs tap or bar swipe, as the pull starts | Whether the page's picture had to be copied at the press because it wasn't current; on iPhone that copy holds the first frame about 33 ms. The quiet-page copy keeps it current, so this should stay a small share of `deck_bar_swipes` plus Tabs taps, and a share that grows after a release means the quiet-page copy stopped running |
+| `deck_pictures_at_press` | a Tabs tap or bar swipe, as the pull starts (iPhone; an Android pull never copies) | Whether the page's picture had to be copied at the press because it wasn't current; that copy holds the first frame about 33 ms. The quiet-page copy keeps it current, so this should stay a small share of `deck_bar_swipes` plus Tabs taps, and a share that grows after a release means the quiet-page copy stopped running |
 | `deck_opens_while_landing` | a card tap while the deck is still landing | How often people tap a card before the deck has settled; each one hurried the landing and opened the card as it landed. Zero over a release with many deck opens would mean the landing tap stopped reaching the deck |
 | `deck_pictures_late` | the deck's hand-over, after the pull or the entrance shrink | Whether the leaving tab's card had a picture that hadn't painted when the deck took over (from 2026-11-22 nothing waits for it, so this counts cards that showed their face for a moment where they have a picture). A tab that has never had a picture always shows its face and isn't counted; a share that grows after a release means cards with pictures open on their face more often |
 | `list_sheets_late` | the Archive and History opens on iPhone | Whether those sheets still mount their rows before they move; near zero is the goal, and a share that grows after a release means the open is again doing its work on the tap's path |

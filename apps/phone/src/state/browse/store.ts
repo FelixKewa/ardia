@@ -56,7 +56,7 @@ import { copyText, pasteForGo } from "../../platform/system";
 import { pasteTap } from "../search/pasteRow";
 import { anyPicturePainted, noteSnapshotPageTop, noteSnapshotShown, pictureKey, picturePainted } from "../../lib/shownSnapshots";
 import { DECK_PULL } from "../../lib/deckPull";
-import { runOnJS, runOnUI } from "react-native-reanimated";
+import { runOnUI } from "react-native-reanimated";
 import { showToast } from "../toasts/store";
 import { hideArchiveCard } from "./archiveCard";
 import { cutDeckPullFromRest, deckPull, deckPullArmed, deckPullFades, deckPullGrowing, deckStandbyId, endDeckPull, fadeDeckPullFromRest, landDeckPullFromRest, noteDeckPullEntrance, PULL_STAGE, showPulledPage, whenDeckStandby } from "./deckPull";
@@ -409,6 +409,7 @@ function pullBusyWith(id: string) {
 }
 
 const CAPTURES_AFTER_MOTION = Platform.OS === "android";
+const PULL_COPIES_PAGE = Platform.OS !== "android";
 const CAPTURE_HOLDS_PAGE_MS = 400;
 
 const pullCounts = (id: string) => !useTabs.getState().incognito && !findTab(currentTabs(), id)?.isPrivate;
@@ -446,17 +447,6 @@ function takeDeckCapture(latched: DeckCapture) {
   return latched.done;
 }
 
-function takeLatchedCapture(id: string) {
-  if (deckCapture?.id === id) void takeDeckCapture(deckCapture);
-}
-
-function afterFirstMotionFrame(run: (id: string) => void, id: string) {
-  "worklet";
-  requestAnimationFrame(() => {
-    runOnJS(run)(id);
-  });
-}
-
 const cardPictureShown = (id: string) => {
   const picture = findTab(currentTabs(), id)?.snapshotFileName ?? null;
   return picture === null || picturePainted(pictureKey(`deck:${id}`, picture)) || anyPicturePainted(`deck:${id}`);
@@ -489,7 +479,8 @@ export function deckPullBegan(id: string, tracked = true) {
     pullBusySince = Date.now();
     beginInteraction(PULL_PERF, INTERACTION_WINDOW_MS.deckPull);
   }
-  latchDeckCapture(id, pageCovered(), PULLED_PAGE_TOP, !tracked && CAPTURES_AFTER_MOTION);
+  if (PULL_COPIES_PAGE) latchDeckCapture(id, pageCovered(), PULLED_PAGE_TOP, false);
+  else deckCapture = null;
 }
 
 export function deckPullReleased(id: string, lands: boolean) {
@@ -525,7 +516,6 @@ function landDeckFromRest(id: string) {
     runOnUI(deckPullFades() ? (cardShowsPicture(id) ? fadeDeckPullFromRest : cutDeckPullFromRest) : landDeckPullFromRest)(id, deckPullSettled, deckPullRefused);
     runOnUI(markNextUiFrame)("deck motion");
     runOnUI(markNextUiFrame)("deck takes taps");
-    if (deckCapture?.id === id && !deckCapture.done) runOnUI(afterFirstMotionFrame)(takeLatchedCapture, id);
   });
 }
 

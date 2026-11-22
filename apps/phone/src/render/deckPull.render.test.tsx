@@ -37,6 +37,8 @@ const { deckPull, PULL_STAGE } = pull;
 const SCREEN = { width: 393, height: 873 };
 const AWAY = 100_000;
 
+const onIos = Platform.OS === "android" ? test.skip : test;
+
 const mounted: ReturnType<typeof renderSurface>[] = [];
 
 let counted: jest.SpyInstance;
@@ -341,12 +343,42 @@ test("once the page in front goes quiet its picture is made current, so a Tabs t
   expect(counted).not.toHaveBeenCalledWith("deck_pictures_at_press");
 });
 
-test("the handover never waits for the fresh picture of the page: the capture starts with the pull, the deck takes over the frame after the landing, the page is gone with it, and the leaving card keeps its earlier picture under the fresh one until that has loaded", async () => {
+test("on Android neither a Tabs tap nor a swipe copies the page while it moves, since drawing a moving page with a playing video dropped it for a frame; on iPhone a picture that isn't current is copied at the press", async () => {
+  const id = currentTabs().selectedId!;
+  act(() => browse.pageStateChanged(id, { url: "https://site0.example/", title: "Site 0", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
+  act(() => updateTabById(id, { snapshotFileName: "file:///snapshots/before-moving.jpg" }));
+  jest.spyOn(browse, "keepFrontPictureCurrent").mockImplementation(() => undefined);
+  const snapped = jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: "file:///snapshots/moving.jpg", width: 600, height: 1333 }) as never);
+  const root = app();
+  act(() => jest.advanceTimersByTime(1600));
+  await promisesSettled();
+  snapped.mockClear();
+  const button = root.root.findAll((node) => node.props.accessibilityLabel === "Tabs" && typeof node.props.onPress === "function")[0]!;
+  act(() => void button.props.onPress());
+  for (let at = 0; at < 240 && surface() !== "deck"; at++) {
+    frame();
+    await promisesSettled();
+  }
+  expect(surface()).toBe("deck");
+  expect(snapped).toHaveBeenCalledTimes(Platform.OS === "android" ? 0 : 1);
+  act(() => browse.openTab(id));
+  for (let at = 0; at < 60; at++) frame();
+  snapped.mockClear();
+  swipe([{ dy: -22 }, { dy: -150 }]);
+  for (let at = 0; at < 240 && surface() !== "deck"; at++) {
+    frame();
+    await promisesSettled();
+  }
+  if (Platform.OS === "android") expect(snapped).not.toHaveBeenCalled();
+});
+
+onIos("on iPhone the handover never waits for the fresh picture of the page: the capture starts with the pull, the deck takes over the frame after the landing, the page is gone with it, and the leaving card keeps its earlier picture under the fresh one until that has loaded", async () => {
   const EARLIER = "file:///snapshots/pulled-earlier.jpg";
   const FRESH = "file:///snapshots/pulled-fresh.jpg";
   const id = currentTabs().selectedId!;
   act(() => updateTabById(id, { snapshotFileName: EARLIER }));
   act(() => browse.pageStateChanged(id, { url: "https://site0.example/", title: "Site 0", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
+  jest.spyOn(browse, "keepFrontPictureCurrent").mockImplementation(() => undefined);
   const snapped = jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1333 }) as never);
   const root = app();
   act(() => pictureOf(root, EARLIER)!.props.onLoad(LOADED));
@@ -523,7 +555,7 @@ async function deckTakesOver(root: Root) {
   expect(covered(root)).toHaveLength(0);
   await promisesSettled();
   frame();
-  expect(pictureOf(root, FRESH)).toBeDefined();
+  if (Platform.OS !== "android") expect(pictureOf(root, FRESH)).toBeDefined();
 }
 
 test("with Reduce Motion nothing tracks the finger and nothing waits: over a card whose picture is already painted the swipe starts the cross-fade within two frames, the page fades where it is, and when the fade ends the deck takes over with the card showing its picture", async () => {
@@ -555,7 +587,7 @@ test("with Reduce Motion nothing tracks the finger and nothing waits: over a car
   act(() => jest.advanceTimersByTime(DECK_PULL.fadeMs / 2 + 16));
   expect(target.width).toBeGreaterThan(0);
   await deckTakesOver(root);
-  expect(snapped).toHaveBeenCalledTimes(1);
+  expect(snapped).toHaveBeenCalledTimes(Platform.OS === "android" ? 0 : 1);
   expect(counted).toHaveBeenCalledWith("deck_bar_swipes");
 });
 
@@ -592,7 +624,7 @@ test("with Reduce Motion and no picture in the card there is no fade and still n
   await deckTakesOver(root);
   expect(moved(host(root, "tabDeck")!).translateX).toBe(0);
   expect(hosts(root, "deckCard").length).toBeGreaterThan(1);
-  expect(snapped).toHaveBeenCalledTimes(1);
+  expect(snapped).toHaveBeenCalledTimes(Platform.OS === "android" ? 0 : 1);
   expect(counted).not.toHaveBeenCalledWith("deck_pictures_late");
 });
 
