@@ -1,0 +1,431 @@
+{
+  "start": {
+    "profile": "default",
+    "active": "t1",
+    "url": "http://127.0.0.1:51320/one/next"
+  },
+  "order": [
+    "t1",
+    "t2",
+    "t3",
+    "t4"
+  ],
+  "toolbar.forward.1": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397026821.481791,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "forward",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": "t2"
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t2",
+      "url": "http://127.0.0.1:51320/two"
+    }
+  },
+  "toolbar.forward.2": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397027595.168583,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "forward",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": "t3"
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t3",
+      "url": "http://127.0.0.1:51320/three"
+    }
+  },
+  "toolbar.forward.atEnd": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397028276.449,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "forward",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": null
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t3",
+      "url": "http://127.0.0.1:51320/three"
+    }
+  },
+  "toolbar.back.1": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397028981.362416,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "back",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": "t2"
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t2",
+      "url": "http://127.0.0.1:51320/two"
+    }
+  },
+  "toolbar.back.2": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397029689.446916,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "back",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": "t1"
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t1",
+      "url": "http://127.0.0.1:51320/one/next"
+    }
+  },
+  "toolbar.back.atStart": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397030369.483041,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "back",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": null
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t1",
+      "url": "http://127.0.0.1:51320/one/next"
+    }
+  },
+  "page.back": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RenderWidgetHostViewCocoa",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "rejects": [],
+    "after": {
+      "profile": "default",
+      "active": "t1",
+      "url": "http://127.0.0.1:51320/one"
+    },
+    "tabReceived": []
+  },
+  "sidebar.profile": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "ArdiaShell.WindowDragRegion",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "rejects": [],
+    "after": {
+      "profile": "work",
+      "active": "t4",
+      "url": "http://127.0.0.1:51320/work"
+    },
+    "tabReceived": []
+  },
+  "off.areaGone": true,
+  "sidebarField.forward": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTTextView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397034369.266916,
+        "surface": "sidebarField",
+        "windowId": "w1",
+        "direction": "forward",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": "t2"
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t2",
+      "url": "http://127.0.0.1:51320/two"
+    }
+  },
+  "sidebarField.restOfSidebarStillProfile": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "ArdiaShell.WindowDragRegion",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "rejects": [],
+    "after": {
+      "profile": "work",
+      "active": "t4",
+      "url": "http://127.0.0.1:51320/work"
+    }
+  },
+  "top.toolbar.back": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "rejects": [],
+    "received": [
+      {
+        "at": 397036530.983708,
+        "surface": "toolbar",
+        "windowId": "w1",
+        "direction": "back",
+        "phase": "changed",
+        "distance": 20,
+        "tabId": "t1"
+      }
+    ],
+    "after": {
+      "profile": "default",
+      "active": "t1",
+      "url": "http://127.0.0.1:51320/one"
+    }
+  },
+  "top.strip.profile": {
+    "where": {
+      "systemSwipeEnabled": true,
+      "hit": "RCTView",
+      "target": true,
+      "window": 3778
+    },
+    "swallowed": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "rejects": [],
+    "after": {
+      "profile": "work",
+      "active": "t4",
+      "url": "http://127.0.0.1:51320/work"
+    },
+    "tabReceived": []
+  },
+  "measure.snapshot": true,
+  "measure.dragRects": [
+    [
+      0,
+      0,
+      1280,
+      800
+    ]
+  ],
+  "measure.state": {
+    "profile": "default",
+    "active": "t2",
+    "url": "http://127.0.0.1:51320/two"
+  }
+}
