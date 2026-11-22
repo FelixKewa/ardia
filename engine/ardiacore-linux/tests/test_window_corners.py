@@ -37,7 +37,8 @@ class WindowCornersTests(unittest.TestCase):
         if not shell.exists():
             self.skipTest('the shell has no tiling desktop list on this branch yet')
         text = shell.read_text()
-        listed = text[text.index('TILING_DESKTOPS'):]
+        declaration = text[text.index('const TILING_DESKTOPS'):]
+        listed = declaration[declaration.index('= [') + len('= ['):]
         self.assertEqual(engine, re.findall(r'"([a-z0-9]+)"', listed[:listed.index(']')]))
 
     def test_every_window_clips_its_native_views_to_the_frames_corners(self):
