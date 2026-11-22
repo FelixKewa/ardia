@@ -75,7 +75,6 @@ public final class LookModule: Module {
       Prop("barShadow") { (view: GlassView, value: Bool?) in view.barShadow = value == true }
       Prop("shown") { (view: GlassView, value: Bool?) in view.shown = value ?? true }
       Prop("shownMs") { (view: GlassView, value: Double?) in view.shownDuration = max(0, value ?? 200) / 1000 }
-      Prop("overPage") { (view: GlassView, value: String?) in view.overPage = value }
       Prop("color") { (view: GlassView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: GlassView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: GlassView, value: [String]?) in view.colors.darkThemeColors = value }
@@ -253,13 +252,8 @@ final class GlassView: ExpoView {
   var shown = true
   var shownDuration: TimeInterval = 0.2
   var colors = LookColors()
-  var overPage: String? {
-    didSet { if overPage != oldValue { followPageEdge() } }
-  }
 
   private let effectView = UIVisualEffectView()
-  private var pageEdge: UIScrollEdgeElementContainerInteraction?
-  private var pageEdgeObserver: NSObjectProtocol?
   private var applied: (tint: UIColor?, interactive: Bool, classic: Bool, tinted: Bool, shown: Bool, colors: LookColors)?
 
   required init(appContext: AppContext? = nil) {
@@ -278,43 +272,6 @@ final class GlassView: ExpoView {
     } else {
       super.insertSubview(view, at: index + 1)
     }
-  }
-
-  override func didMoveToWindow() {
-    super.didMoveToWindow()
-    followPageEdge()
-  }
-
-  private func followPageEdge() {
-    let pageID = window == nil ? nil : overPage
-    guard let pageID else {
-      if let pageEdgeObserver { NotificationCenter.default.removeObserver(pageEdgeObserver) }
-      pageEdgeObserver = nil
-      if let pageEdge { removeInteraction(pageEdge) }
-      pageEdge = nil
-      return
-    }
-    if pageEdgeObserver == nil {
-      pageEdgeObserver = NotificationCenter.default.addObserver(forName: PageView.hostedWebViewChanged, object: nil, queue: .main) { [weak self] _ in
-        MainActor.assumeIsolated { self?.attachPageEdge() }
-      }
-    }
-    attachPageEdge()
-  }
-
-  private func attachPageEdge() {
-    guard let overPage, let window, let host = PageView.host(of: overPage), host.window === window, let scrollView = host.hostedScrollView else {
-      if let pageEdge { removeInteraction(pageEdge) }
-      pageEdge = nil
-      return
-    }
-    if let pageEdge, pageEdge.scrollView === scrollView { return }
-    if let pageEdge { removeInteraction(pageEdge) }
-    let edge = UIScrollEdgeElementContainerInteraction()
-    edge.scrollView = scrollView
-    edge.edge = .bottom
-    addInteraction(edge)
-    pageEdge = edge
   }
 
   override func layoutSubviews() {

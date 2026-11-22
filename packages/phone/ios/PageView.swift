@@ -51,12 +51,6 @@ final class PageView: ExpoView {
   private var registeredPageID: String?
 
   @MainActor private static let hosts = NSMapTable<NSString, PageView>.strongToWeakObjects()
-  static let hostedWebViewChanged = Notification.Name("ArdiaPageHostedWebViewChanged")
-
-  var hostedScrollView: UIScrollView? {
-    guard let hostedWebView, hostedWebView.superview === self else { return nil }
-    return hostedWebView.scrollView
-  }
 
   @MainActor
   static func host(of pageID: String) -> PageView? {
@@ -151,9 +145,7 @@ final class PageView: ExpoView {
     registeredPageID = nil
     PhoneHandoff.withdraw(self)
     if let hostedWebView, hostedWebView.superview === self { hostedWebView.removeFromSuperview() }
-    let hadScrollView = hostedScrollView != nil
     hostedWebView = nil
-    if hadScrollView { announceHostedWebView() }
     page = nil
     failedID = nil
     sampled = nil
@@ -164,12 +156,10 @@ final class PageView: ExpoView {
   @MainActor
   private func host(_ webView: WKWebView?) {
     guard webView !== hostedWebView || webView?.superview !== self else { return }
-    let previousScrollView = hostedScrollView
     if let hostedWebView, hostedWebView.superview === self { hostedWebView.removeFromSuperview() }
     hostedWebView = webView
     scrollObservation = nil
     contentSizeObservation = nil
-    defer { if hostedScrollView !== previousScrollView { announceHostedWebView() } }
     guard let webView else {
       gestures.attach(nil, page: nil)
       return
@@ -272,13 +262,8 @@ final class PageView: ExpoView {
     sendTone(theme: page.themeColor, underPage: page.underPageBackgroundColor)
   }
 
-  private func announceHostedWebView() {
-    NotificationCenter.default.post(name: Self.hostedWebViewChanged, object: self)
-  }
-
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    if hostedScrollView != nil { announceHostedWebView() }
     guard window != nil else {
       MainActor.assumeIsolated {
         PhoneHandoff.withdraw(self)
