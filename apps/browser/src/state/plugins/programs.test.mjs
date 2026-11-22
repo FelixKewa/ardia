@@ -399,7 +399,7 @@ test("the official catalogue, the onboarding picks and the anchor aliases come f
   assert.deepEqual(PRESELECTED_PLUGINS, pin.plugins.filter((p) => p.preselected).map((p) => p.name));
   const made = officialCatalogue({
     plugins: [
-      { name: "one", title: "One", blurb: "First.", icon: "a", preselected: true, anchorAliases: ["oldOne"], version: "1.0.0" },
+      { name: "one", title: "One", blurb: "First.", icon: "a", preselected: true, anchorAliases: ["oldOne"], version: "1.0.0", legacyInstall: { program: "one-cmd", root: "Library/Application Support/Ardia/CLI", current: "current" } },
       { name: "two", title: "Two", blurb: "Second.", icon: "b" },
     ],
     comingSoon: [{ name: "soon", title: "Soon", blurb: "Later.", icon: "c", experiment: "officialPluginsAi" }],
@@ -407,6 +407,9 @@ test("the official catalogue, the onboarding picks and the anchor aliases come f
   assert.deepEqual(made.plugins, [{ name: "one", title: "One", blurb: "First.", icon: "a" }, { name: "two", title: "Two", blurb: "Second.", icon: "b" }]);
   assert.deepEqual(made.preselected, ["one"]);
   assert.deepEqual(made.anchorAliases, { one: ["oldOne"], two: [] });
+  assert.deepEqual(made.legacyPrograms, { one: "one-cmd" });
+  const { OFFICIAL_LEGACY_PROGRAMS } = await import("./officialPin.ts");
+  assert.deepEqual(OFFICIAL_LEGACY_PROGRAMS, Object.fromEntries(pin.plugins.filter((p) => p.legacyInstall).map((p) => [p.name, p.legacyInstall.program])));
   assert.deepEqual(made.comingSoon, [{ name: "soon", title: "Soon", blurb: "Later.", icon: "c", experiment: "officialPluginsAi" }]);
 });
 
