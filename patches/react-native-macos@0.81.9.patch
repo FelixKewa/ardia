@@ -50,7 +50,7 @@ diff --git a/Libraries/Image/RCTImageView.mm b/Libraries/Image/RCTImageView.mm
 index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1f55f8907 100644
 --- a/Libraries/Image/RCTImageView.mm
 +++ b/Libraries/Image/RCTImageView.mm
-@@ -149,6 +149,12 @@ static NSDictionary *onLoadParamsForSource(RCTImageSource *source)
+@@ -149,6 +149,12 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
      _imageView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
      [self addSubview:_imageView];
  
@@ -63,7 +63,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1
  #if !TARGET_OS_OSX // [macOS]
      NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
      [center addObserver:self
-@@ -197,7 +203,7 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame : (CGRect)frame)
+@@ -197,7 +203,7 @@ - (void)updateWithImage:(RCTPlatformImage *)image // [macOS]
      image.resizingMode = NSImageResizingModeTile;
    } else if (_resizeMode == RCTResizeModeCover) {
      if (!NSEqualSizes(self.bounds.size, NSZeroSize)) {
@@ -72,7 +72,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1
      }
  #endif // macOS]
    } else if (!UIEdgeInsetsEqualToEdgeInsets(UIEdgeInsetsZero, _capInsets)) {
-@@ -363,7 +369,7 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame : (CGRect)frame)
+@@ -363,7 +369,7 @@ - (RCTImageSource *)imageSourceForSize:(CGSize)size
  #if !TARGET_OS_OSX // [macOS]
    const CGFloat scale = RCTScreenScale();
  #else // [macOS
@@ -81,7 +81,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1
  #endif // macOS]
    const CGFloat targetImagePixels = size.width * size.height * scale * scale;
  
-@@ -429,7 +435,7 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame : (CGRect)frame)
+@@ -429,7 +435,7 @@ - (void)reloadImage
  #if !TARGET_OS_OSX // [macOS]
      CGFloat imageScale = RCTScreenScale();
  #else // [macOS
@@ -90,7 +90,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1
  #endif // macOS]
      if (!UIEdgeInsetsEqualToEdgeInsets(_capInsets, UIEdgeInsetsZero)) {
        // Don't resize images that use capInsets
-@@ -558,7 +564,7 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame : (CGRect)frame)
+@@ -558,7 +564,7 @@ - (void)reactSetFrame:(CGRect)frame
          imageSize, imageScale, frame.size, RCTScreenScale(), RCTResizeModeFromUIViewContentMode(self.contentMode), YES);
  #else // [macOS
      CGSize idealSize = RCTTargetSize(
@@ -99,7 +99,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1
  #endif // macOS]
  
      // Don't reload if the current image or target image size is close enough
-@@ -621,8 +627,18 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame : (CGRect)frame)
+@@ -621,8 +627,18 @@ - (void)didMoveToWindow
  #if TARGET_OS_OSX // [macOS
  - (void)viewDidChangeBackingProperties
  {
@@ -144,7 +144,7 @@ diff --git a/Libraries/Network/RCTNetworkTask.mm b/Libraries/Network/RCTNetworkT
 index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc99e821ae 100644
 --- a/Libraries/Network/RCTNetworkTask.mm
 +++ b/Libraries/Network/RCTNetworkTask.mm
-@@ -19,6 +19,8 @@
+@@ -19,6 +19,8 @@ @implementation RCTNetworkTask {
    std::mutex _mutex;
    std::atomic<RCTNetworkTaskStatus> _atomicStatus;
    RCTNetworkTask *_selfReference;
@@ -153,7 +153,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
  }
  
  static auto currentRequestId = std::atomic<NSUInteger>(0);
-@@ -52,14 +54,29 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -52,14 +54,29 @@ - (RCTNetworkTaskStatus)status
  
  - (void)invalidate
  {
@@ -189,7 +189,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
  
  - (void)dispatchCallback:(dispatch_block_t)callback
  {
-@@ -72,25 +89,36 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -72,25 +89,36 @@ - (void)dispatchCallback:(dispatch_block_t)callback
  
  - (void)start
  {
@@ -234,7 +234,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
  
    id token = _requestToken;
    if (token && [_handler respondsToSelector:@selector(cancelRequest:)]) {
-@@ -111,10 +139,9 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -111,10 +139,9 @@ - (BOOL)validateRequestToken:(id)requestToken
      valid = NO;
    }
  
@@ -248,7 +248,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
        [self dispatchCallback:^{
          completionBlock(self->_response, nil, RCTErrorWithMessage(@"Invalid request token."));
        }];
-@@ -130,8 +157,8 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -130,8 +157,8 @@ - (void)URLRequest:(id)requestToken didSendDataWithProgress:(int64_t)bytesSent
      return;
    }
  
@@ -259,7 +259,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
      int64_t length = _request.HTTPBody.length;
      [self dispatchCallback:^{
        uploadProgressBlock(bytesSent, length);
-@@ -146,8 +173,8 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -146,8 +173,8 @@ - (void)URLRequest:(id)requestToken didReceiveResponse:(NSURLResponse *)response
    }
  
    _response = response;
@@ -270,7 +270,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
      [self dispatchCallback:^{
        responseBlock(response);
      }];
-@@ -172,9 +199,11 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -172,9 +199,11 @@ - (void)URLRequest:(id)requestToken didReceiveData:(NSData *)data
      @try {
        [_data appendData:data];
      } @catch (NSException *exception) {
@@ -285,7 +285,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
          [self dispatchCallback:^{
            completionBlock(
                self->_response, nil, RCTErrorWithMessage(exception.reason ?: @"Request's received data too long."));
-@@ -189,14 +218,14 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -189,14 +218,14 @@ - (void)URLRequest:(id)requestToken didReceiveData:(NSData *)data
  
    int64_t total = _response.expectedContentLength;
  
@@ -304,7 +304,7 @@ index a82671b7c87fae1e390cc6a292bd91611ca40584..13effa264ea260263dcf9ae7cd5e80bc
      [self dispatchCallback:^{
        downloadProgressBlock(length, total);
      }];
-@@ -209,9 +238,11 @@ RCT_NOT_IMPLEMENTED(-(instancetype)init)
+@@ -209,9 +238,11 @@ - (void)URLRequest:(id)requestToken didCompleteWithError:(NSError *)error
      return;
    }
  
@@ -371,7 +371,7 @@ diff --git a/Libraries/Text/Text/RCTTextView.mm b/Libraries/Text/Text/RCTTextVie
 index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf6d6cb257 100644
 --- a/Libraries/Text/Text/RCTTextView.mm
 +++ b/Libraries/Text/Text/RCTTextView.mm
-@@ -37,6 +37,108 @@
+@@ -37,6 +37,108 @@ - (BOOL)canBecomeKeyView
  
  @end
  
@@ -480,7 +480,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  #endif // macOS]
  
  #if !TARGET_OS_OSX // [macOS]
-@@ -62,6 +164,9 @@
+@@ -62,6 +164,9 @@ @implementation RCTTextView {
    NSArray<RCTUIView *> *_Nullable _descendantViews; // [macOS]
    NSTextStorage *_Nullable _textStorage;
    CGRect _contentFrame;
@@ -490,7 +490,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  }
  
  // [macOS
-@@ -171,6 +276,10 @@
+@@ -171,6 +276,10 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  #if TARGET_OS_OSX // [macOS
    NSLayoutManager *layoutManager = textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
@@ -501,7 +501,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  
    [_textView replaceTextContainer:textContainer];
  
-@@ -187,7 +296,7 @@
+@@ -187,7 +296,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  
    _textView.minSize = contentFrame.size;
    _textView.maxSize = contentFrame.size;
@@ -510,7 +510,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
    _textView.textStorage.attributedString = textStorage;
  #endif // macOS]
  
-@@ -205,6 +314,39 @@
+@@ -205,6 +314,39 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
    [self setNeedsDisplay];
  }
  
@@ -550,7 +550,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  - (void)drawRect:(CGRect)rect
  {
    [super drawRect:rect];
-@@ -293,6 +435,11 @@
+@@ -293,6 +435,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
    CGFloat fraction;
    NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
@@ -562,7 +562,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
    NSUInteger characterIndex = [layoutManager characterIndexForPoint:point
                                                      inTextContainer:textContainer
                             fractionOfDistanceBetweenInsertionPoints:&fraction];
-@@ -310,6 +457,12 @@
+@@ -310,6 +457,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
  - (void)didMoveToWindow
  {
    [super didMoveToWindow];
@@ -575,7 +575,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf
  
    if (!self.window) {
      self.layer.contents = nil;
-@@ -318,6 +471,9 @@
+@@ -318,6 +471,9 @@ - (void)didMoveToWindow
        _highlightLayer = nil;
      }
    } else if (_textStorage) {
@@ -589,7 +589,7 @@ diff --git a/Libraries/Text/Text/RCTTextViewManager.mm b/Libraries/Text/Text/RCT
 index 769a3e556d96b2b9f6c2795303b675b749cdeb61..078288af5be55afc260a48d0860a902ed817a5b8 100644
 --- a/Libraries/Text/Text/RCTTextViewManager.mm
 +++ b/Libraries/Text/Text/RCTTextViewManager.mm
-@@ -34,6 +34,9 @@ RCT_REMAP_SHADOW_PROPERTY(minimumFontScale, minimumFontScale, CGFloat)
+@@ -34,6 +34,9 @@ @implementation RCTTextViewManager {
  RCT_EXPORT_SHADOW_PROPERTY(onTextLayout, RCTDirectEventBlock)
  
  RCT_EXPORT_VIEW_PROPERTY(selectable, BOOL)
@@ -629,7 +629,7 @@ index 18bbe64f657a36596563b3eb6d135284e28c674a..a4046a33e13d35cac155e306f368e04e
  #if !TARGET_OS_OSX // [macOS]
  @interface RCTBackedTextFieldDelegateAdapter () <UITextFieldDelegate, UITextDropDelegate>
  #else // [macOS
-@@ -235,6 +254,9 @@ static void *TextFieldSelectionObservingContext = &TextFieldSelectionObservingCo
+@@ -235,6 +254,9 @@ - (BOOL)control:(NSControl *)control textShouldEndEditing:(NSText *)fieldEditor
  - (BOOL)control:(NSControl *)control textView:(NSTextView *)fieldEditor doCommandBySelector:(SEL)commandSelector
  {
    id<RCTBackedTextInputDelegate> textInputDelegate = [_backedTextInputView textInputDelegate];
@@ -639,7 +639,7 @@ index 18bbe64f657a36596563b3eb6d135284e28c674a..a4046a33e13d35cac155e306f368e04e
    BOOL commandHandled = NO;
    // enter/return
    if (commandSelector == @selector(insertNewline:) || commandSelector == @selector(insertNewlineIgnoringFieldEditor:)) {
-@@ -490,6 +512,9 @@ static void *TextFieldSelectionObservingContext = &TextFieldSelectionObservingCo
+@@ -490,6 +512,9 @@ - (BOOL)textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector
  {
    BOOL commandHandled = NO;
    id<RCTBackedTextInputDelegate> textInputDelegate = [_backedTextInputView textInputDelegate];
@@ -667,7 +667,7 @@ diff --git a/Libraries/Text/TextInput/RCTBaseTextInputView.mm b/Libraries/Text/T
 index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513deb65fcc6 100644
 --- a/Libraries/Text/TextInput/RCTBaseTextInputView.mm
 +++ b/Libraries/Text/TextInput/RCTBaseTextInputView.mm
-@@ -47,6 +47,16 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+@@ -47,6 +47,16 @@ @implementation RCTBaseTextInputView {
  #if TARGET_OS_OSX // [macOS avoids duplicating effects of textInputDid(Begin|End)Editing calls
    BOOL _isCurrentlyEditing;
  #endif // macOS]
@@ -684,7 +684,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
  }
  
  #if !TARGET_OS_OSX // [macOS]
-@@ -76,6 +86,11 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+@@ -76,6 +86,11 @@ - (void)reactUpdateResponderOffsetForScrollView:(RCTScrollView *)scrollView
  }
  #endif // [macOS]
  
@@ -696,7 +696,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
  - (instancetype)initWithBridge:(RCTBridge *)bridge
  {
    RCTAssertParam(bridge);
-@@ -224,6 +239,13 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -224,6 +239,13 @@ - (void)setAttributedText:(NSAttributedString *)attributedText
  
    textNeedsUpdate = ([self textOf:attributedTextCopy equals:backedTextInputViewTextCopy] == NO);
  
@@ -710,7 +710,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
    if ((eventLag == 0 || self.backedTextInputView.ghostTextChanging) && textNeedsUpdate) { // [macOS]
  #if !TARGET_OS_OSX // [macOS]
      UITextRange *selection = self.backedTextInputView.selectedTextRange;
-@@ -238,13 +260,34 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -238,13 +260,34 @@ - (void)setAttributedText:(NSAttributedString *)attributedText
        // If there was ghost text previously, we don't want it showing up if we undo.
        // If something goes wrong when trying to remove it, just stick with oldAttributedText.
        NSAttributedString *oldAttributedTextWithoutGhostText = [self removingGhostTextFromString:oldAttributedText strict:YES] ?: oldAttributedText;
@@ -746,7 +746,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
  
  #if !TARGET_OS_OSX // [macOS]
      if (selection.empty) {
-@@ -330,6 +373,15 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -330,6 +373,15 @@ - (void)setSelection:(RCTTextSelection *)selection
    }
  }
  
@@ -762,7 +762,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
  - (void)setSelectionStart:(NSInteger)start selectionEnd:(NSInteger)end
  {
  #if !TARGET_OS_OSX // [macOS]
-@@ -342,6 +394,9 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -342,6 +394,9 @@ - (void)setSelectionStart:(NSInteger)start selectionEnd:(NSInteger)end
      [self.backedTextInputView setSelectedTextRange:range notifyDelegate:NO];
    }
  #else // [macOS
@@ -772,7 +772,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
    NSInteger startPosition = MIN(start, end);
    NSInteger endPosition = MAX(start, end);
    [self.backedTextInputView setSelectedTextRange:NSMakeRange(startPosition, endPosition - startPosition) notifyDelegate:NO];
-@@ -521,6 +576,11 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -521,6 +576,11 @@ - (void)textInputDidBeginEditing
      return;
    }
    _isCurrentlyEditing = YES;
@@ -784,7 +784,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
  #endif // macOS]
    
    [_eventDispatcher sendTextEventWithType:RCTTextEventTypeFocus
-@@ -729,6 +789,11 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -729,6 +789,11 @@ - (NSString *)textInputShouldChangeText:(NSString *)text inRange:(NSRange)range
  
  - (void)textInputDidChange
  {
@@ -796,7 +796,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
    [self updateLocalData];
  
    id<RCTBackedTextInputViewProtocol> backedTextInputView = self.backedTextInputView;
-@@ -750,6 +815,9 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -750,6 +815,9 @@ - (void)textInputDidChange
    if (!self.backedTextInputView.ghostTextChanging) { // [macOS]
      _nativeEventCount++;
  
@@ -806,7 +806,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
      if (_onChange) {
        _onChange(@{
          @"text" : [self.attributedText.string copy],
-@@ -894,8 +962,49 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -894,8 +962,49 @@ - (RCTUIView *)reactAccessibilityElement // [macOS]
  
  #pragma mark - Focus Control
  
@@ -856,7 +856,7 @@ index cac171e70c9fa225cdec45b205086342a0d50f06..a0d75d7f127c1da4758dcfcdd119513d
    [self.backedTextInputView reactFocus];
  
    if (_clearTextOnFocus) {
-@@ -909,6 +1018,9 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)decoder)
+@@ -909,6 +1018,9 @@ - (void)reactFocus
      [self.backedTextInputView setSelectedTextRange:NSMakeRange(NSNotFound, 0) notifyDelegate:NO];
  #endif // macOS]
    }
@@ -870,7 +870,7 @@ diff --git a/Libraries/Text/TextInput/RCTBaseTextInputViewManager.mm b/Libraries
 index fac5699dedeaaa35bb22b8f8d5d96a3817ca92b1..692ea640ba83db5b0bfe3fc1a24fda68c0568ef9 100644
 --- a/Libraries/Text/TextInput/RCTBaseTextInputViewManager.mm
 +++ b/Libraries/Text/TextInput/RCTBaseTextInputViewManager.mm
-@@ -161,6 +161,11 @@ RCT_EXPORT_METHOD(setTextAndSelection
+@@ -161,6 +161,11 @@ - (void)setBridge:(RCTBridge *)bridge
      if (eventLag != 0) {
        return;
      }
@@ -886,7 +886,7 @@ diff --git a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm b
 index 9973da7611fc92df7e66010350504bf077a9f2d9..66f7f05ae27762b12e41f92c02bd3997212ed092 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
 +++ b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
-@@ -26,7 +26,9 @@
+@@ -26,7 +26,9 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
      self.submitBehavior = @"blurAndSubmit";
  
      _backedTextInputView = [[RCTUITextField alloc] initWithFrame:self.bounds];
@@ -896,7 +896,7 @@ index 9973da7611fc92df7e66010350504bf077a9f2d9..66f7f05ae27762b12e41f92c02bd3997
  #if TARGET_OS_OSX // [macOS
      _backedTextInputView.cell.scrollable = YES;
      _backedTextInputView.cell.usesSingleLineMode = YES;
-@@ -57,10 +59,21 @@
+@@ -57,10 +59,21 @@ - (void)setReactBorderInsets:(UIEdgeInsets)reactBorderInsets
  {
    [super setReactBorderInsets:reactBorderInsets];
    // We apply `borderInsets` as `backedTextInputView`'s layout offset on mac.
@@ -919,7 +919,7 @@ index 9973da7611fc92df7e66010350504bf077a9f2d9..66f7f05ae27762b12e41f92c02bd3997
  - (void)setUseSecureTextField:(BOOL)useSecureTextField {
    if (_useSecureTextField != useSecureTextField) {
      _useSecureTextField = useSecureTextField;
-@@ -84,10 +97,11 @@
+@@ -84,10 +97,11 @@ - (void)setUseSecureTextField:(BOOL)useSecureTextField {
      _backedTextInputView.selectionColor = previousTextField.selectionColor;
      _backedTextInputView.textAlignment = previousTextField.textAlignment;
      _backedTextInputView.textContainerInset = previousTextField.textContainerInset;
@@ -936,12 +936,11 @@ diff --git a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputViewManag
 index 386405335b411e70a82909033febc7dd5b4adabe..ace454e53458fb82d2fd6b456c4e95623ee7311f 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputViewManager.mm
 +++ b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputViewManager.mm
-@@ -29,5 +29,14 @@ RCT_EXPORT_MODULE()
- }
+@@ -30,4 +30,13 @@ - (RCTPlatformView *)view // [macOS]
  
  RCT_REMAP_OSX_VIEW_PROPERTY(secureTextEntry, useSecureTextField, BOOL) // [macOS]
 +RCT_REMAP_OSX_VIEW_PROPERTY(ardiaCentersCapitals, backedTextInputView.ardiaCentersCapitals, BOOL)
-+
+ 
 +#if TARGET_OS_OSX // [Ardia: pastedTypes reached only multiline fields
 +RCT_CUSTOM_VIEW_PROPERTY(pastedTypes, NSArray<NSPasteboardType>*, RCTSinglelineTextInputView)
 +{
@@ -949,7 +948,7 @@ index 386405335b411e70a82909033febc7dd5b4adabe..ace454e53458fb82d2fd6b456c4e9562
 +  [view.backedTextInputView setReadablePasteBoardTypes:types];
 +}
 +#endif // Ardia]
- 
++
  @end
 diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.h b/Libraries/Text/TextInput/Singleline/RCTUITextField.h
 index 61242af88da2f235e5ae506e79dfb9898742eb51..259868183aa018ac6c0e7a83a9008ad63a2bb3dd 100644
@@ -1097,7 +1096,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  @property (nonatomic, assign) UIEdgeInsets textContainerInset;
  @property (nonatomic, getter=isAutomaticTextReplacementEnabled) BOOL automaticTextReplacementEnabled;
  @property (nonatomic, getter=isAutomaticSpellingCorrectionEnabled) BOOL automaticSpellingCorrectionEnabled;
-@@ -29,7 +141,29 @@
+@@ -29,7 +141,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
  
  @end
  
@@ -1128,7 +1127,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  
  - (NSRect)titleRectForBounds:(NSRect)rect
  {
-@@ -84,6 +218,8 @@
+@@ -84,6 +218,8 @@ @implementation RCTUITextField {
  #if TARGET_OS_OSX // [macOS
    BOOL _isUpdatingPlaceholderText;
    NSArray<NSPasteboardType> *_readablePasteboardTypes;
@@ -1137,7 +1136,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #endif // macOS]
  }
  
-@@ -155,6 +291,11 @@
+@@ -155,6 +291,11 @@ - (BOOL)hasMarkedText
  	return ((NSTextView *)self.currentEditor).validAttributesForMarkedText ?: @[];
  }
  
@@ -1149,15 +1148,15 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #endif // macOS]
  
  #pragma mark - Accessibility
-@@ -304,8 +445,110 @@
+@@ -304,8 +445,110 @@ - (RCTUIColor*)cursorColor
  - (void)setFont:(UIFont *)font
  {
    ((RCTUITextFieldCell*)self.cell).font = font;
 +#if TARGET_OS_OSX // [Ardia
 +  [self ardia_applyOpticalLift];
 +#endif // Ardia]
- }
- 
++}
++
 +#if TARGET_OS_OSX
 +// [Ardia: typed and placeholder text get RCTTextView's optical lift. The field grows upward by the lift inside its
 +// unchanged layout box, so its text sits that much higher and the caret, which AppKit clips to the field's bounds,
@@ -1231,8 +1230,8 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
 +- (void)ardia_interfaceScaleDidChange:(NSNotification *)notification
 +{
 +  [self ardia_applyOpticalLift];
-+}
-+
+ }
+ 
 +- (void)viewDidMoveToWindow
 +{
 +  [super viewDidMoveToWindow];
@@ -1260,7 +1259,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  - (UIFont *)font
  {
    return ((RCTUITextFieldCell*)self.cell).font;
-@@ -330,7 +573,9 @@
+@@ -330,7 +573,9 @@ - (void)setPlaceholder:(NSString *)placeholder
  #if !TARGET_OS_OSX // [macOS]
    [super setPlaceholder:placeholder];
  #else // [macOS
@@ -1270,7 +1269,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #endif // macOS]
    [self _updatePlaceholder];
  }
-@@ -385,6 +630,20 @@
+@@ -385,6 +630,20 @@ - (void)_updatePlaceholder
    _isUpdatingPlaceholderText = YES;
    self.placeholderAttributedString = [[NSAttributedString alloc] initWithString:self.placeholder ?: @""
  																	 attributes:[self _placeholderTextAttributes]];
@@ -1291,7 +1290,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
    _isUpdatingPlaceholderText = NO;
  #endif // macOS]
  }
-@@ -710,6 +969,9 @@
+@@ -710,6 +969,9 @@ - (void)keyUp:(NSEvent *)event {
  - (void)setReadablePasteBoardTypes:(NSArray<NSPasteboardType> *)readablePasteboardTypes
  {
    _readablePasteboardTypes = readablePasteboardTypes;
@@ -1317,7 +1316,7 @@ index 6f332dc1701cada0aff0e9a2678fa7bdcea0ef85..462853ec8b76f004cd5b9e92291473bc
  @interface RCTUISecureTextFieldCell : NSSecureTextFieldCell
  
  @property (nonatomic, assign) UIEdgeInsets textContainerInset;
-@@ -71,13 +76,53 @@
+@@ -71,13 +76,53 @@ - (NSText *)setUpFieldEditorAttributes:(NSText *)textObj
  
  #pragma mark - RCTUISecureTextField
  
@@ -1397,7 +1396,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  #if !TARGET_OS_OSX // [macOS]
  #import <UIKit/UIGestureRecognizerSubclass.h>
  #endif // [macOS]
-@@ -59,6 +61,10 @@
+@@ -59,6 +61,10 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
      _reactTouches = [NSMutableArray new];
      _touchViews = [NSMutableArray new];
  
@@ -1408,7 +1407,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  #if !TARGET_OS_OSX // [macOS]
      // `cancelsTouchesInView` and `delaysTouches*` are needed in order to be used as a top level
      // event delegated recognizer. Otherwise, lower-level components not built
-@@ -100,6 +106,114 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)coder)
+@@ -100,6 +106,114 @@ - (void)detachFromView:(RCTPlatformView *)view // [macOS]
  
  #pragma mark - Bookkeeping for touch indices
  
@@ -1523,7 +1522,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  - (void)_recordNewTouches:(NSSet *)touches
  {
  #if !TARGET_OS_OSX // [macOS]
-@@ -108,7 +222,13 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)coder)
+@@ -108,7 +222,13 @@ - (void)_recordNewTouches:(NSSet *)touches
    for (NSEvent *touch in touches) {
  #endif // macOS]
  
@@ -1537,7 +1536,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  
      // Find closest React-managed touchable view
      
-@@ -204,19 +324,27 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)coder)
+@@ -204,19 +324,27 @@ - (void)_recordRemovedTouches:(NSSet *)touches
    for (UITouch *touch in touches) {
      NSInteger index = [_nativeTouches indexOfObject:touch];
  #else // [macOS
@@ -1569,7 +1568,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  }
  
  - (void)_updateReactTouchAtIndex:(NSInteger)touchIndex
-@@ -303,15 +431,17 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)coder)
+@@ -303,15 +431,17 @@ - (void)_updateAndDispatchTouches:(NSSet<NSEvent *> *)touches eventName:(NSStrin
    for (UITouch *touch in touches) {
      NSInteger index = [_nativeTouches indexOfObject:touch];
  #else // [macOS
@@ -1590,7 +1589,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
      
  #if TARGET_OS_OSX // [macOS
      _nativeTouches[index] = touch;
-@@ -431,34 +561,34 @@ static BOOL RCTAnyTouchesChanged(NSSet *touches) // [macOS]
+@@ -431,34 +561,34 @@ - (void)interactionsMoved:(NSSet *)touches // [macOS]
  
  - (void)interactionsEnded:(NSSet *)touches withEvent:(UIEvent*)event // [macOS]
  {
@@ -1634,7 +1633,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  }
    
  #if !TARGET_OS_OSX // [macOS]
-@@ -497,6 +627,7 @@ static BOOL RCTAnyTouchesChanged(NSSet *touches) // [macOS]
+@@ -497,6 +627,7 @@ - (BOOL)acceptsFirstMouse:(NSEvent *)event
  - (void)mouseDown:(NSEvent *)event
  {
    [super mouseDown:event];
@@ -1642,7 +1641,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
    [self interactionsBegan:[NSSet setWithObject:event]];
    // [macOS
    if (_shouldSendMouseUpOnSystemBehalf) {
-@@ -519,6 +650,7 @@ static BOOL RCTAnyTouchesChanged(NSSet *touches) // [macOS]
+@@ -519,6 +650,7 @@ - (void)mouseDown:(NSEvent *)event
  - (void)rightMouseDown:(NSEvent *)event
  {
    [super rightMouseDown:event];
@@ -1678,7 +1677,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
  
  #import <CoreImage/CIFilter.h>
  #import <CoreImage/CIVector.h>
-@@ -214,6 +215,44 @@ static RCTUIView *RCTUIViewCommonInit(RCTUIView *self)
+@@ -214,6 +215,44 @@ - (instancetype)initWithCoder:(NSCoder *)coder
    return RCTUIViewCommonInit([super initWithCoder:coder]);
  }
  
@@ -1723,7 +1722,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
  - (BOOL)acceptsFirstMouse:(NSEvent *)event
  {
    if (self.acceptsFirstMouse || [super acceptsFirstMouse:event]) {
-@@ -284,20 +323,53 @@ static RCTUIView *RCTUIViewCommonInit(RCTUIView *self)
+@@ -284,20 +323,53 @@ - (CATransform3D)transform3D
    return _transform3D;
  }
  
@@ -1785,7 +1784,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
  
  - (NSView *)hitTest:(NSPoint)point
  {
-@@ -308,7 +380,11 @@ static RCTUIView *RCTUIViewCommonInit(RCTUIView *self)
+@@ -308,7 +380,11 @@ - (NSView *)hitTest:(NSPoint)point
    if (self.layer.superlayer) {
      localPoint = [self.layer convertPoint:point fromLayer:self.layer.superlayer];
    } else {
@@ -1798,7 +1797,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    }
    return [self hitTest:localPoint withEvent:nil];
  }
-@@ -331,8 +407,8 @@ static RCTUIView *RCTUIViewCommonInit(RCTUIView *self)
+@@ -331,8 +407,8 @@ - (void)updateLayer
    // On macOS, AppKit's layer-backed view system resets layer.transform to identity
    // during its layout/display cycle because NSView has no built-in transform property
    // (unlike UIView on iOS). We must re-apply the stored transform after each cycle.
@@ -1809,7 +1808,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    }
  
    if (_respondsToDisplayLayer) {
-@@ -822,6 +898,13 @@ static RCTUIView *RCTUIViewCommonInit(RCTUIView *self)
+@@ -822,6 +898,13 @@ - (instancetype)initWithFrame:(CGRect)frame
    return self;
  }
  
@@ -1827,7 +1826,7 @@ diff --git a/React/CoreModules/RCTEventDispatcher.mm b/React/CoreModules/RCTEven
 index 829eeea724bbb5da5e6307972d3c316b26686773..c357ee3cd905cc4f86fdc538277226c92a60ca87 100644
 --- a/React/CoreModules/RCTEventDispatcher.mm
 +++ b/React/CoreModules/RCTEventDispatcher.mm
-@@ -134,6 +134,9 @@ RCT_EXPORT_MODULE()
+@@ -134,6 +134,9 @@ - (void)notifyObserversOfEvent:(id<RCTEvent>)event
  
  - (void)sendEvent:(id<RCTEvent>)event
  {
@@ -1852,7 +1851,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
  
  // These timing contants should be kept in sync with the ones in `JSTimers.js`.
  // The duration of a frame. This assumes that we want to run at 60 fps.
-@@ -26,6 +28,17 @@ static const NSTimeInterval kFrameDuration = 1.0 / 60.0;
+@@ -26,6 +28,17 @@
  // The minimum time left in a frame to trigger the idle callback.
  static const NSTimeInterval kIdleCallbackFrameDeadline = 0.001;
  
@@ -1870,7 +1869,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
  @interface _RCTTimer : NSObject
  
  @property (nonatomic, strong, readonly) NSDate *target;
-@@ -101,6 +114,12 @@ static const NSTimeInterval kIdleCallbackFrameDeadline = 0.001;
+@@ -101,6 +114,12 @@ @implementation RCTTiming {
    BOOL _sendIdleEvents;
    BOOL _inBackground;
    id<RCTTimingDelegate> _timingDelegate;
@@ -1883,7 +1882,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
  }
  
  @synthesize bridge = _bridge;
-@@ -133,11 +152,22 @@ RCT_EXPORT_MODULE()
+@@ -133,11 +152,22 @@ - (void)setup
       if (!self->_inBackground &&
          ([RCTSharedApplication() applicationState] == UIApplicationStateBackground ||
           [UIDevice currentDevice].proximityState)) {
@@ -1909,7 +1908,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
    });
  
  #if !TARGET_OS_OSX // [macOS]
-@@ -166,6 +196,49 @@ RCT_EXPORT_MODULE()
+@@ -166,6 +196,49 @@ - (void)setup
  #endif // [macOS]
  }
  
@@ -1959,7 +1958,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
  - (void)dealloc
  {
    [_sleepTimer invalidate];
-@@ -325,6 +398,14 @@ RCT_EXPORT_MODULE()
+@@ -325,6 +398,14 @@ - (void)didUpdateFrame:(RCTFrameUpdate *)update
  
  - (void)scheduleSleepTimer:(NSDate *)sleepTarget
  {
@@ -1974,7 +1973,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
    @synchronized(self) {
      if (!_sleepTimer || !_sleepTimer.valid) {
        _sleepTimer = [[NSTimer alloc] initWithFireDate:sleepTarget
-@@ -344,12 +425,42 @@ RCT_EXPORT_MODULE()
+@@ -344,12 +425,42 @@ - (void)timerDidFire
  {
    _sleepTimer = nil;
    if (_paused) {
@@ -2017,7 +2016,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
  
  /**
   * A method used for asynchronously creating a timer. If the timer has already expired,
-@@ -391,6 +502,9 @@ RCT_EXPORT_METHOD(createTimer
+@@ -391,6 +502,9 @@ - (void)createTimerForNextFrame:(nonnull NSNumber *)callbackID
                 jsSchedulingTime:(NSDate *)jsSchedulingTime
                          repeats:(BOOL)repeats
  {
@@ -2027,7 +2026,7 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
    NSTimeInterval jsSchedulingOverhead = MAX(-jsSchedulingTime.timeIntervalSinceNow, 0);
  
    NSTimeInterval targetTime = jsDuration - jsSchedulingOverhead;
-@@ -429,6 +543,9 @@ RCT_EXPORT_METHOD(deleteTimer : (double)timerID)
+@@ -429,6 +543,9 @@ - (void)createTimerForNextFrame:(nonnull NSNumber *)callbackID
  
  RCT_EXPORT_METHOD(setSendIdleEvents : (BOOL)sendIdleEvents)
  {
@@ -2051,7 +2050,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
  #import <AVFoundation/AVFoundation.h>
  #import <React/RCTSurfacePresenterStub.h>
  #import <react/featureflags/ReactNativeFeatureFlags.h>
-@@ -181,6 +184,14 @@ NSString *const RCTUIManagerWillUpdateViewsDueToContentSizeMultiplierChangeNotif
+@@ -181,6 +184,14 @@ @implementation RCTUIManager {
  
    // Keyed by viewName
    NSMutableDictionary *_componentDataByName;
@@ -2066,7 +2065,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
  }
  
  @synthesize bridge = _bridge;
-@@ -1321,7 +1332,8 @@ RCT_EXPORT_METHOD(dispatchViewManagerCommand
+@@ -1321,7 +1332,8 @@ - (void)flushUIBlocksWithCompletion:(void (^)(void))completion
  
    // Execute the previously queued UI blocks
    RCTProfileBeginFlowEvent();
@@ -2076,7 +2075,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
      RCTProfileEndFlowEvent();
      RCT_PROFILE_BEGIN_EVENT(RCTProfileTagAlways, @"-[UIManager flushUIBlocks]", (@{
                                @"count" : [@(previousPendingUIBlocks.count) stringValue],
-@@ -1332,7 +1344,48 @@ RCT_EXPORT_METHOD(dispatchViewManagerCommand
+@@ -1332,7 +1344,48 @@ - (void)flushUIBlocksWithCompletion:(void (^)(void))completion
      RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"");
  
      RCTExecuteOnUIManagerQueue(completion);
@@ -2126,7 +2125,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
  }
  
  - (void)setNeedsLayout
-@@ -1458,11 +1511,28 @@ RCT_EXPORT_METHOD(measureInWindow : (nonnull NSNumber *)reactTag callback : (RCT
+@@ -1458,11 +1511,28 @@ - (void)_dispatchPropsDidChangeEvents
      }
  
      // Return frame coordinates in window
@@ -3166,7 +3165,7 @@ diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCT
 index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b749f055df 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
-@@ -702,6 +702,10 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
+@@ -702,6 +702,10 @@ - (void)layoutSubviews
  
  - (void)updateClippedSubviews
  {
@@ -3177,7 +3176,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
    // Find a suitable view to use for clipping
    RCTPlatformView *clipView = [self react_findClipView]; // [macOS]
    if (!clipView) {
-@@ -730,6 +734,7 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
+@@ -730,6 +734,7 @@ - (void)updateClippedSubviews
      [self react_updateClippedSubviewsWithClipRect:clipRect relativeToView:clipView];
      _lastClippedToRect = bounds;
    }
@@ -3185,7 +3184,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +745,23 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
+@@ -740,13 +745,23 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -3210,7 +3209,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..d06ebb9e6949046c5fd546edc77556b7
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -886,8 +901,13 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
+@@ -886,8 +901,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -3229,7 +3228,7 @@ diff --git a/React/Views/UIView+React.m b/React/Views/UIView+React.m
 index 30c4f1e53e7b94016c8ed1b425587753fc80c2ce..1fe8dd641c9c0135f43960e4cc57a0fae4cc8655 100644
 --- a/React/Views/UIView+React.m
 +++ b/React/Views/UIView+React.m
-@@ -191,9 +191,38 @@
+@@ -191,9 +191,38 @@ - (void)setReactZIndex:(NSInteger)reactZIndex
  
  - (void)didUpdateReactSubviews
  {
