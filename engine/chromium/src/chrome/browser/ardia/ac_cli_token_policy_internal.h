@@ -42,6 +42,7 @@ bool IsWebDestination(std::string_view spec);
 bool IsWebFrame(content::RenderFrameHost* frame);
 bool IsPendingWebFrameHost(content::DevToolsAgentHost* host);
 bool IsWebHost(content::DevToolsAgentHost* host);
+bool IsVaultProtected(content::DevToolsAgentHost* host);
 bool IsWebTarget(const std::string* target_id);
 bool IsOffscreenTarget(const std::string* target_id);
 

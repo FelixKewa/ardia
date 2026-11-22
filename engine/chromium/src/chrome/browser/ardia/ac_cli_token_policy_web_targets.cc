@@ -23,6 +23,10 @@
 #include "url/scheme_host_port.h"
 #include "url/url_constants.h"
 
+bool (*g_ardia_vault_browser_context)(content::BrowserContext* context) =
+    nullptr;
+void (*g_ardia_clear_filled_passwords)(content::WebContents* contents) = nullptr;
+
 namespace ardia {
 namespace cli_token_policy_internal {
 
@@ -177,9 +181,14 @@ bool IsWebHost(content::DevToolsAgentHost* host) {
   if (type == content::DevToolsAgentHost::kTypeDedicatedWorker ||
       type == content::DevToolsAgentHost::kTypeSharedWorker ||
       type == content::DevToolsAgentHost::kTypeServiceWorker) {
-    return IsWebWorkerUrl(url);
+    return IsWebWorkerUrl(url) && !IsVaultProtected(host);
   }
   return false;
+}
+
+bool IsVaultProtected(content::DevToolsAgentHost* host) {
+  return host && g_ardia_vault_browser_context &&
+         g_ardia_vault_browser_context(host->GetBrowserContext());
 }
 
 bool IsWebTarget(const std::string* target_id) {

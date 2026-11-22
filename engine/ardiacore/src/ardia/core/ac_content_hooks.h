@@ -17,6 +17,7 @@ class BrowserContext;
 class DevToolsAgentHost;
 class DevToolsAgentHostClient;
 class DevToolsSocketFactory;
+class RenderFrame;
 class RenderFrameHost;
 class RenderWidgetHost;
 class WebContents;
@@ -167,5 +168,17 @@ extern void (*g_ardia_devtools_session_attached)(
     const void* session);
 
 extern void (*g_ardia_devtools_session_detached)(const void* session);
+
+extern bool (*g_ardia_password_fill_blocked)(content::RenderFrameHost* frame);
+
+extern bool (*g_ardia_vault_browser_context)(content::BrowserContext* context);
+
+extern bool (*g_ardia_devtools_hidden)(content::BrowserContext* context);
+
+extern void (*g_ardia_clear_filled_passwords)(content::WebContents* contents);
+
+extern bool (*g_ardia_frame_blocks_extension_scripts)(content::RenderFrame* frame);
+
+extern bool (*g_ardia_forms_seen_at_once)(content::RenderFrame* frame);
 
 #endif

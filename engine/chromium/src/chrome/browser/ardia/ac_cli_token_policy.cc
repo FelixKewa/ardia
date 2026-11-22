@@ -17,6 +17,7 @@
 #include "chrome/browser/ardia/ac_cli_token_policy_internal.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_agent_host_client.h"
+#include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
 namespace ardia {
@@ -251,9 +252,21 @@ std::unique_ptr<ArdiaDevToolsTokenClient> CreateTokenClient(
 
 bool TokenClientMayAttach(content::DevToolsAgentHostClient* root_client,
                           content::DevToolsAgentHost* host) {
-  return !cli_token_policy_internal::Registry().contains(root_client) ||
-         cli_token_policy_internal::IsWebHost(host) ||
-         cli_token_policy_internal::IsPendingWebFrameHost(host);
+  if (cli_token_policy_internal::IsVaultProtected(host)) {
+    return false;
+  }
+  if (!cli_token_policy_internal::Registry().contains(root_client)) {
+    return true;
+  }
+  if (!cli_token_policy_internal::IsWebHost(host) &&
+      !cli_token_policy_internal::IsPendingWebFrameHost(host)) {
+    return false;
+  }
+  if (content::WebContents* contents = host->GetWebContents();
+      contents && g_ardia_clear_filled_passwords) {
+    g_ardia_clear_filled_passwords(contents);
+  }
+  return true;
 }
 
 bool TokenClientMayInput(content::DevToolsAgentHostClient* root_client,
