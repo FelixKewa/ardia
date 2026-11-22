@@ -14,7 +14,7 @@ export const VAULT_TRANSFERS = ["none", "complete", "partial", "sent", "timed_ou
 export type VaultTransferOutcome = (typeof VAULT_TRANSFERS)[number];
 
 const MAX_SAMPLES = 200;
-const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_filled", "vault_codes_kept", "vault_always_added", ...VAULT_REFUSALS.map((code) => `vault_refusals_${code}`), "vault_grants_sheet", "vault_grants_phone", "vault_grants_always", "vault_phone_approvals", ...VAULT_TRANSFERS.map((t) => `vault_transfers_${t}`), ...VAULT_FAILURES.map((r) => `vault_failures_${r}`), "vault_conflict_keys", "vault_transfer_failures", "vault_blocked_requests"] as const;
+const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_filled", "vault_codes_kept", "vault_always_added", ...VAULT_REFUSALS.map((code) => `vault_refusals_${code}`), "vault_grants_sheet", "vault_grants_phone", "vault_grants_always", "vault_phone_approvals", "vault_logins_joined", "vault_autofill_skipped_several", "vault_autofill_held_for_login", "vault_own_conflicts", ...VAULT_TRANSFERS.map((t) => `vault_transfers_${t}`), ...VAULT_FAILURES.map((r) => `vault_failures_${r}`), "vault_conflict_keys", "vault_transfer_failures", "vault_blocked_requests"] as const;
 
 let counts: Record<string, number> = {};
 let samples: Record<VaultTiming, number[]> = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], decide: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
@@ -38,6 +38,10 @@ export function noteVaultTransfer(outcome: VaultTransferOutcome | undefined, sum
   add("vault_transfer_failures", sums.transferFailed);
   add("vault_blocked_requests", sums.blockedRequests);
 }
+
+export type VaultCoordination = "joined" | "skipped_several" | "held_for_login" | "own_conflict";
+const COORDINATION_FIELDS: Record<VaultCoordination, string> = { joined: "vault_logins_joined", skipped_several: "vault_autofill_skipped_several", held_for_login: "vault_autofill_held_for_login", own_conflict: "vault_own_conflicts" };
+export const noteVaultCoordination = (what: VaultCoordination, consent?: ConsentToken | null) => bump(COORDINATION_FIELDS[what], consent);
 
 export const noteVaultCodeKept = (consent?: ConsentToken | null) => bump("vault_codes_kept", consent);
 export const noteVaultAlwaysAdded = (consent?: ConsentToken | null) => bump("vault_always_added", consent);

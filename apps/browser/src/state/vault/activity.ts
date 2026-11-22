@@ -4,7 +4,7 @@ import { vaultPrefs } from "./prefs";
 import { orWarn } from "../../lib/fallback";
 import { onAppEvent } from "../../platform/app";
 
-export type VaultEventKind = "grant" | "fill" | "refusal" | "end";
+export type VaultEventKind = "grant" | "fill" | "refusal" | "skip" | "end";
 
 export type VaultEvent = {
   time: number;

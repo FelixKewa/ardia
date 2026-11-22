@@ -9,11 +9,11 @@ import { onAppEvent } from "../../platform/app";
 import { secureRandomHex } from "../../platform/secureRandom";
 import type { ConsentToken } from "../telemetry/client";
 import { nativeConsent } from "../telemetry/nativeConsent";
-import { noteVaultFailure, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
+import { noteVaultCoordination, noteVaultFailure, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
 import { dropApprovals } from "./approval";
 import { programLabel } from "./programs";
-import { dropAllTasks, drivenTabs, driveTab, liveTaskCount, onTaskGone, taskDrivingTab, taskIsLive, undriveTab, type AutoFill, type GoneReason, type VaultTask } from "./tasks";
+import { dropAllTasks, drivenTabs, driveTab, liveTaskCount, onTaskGone, siteRun, taskDrivingTab, taskIsLive, undriveTab, type AutoFill, type GoneReason, type SignInAnswer, type SiteAttempt, type SiteRun, type VaultTask } from "./tasks";
 
 export class VaultError extends Error {
   readonly code: VaultRefusal;
@@ -26,6 +26,7 @@ export class VaultError extends Error {
 
 const AUTO_RETRY_MS = 30_000;
 const AUTO_FAILURES = 3;
+const MANUAL_QUIET_MS = 30_000;
 const FINAL_REFUSALS: ReadonlySet<VaultRefusal> = new Set(["not_granted", "no_login", "needs_passkey", "needs_human", "password_manager_plugin", "denied", "bad_request", "task_expired", "locked"]);
 
 const STATUS_CODES: Partial<Record<VaultSignIn["status"], VaultRefusal>> = {
@@ -147,6 +148,10 @@ type Request = { task: VaultTask; origin: string; account: string | null; tabId:
 export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now(), consent }: Request) {
   const attempt: Attempt = { id: secureRandomHex(16), task, origin, tabId, revoked: null };
   attempts.set(attempt.id, attempt);
+  const site = siteRun(task, origin);
+  const mine: SiteAttempt = { origin, overlapped: task.running.size > 0 };
+  for (const other of task.running) other.overlapped = true;
+  task.running.add(mine);
   const base = { profile: task.profileId, site: origin, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), via: auto ? "auto" : "login", reason: why };
   let username: string | null = account;
   try {
@@ -155,6 +160,7 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     if (!task.origins.has(origin)) throw new VaultError("not_granted", "This task wasn't granted that site.");
     checkpoint(attempt);
     username = await usernameFor(attempt, account);
+    if (!auto) site.account = username;
     checkpoint(attempt);
     const result = await vaultSignIn(task.engineProfile, signInUrl(origin, tabId), origin, username, attempt.id);
     checkpoint(attempt);
@@ -168,7 +174,8 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     if (transfer) throw new VaultError(...transfer);
     if (tabId) driveTab(task, tabId);
     if (tabId && result.status === "signed_in" && result.transfer === "complete") void tabReloads.reload(tabId, () => stillAllowed(attempt)).catch(() => false);
-    if (result.status === "signed_in" && (result.conflicts ?? 0) > 0) throw new VaultError("conflict", "You changed this site's session in Ardia while the agent was signing in, so Ardia kept your changes and reloaded the tab; it may be signed in as you rather than as the saved login.");
+    if (result.status === "signed_in" && (result.conflicts ?? 0) > 0 && mine.overlapped) noteVaultCoordination("own_conflict", consent);
+    if (result.status === "signed_in" && (result.conflicts ?? 0) > 0 && !mine.overlapped) throw new VaultError("conflict", "You changed this site's session in Ardia while the agent was signing in, so Ardia kept your changes and reloaded the tab; it may be signed in as you rather than as the saved login.");
     const ms = result.totalMs ?? result.appMs;
     noteVaultFill(auto, result.usedCode, consent);
     noteVaultTiming(auto ? "autofill" : "login", ms, consent);
@@ -202,12 +209,50 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     throw refusal;
   } finally {
     attempts.delete(attempt.id);
+    task.running.delete(mine);
   }
 }
 
+export async function signInOnce(request: Request): Promise<SignInAnswer> {
+  const site = siteRun(request.task, request.origin);
+  site.pending++;
+  try {
+    for (;;) {
+      if (site.manual && (request.account === null || request.account === site.manualAccount)) {
+        const leadTab = site.manualTab;
+        noteVaultCoordination("joined", request.consent);
+        return followJoinedTab(request, leadTab, await site.manual);
+      }
+      const ahead = site.manual ?? site.auto;
+      if (!ahead) break;
+      await ahead.catch(() => undefined);
+    }
+    const running: Promise<SignInAnswer> = signIn(request).finally(() => {
+      if (site.manual === running) site.manual = null;
+    });
+    site.manual = running;
+    site.manualAccount = request.account;
+    site.manualTab = request.tabId;
+    return await running;
+  } finally {
+    site.pending--;
+    site.manualEndedAt = Date.now();
+  }
+}
+
+function followJoinedTab({ task, origin, tabId }: Request, leadTab: string | null, answer: SignInAnswer): SignInAnswer {
+  if (tabId === null || tabId === leadTab || answer.status !== "signed_in" || !taskIsLive(task)) return answer;
+  driveTab(task, tabId);
+  const mayReload = () => taskIsLive(task) && task.origins.has(origin) && currentTab(tabId)?.profileId === task.profileId;
+  if (answer.transfer === "complete") void tabReloads.reload(tabId, mayReload).catch(() => false);
+  return answer;
+}
+
+const manualClaims = (site: SiteRun) => site.pending > 0 || Date.now() - site.manualEndedAt < MANUAL_QUIET_MS;
+
 function autoFill(task: VaultTask, tab: string, origin: string): AutoFill {
   const key = `${tab}\n${origin}`;
-  if (!task.auto.has(key)) task.auto.set(key, { documents: new Set(), lastSuccess: 0, failures: 0, stopped: false });
+  if (!task.auto.has(key)) task.auto.set(key, { documents: new Set(), skipped: new Set(), lastSuccess: 0, failures: 0, stopped: false });
   return task.auto.get(key)!;
 }
 
@@ -252,10 +297,17 @@ export function watchVault() {
     const document = form.document === undefined ? null : String(form.document);
     if (state.stopped || (document !== null && state.documents.has(document))) return;
     if (Date.now() - state.lastSuccess < AUTO_RETRY_MS) return;
+    const consent = nativeConsent(form);
+    const site = siteRun(task, origin);
+    if (manualClaims(site)) return void noteVaultCoordination("held_for_login", consent);
+    if (site.auto) return;
     task.busyTabs.add(form.tab);
-    void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true, consent: nativeConsent(form) })
+    const run = accountForAuto(task, origin, site.account, document, state, consent).then((account) => (account === undefined || manualClaims(site) ? undefined : signIn({ task, origin, account, tabId: form.tab, why: task.why, auto: true, consent })));
+    site.auto = run;
+    void run
       .then(
-        () => {
+        (answer) => {
+          if (answer === undefined) return;
           state.failures = 0;
           state.lastSuccess = Date.now();
           if (document !== null) state.documents.add(document);
@@ -265,8 +317,24 @@ export function watchVault() {
           if (FINAL_REFUSALS.has(code) || ++state.failures >= AUTO_FAILURES) state.stopped = true;
         },
       )
-      .finally(() => task.busyTabs.delete(form.tab));
+      .finally(() => {
+        task.busyTabs.delete(form.tab);
+        if (site.auto === run) site.auto = null;
+      });
   });
+}
+
+async function accountForAuto(task: VaultTask, origin: string, remembered: string | null, document: string | null, state: AutoFill, consent: ConsentToken | null): Promise<string | null | undefined> {
+  if (remembered !== null) return remembered;
+  await cacheLogins(task);
+  const names = task.logins.get(origin) ?? [];
+  if (names.length <= 1) return null;
+  const key = document ?? "";
+  if (state.skipped.has(key)) return undefined;
+  state.skipped.add(key);
+  noteVaultCoordination("skipped_several", consent);
+  recordVaultEvent({ time: Date.now(), kind: "skip", profile: task.profileId, site: origin, account: null, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), outcome: "several_logins", via: "auto", reason: task.why });
+  return undefined;
 }
 
 export const liveAttempts = () => attempts.size;

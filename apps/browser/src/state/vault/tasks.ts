@@ -16,9 +16,22 @@ export type VaultTask = {
   loginsLoading: Promise<void> | null;
   auto: Map<string, AutoFill>;
   busyTabs: Set<string>;
+  sites: Map<string, SiteRun>;
+  running: Set<SiteAttempt>;
 };
 
-export type AutoFill = { documents: Set<string>; lastSuccess: number; failures: number; stopped: boolean };
+export type SiteRun = { manual: Promise<SignInAnswer> | null; manualAccount: string | null; manualTab: string | null; manualEndedAt: number; pending: number; auto: Promise<unknown> | null; account: string | null };
+
+export type SiteAttempt = { origin: string; overlapped: boolean };
+
+export type SignInAnswer = Record<string, unknown> & { status: string };
+
+export const siteRun = (task: VaultTask, origin: string): SiteRun => {
+  if (!task.sites.has(origin)) task.sites.set(origin, { manual: null, manualAccount: null, manualTab: null, manualEndedAt: 0, pending: 0, auto: null, account: null });
+  return task.sites.get(origin)!;
+};
+
+export type AutoFill = { documents: Set<string>; skipped: Set<string>; lastSuccess: number; failures: number; stopped: boolean };
 
 export type GoneReason = "ended" | "expired" | "closed" | "locked";
 

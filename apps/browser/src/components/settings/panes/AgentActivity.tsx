@@ -15,13 +15,13 @@ import { Group, Row, SectionHeader } from "../Form";
 
 const SHOWN = 50;
 
-const VERBS: Record<VaultEvent["kind"], string> = { grant: "Allowed", fill: "Signed in", refusal: "Refused", end: "Task ended" };
+const VERBS: Record<VaultEvent["kind"], string> = { grant: "Allowed", fill: "Signed in", refusal: "Refused", skip: "Didn't sign in on its own", end: "Task ended" };
 
 const firstSite = (site: string | null) => (site ? (site.split(" ")[0] ?? site) : "");
 
 function describe(e: VaultEvent) {
   const sites = e.site ? e.site.split(" ").map(hostLabel).join(", ") : "";
-  const title = e.kind === "refusal" ? `${VERBS[e.kind]} (${e.outcome.replace(/_/g, " ")})${sites ? `: ${sites}` : ""}` : `${VERBS[e.kind]}${sites ? `: ${sites}` : ""}`;
+  const title = e.kind === "refusal" || e.kind === "skip" ? `${VERBS[e.kind]} (${e.outcome.replace(/_/g, " ")})${sites ? `: ${sites}` : ""}` : `${VERBS[e.kind]}${sites ? `: ${sites}` : ""}`;
   const parts = [e.program, e.account, e.via === "phone" ? "approved on iPhone" : e.via === "always" ? "always allowed" : e.via === "auto" ? "filled on its own" : null, ago(e.time)];
   const detail = parts.filter(Boolean).join(" · ");
   return { title, description: e.reason ? `${detail}\n“${e.reason}”` : detail };

@@ -9,7 +9,7 @@ import { clippedReason, recordVaultEvent, vaultLog } from "../vault/activity";
 import { alwaysAllowed, loadVaultAlways, setAlwaysAllowed, useVaultAlways } from "../vault/always";
 import { askApproval, dropApprovals } from "../vault/approval";
 import { mayAlwaysAllow, programKey, programLabel, programOf, signerLine, type Program } from "../vault/programs";
-import { cacheLogins, pluginRefusal, signIn, VaultError, watchVault } from "../vault/signIn";
+import { cacheLogins, pluginRefusal, signInOnce, VaultError, watchVault } from "../vault/signIn";
 import { addTask, DEFAULT_TTL_SECONDS, dropAllTasks, dropConnectionTasks, dropTask, MAX_SITES, MAX_TTL_SECONDS, siteOrigin, taskFor, tasksOf, type VaultTask } from "../vault/tasks";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { shownWindowId } from "./socketAsk";
@@ -103,6 +103,8 @@ async function taskStart(params: Record<string, unknown>, call: SocketCall) {
     loginsLoading: null,
     auto: new Map(),
     busyTabs: new Set(),
+    sites: new Map(),
+    running: new Set(),
   };
   for (const t of tabs) task.tabs.add(t.id);
   addTask(task);
@@ -138,7 +140,7 @@ async function login(params: Record<string, unknown>, call: SocketCall) {
   if (tab && tab.profileId !== task.profileId) throw new OpError("bad_request", "That tab is in another profile than the task.");
   const why = params.why === undefined ? task.why : clippedReason(params.why);
   try {
-    return await signIn({ task, origin, account: (params.account as string | undefined) ?? null, tabId: tab?.id ?? null, why, auto: false, startedAt, consent });
+    return await signInOnce({ task, origin, account: (params.account as string | undefined) ?? null, tabId: tab?.id ?? null, why, auto: false, startedAt, consent });
   } catch (error) {
     if (error instanceof VaultError) throw new OpError(error.code, error.message);
     throw error;
