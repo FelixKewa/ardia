@@ -792,7 +792,7 @@ export async function captureSnapshot(id: string, pageTop: number | null = null,
   const step = pictureCaptured(tab, snapshot.uri, snapshot.durable !== false, snapshot.generation);
   if (step && tab.snapshotFileName !== step.show) {
     updateTabById(id, { snapshotFileName: step.show });
-    showFadingDeckThePicture(id);
+    showHiddenDeckThePicture(id);
   }
 }
 
@@ -812,8 +812,8 @@ function pictureRefused(id: string, reason: "hidden" | "blank", counts: boolean)
   countUsage(reason === "blank" ? "page_pictures_blank" : "page_pictures_hidden");
 }
 
-function showFadingDeckThePicture(id: string) {
-  if (deckPullFades() && currentTabs().selectedId === id && useBrowse.getState().surface === "browsing" && !deckPullInFlight()) refreshHiddenDeck();
+function showHiddenDeckThePicture(id: string) {
+  if (currentTabs().selectedId === id && useBrowse.getState().surface === "browsing" && !deckPullInFlight()) refreshHiddenDeck();
 }
 
 function snapshotLanded(id: string, uri: string, generation: number) {
@@ -823,7 +823,7 @@ function snapshotLanded(id: string, uri: string, generation: number) {
   if (!landed) return;
   if (landed === "shown" && tab.snapshotFileName !== uri) {
     updateTabById(id, { snapshotFileName: uri });
-    showFadingDeckThePicture(id);
+    showHiddenDeckThePicture(id);
   } else rewriteTab(id);
 }
 

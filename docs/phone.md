@@ -1118,7 +1118,10 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
   that has never had a picture isn't. A picture taken for the deck never falls back to copying the window on Android
   (`windowCopy: false`), since by then the deck may be over the page. Each deck entrance carries a token, so a late
   capture or hold from an earlier entrance can't let go of a later one's page, and a second card tap while a grow
-  is claimed is dropped. The 1.5 s in-flight clock of a pull starts at its release. The capture of the page starts with the pull on iPhone; on Android it starts on the frame
+  is claimed is dropped. The 1.5 s in-flight clock of a pull starts at its release. The capture of the page starts with the pull on iPhone: the on-screen copy is synchronous, and when the page's
+  picture isn't current it holds the first frame of a tap about 33 ms on the simulator (first frame 48 ms, taps
+  248 ms). Moving it to the frame after the motion starts was tried and dropped: it became a 60 to 80 ms frame in
+  the middle of the landing. On Android it starts on the frame
   after the landing begins for a tap (the draw runs on the main thread, 20 to 60 ms on the F4, and must not delay the
   first frame) and with the pull for a swipe. A capture is skipped when the page reports its picture still current
   (`snapshotIsCurrent`). A second request for the tabs while a landing is in flight is ignored; one whose landing
@@ -1160,9 +1163,10 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
     card's picture when it has loaded.
   - **It has no painted picture** (a page never captured, or a newer picture the waiting deck hasn't drawn): no
     fade. The page is cut into its card (`cutDeckPullFromRest`) and the deck takes over on the next frame.
-  With Reduce Motion on, the waiting deck takes each new picture of the page in front as it lands
-  (`showFadingDeckThePicture`), so the first case is the common one; with normal motion it doesn't re-render for
-  that. A touch on the bar wakes the deck under the page and draws the page at 99% (`deckPull.primed`), which makes
+  The waiting deck takes each new picture of the page in front as it lands (`showHiddenDeckThePicture`), so the
+  first case is the common one. It does so with normal motion too: when it didn't, a card whose stored picture
+  failed to load (the first launch after an update on iPhone) showed the tab's face for two frames at the
+  handover before the fresh picture drew. A touch on the bar wakes the deck under the page and draws the page at 99% (`deckPull.primed`), which makes
   the compositor draw both before the fade: without it the first fade after a launch stalled about 90 ms and
   showed in two frames. The bar keeps the browsing glass through the fade, with the tab view's glyphs fading in on
   it, and the deck's bar takes over after. Opening a card is a fade too (`growDeckPull(…, steady)`): the deck holds

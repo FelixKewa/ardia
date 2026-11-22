@@ -491,7 +491,7 @@ test("with Reduce Motion nothing tracks the finger and nothing waits: over a car
   expect(counted).toHaveBeenCalledWith("deck_bar_swipes");
 });
 
-test("with Reduce Motion the waiting deck takes each new picture of the page in front as it lands, so the next request can fade over it; with normal motion it doesn't re-render for one", async () => {
+test("with Reduce Motion and with normal motion the waiting deck takes each new picture of the page in front as it lands, so the next request fades over it or lands on a card that already holds it, never on the face or a picture that failed to load", async () => {
   for (const reduced of [true, false]) {
     mockMotion.reduced = reduced;
     const id = currentTabs().selectedId!;
@@ -506,8 +506,8 @@ test("with Reduce Motion the waiting deck takes each new picture of the page in 
     });
     frame();
     expect(currentTabs().open.find((tab) => tab.id === id)!.snapshotFileName).toBe(uri);
-    expect(pictureOf(root, uri) !== undefined).toBe(reduced);
-    expect(renders.includes("TabDeck")).toBe(reduced);
+    expect(pictureOf(root, uri)).toBeDefined();
+    expect(renders.includes("TabDeck")).toBe(true);
     mounted.splice(mounted.indexOf(root), 1);
     unmount(root);
     act(() => updateTabById(id, { snapshotFileName: null }));
