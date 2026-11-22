@@ -347,8 +347,11 @@ static BOOL gReportsCommits = NO;
   const BOOL turnedOn = reportsCommits && !gReportsCommits;
   gReportsCommits = reportsCommits;
   if (!turnedOn) return;
-  for (ArdiaWebView *view in LiveViews().allObjects)
-    if (view->_tab) [view emitNavigation];
+  for (ArdiaWebView *view in LiveViews().allObjects) {
+    if (!view->_tab) continue;
+    view->_sent.navigation = nil;
+    [view emitNavigation];
+  }
 }
 
 + (int)browserIdOfTab:(NSString *)tabId {

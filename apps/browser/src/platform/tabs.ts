@@ -49,12 +49,17 @@ export const tabStrips = () => call("tabs.strips");
 export type CommitReader = "automation" | "pageBars";
 
 const commitReaders = new Set<CommitReader>();
+let reportsSent: boolean | null = false;
 
 export function reportPageCommits(reader: CommitReader, on: boolean): Promise<null> {
-  const before = commitReaders.size > 0;
   if (on) commitReaders.add(reader);
   else commitReaders.delete(reader);
-  const after = commitReaders.size > 0;
-  return before === after ? Promise.resolve(null) : call("tabs.reportCommits", { on: after });
+  const wanted = commitReaders.size > 0;
+  if (reportsSent === wanted) return Promise.resolve(null);
+  reportsSent = wanted;
+  return call("tabs.reportCommits", { on: wanted }).catch((error: unknown) => {
+    if (reportsSent === wanted) reportsSent = null;
+    throw error;
+  });
 }
 export const lastTabClosesWindow = () => call("tabs.lastTabPolicy").then((r) => r.closesWindow);

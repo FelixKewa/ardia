@@ -5,7 +5,7 @@ import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { takeTypedAddress } from "./typedAddresses";
-import { consentNow } from "../telemetry/choice";
+import { consentNow, type ConsentToken } from "../telemetry/choice";
 import { noteSiteSwitch, noteSiteSwitchTypedOn } from "../telemetry/pageBarCounts";
 import { updateRecord } from "./lifecycle";
 import { activeManifest, activeNames, currentPlugins, NO_RECORD, recordOf, usePlugins, type PluginsStore } from "./store";
@@ -32,7 +32,7 @@ export function siteSwitchRows(s: Plugins, url: string): SiteSwitchRow[] {
   );
 }
 
-export function setSiteSwitch(plugin: string, key: string, url: string, on: boolean, by: "you" | "typed" = "you"): boolean {
+export function setSiteSwitch(plugin: string, key: string, url: string, on: boolean, consent: ConsentToken | null, by: "you" | "typed" = "you"): boolean {
   const s = currentPlugins();
   const origin = switchOrigin(url);
   if (!origin || !activeManifest(s, plugin)?.contributes.siteSwitches.some((sw) => sw.key === key)) return false;
@@ -45,22 +45,23 @@ export function setSiteSwitch(plugin: string, key: string, url: string, on: bool
       const values = Object.hasOwn(sites, key) ? sites[key]! : {};
       return { ...base, sites: { ...sites, [key]: { ...values, [origin]: on } } };
     },
-    consentNow(),
+    consent,
   );
-  if (saved && by === "you") noteSiteSwitch(on);
-  if (saved && by === "typed") noteSiteSwitchTypedOn();
+  if (saved && by === "you") noteSiteSwitch(on, consent);
+  if (saved && by === "typed") noteSiteSwitchTypedOn(consent);
   return saved;
 }
 
 export function consumeTypedAddress(tabId: string, committedUrl: string, committedAt: number, privatePage: boolean) {
-  const origin = takeTypedAddress(tabId, committedUrl, committedAt);
-  if (!origin || privatePage) return;
+  const intent = takeTypedAddress(tabId, committedUrl, committedAt);
+  if (!intent || privatePage) return;
+  const { origin, consent } = intent;
   const s = currentPlugins();
   for (const plugin of pluginOrder(s)) {
     const bar = activeManifest(s, plugin)!.contributes.pageBar;
     if (!bar?.when.siteSwitch || !bar.when.localAddresses || valuesOf(s, plugin)[bar.when.localAddresses] !== true) continue;
     if (siteSwitchValue(s, plugin, bar.when.siteSwitch, origin) !== undefined) continue;
-    setSiteSwitch(plugin, bar.when.siteSwitch, committedUrl, true, "typed");
+    setSiteSwitch(plugin, bar.when.siteSwitch, committedUrl, true, consent, "typed");
   }
 }
 

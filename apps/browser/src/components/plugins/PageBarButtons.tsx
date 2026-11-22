@@ -24,7 +24,7 @@ const ICONS: Record<Exclude<HostAction, "address" | "extensions">, (typeof DEVEL
   split: DEVELOPER_ICONS.split,
 };
 
-type Props = { windowId: string; tabId: string; buttons: PageBarButton[]; palette: ToolbarPalette; look: "row" | "field"; active?: HostAction | null; onFocus?: () => void };
+type Props = { windowId: string; tabId: string; document: { url: string; at: number }; buttons: PageBarButton[]; palette: ToolbarPalette; look: "row" | "field"; active?: HostAction | null; onFocus?: () => void };
 
 function usable(action: HostAction, webkit: boolean): boolean {
   if (DEVTOOLS.includes(action) && webkit) return false;
@@ -40,7 +40,7 @@ function trimmed(buttons: PageBarButton[]): PageBarButton[] {
   return out;
 }
 
-export function PageBarButtons({ windowId, tabId, buttons, palette, look, active, onFocus }: Props) {
+export function PageBarButtons({ windowId, tabId, document, buttons, palette, look, active, onFocus }: Props) {
   const webkit = usePageEngine(tabId) === "webkit";
   const hints: Partial<Record<HostAction, string | undefined>> = { copyLink: useShortcutHint("copyUrl"), console: useShortcutHint("javaScriptConsole"), inspect: useShortcutHint("inspectElements") };
   const glyph = look === "row" ? DEVELOPER_BAR.glyph : undefined;
@@ -55,7 +55,7 @@ export function PageBarButtons({ windowId, tabId, buttons, palette, look, active
         if (b === "|") return <Divider key={`divider-${i}`} vertical length={DEVELOPER_BAR.dividerLength} color={palette.divider} style={{ marginHorizontal: DEVELOPER_BAR.groupGap }} />;
         if (b === "address") return null;
         if (b === "extensions")
-          return <OverflowButton key={b} windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} mayActivate={() => hostActionTarget("extensions", windowId, tabId)} onActivate={() => runHostAction("extensions", windowId, tabId)} />;
+          return <OverflowButton key={b} windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} mayActivate={() => hostActionTarget("extensions", windowId, tabId, document)} onActivate={() => runHostAction("extensions", windowId, tabId)} />;
         return (
           <Button
             key={b}

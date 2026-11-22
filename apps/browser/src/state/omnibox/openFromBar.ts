@@ -8,7 +8,7 @@ import { gateOpening, settleOpening } from "../tabs/openingGate";
 import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
-import { noteTypedAddress } from "../plugins/typedAddresses";
+import { dropTypedAddress, noteTypedAddress } from "../plugins/typedAddresses";
 
 export type Disposition = "current" | "newTab" | "newWindow" | "split";
 
@@ -19,14 +19,18 @@ export function dispositionFor(mods: { metaKey?: boolean; altKey?: boolean; shif
   return "current";
 }
 
+const navigationSeq = (tab: Tab | undefined) => (tab?.page.kind === "loaded" || tab?.page.kind === "adopted" ? tab.page.nav?.seq : undefined);
+
 export function openFromBar(url: string, tabId: string, disposition: Disposition) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   if (!url || !tab) return;
   const w = s.windows[tab.windowId];
   if (disposition === "current") {
+    const before = navigationSeq(tab);
     noteTypedAddress(tabId, url);
     s.navigate(tabId, url);
+    if (navigationSeq(useBrowser.getState().tabs[tabId]) === before) dropTypedAddress(tabId);
     return noteBarLoad(tabId);
   }
   if (disposition === "split") {

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { pageBarsWanted } from "./chrome";
 import { consumeTypedAddress } from "./siteSwitches";
-import { dropTypedAddress } from "./typedAddresses";
+import { dropAllTypedAddresses, dropTypedAddress } from "./typedAddresses";
 
 export const DOCUMENT_SETTLE_MS = 300;
 
@@ -13,6 +13,8 @@ export type DocumentReporter = object;
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const reporters = new Map<string, DocumentReporter>();
+type Report = { shownUrl: string; committedUrl: string | undefined; committedAt: number | undefined; privatePage: boolean };
+const reports = new Map<string, Report>();
 
 function cancelTimer(tabId: string) {
   const timer = timers.get(tabId);
@@ -46,7 +48,15 @@ function drop(tabId: string) {
 
 export function notePageDocument(tabId: string, shownUrl: string, committedUrl: string | undefined, committedAt: number | undefined, privatePage: boolean, reporter: DocumentReporter, now = Date.now()) {
   reporters.set(tabId, reporter);
-  if (!pageBarsWanted()) return;
+  reports.set(tabId, { shownUrl, committedUrl, committedAt, privatePage });
+  if (pageBarsWanted()) trackDocument(tabId, shownUrl, committedUrl, committedAt, privatePage, now);
+}
+
+export function replayPageDocuments(now = Date.now()) {
+  for (const [tabId, r] of reports) trackDocument(tabId, r.shownUrl, r.committedUrl, r.committedAt, r.privatePage, now);
+}
+
+function trackDocument(tabId: string, shownUrl: string, committedUrl: string | undefined, committedAt: number | undefined, privatePage: boolean, now: number) {
   if (committedUrl === undefined) return drop(tabId);
   const before = Object.hasOwn(usePageDocuments.getState(), tabId) ? usePageDocuments.getState()[tabId] : undefined;
   const at = typeof committedAt === "number" && committedAt > 0 ? committedAt : 0;
@@ -68,12 +78,22 @@ export function notePageDocument(tabId: string, shownUrl: string, committedUrl: 
 export function forgetAllPageDocuments() {
   for (const timer of timers.values()) clearTimeout(timer);
   timers.clear();
+  dropAllTypedAddresses();
   if (Object.keys(usePageDocuments.getState()).length) usePageDocuments.setState({}, true);
 }
 
 export function forgetPageDocument(tabId: string, reporter: DocumentReporter) {
   if (reporters.has(tabId) && reporters.get(tabId) !== reporter) return;
   reporters.delete(tabId);
+  reports.delete(tabId);
+  dropTypedAddress(tabId);
+  drop(tabId);
+}
+
+export function endPageDocument(tabId: string, reporter: DocumentReporter) {
+  if (reporters.has(tabId) && reporters.get(tabId) !== reporter) return;
+  reports.delete(tabId);
+  dropTypedAddress(tabId);
   drop(tabId);
 }
 

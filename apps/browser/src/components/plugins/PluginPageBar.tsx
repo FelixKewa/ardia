@@ -50,7 +50,7 @@ export const PluginPageBar = memo(function PluginPageBar({ tabId, windowId, matc
         </View>
         <WindowDragRegion style={StyleSheet.absoluteFill} />
         <View pointerEvents="box-none" style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: DEVELOPER_BAR.leadingEdge, paddingRight: DEVELOPER_BAR.trailingEdge }}>
-          {leading.length ? <PageBarButtons windowId={windowId} tabId={tabId} buttons={leading} palette={palette} look="row" active={active} /> : null}
+          {leading.length ? <PageBarButtons windowId={windowId} tabId={tabId} document={match} buttons={leading} palette={palette} look="row" active={active} /> : null}
           <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
             {at < 0 ? (
               <View style={labelStyle}>{label}</View>
@@ -61,7 +61,7 @@ export const PluginPageBar = memo(function PluginPageBar({ tabId, windowId, matc
             )}
           </ContextMenuArea>
           <View style={PAGE_BAR_ROW}>
-            <PageBarButtons windowId={windowId} tabId={tabId} buttons={trailing} palette={palette} look="row" active={active} />
+            <PageBarButtons windowId={windowId} tabId={tabId} document={match} buttons={trailing} palette={palette} look="row" active={active} />
           </View>
         </View>
         <Divider color={palette.divider} style={BOTTOM_LINE} />

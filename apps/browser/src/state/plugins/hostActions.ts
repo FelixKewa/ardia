@@ -20,7 +20,7 @@ function targetOf(windowId: string, tabId: string, action: HostAction, document?
   if (document && (live.url !== document.url || live.at !== document.at)) return null;
   const spec = activeManifest(currentPlugins(), match.plugin)?.contributes.pageBar;
   const origin = switchOrigin(live.url);
-  if (!spec?.when.siteSwitch || !origin || siteSwitchValue(currentPlugins(), match.plugin, spec.when.siteSwitch, origin) !== true) return null;
+  if (!spec?.when.siteSwitch || !spec.buttons.includes(action) || !origin || siteSwitchValue(currentPlugins(), match.plugin, spec.when.siteSwitch, origin) !== true) return null;
   return match;
 }
 
@@ -46,4 +46,4 @@ export function runHostAction(action: HostAction, windowId: string, tabId: strin
   }
 }
 
-export const hostActionTarget = (action: HostAction, windowId: string, tabId: string): boolean => targetOf(windowId, tabId, action) !== null;
+export const hostActionTarget = (action: HostAction, windowId: string, tabId: string, document?: { url: string; at: number }): boolean => targetOf(windowId, tabId, action, document) !== null;

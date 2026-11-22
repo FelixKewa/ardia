@@ -36,7 +36,7 @@ import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt }
 import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
 import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { hoverStatus } from "../../state/tabs/hoverStatus";
-import { forgetPageDocument, notePageDocument } from "../../state/plugins/pageBarDocuments";
+import { endPageDocument, forgetPageDocument, notePageDocument } from "../../state/plugins/pageBarDocuments";
 import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
@@ -305,6 +305,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         patchPage(tabId, status ? { status: hoverStatus(status), statusAtTop } : { status });
       }}
       onCrashed={(crashed) => {
+        if (crashed) endPageDocument(tabId, documentReporter);
         if (!isQuitting()) {
           pageEnded(tabId);
           patchPage(tabId, { crashed, unresponsive: false, fullscreen: false, status: "" });
@@ -358,6 +359,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       onVerificationCodeFound={(found: VerificationCodeFound) => verificationCodeFound(tabId, found)}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {
+        endPageDocument(tabId, documentReporter);
         releaseTranslation(tabId);
         pending.current = url;
         fromNewTab.current = false;

@@ -35,5 +35,5 @@ export function PageBarPublisher({ windowId, panes, small, fullscreen }: { windo
 const FIELD_ACTIONS: readonly PageBarButton[] = ["console", "network", "inspect"];
 
 export function PageBarFieldButtons({ windowId, tabId, match, palette, onFocus }: { windowId: string; tabId: string; match: PageBarMatch; palette: ToolbarPalette; onFocus: () => void }) {
-  return <PageBarButtons windowId={windowId} tabId={tabId} buttons={match.spec.buttons.filter((b) => FIELD_ACTIONS.includes(b))} palette={palette} look="field" onFocus={onFocus} />;
+  return <PageBarButtons windowId={windowId} tabId={tabId} document={match} buttons={match.spec.buttons.filter((b) => FIELD_ACTIONS.includes(b))} palette={palette} look="field" onFocus={onFocus} />;
 }

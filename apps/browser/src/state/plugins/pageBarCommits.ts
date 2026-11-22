@@ -1,5 +1,5 @@
 import { reportPageCommits } from "../../platform/tabs";
-import { forgetAllPageDocuments } from "./pageBarDocuments";
+import { forgetAllPageDocuments, replayPageDocuments } from "./pageBarDocuments";
 import { pageBarsWanted } from "./chrome";
 import { usePlugins } from "./store";
 
@@ -12,6 +12,7 @@ function apply() {
   reporting = want;
   if (!want) forgetAllPageDocuments();
   void reportPageCommits("pageBars", want).catch(() => {});
+  if (want) replayPageDocuments();
 }
 
 export function watchPageBarCommits() {
