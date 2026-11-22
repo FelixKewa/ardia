@@ -76,6 +76,16 @@ if (is_linux) {
   ardia_sources += [ "ac_not_linux.cc" ]
 }
 
+if (is_mac) {
+  ardia_sources += [ "both.cc" ]
+} else if (is_linux) {
+  ardia_sources += [
+    "//chrome/browser/ardia/both.cc",
+    "//chrome/browser/ardia/rooted_linux.cc",
+    "//ardia/core/twice.cc",
+  ]
+}
+
 source_set("ardia") {
   sources = ardia_sources
 }
@@ -101,6 +111,10 @@ const files = {
   [`${ardia}/ac_nested_linux.cc`]: 'nested linux\n',
   [`${ardia}/ac_not_linux.cc`]: 'not linux\n',
   [`${ardia}/ac_commented_linux.cc`]: 'in a comment only\n',
+  [`${ardia}/both.cc`]: 'both\n',
+  [`${ardia}/rooted_linux.cc`]: 'rooted linux\n',
+  'engine/chromium/src/ardia/core/twice.cc': 'twice in chromium\n',
+  'engine/ardiacore/src/ardia/core/twice.cc': 'twice in ardiacore\n',
   'engine/ardiacore/apply.sh': '#!/usr/bin/env bash\n',
   'engine/ardiacore/src/ardia/core/ac_hooks.h': 'hooks\n',
   'engine/ardiacore/src/ardia/core/ardiacore_engine.mm': 'mac engine\n',
@@ -190,6 +204,9 @@ const cases = [
   ['a unit inside !is_win', `${ardia}/ac_local_storage.cc`, { macos: true, linux: true }],
   ['a unit named only in a BUILD.gn comment', `${ardia}/ac_commented_linux.cc`, { macos: true, linux: true }],
   ['a shared unit', `${ardia}/shared.cc`, { macos: true, linux: true }],
+  ['a unit listed relative under is_mac and from the source root under else if (is_linux)', `${ardia}/both.cc`, { macos: true, linux: true }],
+  ['a unit listed from the source root only under is_linux', `${ardia}/rooted_linux.cc`, { macos: false, linux: true }],
+  ['a unit a source-root path under is_linux names in two layers', 'engine/chromium/src/ardia/core/twice.cc', { macos: true, linux: true }],
   ['the BUILD.gn', `${ardia}/BUILD.gn`, { macos: true, linux: true }],
   ['the build scripts', 'engine/patches/build/env.sh', { macos: true, linux: true }],
   ['series.py, the series parser', 'engine/patches/series.py', { macos: true, linux: true }],
@@ -341,6 +358,7 @@ for (const [name, line] of [
   ['a path with ..', 'engine/ardiacore-linux/../../README.md\tardia/core/readme'],
   ['an absolute target', 'packages/ardiacore/ios/page_script.js\t/ardia/core/page_script.js'],
   ['a leading tab', '\tpackages/ardiacore/ios/page_script.js\tardia/core/page_script.js'],
+  ['a backslash', 'engine/input\\literal.cc\tardia/core/literal.cc'],
 ]) {
   test(
     `copies.tsv with ${name} stops both the key and apply.sh`,

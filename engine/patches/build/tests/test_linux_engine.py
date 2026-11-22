@@ -214,6 +214,9 @@ class RuntimeSelectionTests(unittest.TestCase):
             ('no chrome digest', lambda engine: self.make_engine(engine, built, chrome_sha256=None)),
             ('another chrome', lambda engine: (self.make_engine(engine, built), (engine / 'chrome').write_bytes(b'other'))),
             ('a missing runtime file', lambda engine: (self.make_engine(engine, built), (engine / 'icudtl.dat').unlink())),
+            ('a directory for a runtime file', lambda engine: (self.make_engine(engine, built), (engine / 'icudtl.dat').unlink(), (engine / 'icudtl.dat').mkdir())),
+            ('a file for locales', lambda engine: (self.make_engine(engine, built), shutil.rmtree(engine / 'locales'), (engine / 'locales').write_bytes(b'locale'))),
+            ('a chrome that is not executable', lambda engine: (self.make_engine(engine, built), (engine / 'chrome').chmod(0o644))),
             ('a broken manifest', lambda engine: (self.make_engine(engine, built), (engine / 'manifest.json').write_text('{'))),
         ]
         for name, prepare in cases:
@@ -229,18 +232,42 @@ class RuntimeSelectionTests(unittest.TestCase):
 
     def test_the_row_a_fetch_verified_makes_the_engine_exact_without_the_table(self):
         built, alias, other, sha = 'a' * 40, 'b' * 40, 'c' * 40, 'd' * 64
+        tag = f'engine-{built[:12]}'
         with tempfile.TemporaryDirectory() as scratch:
             root = pathlib.Path(scratch)
-            engine = self.make_engine(root / 'engine', built)
+            engine = self.make_engine(root / alias[:12], built)
             empty = root / 'empty.tsv'
             empty.write_text('')
+            complete = engine / '.complete'
+
+            def bound(*row, digest=sha):
+                complete.write_text(f'{digest}\n' + '\t'.join(row) + '\n')
+
             self.assertFalse(runtime.serves(engine, alias, empty))
-            (engine / '.complete').write_text(sha + '\n')
-            (engine / '.engine-row').write_text(f'{alias}\tengine-{built[:12]}\t{sha}\t{built}\n')
+            complete.write_text(sha + '\n')
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, sha, built)
             self.assertTrue(runtime.serves(engine, alias, empty))
+            self.assertTrue(runtime.serves(engine, built, empty))
             self.assertFalse(runtime.serves(engine, other, empty))
-            (engine / '.complete').write_text('e' * 64 + '\n')
+            bound(other, tag, sha, built)
+            self.assertFalse(runtime.serves(engine, other, empty))
             self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, sha, built, digest='e' * 64)
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, f'engine-{other[:12]}', sha, built)
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, sha, built)
+            moved = engine.rename(root / other[:12])
+            self.assertFalse(runtime.serves(moved, alias, empty))
+            moved.rename(engine)
+            conflicting = root / 'conflicting.tsv'
+            conflicting.write_text(f'{alias}\tengine-{other[:12]}\t{sha}\t{other}\n')
+            self.assertFalse(runtime.serves(engine, alias, conflicting))
+            agreeing = root / 'agreeing.tsv'
+            agreeing.write_text(f'{alias}\t{tag}\t{sha}\t{built}\n')
+            complete.unlink()
+            self.assertTrue(runtime.serves(engine, alias, agreeing))
 
     def test_allowlist_keeps_runtime_files_and_drops_build_files(self):
         with tempfile.TemporaryDirectory() as scratch:
@@ -499,7 +526,7 @@ class FetcherTests(unittest.TestCase):
         self.assert_fetched(again, key)
         self.assertIn('cached', again.stderr)
         self.assertEqual(sorted(path.name for path in self.fixture.store.iterdir()), ['.lock', key[:12]])
-        self.assertEqual((engine / '.complete').read_text().strip(), self.assets.table.read_text().split()[2])
+        self.assertEqual((engine / '.complete').read_text().split('\n')[0], self.assets.table.read_text().split()[2])
 
     def test_a_row_built_under_another_key_fetches_that_archive_for_this_key(self):
         older = self.fixture.key()
@@ -518,6 +545,24 @@ class FetcherTests(unittest.TestCase):
         self.assertEqual(serves.returncode, 0, serves.stderr)
         other = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', older])
         self.assertEqual(other.returncode, 0, other.stderr)
+
+    def test_a_cached_engine_fetched_through_a_carried_over_row_needs_no_table_again(self):
+        older = self.fixture.key()
+        key = self.fixture.commit_engine('two')
+        self.assets.publish(older, row_key=key)
+        engine = self.fixture.store / key[:12]
+        self.assertEqual(self.fetch().stdout, f'{engine}\n')
+        self.assets.table.unlink()
+        for directory in self.assets.assets.iterdir():
+            shutil.rmtree(directory)
+        offline = self.fetch()
+        self.assertEqual(offline.returncode, 0, offline.stderr)
+        self.assertEqual(offline.stdout, f'{engine}\n')
+        self.assertIn('cached', offline.stderr)
+        (engine / '.complete').write_text((engine / '.complete').read_text().replace(key, 'f' * 40))
+        tampered = self.fetch()
+        self.assertNotEqual(tampered.returncode, 0)
+        self.assertEqual(tampered.stdout, '')
 
     def test_exact_miss_names_the_key_to_build(self):
         older = self.fixture.key()

@@ -43,10 +43,13 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
   old and new `apply.sh` write byte-identical trees.
 - **Exact.** `scripts/linux/runtime_files.py serves --engine <dir> --key <key>` (used by `release.sh` and the `package`
   job) calls an engine dir this key's exact engine only when its `manifest.json` is format 2 for `linux`/`x64`, every
-  required runtime file is there, `chrome` matches the manifest's `chrome_sha256`, and the manifest names the key, or
-  the key's row names the manifest's key as its built key. The row is the one the fetcher verified, kept beside the
-  engine as `.engine-row`, so a row from the published table or `ARDIACORE_PREBUILT_LINUX_TABLE` counts too; else the
-  checked-in table.
+  required runtime file is a regular file (`locales` a directory), `chrome` is executable and matches the manifest's
+  `chrome_sha256`, and the manifest names the key, or the key's row names the manifest's key as its built key. The
+  row comes from the table (`--table`, default `ARDIACORE_PREBUILT_LINUX_TABLE`, else the checked-in one), and a row
+  there that names another built key refuses the engine. With no row there, it is the row the fetcher verified: the
+  second line of the cached engine's `.complete`, under the archive SHA-256, and it counts only for the cache folder
+  named after its key and for the tag of its built key. So a row from the published table counts too, and the fetcher
+  finds a cached engine again without its table.
 - **Archive.** `ArdiaCore-<key12>-linux-x64.tar.xz` holds one directory, `ardiacore-linux-x64/`. It contains the
   allowlisted runtime files and a `manifest.json` (format 2): engine key, source commit, Chromium version, `args.gn` hash,
   chrome hash and build ID, and build and packaging times.

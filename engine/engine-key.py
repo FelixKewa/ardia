@@ -191,16 +191,32 @@ def gn_strings(text):
         index += 1
 
 
+def source_roots(files):
+    return sorted({'/'.join(path.split('/')[:3]) for path in files if re.match(r'engine/[^/]+/src/', path)})
+
+
+def gn_sources(value, base, roots, files):
+    if value.startswith('//'):
+        found = [path for path in (posixpath.normpath(f'{root}/{value[2:]}') for root in roots) if path in files]
+        return found, len(found) > 1
+    if value.startswith(('/', '$', ':')) or '*' in value:
+        return [], False
+    return [posixpath.normpath(posixpath.join(base, value))], False
+
+
 def platform_units(tree):
     listed = {'mac': set(), 'linux': set(), 'all': set()}
-    for path in tree.files():
+    files = set(tree.files())
+    roots = source_roots(files)
+    for path in sorted(files):
         if not path.startswith('engine/') or posixpath.basename(path) != 'BUILD.gn':
             continue
         base = posixpath.dirname(path)
         for context, value in gn_strings(tree.read(path).decode('utf-8', 'surrogateescape')):
-            if not value.endswith(UNITS) or value.startswith(('/', '$', ':')) or '*' in value:
+            if not value.endswith(UNITS):
                 continue
-            listed[context].add(posixpath.normpath(posixpath.join(base, value)))
+            sources, ambiguous = gn_sources(value, base, roots, files)
+            listed['all' if ambiguous else context].update(sources)
     shared = listed['all']
     return {'mac': listed['mac'] - listed['linux'] - shared, 'linux': listed['linux'] - listed['mac'] - shared}
 

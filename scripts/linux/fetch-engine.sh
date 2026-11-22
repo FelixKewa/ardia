@@ -17,10 +17,11 @@ scripts/linux/package.py --out.
 Rows come from packages/ardiacore/prebuilt-engines-linux.tsv
 (key<TAB>tag<TAB>sha256[<TAB>built key]), then from the published table. A
 row with a built key serves an engine published under that other key (one the
-engine key changed from) built from the sources of this key. The row an engine
-was fetched for is kept beside it as .engine-row, so
-scripts/linux/runtime_files.py serves can tell it is the exact engine of this key
-whichever table the row came from.
+engine key changed from) built from the sources of this key. The .complete of
+a cached engine holds the archive SHA-256 and, below it, the row it was
+fetched and verified for, so scripts/linux/runtime_files.py serves can tell it
+is the exact engine of this key whichever table the row came from, and a cached
+engine is found again with no table at hand.
 Environment:
   ARDIACORE_PREBUILT_REPO          GitHub repo (default ardia-browser/ardia)
   ARDIACORE_PREBUILT_ASSETS        asset base URL (default
@@ -76,13 +77,17 @@ cached_key() {
   [ -f "$dir/.complete" ] && [ -f "$dir/manifest.json" ] || return 1
   [ "$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get("engine_key", ""))' "$dir/manifest.json" 2>/dev/null)" = "${2:-$1}" ]
 }
+cached_alias() {
+  [ -f "$store/${1:0:12}/.complete" ] || return 1
+  python3 -I "$here/runtime_files.py" serves --engine "$store/${1:0:12}" --key "$1" --table "$table"
+}
 row=""
 resolve() {
   row=""
   [ -n "$1" ] || return 1
   [ ! -f "$table" ] || row=$(row_in "$1" <"$table")
   [ -z "$row" ] || return 0
-  if cached_key "$1"; then row="$1"; return 0; fi
+  if cached_key "$1" || cached_alias "$1"; then row="$1"; return 0; fi
   load_remote
   row=$(row_in "$1" <<<"$remote_rows")
   [ -n "$row" ]
@@ -125,10 +130,9 @@ if [ -z "${tag:-}" ] && [ -z "${sha:-}" ] && [ -f "$dest/.complete" ]; then
 fi
 [[ "${tag:-}" =~ ^[A-Za-z0-9._-]+$ ]] || die "bad release tag in the engine table row: $found"
 [[ "${sha:-}" =~ ^[0-9a-f]{64}$ ]] || die "bad SHA-256 in the engine table row: $found"
-if [ -f "$dest/.complete" ] && [ "$(cat "$dest/.complete")" = "$sha" ] && cached_key "$selected" "$built"; then
+if [ -f "$dest/.complete" ] && [ "$(head -n 1 "$dest/.complete")" = "$sha" ] && cached_key "$selected" "$built"; then
   echo "using the cached Linux engine $short" >&2
-  touch "$dest/.complete"
-  printf '%s\t%s\t%s\t%s\n' "$selected" "$tag" "$sha" "$built" >"$dest/.engine-row"
+  printf '%s\n%s\t%s\t%s\t%s\n' "$sha" "$selected" "$tag" "$sha" "$built" >"$dest/.complete"
   echo "$dest"
   exit 0
 fi
@@ -149,8 +153,7 @@ python3 -I "$here/runtime_files.py" unpack --archive "$tmp/$file" --into "$tmp/u
 rm -f "$tmp/$file"
 rm -rf "$dest"
 mv "$tmp/unpacked/$archive_root" "$dest"
-printf '%s\n' "$sha" >"$dest/.complete"
-printf '%s\t%s\t%s\t%s\n' "$selected" "$tag" "$sha" "$built" >"$dest/.engine-row"
+printf '%s\n%s\t%s\t%s\t%s\n' "$sha" "$selected" "$tag" "$sha" "$built" >"$dest/.complete"
 rm -rf "$tmp"
 trap - EXIT
 

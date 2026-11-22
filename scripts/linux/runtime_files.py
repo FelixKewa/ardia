@@ -52,13 +52,16 @@ def built_key(table, key):
 
 
 def fetched_built_key(directory, key):
-    row, complete = directory / '.engine-row', directory / '.complete'
-    if not row.is_file() or not complete.is_file():
+    complete = directory / '.complete'
+    if directory.name != key[:12] or not complete.is_file():
         return None
-    fields = row.read_text().rstrip('\n').split('\t')
-    if len(fields) != 4 or fields[2] != complete.read_text().strip():
+    lines = complete.read_text().split('\n')
+    if len(lines) < 2:
         return None
-    return row_built_key(fields, key)
+    fields = lines[1].split('\t')
+    if len(fields) != 4 or fields[0] != key or fields[2] != lines[0] or not HEX40.match(fields[3]) or fields[1] != release_tag(fields[3]):
+        return None
+    return fields[3]
 
 
 def sha256_of(path):
@@ -85,9 +88,25 @@ def serves(directory, key, table):
     engine_key, chrome_sha256 = manifest.get('engine_key'), manifest.get('chrome_sha256')
     if not isinstance(engine_key, str) or not HEX40.match(engine_key) or not isinstance(chrome_sha256, str) or not HEX64.match(chrome_sha256):
         return False
-    if missing(directory) or not (directory / 'chrome').is_file() or sha256_of(directory / 'chrome') != chrome_sha256:
+    if runtime_problems(directory) or sha256_of(directory / 'chrome') != chrome_sha256:
         return False
-    return engine_key in (key, fetched_built_key(directory, key), built_key(table, key))
+    if engine_key == key:
+        return True
+    listed = built_key(table, key)
+    if listed is not None:
+        return listed == engine_key
+    return fetched_built_key(directory, key) == engine_key
+
+
+def runtime_problems(directory):
+    problems = []
+    for name in REQUIRED:
+        path = directory / name
+        if not (path.is_dir() if name == 'locales' else path.is_file()):
+            problems.append(name)
+    if not problems and not os.access(directory / 'chrome', os.X_OK):
+        problems.append('chrome is not executable')
+    return problems
 
 
 def missing(directory):
@@ -193,7 +212,7 @@ def main():
     serving = commands.add_parser('serves', help='exit 0 when an engine dir is the published engine of an engine key: its manifest names the key, or the key\'s table row names the manifest\'s key as the one it was built under')
     serving.add_argument('--engine', type=pathlib.Path, required=True)
     serving.add_argument('--key', required=True)
-    serving.add_argument('--table', type=pathlib.Path, default=pathlib.Path(__file__).resolve().parents[2] / 'packages/ardiacore/prebuilt-engines-linux.tsv')
+    serving.add_argument('--table', type=pathlib.Path, default=pathlib.Path(os.environ.get('ARDIACORE_PREBUILT_LINUX_TABLE') or pathlib.Path(__file__).resolve().parents[2] / 'packages/ardiacore/prebuilt-engines-linux.tsv'))
     args = parser.parse_args()
     try:
         if args.command == 'list':

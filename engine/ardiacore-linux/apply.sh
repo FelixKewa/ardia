@@ -18,7 +18,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   fi
   for path in "$source" "$target"; do
     case "/$path/" in
-      *//* | */./* | */../*) echo "error: copies.tsv:$line_number: $path isn't a relative path without . or .." >&2; exit 1 ;;
+      *//* | */./* | */../* | *\\*) echo "error: copies.tsv:$line_number: $path isn't a relative path without ., .. or \\" >&2; exit 1 ;;
     esac
   done
   sources+=("$source")
