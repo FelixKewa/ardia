@@ -114,6 +114,7 @@ lib/                    pure helpers: url, color, time, keys
 | a menu-material panel with a scale-in | `Popover` (or `PopoverSurface` for the material alone); a panel placed by its own math uses `usePopoverMotion` + `usePopoverMotionStyle`; open/close state from `usePopoverPresence` |
 | a row in a popover or menu | `MenuRow` and `MenuSeparator` |
 | a `Surface` with a fill, corner radius, hairline border and shadow (cards, ghosts, HUDs) | `<Panel fill radius border shadow={level}>`; the level is a `ShadowLevel` from `tokens.ts` or the feature's `tokens.ts` |
+| a dialog whose buttons and fields should be the rounded 28 pt ones | `<Dialog controls="large">`: push `Button`s and `TextField`s inside read `controlSize` from `tokens.ts`; never set their height or radius by hand |
 | a centred modal over a scrim | `<Dialog width pad onDismiss>`; anchored to a spot with `place={{ top, right }}`; `Sheet` is the settings preset; `onSubmit` adds Escape/Enter keys, `restoreFocus` runs on close, `animated` fades it in |
 | a view kept mounted until its exit fade ends | `usePresence(value, { show, hide })` from `motion.ts` |
 | reduce motion | `reduceMotion()` and `reduceMotionKnown` from `components/ui` |
