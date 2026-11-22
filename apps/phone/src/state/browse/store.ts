@@ -100,7 +100,7 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
   archiveDueTabs();
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
   listenToPages(pageEvent);
-  watchFrontScroll(frontPageId, keepFrontPictureCurrent);
+  watchFrontScroll(frontPageId, pictureScrolledOrQuietPage);
   if (!currentPreferences().hasFinishedOnboarding) showOnboarding();
   else if (currentPreferences().autoOpensKeyboard) presentSearch("home", "", useTabs.getState().incognito, null, "atRest");
 }
@@ -800,14 +800,14 @@ export function captureCurrentCover() {
   void captureSnapshot(id);
 }
 
-export async function captureSnapshot(id: string, pageTop: number | null = null, latched = false) {
-  if (!latched && !snapshotAllowed(id)) return;
+export async function captureSnapshot(id: string, pageTop: number | null = null, latched = false): Promise<boolean> {
+  if (!latched && !snapshotAllowed(id)) return false;
   const countable = pictureCountable(id);
   const taken = await snapshotPage(id, !latched);
   const counts = countable && pictureCountable(id);
   if (taken && isRefusedSnapshot(taken)) {
     pictureRefused(id, taken.refused, counts);
-    return;
+    return false;
   }
   const snapshot = taken;
   if (snapshot) pictureSaved(id, snapshot.route, counts);
@@ -816,12 +816,26 @@ export async function captureSnapshot(id: string, pageTop: number | null = null,
   if (snapshot && top !== null) noteSnapshotPageTop(snapshot.uri, top);
   else if (snapshot?.frame) noteSnapshotPageTop(snapshot.uri, snapshot.frame.y);
   const tab = snapshot ? findTab(currentTabs(), id) : null;
-  if (!snapshot || !tab) return;
+  if (!snapshot || !tab) return false;
   const step = pictureCaptured(tab, snapshot.uri, snapshot.durable !== false, snapshot.generation);
   if (step && tab.snapshotFileName !== step.show) {
     updateTabById(id, { snapshotFileName: step.show });
     showHiddenDeckThePicture(id);
   }
+  return step !== null;
+}
+
+function pictureScrolledOrQuietPage(id: string) {
+  pictureScrolledPage(id);
+  keepFrontPictureCurrent();
+}
+
+function pictureScrolledPage(id: string) {
+  if (Platform.OS !== "android" || loading.get(id) !== true || !coverIsCapturable(true, pageCovered())) return;
+  const countable = pictureCountable(id);
+  void captureSnapshot(id).then((published) => {
+    if (published && countable && pictureCountable(id)) countUsage("page_pictures_scrolled");
+  });
 }
 
 function pictureCountable(id: string) {
