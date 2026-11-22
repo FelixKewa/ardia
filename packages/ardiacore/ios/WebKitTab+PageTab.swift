@@ -22,7 +22,7 @@ extension WebKitTab: PageTab {
     get { life.contentsBackgroundColor }
     set {
       life.contentsBackgroundColor = newValue
-      if pageBackgroundColor == nil, let color = newValue { webView?.underPageBackgroundColor = color }
+      if pageBackgroundColor == nil { webView?.underPageBackgroundColor = newValue }
       applyBackdrop(newValue)
     }
   }

@@ -11,6 +11,7 @@ struct WebKitTabLife {
   var discarded: WebKitDiscardedPage?
   var frozen = false
   var suspended = false
+  var suspending: Bool?
   var unresponsive = false
   var unresponsiveRecheck: DispatchWorkItem?
   var historySave: DispatchWorkItem?
@@ -30,7 +31,8 @@ enum WebKitTabHistory {
   private static let maxBytes = 32 * 1024 * 1024
   private static let files = DispatchQueue(label: "ardia.webkit.tab-history")
   private static var bound = Set<String>()
-  private static var pruned = Set<String>()
+  private static var lastPruned: [String: Date] = [:]
+  private static let pruneEvery: TimeInterval = 86400
   private static var waiting: [ObjectIdentifier: WebKitTab] = [:]
   private static let gate = WebKitHistoryGate()
   private static let flushAtQuit: NSObjectProtocol = NotificationCenter.default.addObserver(
@@ -149,15 +151,17 @@ enum WebKitTabHistory {
     bound.insert(key)
     let directory = file.deletingLastPathComponent()
     let profile = tab.profile
-    let prune = pruned.insert(profile).inserted
     files.async {
       guard !forgottenOnDisk(profile) else { return }
       var body: [String: Any] = ["version": version, "url": url, "state": state.base64EncodedString()]
       if let current = epoch(profile) { body["epoch"] = current }
       guard let data = try? JSONSerialization.data(withJSONObject: body), data.count <= maxBytes else { return }
       try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      try? data.write(to: file, options: .atomic)
-      if prune { pruneOld(in: directory) }
+      guard (try? data.write(to: file, options: .atomic)) != nil else { return }
+      if Date().timeIntervalSince(lastPruned[profile] ?? .distantPast) >= pruneEvery {
+        lastPruned[profile] = Date()
+        pruneOld(in: directory)
+      }
     }
   }
 
@@ -297,6 +301,8 @@ extension WebKitTab {
   }
 
   func lifecycleWatches(_ view: WebKitWebView) -> [NSObject] {
+    life.suspended = false
+    life.suspending = nil
     if life.frozen { applyFrozen() }
     return [view.observe(\.fullscreenState) { [weak self] v, _ in self?.fullscreenChanged(v.fullscreenState) }]
   }
@@ -319,12 +325,21 @@ extension WebKitTab {
   }
 
   private func applyFrozen() {
-    guard let view = webView, life.frozen != life.suspended else { return }
+    guard let view = webView, life.frozen != life.suspended, life.suspending == nil else { return }
     let selector = life.frozen ? Self.suspendSelector : Self.resumeSelector
     guard view.responds(to: selector) else { return }
-    life.suspended = life.frozen
+    let target = life.frozen
+    life.suspending = target
     typealias PageCall = @convention(c) (AnyObject, Selector, @escaping @convention(block) (Bool) -> Void) -> Void
-    unsafeBitCast(view.method(for: selector), to: PageCall.self)(view, selector, { _ in })
+    unsafeBitCast(view.method(for: selector), to: PageCall.self)(view, selector, { [weak self, weak view] applied in
+      DispatchQueue.main.async {
+        guard let self, let view, view === self.webView, self.life.suspending == target else { return }
+        self.life.suspending = nil
+        guard applied else { return }
+        self.life.suspended = target
+        if self.life.frozen != target { self.applyFrozen() }
+      }
+    })
   }
 
   @objc(_webViewWebProcessDidBecomeUnresponsive:)
@@ -357,10 +372,15 @@ extension WebKitTab {
     guard let view = webView, life.unresponsive else { return }
     life.unresponsiveRecheck?.cancel()
     if terminate {
+      let pid = view.responds(to: NSSelectorFromString(Self.processKey)) ? (view.value(forKey: Self.processKey) as? NSNumber)?.int32Value ?? 0 : 0
+      var ended = pid > 0 && kill(pid, SIGKILL) == 0
+      if !ended, view.responds(to: Self.killSelector) {
+        view.perform(Self.killSelector)
+        ended = true
+      }
+      guard ended else { return NSLog("[webkit] a page that stopped responding couldn't be ended") }
       life.unresponsive = false
       ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "unresponsiveEnded"]))
-      let pid = view.responds(to: NSSelectorFromString(Self.processKey)) ? (view.value(forKey: Self.processKey) as? NSNumber)?.int32Value ?? 0 : 0
-      if pid > 0 { kill(pid, SIGKILL) } else if view.responds(to: Self.killSelector) { view.perform(Self.killSelector) }
       return
     }
     let work = DispatchWorkItem { [weak self, weak view] in

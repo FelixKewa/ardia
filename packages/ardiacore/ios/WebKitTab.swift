@@ -17,7 +17,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var selected = true { didSet { noteShownChanged() } }
   var wasShown = true
   var autoPictureInPicture = false { didSet { autoPictureInPictureInputsChanged() } }
-  var pageBackgroundColor: NSColor? { didSet { if let color = pageBackgroundColor { webView?.underPageBackgroundColor = color } } }
+  var pageBackgroundColor: NSColor? { didSet { webView?.underPageBackgroundColor = pageBackgroundColor ?? life.contentsBackgroundColor } }
   let browserId = WebKitHub.shared.nextBrowserId()
 
   private(set) var webView: WebKitWebView?

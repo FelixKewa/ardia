@@ -6,6 +6,7 @@ final class WebKitSiteData: NSObject, WKHTTPCookieStoreObserver {
   static let gateDeadline: TimeInterval = 0.6
   private static let changeDebounce: TimeInterval = 0.3
   private static let maxCookies = 4000
+  static let maxOrigins = 16
 
   private var watchingGate = false
   private var gates: [String: () -> Void] = [:]

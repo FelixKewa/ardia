@@ -44,7 +44,12 @@ public class WebKitModule: Module {
     },
     "readSiteData": { args, reply in
       let origins = try args.strings("origins").compactMap(URL.init(string:)).filter { WebKitSiteData.origin(of: $0) != nil }
-      WebKitSiteData.shared.read(profile: args.profile, domains: try args.strings("domains"), origins: Array(origins.prefix(16))) { reply.ok($0) }
+      let skipped = origins.dropFirst(WebKitSiteData.maxOrigins).map(\.absoluteString)
+      WebKitSiteData.shared.read(profile: args.profile, domains: try args.strings("domains"), origins: Array(origins.prefix(WebKitSiteData.maxOrigins))) { read in
+        guard var read, !skipped.isEmpty else { return reply.ok(read) }
+        read["skippedOrigins"] = Array(skipped)
+        reply.ok(read)
+      }
     },
     "writeSiteData": { args, reply in
       let storage = (try args.dict("storage")).compactMapValues { $0 as? [String: Any] }

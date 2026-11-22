@@ -48,7 +48,7 @@ const store = () => useBrowser.getState();
 const declinedSites = new Set<string>();
 const toldInChromiumMode = new Set<string>();
 const movingTabs = new Set<string>();
-const siteMoves = new Map<string, number>();
+const siteMoves = new Map<string, { at: number; to: PageEngine; returned: boolean }>();
 const webKitSites = new Map<string, string>();
 const SITE_MOVE_SPACING_MS = 10_000;
 const hostLabel = (site: string) => new URL(site).hostname.replace(/^www\./, "");
@@ -250,8 +250,10 @@ async function moveForProtectedVideo(tabId: string, site: string) {
 
 function moveAfterNavigation(tabId: string, from: PageEngine, to: PageEngine, previousUrl: string) {
   const now = Date.now();
-  if (now - (siteMoves.get(tabId) ?? 0) < SITE_MOVE_SPACING_MS) return;
-  siteMoves.set(tabId, now);
+  const last = siteMoves.get(tabId);
+  const recent = !!last && now - last.at < SITE_MOVE_SPACING_MS;
+  if (recent && (last.to === to || last.returned)) return;
+  siteMoves.set(tabId, { at: now, to, returned: recent });
   watchClosedTabs();
   const holds = modeStillHolds();
   void openPageIn(tabId, to, { checkWork: false }).then((moved) => {

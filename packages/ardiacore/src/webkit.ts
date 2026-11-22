@@ -18,7 +18,7 @@ export type PageCookie = {
 
 export type StorageItems = [string, string][];
 export type SiteStorage = Record<string, StorageItems | null>;
-export type SiteData = { cookies: PageCookie[]; storage: SiteStorage };
+export type SiteData = { cookies: PageCookie[]; storage: SiteStorage; skippedOrigins?: string[] };
 export type StorageChange = { set: StorageItems; remove: string[] };
 export type CookieRemoval = { name: string; domain: string; path: string };
 export type ChromiumCookieWrite = {

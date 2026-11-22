@@ -334,6 +334,29 @@ test("in WebKit only, leaving the Web Store or its Google sign-in for another si
   webviews.clear();
 });
 
+test("in WebKit only, a quick visit to the Web Store still moves the tab back to WebKit when it leaves, and a third quick move waits", async () => {
+  S().hydrate({});
+  S().updateSettings({ engineMode: "webkit" });
+  const w = S().createWindow({ url: "https://blog.example/" });
+  const tabId = model.activeTabId(S(), w);
+  webviews.set(tabId, { evaluate: () => Promise.resolve(false), pageCookies: () => Promise.resolve([]) });
+  S().updateTab(tabId, { url: "https://chromewebstore.google.com/detail/abc" });
+  followSiteChoice(tabId, "webkit", "https://chromewebstore.google.com/detail/abc", "https://blog.example/");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "chromium");
+  dropSwap(tabId);
+  S().updateTab(tabId, { url: "https://news.example/" });
+  followSiteChoice(tabId, "chromium", "https://news.example/", "https://chromewebstore.google.com/detail/abc");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "webkit", "leaving the Web Store right away still returns to WebKit");
+  dropSwap(tabId);
+  S().updateTab(tabId, { url: "https://chromewebstore.google.com/detail/def" });
+  followSiteChoice(tabId, "webkit", "https://chromewebstore.google.com/detail/def", "https://news.example/");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "webkit", "a third move within the spacing window waits, so a redirect loop can't bounce the tab");
+  webviews.clear();
+});
+
 const { persistEngine } = await import("./actions.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../session/persist.ts");
 const stub = await import("../../test-native/index.ts");

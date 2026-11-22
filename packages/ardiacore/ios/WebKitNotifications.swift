@@ -22,6 +22,8 @@ final class WebKitNotifications {
   }
 
   private var workerShown: [String: WorkerShown] = [:]
+  private var showing = Set<String>()
+  private var closedBeforeShown = Set<String>()
   private var workerDelegates: [ObjectIdentifier: WebKitWorkerNotifications] = [:]
   private var granted: [String: [String: Bool]] = [:]
   private var forgottenProfiles = Set<String>()
@@ -147,8 +149,14 @@ final class WebKitNotifications {
       let scope = Self.scope(data, origin: origin)
       if persistent && scope == nil { return }
       let profile = tab.profile
+      let pageId = persistent ? nil : Self.pageWireId(id, tab: tab)
+      if let pageId { showing.insert(pageId) }
       WebKitHub.shared.permissions.answers(profile: profile, origin: origin, kinds: ["notifications"]) { [weak self, weak tab] answers in
         self?.note(answers["notifications"], profile: profile, origin: origin)
+        if let pageId {
+          self?.showing.remove(pageId)
+          if self?.closedBeforeShown.remove(pageId) != nil { return }
+        }
         guard let self, let tab, answers["notifications"] == true, !WebKitStores.isPrivate(tab.profile), Self.origin(of: tab) == origin else { return }
         let wireId = persistent ? self.nextWireId() : Self.pageWireId(id, tab: tab)
         if persistent, let scope {
@@ -170,6 +178,7 @@ final class WebKitNotifications {
     case "close":
       let wireId = id.hasPrefix("wk-n") ? id : Self.pageWireId(id, tab: tab)
       if id.hasPrefix("wk-n"), !shows(wireId, for: tab, origin: origin) { return }
+      if showing.contains(wireId) { closedBeforeShown.insert(wireId) }
       forgetShown(wireId)
       tab.emit("notificationClose", ["id": wireId])
     default: break
@@ -322,6 +331,7 @@ final class WebKitNotifications {
         wireId: wireId, profile: profile, origin: origin, tag: tag, notification: dictionary, order: self.workerCount, store: store)
       if self.workerShown.count > 200, let oldest = self.workerShown.values.min(by: { $0.order < $1.order }) {
         self.workerShown.removeValue(forKey: oldest.wireId)
+        Self.emitClose(oldest.wireId, via: Self.liveTab(profile: oldest.profile, origin: oldest.origin))
       }
       let shown: [String: Any] = [
         "id": wireId, "title": title, "body": body, "icon": NSNull(), "tag": tag, "silent": silent, "requireInteraction": false,
