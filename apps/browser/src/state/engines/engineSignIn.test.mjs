@@ -212,33 +212,6 @@ test("a cookie block set after a carry applies to the next carry at once, not af
   });
 });
 
-test("a blocked host found only in site settings still keeps the domain cookies it would receive, and a block on another port still counts", async () => {
-  await withSites(twoLabelSites, async () => {
-    try {
-      {
-        const { tabId } = setup();
-        blockSibling();
-        S().updateTab(tabId, { url: `${OK}/home` });
-        webviews.set(tabId, chromiumPage({ cookies: [cookieOn("okc", "ok.app.test"), cookieOn("wide", ".app.test")], storage: {} }));
-        await carrySignIn(tabId, `${OK}/home`, "webkit", null);
-        assert.deepEqual(names(webKit.cookies), ["okc"], "no cookie or remembered origin names blk.app.test, and .app.test still stays behind");
-      }
-      stub.siteSettingsDb.delete(`\n${BLOCKED}`);
-      {
-        const { tabId } = setup();
-        stub.siteSettingsDb.set(`\n${BLOCKED}:8443`, { cookies: "block" });
-        S().updateTab(tabId, { url: `${OK}/home` });
-        webviews.set(tabId, chromiumPage({ cookies: [cookieOn("okc", "ok.app.test"), cookieOn("blkc", "blk.app.test")], storage: {} }));
-        await carrySignIn(tabId, `${OK}/home`, "webkit", null);
-        assert.deepEqual(names(webKit.cookies), ["okc"], "a block on https://blk.app.test:8443 holds blk.app.test's cookies");
-      }
-    } finally {
-      stub.siteSettingsDb.delete(`\n${BLOCKED}`);
-      stub.siteSettingsDb.delete(`\n${BLOCKED}:8443`);
-    }
-  });
-});
-
 test("a cookie held back by a block keeps what the carry knew about it, so lifting the block brings back nothing Chromium deleted", async () => {
   const { setSiteSetting } = await import("../../platform/siteSettings.ts");
   await withSites(twoLabelSites, async () => {
@@ -262,16 +235,33 @@ test("a cookie held back by a block keeps what the carry knew about it, so lifti
   });
 });
 
-test("a carry moves nothing when the cookie block can't be read", async () => {
-  for (const down of [{ settings: () => Promise.reject(new Error("down")) }, { origins: () => Promise.reject(new Error("down")) }]) {
-    await withSites({ ...twoLabelSites, ...down }, async () => {
+test("a block set while a carry is still reading stops its write", async () => {
+  const { setSiteSetting } = await import("../../platform/siteSettings.ts");
+  await withSites(twoLabelSites, async () => {
+    try {
       const { tabId } = setup();
       S().updateTab(tabId, { url: `${OK}/home` });
-      webviews.set(tabId, chromiumPage({ cookies: [cookieOn("okc", "ok.app.test")], storage: {} }));
-      await carrySignIn(tabId, `${OK}/home`, "webkit", null);
-      assert.deepEqual(webKit.cookies, [], `nothing crosses with ${Object.keys(down)[0]} unavailable`);
-    });
-  }
+      webviews.set(tabId, chromiumPage({ cookies: [], storage: { [OK]: [["token", "t1"]] } }, 80));
+      const carried = carrySignIn(tabId, `${OK}/home`, "webkit", null);
+      setTimeout(() => void setSiteSetting("", BLOCKED, "cookies", "block"), 40);
+      setTimeout(() => void setSiteSetting("", OK, "cookies", "block"), 250);
+      await carried;
+      assert.equal(webKit.storage[OK], undefined, "saved data approved before the block stays in Chromium when the block lands during the carry's read");
+    } finally {
+      stub.siteSettingsDb.delete(`\n${BLOCKED}`);
+      stub.siteSettingsDb.delete(`\n${OK}`);
+    }
+  });
+});
+
+test("a carry moves nothing when the cookie block can't be read", async () => {
+  await withSites({ ...twoLabelSites, settings: () => Promise.reject(new Error("down")) }, async () => {
+    const { tabId } = setup();
+    S().updateTab(tabId, { url: `${OK}/home` });
+    webviews.set(tabId, chromiumPage({ cookies: [cookieOn("okc", "ok.app.test")], storage: {} }));
+    await carrySignIn(tabId, `${OK}/home`, "webkit", null);
+    assert.deepEqual(webKit.cookies, [], "nothing crosses while site settings are unavailable");
+  });
 });
 
 test("a switch carry leaves a blocked sibling's cookies behind in both directions", async () => {

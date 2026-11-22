@@ -1,6 +1,6 @@
 import { exportWebKitCookies, readWebKitSiteData, type PageCookie, type SiteStorage, type StorageChange } from "../../platform/webkit";
 import type { PageEngine } from "../../platform/tabs";
-import { getSiteSettings, getSiteSettingsOrigins, onSiteSettingChange } from "../../platform/siteSettings";
+import { getSiteSettings, onSiteSettingChange } from "../../platform/siteSettings";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { tabEngine } from "./engines";
@@ -28,6 +28,7 @@ import type { ConsentToken } from "../telemetry/client";
 
 const WEBKIT_PURGE_WINDOW_MS = 7 * 24 * 60 * 60_000;
 const BLOCK_CACHE_MS = 60_000;
+const ALLOW_CACHE_MS = 5_000;
 const BLOCK_CACHE_SIZE = 200;
 const NOTHING: SiteDataCarry = { cookies: 0, removed: 0, storage: 0, conflicts: 0 };
 
@@ -61,11 +62,13 @@ onSiteSettingChange(() => {
 async function cookiesBlocked(profile: string, origin: string): Promise<boolean> {
   const key = `${profile}|${origin}`;
   const cached = blockCache.get(key);
-  if (cached && Date.now() - cached.at < BLOCK_CACHE_MS) return cached.blocked;
+  if (cached && Date.now() - cached.at < (cached.blocked ? BLOCK_CACHE_MS : ALLOW_CACHE_MS)) return cached.blocked;
+  const epoch = settingsEpoch;
   const engines: PageEngine[] = ["chromium", "webkit"];
   const settings = await Promise.all(engines.map((engine) => getSiteSettings(profile, origin, engine).catch(() => null)));
   if (settings.every((s) => !s?.cookies)) return true;
   const blocked = settings.some((s) => s?.cookies?.value === "block");
+  if (epoch !== settingsEpoch) return blocked;
   const now = Date.now();
   if (blockCache.size >= BLOCK_CACHE_SIZE) for (const [k, v] of blockCache) if (now - v.at >= BLOCK_CACHE_MS) blockCache.delete(k);
   if (blockCache.size >= BLOCK_CACHE_SIZE) blockCache.delete(blockCache.keys().next().value ?? "");
@@ -106,33 +109,21 @@ async function hostBlocked(profile: string, host: string): Promise<boolean> {
   return secure || plain;
 }
 
-async function blockedListedHosts(profile: string, domains: readonly string[]): Promise<string[] | null> {
-  const listed = await getSiteSettingsOrigins(profile).catch(() => null);
-  if (!Array.isArray(listed)) return null;
-  const nearby = [...new Set(listed)].filter((o) => {
-    const host = URL.canParse(o) ? hostOf(o) : "";
-    return !!host && domains.some((d) => within(host, d));
-  });
-  const found = await Promise.all(nearby.map((o) => cookiesBlocked(profile, o)));
-  return [...new Set(nearby.filter((_, i) => found[i]).map(hostOf))];
-}
-
-type BlockPlan = { stop: "blocked" | "failure" | null; origins: string[]; domains: string[]; blocked: string[] };
+type BlockPlan = { stop: "blocked" | null; origins: string[]; domains: string[]; blocked: string[] };
 
 async function blockPlan(profile: string, site: string, entry: ReturnType<typeof siteEntry>, origin: string | null | undefined): Promise<BlockPlan> {
   const known = [...new Set([...(origin ? [origin] : []), ...entry.origins])];
   const candidates = [...new Set([site, ...entry.hops])];
-  const [originBlocks, domainBlocks, listed] = await Promise.all([
+  const [originBlocks, domainBlocks] = await Promise.all([
     Promise.all(known.map((o) => cookiesBlocked(profile, o))),
     Promise.all(candidates.map((d) => hostBlocked(profile, d))),
-    blockedListedHosts(profile, candidates),
   ]);
-  const stop = !listed ? "failure" : origin && originBlocks[0] ? "blocked" : null;
+  const stop = origin && originBlocks[0] ? "blocked" : null;
   return {
     stop,
     origins: known.filter((_, i) => !originBlocks[i]),
     domains: candidates.filter((_, i) => !domainBlocks[i]),
-    blocked: [...new Set([...known.filter((_, i) => originBlocks[i]).map(hostOf), ...candidates.filter((_, i) => domainBlocks[i]), ...(listed ?? [])])],
+    blocked: [...new Set([...known.filter((_, i) => originBlocks[i]).map(hostOf), ...candidates.filter((_, i) => domainBlocks[i])])],
   };
 }
 
@@ -154,7 +145,7 @@ const readBoth = async (profile: string, { domains, origins, blocked }: BlockPla
   return withoutBlockedCookies(profile, chromium, webkit, blocked);
 };
 
-const withoutHeldCookies = (base: Record<string, string>, blocked: readonly string[]) =>
+const baseOutsideBlocks = (base: Record<string, string>, blocked: readonly string[]) =>
   blocked.length ? Object.fromEntries(Object.entries(base).filter(([key]) => !blocked.some((host) => reaches(domainOfKey(key), host)))) : base;
 
 const trustsDropsFrom = (from: PageEngine, lastUsed: number | undefined) => from === "chromium" || Date.now() - (lastUsed ?? 0) < WEBKIT_PURGE_WINDOW_MS;
@@ -176,14 +167,17 @@ async function carryNow(profile: string, site: string, to: PageEngine, { origin,
   const early = await readBoth(profile, plan);
   if (!stillCurrent()) return NOTHING;
   return inCommitLane(profile, urgent, async () => {
-    const fresh = settingsEpoch === epoch ? plan : await blockPlan(profile, site, entry, origin);
+    const laneEpoch = settingsEpoch;
+    const settled = () => stillCurrent() && settingsEpoch === laneEpoch;
+    const fresh = laneEpoch === epoch ? plan : await blockPlan(profile, site, entry, origin);
     if (fresh.stop) {
       noteSiteDataSkip(fresh.stop, consent);
       return NOTHING;
     }
     const read = fresh === plan && !committedSince(profile, seen, plan.domains, plan.origins) ? early : await readBoth(profile, fresh);
+    if (!settled()) return NOTHING;
     noteSiteDataBlockedCookies(read.heldBack, consent);
-    return commitCarry(profile, site, to, { entry, origins: fresh.origins, domains: fresh.domains, read, cleared, stillCurrent, consent });
+    return commitCarry(profile, site, to, { entry, origins: fresh.origins, domains: fresh.domains, read, cleared, stillCurrent: settled, consent });
   });
 }
 
@@ -202,7 +196,7 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
   const { chromium, webkit } = read;
   if (!webkit || !stillCurrent()) return NOTHING;
   const p = profileOf(book(), profile);
-  const cookieBase = withoutHeldCookies(scopedBase(p.cookies, domains), read.blocked);
+  const cookieBase = baseOutsideBlocks(scopedBase(p.cookies, domains), read.blocked);
   const now = Date.now() / 1000;
   if (!chromium) {
     if (from === "chromium") {
