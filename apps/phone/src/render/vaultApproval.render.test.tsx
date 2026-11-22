@@ -9,7 +9,7 @@ import { renderSurface, unmount } from "../../test/render/harness";
 const onIos = Platform.OS === "ios" ? test : test.skip;
 
 const NOW = Date.UTC(2026, 10, 22, 12);
-const request = { id: "0f0e0d0c-0b0a-4908-8706-050403020100", program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", alwaysOffered: true, askedAt: NOW - 2_000, expiresAt: NOW + 90_000, fromDeviceId: "mac", fromDevice: "MacBook Pro" };
+const request = { id: "0f0e0d0c-0b0a-4908-8706-050403020100", program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", alwaysOffered: true, trusted: true, askedAt: NOW - 2_000, expiresAt: NOW + 90_000, fromDeviceId: "mac", fromDevice: "MacBook Pro" };
 
 const within = (node: ReactTestInstance, has: (props: Record<string, unknown>) => boolean) => node.findAll((inner) => typeof inner.type === "string" && has(inner.props));
 const texts = (node: ReactTestInstance) => within(node, (props) => typeof props.text === "string" || typeof props.title === "string" || typeof props.label === "string").map((inner) => (inner.props.text ?? inner.props.title ?? inner.props.label) as string);
@@ -86,5 +86,23 @@ onIos("a program the Mac won't let you always allow (the ardia command, an inter
   expect(texts(root.root).some((text) => text.startsWith("Ends in"))).toBe(true);
   await press(button(root.root, "Allow with Face ID"));
   expect(answer).toHaveBeenCalledWith(request.id, true, false);
+  unmount(root);
+});
+
+onIos("before the Mac trusts this iPhone, the sheet shows its key's code and how to trust it there, offers no Allow, and makes the key if there is none", async () => {
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const prepare = jest.spyOn(sync, "prepareVaultKey").mockResolvedValue("4979 42AC F8F3 4E6A 2DBB");
+  useSync.setState({ view: { ...EMPTY_VIEW, vaultRequests: [{ ...request, trusted: false }], vaultKey: null } });
+  const root = renderSurface(<VaultApprovalSheet />);
+  await act(async () => undefined);
+  expect(prepare).toHaveBeenCalledTimes(1);
+  expect(texts(root.root)).toEqual(expect.arrayContaining(["Trust This iPhone First", "Not Now"]));
+  expect(texts(root.root)).not.toContain("Allow with Face ID");
+  expect(within(root.root, (props) => typeof props.onIsOnChange === "function")).toEqual([]);
+  act(() => useSync.setState({ view: { ...EMPTY_VIEW, vaultRequests: [{ ...request, trusted: false }], vaultKey: "4979 42AC F8F3 4E6A 2DBB" } }));
+  expect(texts(root.root)).toContain("4979 42AC F8F3 4E6A 2DBB");
+  expect(counted).toHaveBeenCalledWith("vault_requests_untrusted");
+  await press(button(root.root, "Not Now"));
+  expect(presented(root)).toBe(false);
   unmount(root);
 });

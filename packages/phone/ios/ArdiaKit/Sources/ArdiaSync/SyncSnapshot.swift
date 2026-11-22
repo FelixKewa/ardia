@@ -7,6 +7,7 @@ public struct SyncSnapshot: Codable, Equatable, Sendable {
   public var look: SyncedLook?
   public var syncedAt: Date?
   public var vaultRequests: [VaultApprovalRequest]?
+  public var vaultKey: String?
 
   public init(devices: [SyncedDevice] = [], profiles: [SyncedProfile] = [], search: SyncedSearch? = nil, look: SyncedLook? = nil, syncedAt: Date? = nil, vaultRequests: [VaultApprovalRequest]? = nil) {
     self.devices = devices
@@ -33,18 +34,20 @@ public struct VaultApprovalRequest: Codable, Equatable, Hashable, Identifiable, 
   public var why: String
   public var profileName: String
   public var alwaysOffered: Bool?
+  public var trusted: Bool?
   public var askedAt: Date
   public var expiresAt: Date
   public var fromDeviceId: String
   public var fromDevice: String?
 
-  public init(id: String, program: String, sites: [String], why: String, profileName: String, alwaysOffered: Bool, askedAt: Date, expiresAt: Date, fromDeviceId: String, fromDevice: String?) {
+  public init(id: String, program: String, sites: [String], why: String, profileName: String, alwaysOffered: Bool, trusted: Bool, askedAt: Date, expiresAt: Date, fromDeviceId: String, fromDevice: String?) {
     self.id = id
     self.program = program
     self.sites = sites
     self.why = why
     self.profileName = profileName
     self.alwaysOffered = alwaysOffered
+    self.trusted = trusted
     self.askedAt = askedAt
     self.expiresAt = expiresAt
     self.fromDeviceId = fromDeviceId

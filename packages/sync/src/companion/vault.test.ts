@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createHash, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
 import { Clock } from "../hlc.ts";
 import { syncScope, visible } from "../scope.ts";
 import { emptyScope, type Adapter, type Listing, type LogFile, type ScopeState } from "../scopeState.ts";
-import { VAULT_ANSWER, VAULT_REQUEST, vaultRequestsAdapter, type VaultAnswerRecord, type VaultRequestRecord } from "../vaultApproval.ts";
-import { companionAnswerVault, companionView, runCompanionCycle } from "./cycle.ts";
+import { VAULT_ANSWER, VAULT_KEY, VAULT_REQUEST, vaultChallenge, vaultKeyOf, vaultRequestsAdapter, type VaultAnswerRecord, type VaultRequestRecord } from "../vaultApproval.ts";
+import { companionAnswerVault, companionVaultChallenge, companionVaultKey, companionView, runCompanionCycle } from "./cycle.ts";
 import { companionLoad, type CompanionState, type Host } from "./state.ts";
 
 const START = Date.UTC(2026, 10, 22);
@@ -13,6 +14,10 @@ const MAC = "mac00000000000000000000000";
 const OTHER_MAC = "mac11111111111111111111111";
 const ID = "0f0e0d0c-0b0a-4908-8706-050403020100";
 const NONCE = "n0nce-0123456789abcdef";
+
+const fingerprintOf = (raw: Buffer) => createHash("sha256").update(raw).digest("hex").slice(0, 20).toUpperCase().match(/.{4}/g)!.join(" ");
+const rawKey = (key: KeyObject) => Buffer.from(key.export({ format: "jwk" }).x!, "base64url").length === 32 ? Buffer.concat([Buffer.from([4]), Buffer.from(key.export({ format: "jwk" }).x!, "base64url"), Buffer.from(key.export({ format: "jwk" }).y!, "base64url")]) : Buffer.alloc(0);
+const publicFromRaw = (raw: Buffer) => ({ key: { kty: "EC", crv: "P-256", x: raw.subarray(1, 33).toString("base64url"), y: raw.subarray(33, 65).toString("base64url") }, format: "jwk" as const, dsaEncoding: "ieee-p1363" as const });
 
 class Folder {
   files = new Map<string, Map<string, string>>();
@@ -44,6 +49,8 @@ class Mac {
   store = new Map<string, unknown>();
   live: VaultRequestRecord[] = [];
   answers: { request: VaultRequestRecord; answer: VaultAnswerRecord }[] = [];
+  rejected: VaultAnswerRecord[] = [];
+  trusted = new Map<string, Buffer>();
   readonly folder: Folder;
   readonly id: string;
   constructor(folder: Folder, id = MAC) {
@@ -64,8 +71,12 @@ class Mac {
         me: this.id,
         live: () => this.live,
         author: (key) => this.state.records[key]?.o?.[0],
+        trusts: () => [...this.trusted].map(([phone, raw]) => ({ phone, f: fingerprintOf(raw) })),
         isPhone: (device) => (visible(this.state, "dev:").get(`dev:${device}`) as { k?: string } | undefined)?.k === "phone",
         answered: (request, answer) => {
+          const raw = this.trusted.get(answer.by);
+          const good = !!raw && verify("sha256", Buffer.from(vaultChallenge(request, answer.by, answer.a, answer.al)), publicFromRaw(raw), Buffer.from(answer.sig, "base64"));
+          if (!good) return void this.rejected.push(answer);
           this.live = this.live.filter((r) => r.id !== request.id);
           this.answers.push({ request, answer });
         },
@@ -88,7 +99,7 @@ class Mac {
     });
   }
   vaultKeys() {
-    return [...visible(this.state, "vault:").keys()];
+    return [...visible(this.state, "vault:").keys()].filter((k) => k.startsWith(VAULT_REQUEST) || k.startsWith(VAULT_ANSWER));
   }
 }
 
@@ -129,9 +140,18 @@ class Phone {
     const out = await this.cycle();
     return (out.view ?? companionView()).vaultRequests;
   }
+  keys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  raw = rawKey(this.keys.publicKey);
+  enroll() {
+    (globalThis as { __host?: Host }).__host = this.host();
+    return companionVaultKey({ k: this.raw.toString("base64"), f: fingerprintOf(this.raw), at: this.folder.now });
+  }
   answer(allow: boolean, always: boolean, id = ID) {
     (globalThis as { __host?: Host }).__host = this.host();
-    return companionAnswerVault({ id, allow, always, at: this.folder.now });
+    const challenge = companionVaultChallenge({ id, allow, always, at: this.folder.now });
+    if (!("message" in challenge)) return challenge;
+    const sig = sign("sha256", Buffer.from(challenge.message), { key: this.keys.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64");
+    return companionAnswerVault({ id, allow, always, at: this.folder.now, sig });
   }
 }
 
@@ -139,9 +159,14 @@ async function paired() {
   const folder = new Folder();
   const mac = new Mac(folder);
   const phone = new Phone(folder).launch();
+  phone.enroll();
   await mac.sync();
   await phone.cycle();
   await mac.sync();
+  const published = vaultKeyOf(`${VAULT_KEY}${PHONE}`, visible(mac.state, VAULT_KEY).get(`${VAULT_KEY}${PHONE}`));
+  mac.trusted.set(PHONE, Buffer.from(published!.k, "base64"));
+  await mac.sync();
+  await phone.cycle();
   return { folder, mac, phone };
 }
 
@@ -150,7 +175,7 @@ test("a Mac's request reaches the phone, Allow comes back bound to its nonce, an
   const request = mac.ask();
   await mac.sync();
   const shown = await phone.requests();
-  assert.deepEqual(shown, [{ id: ID, program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", alwaysOffered: true, askedAt: request.at, expiresAt: request.x, fromDeviceId: MAC, fromDevice: "MacBook Pro" }]);
+  assert.deepEqual(shown, [{ id: ID, program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", alwaysOffered: true, trusted: true, askedAt: request.at, expiresAt: request.x, fromDeviceId: MAC, fromDevice: "MacBook Pro" }]);
   assert.ok(!JSON.stringify(shown).includes(NONCE));
   assert.deepEqual(phone.answer(true, true), { saved: true });
   assert.deepEqual(phone.answer(false, false), { saved: false, refused: true });
@@ -206,7 +231,7 @@ test("the Mac takes no answer that doesn't match its request exactly, nor one a 
   await phone.requests();
   const other = new Mac(folder, OTHER_MAC);
   await other.sync();
-  const forged = (changes: Partial<VaultAnswerRecord>, by = PHONE): VaultAnswerRecord => ({ id: ID, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al: true, by, at: folder.now, ...changes });
+  const forged = (changes: Partial<VaultAnswerRecord>, by = PHONE): VaultAnswerRecord => ({ id: ID, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al: true, by, sig: "AAAA", at: folder.now, ...changes });
   for (const answer of [forged({ s: ["https://evil.example"] }), forged({ n: "replayed-nonce-0000000000" }), forged({ p: "another-profile" }), forged({ x: request.x + 1 }), forged({}, OTHER_MAC)]) {
     other.store.set(`${VAULT_ANSWER}${ID}`, answer);
     other.adapters = () => [{ prefix: "", extract: () => ({ values: new Map(other.store), ignore: (k) => !other.store.has(k) && !k.startsWith(VAULT_ANSWER) }), apply: () => true }];
@@ -245,12 +270,56 @@ test("where the Mac doesn't offer Always Allow, the phone is told so, its Always
   await mac.sync();
   assert.deepEqual(mac.answers.map((a) => [a.answer.a, a.answer.al]), [[true, false]]);
   const taken: boolean[] = [];
-  const adapter = vaultRequestsAdapter({ me: MAC, live: () => [request], isPhone: (d) => d === PHONE, author: () => PHONE, answered: (_r, answer) => void taken.push(answer.al) });
+  const adapter = vaultRequestsAdapter({ me: MAC, live: () => [request], isPhone: (d) => d === PHONE, author: () => PHONE, trusts: () => [], answered: (_r, answer) => void taken.push(answer.al) });
   const key = `${VAULT_ANSWER}${request.id}`;
-  const claim = (al: boolean) => adapter.apply(new Map([[key, { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al, by: PHONE, at: folder.now }]]), new Set([key]), () => undefined, {} as never);
+  const claim = (al: boolean) => adapter.apply(new Map([[key, { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al, by: PHONE, sig: "AAAA", at: folder.now }]]), new Set([key]), () => undefined, {} as never);
   claim(true);
   assert.deepEqual(taken, []);
   claim(false);
   assert.deepEqual(taken, [false]);
   assert.equal(request.ao, false);
+});
+
+test("the phone's key reaches the Mac, the view says whether this Mac trusts it, and an answer signed by an untrusted key or over another challenge is not taken", async () => {
+  const folder = new Folder();
+  const mac = new Mac(folder);
+  const phone = new Phone(folder).launch();
+  assert.equal(companionView().vaultKey, null);
+  phone.enroll();
+  await phone.cycle();
+  await mac.sync();
+  assert.equal(vaultKeyOf(`${VAULT_KEY}${PHONE}`, visible(mac.state, VAULT_KEY).get(`${VAULT_KEY}${PHONE}`))?.f, fingerprintOf(phone.raw));
+  mac.ask();
+  await mac.sync();
+  const [shown] = await phone.requests();
+  assert.equal(shown!.trusted, false);
+  assert.equal(companionView().vaultKey, fingerprintOf(phone.raw));
+  phone.answer(true, false);
+  await phone.cycle();
+  await mac.sync();
+  assert.deepEqual([mac.answers.length, mac.rejected.length], [0, 1]);
+  mac.trusted.set(PHONE, phone.raw);
+  await mac.sync();
+  assert.equal((await phone.requests()).length, 0);
+  const impostor = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const request = mac.live[0]!;
+  const forged = (message: string, key: KeyObject) => sign("sha256", Buffer.from(message), { key, dsaEncoding: "ieee-p1363" }).toString("base64");
+  const key = `${VAULT_ANSWER}${request.id}`;
+  const adapter = mac.adapters()[1]!;
+  const apply = (answer: VaultAnswerRecord) => adapter.apply(new Map([[key, answer]]), new Set([key]), () => undefined, {} as never);
+  mac.state.records[key] = { h: "0", v: null, o: [PHONE, 1] } as never;
+  const base = { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al: false, by: PHONE, at: folder.now };
+  apply({ ...base, sig: forged(vaultChallenge(request, PHONE, true, false), impostor.privateKey) });
+  apply({ ...base, sig: forged(vaultChallenge({ ...request, s: ["https://evil.example"] }, PHONE, true, false), phone.keys.privateKey) });
+  apply({ ...base, a: false, sig: forged(vaultChallenge(request, PHONE, true, false), phone.keys.privateKey) });
+  assert.deepEqual([mac.answers.length, mac.rejected.length], [0, 4]);
+  apply({ ...base, sig: forged(vaultChallenge(request, PHONE, true, false), phone.keys.privateKey) });
+  assert.deepEqual([mac.answers.length, mac.rejected.length], [1, 4]);
+});
+
+test("the challenge is length-prefixed, so no field can bleed into the next", () => {
+  const request = { id: "0f0e0d0c-0b0a-4908-8706-050403020100", n: NONCE, p: "p:1", pn: "", g: "", s: ["https://a.example", "https://b.example"], w: "", x: 1_800_000_000_000, m: MAC, ao: true, at: 0 } satisfies VaultRequestRecord;
+  assert.equal(vaultChallenge(request, PHONE, true, true), `20:ardia-vault-answer-136:${request.id}22:${NONCE}3:p:11:217:https://a.example17:https://b.example13:18000000000001:126:${MAC}27:${PHONE}1:11:1`);
+  assert.notEqual(vaultChallenge({ ...request, s: ["https://a.example17:https://b.example"] }, PHONE, true, true), vaultChallenge(request, PHONE, true, true));
+  assert.equal(vaultChallenge({ ...request, ao: false }, PHONE, true, true).endsWith("1:11:0"), true);
 });

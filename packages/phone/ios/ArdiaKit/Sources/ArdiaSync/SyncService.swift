@@ -498,12 +498,45 @@ public final class SyncService {
     case sent
     case gone
     case failed
+    case cancelled
+    case untrusted
+    case unavailable
+  }
+
+  public func prepareVaultKey() async -> String? {
+    let key: VaultPhoneKey
+    do {
+      key = try VaultPhoneKey.loadOrCreate()
+    } catch {
+      NSLog("[vault] this iPhone's sign-in approval key isn't available: \(error)")
+      return nil
+    }
+    if isDemo {
+      snapshot.vaultKey = key.fingerprint
+      return key.fingerprint
+    }
+    guard let engine else { return nil }
+    guard (try? await engine.setVaultKey(key.publicKey, fingerprint: key.fingerprint)) != nil else { return nil }
+    Task { await runCycle() }
+    return key.fingerprint
+  }
+
+  private func signVault(_ message: String, for request: VaultApprovalRequest, allow: Bool) async -> Result<String, VaultPhoneKeyError> {
+    let sites = request.sites.compactMap { URL(string: $0)?.host() }.joined(separator: ", ")
+    let reason = allow ? "Let \(request.program) sign in to \(sites)" : "Turn down \(request.program) signing in to \(sites)"
+    do {
+      return .success(try await VaultPhoneKey.loadOrCreate().sign(message, reason: reason))
+    } catch let error as VaultPhoneKeyError {
+      return .failure(error)
+    } catch {
+      return .failure(.unavailable)
+    }
   }
 
   public func demoAskToSignIn() {
     guard isDemo else { return }
     let now = now()
-    let request = VaultApprovalRequest(id: UUID().uuidString.lowercased(), program: "node, unsigned", sites: ["https://github.com", "https://accounts.google.com"], why: "Deploy the docs site", profileName: "Personal", alwaysOffered: false, askedAt: now, expiresAt: now.addingTimeInterval(120), fromDeviceId: "demo-mac", fromDevice: "MacBook Pro")
+    let request = VaultApprovalRequest(id: UUID().uuidString.lowercased(), program: "node, unsigned", sites: ["https://github.com", "https://accounts.google.com"], why: "Deploy the docs site", profileName: "Personal", alwaysOffered: false, trusted: !UserDefaults.standard.bool(forKey: "ArdiaVaultDemoUntrusted"), askedAt: now, expiresAt: now.addingTimeInterval(120), fromDeviceId: "demo-mac", fromDevice: "MacBook Pro")
     snapshot.vaultRequests = (snapshot.vaultRequests ?? []) + [request]
   }
 
@@ -513,14 +546,33 @@ public final class SyncService {
   }
 
   public func answerVault(id: String, allow: Bool, always: Bool) async -> VaultAnswerOutcome {
+    guard let request = vaultRequests.first(where: { $0.id == id }) else { return .gone }
+    guard request.trusted == true else { return .untrusted }
+    let always = always && request.alwaysOffered == true
     if isDemo {
-      guard snapshot.vaultRequests?.contains(where: { $0.id == id }) == true else { return .gone }
+      switch await signVault("demo \(id)", for: request, allow: allow) {
+      case .failure(let error): return error == .cancelled ? .cancelled : .unavailable
+      case .success: break
+      }
       snapshot.vaultRequests?.removeAll { $0.id == id }
       return .sent
     }
     guard let engine else { return .failed }
+    let message: String
     do {
-      try await engine.answerVault(id: id, allow: allow, always: always)
+      message = try await engine.vaultChallenge(id: id, allow: allow, always: always)
+    } catch SyncError.refused {
+      return .gone
+    } catch {
+      return .failed
+    }
+    let signature: String
+    switch await signVault(message, for: request, allow: allow) {
+    case .failure(let error): return error == .cancelled ? .cancelled : .unavailable
+    case .success(let made): signature = made
+    }
+    do {
+      try await engine.answerVault(id: id, allow: allow, always: always, signature: signature)
     } catch SyncError.refused {
       return .gone
     } catch {

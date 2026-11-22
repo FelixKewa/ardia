@@ -1,12 +1,13 @@
-import { vaultOrigin, vaultRequestsAdapter, visible, VAULT_REQUEST_MAX_MS, type Adapter, type ScopeState, type VaultRequestRecord } from "../../platform/sync";
+import { SyncNative, vaultChallenge, vaultKeyOf, vaultOrigin, vaultRequestsAdapter, visible, VAULT_KEY, VAULT_REQUEST_MAX_MS, type Adapter, type ScopeState, type VaultAnswerRecord, type VaultRequestRecord } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { consentToken } from "../telemetry/client";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 import { notePhoneApproval } from "../telemetry/vaultPhoneApprovalCounts";
 import { scheduleSync, syncWritesOpen, useSync } from "./engine";
 
 export type VaultApprovalAsk = { id: string; nonce: string; profile: string; program: string; sites: string[]; why?: string; alwaysOffered: boolean; expiresAt: number };
-export type VaultApprovalAnswer = { allow: boolean; always: boolean; nonce: string };
+export type VaultApprovalAnswer = { allow: boolean; always: boolean; nonce: string; phone: string; signature: string };
+export type PhoneCheck = "ok" | "unenrolled" | "bad_signature";
+export type PhoneKey = { phone: string; name: string; fingerprint: string; trusted: boolean };
 
 export type VaultApprovalChannel = {
   deviceId: () => string | null;
@@ -14,9 +15,14 @@ export type VaultApprovalChannel = {
   app: () => ScopeState | undefined;
   profileName: (profile: string) => string;
   cycleSoon: () => void;
+  verify: (phone: string, message: string, signature: string) => PhoneCheck;
+  trusted: () => { phone: string; fingerprint: string }[];
+  fingerprint: (key: string) => string | null;
+  trust: (phone: string, key: string) => boolean;
+  forget: (phone: string) => boolean;
 };
 
-type OpenAsk = { request: VaultRequestRecord; askedAt: number; consent: ConsentToken | null; settle: (answer: VaultApprovalAnswer | null) => void; timer: ReturnType<typeof setTimeout> };
+type OpenAsk = { request: VaultRequestRecord; askedAt: number; consent: ConsentToken | null | undefined; settle: (answer: VaultApprovalAnswer | null) => void; timer: ReturnType<typeof setTimeout> };
 
 const PHONE_SEEN_MS = 14 * 86_400_000;
 const CYCLE_GONE_MS = 60_000;
@@ -33,13 +39,54 @@ const syncChannel: VaultApprovalChannel = {
   app: () => lastCycle?.app(),
   profileName: (profile) => useBrowser.getState().profiles[profile]?.name ?? "",
   cycleSoon: () => scheduleSync(0),
+  verify: (phone, message, signature) => SyncNative?.vaultVerifyPhone?.(phone, message, signature) ?? "unenrolled",
+  trusted: () => SyncNative?.vaultTrustedPhones?.() ?? [],
+  fingerprint: (key) => SyncNative?.vaultPhoneFingerprint?.(key) ?? null,
+  trust: (phone, key) => SyncNative?.vaultTrustPhone?.(phone, key) ?? false,
+  forget: (phone) => SyncNative?.vaultForgetPhone?.(phone) ?? false,
 };
 
 let channel: VaultApprovalChannel | null = syncChannel;
+let trustedCache: { phone: string; fingerprint: string }[] | null = null;
 
 export function connectVaultApprovals(next: VaultApprovalChannel | null) {
   for (const id of [...openAsks.keys()]) finish(id, null, "unreachable");
   channel = next;
+  trustedCache = null;
+}
+
+const trustedPhones = () => (trustedCache ??= channel?.trusted() ?? []);
+
+export function phoneKeys(): PhoneKey[] {
+  const app = channel?.app();
+  if (!app || !channel) return [];
+  const trusted = new Map(trustedPhones().map((t) => [t.phone, t.fingerprint]));
+  const out: PhoneKey[] = [];
+  for (const [key, value] of visible(app, VAULT_KEY)) {
+    const record = vaultKeyOf(key, value);
+    const fingerprint = record && deviceKind(app, record.by) === "phone" ? channel.fingerprint(record.k) : null;
+    if (!record || !fingerprint) continue;
+    const name = (visible(app, "dev:").get(`dev:${record.by}`) as { n?: unknown } | undefined)?.n;
+    out.push({ phone: record.by, name: typeof name === "string" && name ? name : "iPhone", fingerprint, trusted: trusted.get(record.by) === fingerprint });
+  }
+  return out.sort((a, z) => a.name.localeCompare(z.name) || (a.phone < z.phone ? -1 : 1));
+}
+
+export function trustPhoneKey(phone: string, fingerprint: string, consent: ConsentToken | null): boolean {
+  const app = channel?.app();
+  const record = app ? vaultKeyOf(`${VAULT_KEY}${phone}`, visible(app, VAULT_KEY).get(`${VAULT_KEY}${phone}`)) : null;
+  if (!channel || !record || channel.fingerprint(record.k) !== fingerprint || !channel.trust(phone, record.k)) return false;
+  trustedCache = null;
+  notePhoneApproval("trusted", consent);
+  channel.cycleSoon();
+  return true;
+}
+
+export function forgetPhoneKey(phone: string): boolean {
+  if (!channel?.forget(phone)) return false;
+  trustedCache = null;
+  channel.cycleSoon();
+  return true;
 }
 
 function pollWhileAsking() {
@@ -64,9 +111,8 @@ export function phonesInReach(app: ScopeState | undefined, now = Date.now()): st
 
 export const vaultApprovalsAsking = () => openAsks.size > 0;
 
-export function askPhoneForVaultApproval(ask: VaultApprovalAsk): Promise<VaultApprovalAnswer | null> {
+export function askPhoneForVaultApproval(ask: VaultApprovalAsk, consent?: ConsentToken | null): Promise<VaultApprovalAnswer | null> {
   const now = Date.now();
-  const consent = consentToken();
   const me = channel?.usable() ? channel.deviceId() : null;
   if (!channel || !me || !phonesInReach(channel.app(), now).length) {
     notePhoneApproval("unreachable", consent);
@@ -123,6 +169,15 @@ export function vaultApprovalsAdapter(me: string, app: () => ScopeState | undefi
     live: () => [...openAsks.values()].map((w) => w.request),
     isPhone: (device) => deviceKind(app(), device) === "phone",
     author: (key) => app()?.records[key]?.o?.[0],
-    answered: (request, answer) => finish(request.id, { allow: answer.a, always: answer.a && answer.al, nonce: answer.n }, answer.a ? "allowed" : "denied"),
+    trusts: () => trustedPhones().map((t) => ({ phone: t.phone, f: t.fingerprint })),
+    answered: (request, answer) => settleFromPhone(request, answer),
   });
+}
+
+function settleFromPhone(request: VaultRequestRecord, answer: VaultAnswerRecord) {
+  const entry = openAsks.get(request.id);
+  if (!entry || !channel) return;
+  const check = channel.verify(answer.by, vaultChallenge(request, answer.by, answer.a, answer.al), answer.sig);
+  if (check !== "ok") return notePhoneApproval(check, entry.consent);
+  finish(request.id, { allow: answer.a, always: answer.a && answer.al && request.ao, nonce: answer.n, phone: answer.by, signature: answer.sig }, answer.a ? "allowed" : "denied");
 }

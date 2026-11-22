@@ -73,9 +73,9 @@ export type SyncedProfile = {
 
 export type SyncedSearch = { engineId: string; customURL: string | null; customEngines: { id: string; name: string; keyword: string; url: string }[] };
 
-export type VaultApprovalRequest = { id: string; program: string; sites: string[]; why: string; profileName: string; alwaysOffered: boolean; askedAt: number; expiresAt: number; fromDeviceId: string; fromDevice: string | null };
+export type VaultApprovalRequest = { id: string; program: string; sites: string[]; why: string; profileName: string; alwaysOffered: boolean; trusted: boolean; askedAt: number; expiresAt: number; fromDeviceId: string; fromDevice: string | null };
 
-export type VaultAnswerResult = "sent" | "gone" | "failed" | "cancelled" | "unsupported";
+export type VaultAnswerResult = "sent" | "gone" | "failed" | "cancelled" | "untrusted" | "unavailable" | "unsupported";
 
 export type SyncedLook = { interfaceStyle: "glass" | "classic" | null; appearance: "auto" | "light" | "dark" | null };
 
@@ -90,6 +90,7 @@ export type SyncedView = {
   pendingPins?: { profileSyncId: string; url: string }[];
   receivers: SyncedDevice[];
   vaultRequests?: VaultApprovalRequest[];
+  vaultKey?: string | null;
 };
 
 export type ReceivedTab = { key: string; url: string; title: string; fromDevice: string; fromDeviceId: string; sentAt: number; profileSyncId: string };
@@ -130,6 +131,7 @@ type SyncNative = {
   inbox(): Promise<PhoneInbox[]>;
   inboxApplied(ids: number[]): Promise<void>;
   answerVaultRequest?(id: string, allow: boolean, always: boolean): Promise<VaultAnswerResult>;
+  prepareVaultKey?(): Promise<string | null>;
 };
 
 let loaded: SyncNative | undefined;
@@ -167,5 +169,6 @@ export const sync = {
   inboxApplied: (ids: number[]) => native().inboxApplied(ids),
   answerVaultRequest: (id: string, allow: boolean, always: boolean): Promise<VaultAnswerResult> =>
     native().answerVaultRequest ? native().answerVaultRequest!(id, allow, always) : Promise.resolve("unsupported"),
+  prepareVaultKey: (): Promise<string | null> => native().prepareVaultKey?.() ?? Promise.resolve(null),
   addListener: (listener: (event: SyncEvent) => void): Subscription => native().addListener("onSyncEvent", listener),
 };

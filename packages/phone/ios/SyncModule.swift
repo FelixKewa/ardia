@@ -1,7 +1,6 @@
 import ArdiaDesign
 import ArdiaSync
 import ExpoModulesCore
-import LocalAuthentication
 import os
 import PhoneSync
 import SwiftUI
@@ -141,14 +140,11 @@ public final class SyncModule: Module {
     }
 
     AsyncFunction("answerVaultRequest") { (id: String, allow: Bool, always: Bool, promise: Promise) in
-      PageViewModule.main(promise) { () -> String in
-        let sync = await PhoneSyncHost.shared.ready()
-        guard let request = sync.vaultRequests.first(where: { $0.id == id }) else { return "gone" }
-        if allow {
-          guard await Self.ownerConfirms(request) else { return "cancelled" }
-        }
-        return await sync.answerVault(id: id, allow: allow, always: always && request.alwaysOffered == true).rawValue
-      }
+      PageViewModule.main(promise) { await PhoneSyncHost.shared.ready().answerVault(id: id, allow: allow, always: always).rawValue }
+    }
+
+    AsyncFunction("prepareVaultKey") { (promise: Promise) in
+      PageViewModule.main(promise) { await PhoneSyncHost.shared.ready().prepareVaultKey() }
     }
 
     AsyncFunction("clearIncoming") {
@@ -175,17 +171,6 @@ public final class SyncModule: Module {
     let host = PhoneSyncHost.shared
     let sync = await host.ready()
     return SyncPayloads.status(sync, isDemo: host.isDemo, inboxProblem: host.inbox.problem)
-  }
-
-  @MainActor
-  static func ownerConfirms(_ request: VaultApprovalRequest) async -> Bool {
-    let context = LAContext()
-    context.localizedFallbackTitle = "Use Passcode"
-    var problem: NSError?
-    guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &problem) else { return false }
-    let sites = request.sites.compactMap { URL(string: $0)?.host() }.joined(separator: ", ")
-    let reason = "Let \(request.program) sign in to \(sites)"
-    return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) == true
   }
 
   @MainActor

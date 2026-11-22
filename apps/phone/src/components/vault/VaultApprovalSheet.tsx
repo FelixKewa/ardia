@@ -35,6 +35,7 @@ const ROUNDED = buttonBorderShape("roundedRectangle", 12);
 
 export function VaultApprovalSheet() {
   const requests = useSync((s) => s.view.vaultRequests);
+  const vaultKey = useSync((s) => s.view.vaultKey ?? null);
   const [setAside, setSetAside] = useState<ReadonlySet<string>>(() => new Set());
   const [, tick] = useState(0);
   const now = Date.now();
@@ -50,13 +51,19 @@ export function VaultApprovalSheet() {
     shownId.current = request.id;
     if (__DEV__) console.info(`[vault] sheet shown ${sheetLatencyMs(request, Date.now())} ms after the Mac asked`);
     countUsage("vault_requests_shown");
+    if (!request.trusted) countUsage("vault_requests_untrusted");
     haptics.warning();
   }, [request?.id]);
+  const needsKey = request !== null && !request.trusted && vaultKey === null;
+  const [keyFailed, setKeyFailed] = useState(false);
+  useEffect(() => {
+    if (needsKey) void sync.prepareVaultKey().then((made) => setKeyFailed(made === null));
+  }, [needsKey]);
   const putAside = (id: string) => setSetAside((was) => new Set(was).add(id));
   return (
     <Host testID="vaultApprovalSheet" style={styles.anchor} pointerEvents="none">
       <BottomSheet isPresented={request !== null} onIsPresentedChange={(presented) => (presented || !request ? undefined : putAside(request.id))}>
-        {request ? <VaultApproval key={request.id} request={request} now={now} onDone={() => putAside(request.id)} /> : <Group>{null}</Group>}
+        {request ? <VaultApproval key={request.id} request={request} vaultKey={vaultKey} keyFailed={keyFailed} now={now} onDone={() => putAside(request.id)} /> : <Group>{null}</Group>}
       </BottomSheet>
     </Host>
   );
@@ -64,7 +71,12 @@ export function VaultApprovalSheet() {
 
 type Busy = "allow" | "deny" | null;
 
-function VaultApproval({ request, now, onDone }: { request: VaultRequest; now: number; onDone: () => void }) {
+const PROBLEMS: Record<string, string> = {
+  untrusted: "Your Mac doesn’t trust this iPhone yet, so it would ignore the answer.",
+  unavailable: "This iPhone can’t sign an answer: it needs Face ID or a passcode.",
+};
+
+function VaultApproval({ request, vaultKey, keyFailed, now, onDone }: { request: VaultRequest; vaultKey: string | null; keyFailed: boolean; now: number; onDone: () => void }) {
   const [always, setAlways] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -84,7 +96,7 @@ function VaultApproval({ request, now, onDone }: { request: VaultRequest; now: n
       onDone();
     } else {
       haptics.error();
-      setProblem("Your answer couldn’t be sent. Check that sync is on, then try again.");
+      setProblem(PROBLEMS[result] ?? "Your answer couldn’t be sent. Check that sync is on, then try again.");
     }
   };
   const ends = `Ends in ${timeLeft(request.expiresAt - now)}. The program never sees your passwords; Ardia fills them in on your Mac.`;
@@ -102,28 +114,47 @@ function VaultApproval({ request, now, onDone }: { request: VaultRequest; now: n
               </VStack>
             </HStack>
           </Section>
-          <Section title={request.sites.length === 1 ? "Site" : "Sites"} footer={!request.why && !request.alwaysOffered ? footer : undefined}>
+          <Section title={request.sites.length === 1 ? "Site" : "Sites"}>
             {request.sites.map((site) => (
               <Label key={site} title={siteName(site)} systemImage="lock.fill" />
             ))}
           </Section>
           {request.why ? (
-            <Section title="Reason Given" footer={request.alwaysOffered ? undefined : footer}>
+            <Section title="Reason Given">
               <Text>{request.why}</Text>
             </Section>
           ) : null}
-          {request.alwaysOffered ? (
-            <Section footer={footer}>
+          {request.trusted ? null : (
+            <Section title="Trust This iPhone First" footer={<Text>{`On ${request.fromDevice?.trim() || "your Mac"}, open Ardia’s Settings › Sync and choose Approve Sign-Ins… next to this iPhone. Trust it only if the code there matches this one.`}</Text>}>
+              {vaultKey ? (
+                <Text modifiers={[font({ textStyle: "title3", weight: "semibold", design: "monospaced" }), foregroundStyle(PLUM)]}>{vaultKey}</Text>
+              ) : keyFailed ? (
+                <Text modifiers={[foregroundStyle(SECONDARY)]}>{PROBLEMS.unavailable}</Text>
+              ) : (
+                <ProgressView />
+              )}
+            </Section>
+          )}
+          {request.trusted && request.alwaysOffered ? (
+            <Section>
               <Toggle isOn={always} onIsOnChange={setAlways} label={`Always Allow ${request.program} on ${request.sites.length === 1 ? "This Site" : "These Sites"}`} modifiers={[disabled(busy !== null)]} />
             </Section>
           ) : null}
-          <Section modifiers={[listRowBackground("clear"), listRowInsets(BUTTON_ROW), listRowSeparator("hidden")]}>
-            <Button onPress={() => void answer(true)} modifiers={[buttonStyle("borderedProminent"), ROUNDED, controlSize("large"), tint(PLUM), disabled(busy !== null)]}>
-              {busy === "allow" ? <ProgressView modifiers={[frame({ maxWidth: FILL })]} /> : <Label title="Allow with Face ID" systemImage="faceid" modifiers={[frame({ maxWidth: FILL })]} />}
-            </Button>
-            <Button onPress={() => void answer(false)} modifiers={[buttonStyle("bordered"), ROUNDED, controlSize("large"), disabled(busy !== null)]}>
-              <Text modifiers={[frame({ maxWidth: FILL })]}>Don’t Allow</Text>
-            </Button>
+          <Section footer={footer} modifiers={[listRowBackground("clear"), listRowInsets(BUTTON_ROW), listRowSeparator("hidden")]}>
+            {request.trusted ? (
+              <Button onPress={() => void answer(true)} modifiers={[buttonStyle("borderedProminent"), ROUNDED, controlSize("large"), tint(PLUM), disabled(busy !== null)]}>
+                {busy === "allow" ? <ProgressView modifiers={[frame({ maxWidth: FILL })]} /> : <Label title="Allow with Face ID" systemImage="faceid" modifiers={[frame({ maxWidth: FILL })]} />}
+              </Button>
+            ) : null}
+            {request.trusted ? (
+              <Button onPress={() => void answer(false)} modifiers={[buttonStyle("bordered"), ROUNDED, controlSize("large"), disabled(busy !== null)]}>
+                <Text modifiers={[frame({ maxWidth: FILL })]}>Don’t Allow</Text>
+              </Button>
+            ) : (
+              <Button onPress={onDone} modifiers={[buttonStyle("bordered"), ROUNDED, controlSize("large")]}>
+                <Text modifiers={[frame({ maxWidth: FILL })]}>Not Now</Text>
+              </Button>
+            )}
           </Section>
         </Form>
       </NavigationStack>

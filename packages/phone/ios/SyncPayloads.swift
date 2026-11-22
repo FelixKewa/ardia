@@ -130,6 +130,7 @@ enum SyncPayloads {
       "shownProfileId": sync.selectedProfile?.syncId,
       "receivers": sync.devicesThatReceiveTabs.map(device),
       "vaultRequests": sync.vaultRequests.map(vaultRequest),
+      "vaultKey": sync.snapshot.vaultKey,
     ]
   }
 
@@ -141,6 +142,7 @@ enum SyncPayloads {
       "why": request.why,
       "profileName": request.profileName,
       "alwaysOffered": request.alwaysOffered == true,
+      "trusted": request.trusted == true,
       "askedAt": milliseconds(request.askedAt),
       "expiresAt": milliseconds(request.expiresAt),
       "fromDeviceId": request.fromDeviceId,

@@ -220,6 +220,12 @@ public class SyncModule: Module {
       }
     }
 
+    Function("vaultPhoneFingerprint") { (key: String) -> String? in Data(base64Encoded: key).flatMap(VaultPhoneKeys.fingerprint) }
+    Function("vaultTrustedPhones") { () -> [[String: String]] in Self.vaultPhones.trusted().map { ["phone": $0.phone, "fingerprint": $0.fingerprint] } }
+    Function("vaultTrustPhone") { (phone: String, key: String) -> Bool in Self.vaultPhones.trust(phone: phone, key: key) }
+    Function("vaultForgetPhone") { (phone: String) -> Bool in Self.vaultPhones.forget(phone: phone) }
+    Function("vaultVerifyPhone") { (phone: String, message: String, signature: String) -> String in Self.vaultPhones.verify(phone: phone, message: message, signature: signature).rawValue }
+
     AsyncFunction("savePassword") { (engineProfile: String, origin: String, username: String, sealed: String, replacing: Bool, promise: Promise) in
       guard let keys = self.state.keys, let password = try? keys.openPassword(sealed, origin: origin, username: username) else {
         NSLog("[sync] a synced password didn't open for its login; not saving it")
@@ -352,6 +358,8 @@ public class SyncModule: Module {
   }
 
   static let keyStore: SyncKeyStore = dataDirectory.map { FileKeyStore(directory: $0) } ?? KeychainKeyStore()
+
+  static let vaultPhones = VaultPhoneTrust(store: dataDirectory.map { SecretFile(url: $0.appendingPathComponent("sign-in-approval-phones.json")) as SecretStore } ?? LoginKeychain())
 
   static let loginsTimeout = LaunchConfig.shared.testValue("loginsTimeout").flatMap(TimeInterval.init) ?? 30
 }

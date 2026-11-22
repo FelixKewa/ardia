@@ -200,10 +200,23 @@ public actor SyncEngine {
     }))
   }
 
-  public func answerVault(id: String, allow: Bool, always: Bool) throws {
+  public func setVaultKey(_ key: Data, fingerprint: String) throws {
     try checkLive()
     try load()
-    try mutate("companionAnswerVault", VaultAnswerInput(id: id, allow: allow, always: always, at: now().millisecondsSince1970))
+    try mutate("companionVaultKey", VaultKeyInput(k: key.base64EncodedString(), f: fingerprint, at: now().millisecondsSince1970))
+  }
+
+  public func vaultChallenge(id: String, allow: Bool, always: Bool) throws -> String {
+    try checkLive()
+    try load()
+    guard let message = try mutate("companionVaultChallenge", VaultAnswerInput(id: id, allow: allow, always: always, at: now().millisecondsSince1970, sig: nil)).message else { throw SyncError.refused }
+    return message
+  }
+
+  public func answerVault(id: String, allow: Bool, always: Bool, signature: String) throws {
+    try checkLive()
+    try load()
+    try mutate("companionAnswerVault", VaultAnswerInput(id: id, allow: allow, always: always, at: now().millisecondsSince1970, sig: signature))
   }
 
   @discardableResult
@@ -339,6 +352,7 @@ private struct Saved: Decodable {
   var saved: Bool
   var refused: Bool?
   var existing: Bool?
+  var message: String?
 }
 
 private struct CycleInput: Encodable {
@@ -404,6 +418,13 @@ private struct VaultAnswerInput: Encodable {
   var id: String
   var allow: Bool
   var always: Bool
+  var at: Double
+  var sig: String?
+}
+
+private struct VaultKeyInput: Encodable {
+  var k: String
+  var f: String
   var at: Double
 }
 

@@ -70,8 +70,8 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["talk_to_me_answers_read", "talk_to_me_ear_listens", "talk_to_me_voice_downloads", "talk_to_me_download_failed", "talk_to_me_failed", "tray_incognito_switches"],
       },
       {
-        text: "In the same daily counts, on iPhone: how many times your Mac asked this phone to let a program sign in to sites, how many of those you allowed or denied, and how many times Face ID or the passcode was cancelled. Counts only, never which program, site or account",
-        fields: ["vault_requests_shown", "vault_requests_allowed", "vault_requests_denied", "vault_face_id_cancelled"],
+        text: "In the same daily counts, on iPhone: how many times your Mac asked this phone to let a program sign in to sites, how many of those you allowed or denied, how many times Face ID or the passcode was cancelled, and how many requests came before this iPhone was trusted on the Mac. Counts only, never which program, site or account",
+        fields: ["vault_requests_shown", "vault_requests_allowed", "vault_requests_denied", "vault_face_id_cancelled", "vault_requests_untrusted"],
       },
       {
         text: "In the same daily counts, on iPhone: how often you summarized a page by pinching in or from the page menu, how many summaries Apple Intelligence wrote on the phone or were the page’s own lines, and how many it couldn’t write. Counts only, never which page or what the summary said",
