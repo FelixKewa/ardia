@@ -53,6 +53,7 @@ const FAMILY_OF_AREA: Record<string, SocketFamily> = {
   sync: "sync",
   passwords: "secrets",
   autofill: "secrets",
+  vault: "secrets",
   pins: "pins",
   favicons: "favicons",
   sharedFolders: "shared_folders",

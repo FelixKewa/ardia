@@ -90,4 +90,21 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
 
 @end
 
+@interface ArdiaServices (PasswordBatch)
+
++ (void)savePasswords:(NSString *)profile json:(NSString *)json reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(savePasswords(profile:json:reply:));
+
+@end
+
+@interface ArdiaServices (Vault)
+
++ (void)vaultSignIn:(NSString *)profile
+                url:(NSString *)url
+             origin:(NSString *)origin
+           username:(NSString *)username
+               code:(nullable NSString *)code
+         completion:(ArdiaCoreResult)completion NS_SWIFT_NAME(vaultSignIn(profile:url:origin:username:code:completion:));
+
+@end
+
 NS_ASSUME_NONNULL_END

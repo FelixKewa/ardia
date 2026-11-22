@@ -1,4 +1,5 @@
 import type {
+  ControlPeer,
   AppEvent,
   BangListReply,
   CommandEvent,
@@ -438,6 +439,7 @@ export const controlSocket = {
   held: [] as number[],
   replies: [] as { connection: number; line: string }[],
   broadcasts: [] as { connections: number[]; line: string }[],
+  peers: {} as Record<number, ControlPeer>,
 };
 const controlEvents = nativeEvents();
 export const emitControlRequest = (request: { connection: number; generation: number; line: string }) => controlEvents.emit("onRequest", request);
@@ -461,6 +463,7 @@ const automation: Modules["ArdiaAutomation"] = {
     if (!controlSocket.holdWrites) writeHeldReplies();
   },
   broadcast: (connections, line) => void controlSocket.broadcasts.push({ connections, line }),
+  peer: async (connection) => controlSocket.peers[connection] ?? null,
   addListener: controlEvents.addListener,
 };
 

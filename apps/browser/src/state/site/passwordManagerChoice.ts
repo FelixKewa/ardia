@@ -75,21 +75,26 @@ export function neverChosenProfiles(s: ChoiceState): string[] {
 
 export type ProviderState = ChoiceState & Pick<Parameters<typeof engineProfile>[0], "profiles">;
 
-export type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean };
+export type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean; keepCodes?: boolean };
 
-export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlugin[]): { providers: FieldProviderEntry[]; key: string } {
+export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlugin[], keepsCodes = false): { providers: FieldProviderEntry[]; key: string } {
   const byEngine = new Map<string, { entry: FieldProviderEntry; by: string }>();
   for (const id of Object.keys(s.profiles).sort()) {
-    const plugin = managerPluginOf(plugins, profilePasswordManager(s, plugins, id));
-    if (!plugin || plugin.spec.fill !== "system") continue;
+    const choice = profilePasswordManager(s, plugins, id);
     const profile = engineProfile(s, id);
+    if (choice === "ardia" && keepsCodes) {
+      if (!byEngine.has(profile)) byEngine.set(profile, { entry: { profile, fields: [], codeSetup: true, keepCodes: true }, by: "ardia" });
+      continue;
+    }
+    const plugin = managerPluginOf(plugins, choice);
+    if (!plugin || plugin.spec.fill !== "system") continue;
     if (!byEngine.has(profile)) byEngine.set(profile, { entry: { profile, fields: [...plugin.spec.fields], codeSetup: plugin.spec.verificationCodeSetup === "system" }, by: `${plugin.name}:${plugin.approval}` });
   }
   const sorted = [...byEngine.values()].sort((a, b) => (a.entry.profile < b.entry.profile ? -1 : a.entry.profile > b.entry.profile ? 1 : 0));
   return { providers: sorted.map((x) => x.entry), key: JSON.stringify(sorted) };
 }
 
-export const fieldProviders = (s: ProviderState, plugins: readonly ManagerPlugin[]) => fieldProviderSet(s, plugins).providers;
+export const fieldProviders = (s: ProviderState, plugins: readonly ManagerPlugin[], keepsCodes = false) => fieldProviderSet(s, plugins, keepsCodes).providers;
 
 export function passwordManagerProfileCounts(s: ChoiceState, plugins: readonly ManagerPlugin[]): Record<string, string> {
   const counts: Record<PasswordManagerKind, number> = { ardia: 0, none: 0, plugin: 0 };

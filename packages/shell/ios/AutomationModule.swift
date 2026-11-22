@@ -23,6 +23,10 @@ public class AutomationModule: Module {
       ControlSocket.shared.reply(connection, line, ticket: ticket)
     }
 
+    AsyncFunction("peer") { (connection: Int, promise: Promise) in
+      ControlSocket.shared.peer(connection) { promise.resolve($0) }
+    }
+
     Function("broadcast") { (connections: [Int], line: String) in
       ControlSocket.shared.broadcast(connections, line)
     }

@@ -20,6 +20,7 @@ final class ControlSocket {
   private var bound: (path: String, device: dev_t, inode: ino_t)?
   private var connections: [Int: ControlConnection] = [:]
   private var peerFinished = Set<Int>()
+  private var peers: [Int: (peer: ControlPeer, identity: [String: Any]?)] = [:]
   private var nextConnection = 0
   private var generation = 0
   private var quitObserver: NSObjectProtocol?
@@ -61,6 +62,21 @@ final class ControlSocket {
         target.reply(data, ticket: ticket)
       } else if ticket > 0 {
         sink?.send("onWritten", ["tickets": [ticket]])
+      }
+    }
+  }
+
+  func peer(_ connection: Int, _ done: @escaping ([String: Any]?) -> Void) {
+    queue.async { [self] in
+      guard let entry = peers[connection] else { return done(nil) }
+      if let known = entry.identity { return done(known) }
+      DispatchQueue.global(qos: .userInitiated).async { [self] in
+        let identity = entry.peer.identity()
+        queue.async { [self] in
+          guard peers[connection] != nil else { return done(nil) }
+          peers[connection]?.identity = identity
+          done(identity)
+        }
       }
     }
   }
@@ -165,6 +181,7 @@ final class ControlSocket {
     for connection in Array(connections.values) { connection.retire() }
     connections.removeAll()
     peerFinished.removeAll()
+    peers.removeAll()
     acceptSource?.cancel()
     acceptSource = nil
     listenFd = -1
@@ -196,6 +213,7 @@ final class ControlSocket {
         },
         onClose: { [weak self] connection in
           guard let self, self.connections.removeValue(forKey: connection.id) != nil else { return }
+          self.peers.removeValue(forKey: connection.id)
           guard self.peerFinished.remove(connection.id) == nil else { return }
           self.sink?.send("onClose", ["connection": connection.id])
         },
@@ -205,6 +223,7 @@ final class ControlSocket {
           self.sink?.send("onClose", ["connection": connection.id])
         })
       connections[connection.id] = connection
+      if let peer = ControlPeer.of(fd) { peers[connection.id] = (peer, nil) }
       connection.open()
     }
   }

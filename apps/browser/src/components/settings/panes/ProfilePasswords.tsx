@@ -34,6 +34,7 @@ import { useGrowingRows } from "../../../state/settings/growingRows";
 import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
 import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
+import { AgentActivity } from "./AgentActivity";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -193,6 +194,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
               </Group>
             </>
           )}
+          {PLATFORM_FEATURES.ardiaCommand ? <AgentActivity profileId={profileId} /> : null}
         </>
       )}
     </ProfileSubPage>

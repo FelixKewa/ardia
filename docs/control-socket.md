@@ -566,9 +566,46 @@ attacker could log in with. Revealing a password in Ardia's own UI asks macOS fo
 which program asked, and anything that can reach the socket (every process of the user) could ask. Cookie values are
 the user's live sessions on every site. Both are a different consent than "control Ardia".
 
-**Next, if the owner wants it:** `passwords.reveal {origin, username}` behind its own switch in Settings › Advanced
-(off by default) and the macOS re-auth on every call, with Ardia's own sheet naming the program first. It follows the
-same rule: a profile whose passwords a plugin keeps answers `password_manager_plugin`, naming the plugin.
+**Signing in without seeing a password (#3429): the agent vault.** A program never gets a password, a verification
+code or a field value; it asks Ardia to sign in for it, and Ardia does it in the browser.
+
+| Method | What it does |
+| --- | --- |
+| `vault.taskStart {sites, why?, ttlSeconds?, profile?, tabs?}` | Asks the person: Ardia's own sheet in the last focused window names the program, who signed it, the sites, the profile and the reason, then Touch ID (or the Mac's password) confirms. The iPhone can approve the same request (`askPhoneForVaultApproval`, Face ID there); the first answer wins. Returns `{task, sites, expiresAt, via, program}`: a 32-hex token that lives until `vault.taskEnd`, the timeout (`ttlSeconds`, 15 min by default, 2 h at most), or this connection closing. Only `https` sites (a test instance also takes `http://localhost`) |
+| `vault.login {task, site, tab?, account?, why?}` | Signs in to a granted site with its saved login, and its verification code when Ardia keeps one: the engine signs in inside a hidden context of the profile that the token DevTools connection can't reach (`-[ArdiaCoreProfile vaultSignInAtURL:origin:username:oneTimeCode:completion:]`), then Ardia reloads `tab`, signed in through the profile's cookies. Returns `{status, ms, readyMs, fillMs, usedCode}` (`signed_in`, `submitted`) |
+| `vault.taskEnd {task}` | Ends a task early |
+| `vault.status` | The program Ardia sees on this connection, its live tasks and the sites always allowed for it |
+| `vault.log {limit?, since?, profile?}` | Grants, sign-ins and refusals: time, profile, site, account, program, signer, task (its first 8 hex digits), outcome, how it was allowed. The agent's `why` is left out unless the person turns on **Show agents' reasons in ardia vault log** |
+
+- **Who's asking.** The socket takes the peer's audit token at accept (`LOCAL_PEERTOKEN`, `ControlPeer.swift`) and checks
+  its code signature through it (`SecCodeCopyGuestWithAttributes` with the audit token, never a pid, so pid reuse or an
+  exec after connecting can't borrow another program's name). The sheet says what it found: a signed app by its signer,
+  "node runs scripts, so the script itself isn't known", "the ardia command", "not signed by a known developer".
+  **Always allow <program> on <site>** is offered only for a signed program with a team ID that isn't the `ardia`
+  command or an interpreter or shell (`state/vault/programs.ts`); everything else asks every time. Always-allow choices
+  are per profile and kept in Ardia's own vault store; Settings › Profiles › Passwords › Agent activity lists and removes them.
+- **Bound grants.** An approval belongs to a one-use request id, the connection, the profile and the exact origins, and
+  runs out after 60 s. A task is checked in memory (a map) before every sign-in: its connection, that it hasn't run out,
+  that the site was granted. Another connection presenting the token gets `denied`.
+- **Auto-fill.** While a task covers a site, a sign-in form Chrome finds in a tab the task drives (`tabs`, or a tab a
+  `vault.login` named) signs in at once on Chrome's own form-parsed event (`vault.loginFormSeen`): no timer, no polling,
+  one try per tab and site every 30 s, none after a refusal.
+- **Never stuck.** Each failure answers at once with a code: `not_granted`, `no_login`, `no_form`, `needs_passkey`,
+  `needs_human` (the site still shows its sign-in page after the fill: a text-message code, a CAPTCHA; or nobody can see
+  the sheet, in a background instance without its test answer), `password_manager_plugin` (a plugin keeps the profile's
+  passwords; plugins stay write-only toward agents), `task_expired`, `denied`, `locked` (the screen is locked, so nobody
+  can approve). A site with several saved logins needs `account`; the error says how many, never which.
+- **Verification codes.** Ardia keeps TOTP secrets in its own vault store (`Ardia Vault/vault.sealed` in the data folder,
+  AES-GCM with a key derived from a Secure Enclave key that needs no user presence, unwrapped once per launch off the main
+  thread), from the password-manager import, `saveVerificationSecret` and, with **Offer to keep verification codes**
+  on, the "Set Up Verification Code in Ardia?" offer a setup code on a page raises. The code is computed natively (RFC 6238,
+  about 2 µs) and handed only to the engine's sign-in. A vault copied to another Mac can't be read there; Settings says to
+  set the codes up again. Chrome's own password store is untouched.
+- **The activity log** is appended in batches (each second, or every 32 entries) on the vault's own queue to
+  `Ardia Vault/activity.jsonl` (cut back to 2 MB past 4 MB).
+- **Test seams** (background instances, `docs/agent-brief.md` › Launch variables): `ARDIA_TEST=vaultApproval=allow|always|deny|ignore`
+  answers the sheet once it is on screen, `reauth=granted` answers Touch ID, `vaultKey=software` keeps the vault key in a
+  file instead of the Secure Enclave.
 
 ## Native UI: prompts and menus
 

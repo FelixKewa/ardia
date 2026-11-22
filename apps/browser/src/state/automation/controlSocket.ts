@@ -42,6 +42,7 @@ import { dropAllHistoryHandles, dropHistoryHandles } from "./historyHandles";
 import { dropLateResults, forgetTabCalls } from "./tabCalls";
 import { backgroundInstance } from "../app/appSettings";
 import { programControlOn } from "../app/programControlSetting";
+import { vaultConnectionClosed, vaultControlStopped } from "./socketVault";
 
 export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
@@ -283,6 +284,7 @@ function handleClose({ connection }: { connection: number }) {
   dropResponder(connection);
   dropHistoryHandles(connection);
   dropLateResults(connection);
+  vaultConnectionClosed(connection);
   if (subscriptions.delete(connection)) refreshFeed();
 }
 
@@ -314,6 +316,7 @@ async function stop() {
   openConnections.clear();
   generation = null;
   dismissSocketAsks();
+  vaultControlStopped();
   dropAllHistoryHandles();
   forgetTabCalls();
   noteSocketServing(false);
@@ -336,6 +339,7 @@ function sync() {
     openConnections.clear();
     generation = null;
     dismissSocketAsks();
+    vaultControlStopped();
     dropAllHistoryHandles();
     forgetTabCalls();
     noteSocketServing(false);

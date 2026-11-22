@@ -327,6 +327,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `cliInstallScript=<path>` | Another `ardia` installer script (the Linux and Windows hosts' installer; macOS no longer runs one) |
 | | `applePasswordsPanel` | Background mode really opens macOS's Passwords panel for the key and Edit › AutoFill › Passwords… instead of logging it (`docs/testing.md`); the panel is another process's window and can show on screen |
 | | `systemPanelRace` | Runs AppKit's delayed autofill show-or-hide pass right after the Passwords command, to check the panel survives it (`docs/testing.md`) |
+| | `vaultApproval=allow\|always\|deny\|ignore` · `vaultKey=software` | Background mode answers the agent vault's approval sheet once it's on screen; the vault's key lives in a file in the data dir instead of the Secure Enclave (`docs/control-socket.md` › Secrets) |
 | | `bundledPlugins=<dir>` | Built-in plugins come from this folder instead of `Ardia.app/Contents/Resources/Plugins` (`docs/plugins.md` › Built-in plugins) |
 | | `legacySource=<home>` · `legacyCrashAfter=<step>` | The Netnyahoo → Ardia migration from a scratch home |
 | | `bangsUrl` · `onboarding` · `whatsNew` · `telemetry` · `liveMock=<url>` · `calendarFixture` | Debug builds only: bang list, run onboarding, show What's New, send telemetry, live folders from a mock, the calendar fixture |

@@ -22,6 +22,7 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
+import type { VaultAlwaysGrant, VaultAuthentication, VaultLoginFormSeen, VaultSignIn, VaultStoreState } from "../vault";
 
 type Profile = { profile: string };
 type Done = Record<string, never> | null;
@@ -114,6 +115,19 @@ export type EngineCalls = {
   "passwords.systemPanelAvailable": [{}, { chromium: boolean; webkit: boolean }];
   "passwords.otpauthHandler": [{}, { app: string | null }];
   "passwords.setUpVerificationCode": [{ tab: string; token: string; generation?: number }, VerificationCodeSetupResult];
+  "vault.state": [{}, VaultStoreState];
+  "vault.screenLocked": [{}, boolean];
+  "vault.signIn": [Profile & { url: string; origin: string; username: string }, VaultSignIn];
+  "vault.saveSecret": [Profile & { origin: string; username: string; uri: string }, { saved: boolean; reason?: "unreadable" }];
+  "vault.keepOfferedCode": [Profile & { tab: string; token: string; generation?: number; origin: string; usernames: string[] }, VerificationCodeSetupResult];
+  "vault.hasSecret": [Profile & { origin: string; username: string }, boolean];
+  "vault.secrets": [Profile, { origin: string; username: string }[]];
+  "vault.removeSecret": [Profile & { origin: string; username: string }, boolean];
+  "vault.always": [{}, VaultAlwaysGrant[]];
+  "vault.setAlways": [Profile & { origin: string; teamId: string; identifier: string; program: string; on: boolean }, boolean];
+  "vault.authenticate": [{ reason: string }, VaultAuthentication];
+  "vault.appendLog": [{ lines: string[] }, boolean];
+  "vault.readLog": [{ limit: number }, string[]];
 
   "autofill.settings": [Profile, { addresses: boolean; cards: boolean }];
   "autofill.setSettings": [Profile & { addresses?: boolean; cards?: boolean }, null];
@@ -264,6 +278,8 @@ export type EngineEvents = {
   "media.deviceChooser": DeviceChooser;
   "media.castDialog": CastDialog;
   "media.castRoutes": { profile: string; routes: CastRoute[] };
+  "vault.loginFormSeen": VaultLoginFormSeen;
+  "vault.codeKept": { profile: string; origin: string; username: string };
 };
 
 export type WindowsHostEvents = {
