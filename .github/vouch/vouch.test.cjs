@@ -694,7 +694,7 @@ test("the run-ci label re-runs the skipped build of every gated workflow", async
 test("every gated workflow has a gate job that only fork pull requests run, and builds when it is skipped", () => {
   const workflows = path.join(__dirname, "..", "workflows");
   const forkOnly = "if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository";
-  const buildsWhenSkipped = "needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true'";
+  const buildsWhenSkipped = "needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')";
   for (const workflow of vouch.GATED_WORKFLOWS) {
     const text = fs.readFileSync(path.join(workflows, workflow), "utf8");
     const gateJob = text.match(/^  gate:\n((?:    .*\n|\n)*)/m);
@@ -703,6 +703,14 @@ test("every gated workflow has a gate job that only fork pull requests run, and 
     assert.ok(gateJob[1].includes("vouch.gate("), `${workflow}'s gate asks vouch.gate`);
     assert.ok(text.includes(buildsWhenSkipped), `${workflow} builds when its gate is skipped`);
     assert.ok(!/^    if: needs\.gate\.outputs\.run == 'true'$/m.test(text), `${workflow} has no job that a skipped gate would skip`);
+    const runChecks = text.match(/[^\n]{0,40}needs\.gate\.outputs\.run == 'true'/g) || [];
+    assert.ok(runChecks.length > 0, `${workflow} reads the gate's decision`);
+    for (const check of runChecks) {
+      assert.ok(check.endsWith("needs.gate.result == 'success' && needs.gate.outputs.run == 'true'"), `${workflow} trusts run only from a gate that succeeded: ${check}`);
+    }
+    for (const line of text.match(/^    if: .*needs\.gate\..*$/gm) || []) {
+      assert.ok(line.startsWith("    if: ${{ !cancelled() && "), `${workflow}: ${line.trim()} starts with !cancelled()`);
+    }
   }
 });
 

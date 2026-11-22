@@ -48,7 +48,8 @@ jobs:
           --newest-only windows-app-arm64-
           --newest-only swiftpm-xcode-
           --newest-only phone-pods-
-          --newest-only mac-pods-
+          --newest-only pods-
+          --main-only gradle-phone-
           --newest-only gradle-phone-
           --newest-only turbo-
           --newest-only ardia-test-tsx-1-of-3-

@@ -54,7 +54,7 @@ jobs:
 
   app:
     needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

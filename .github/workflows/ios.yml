@@ -71,7 +71,7 @@ jobs:
 
   app:
     needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: xcode-27
     timeout-minutes: 75
     env:
@@ -123,7 +123,7 @@ jobs:
 
   packages:
     needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: xcode-27
     timeout-minutes: 45
     env:

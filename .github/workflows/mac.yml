@@ -5,6 +5,9 @@ on:
     paths: &native
       - "apps/browser/macos/**"
       - "apps/browser/package.json"
+      - "apps/browser/react-native.config.js"
+      - "package.json"
+      - "pnpm-workspace.yaml"
       - "packages/ardiacore/ios/**"
       - "packages/ardiacore/scripts/**"
       - "packages/ardiacore/prebuilt-engines.tsv"
@@ -63,7 +66,7 @@ jobs:
   app:
     name: compile (Debug)
     needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: xcode-27
     timeout-minutes: 75
     env:
@@ -110,7 +113,7 @@ jobs:
             done < <(git rev-list HEAD -- "${key_paths[@]}")
             if [ -z "$base" ] || [ -n "$(git diff --no-renames --name-only "$base" HEAD -- "$public")" ]; then
               strict=false
-              echo "::warning::compiled against engine $short, older than this commit's ${ENGINE_KEY:0:12}, and $public changed since: a link error may be engine API that is not published yet, so this build reports and does not fail"
+              echo "::warning::compiling against engine $short, older than this commit's ${ENGINE_KEY:0:12}, and $public changed since: this run fails after the build"
             else
               echo "::notice::compiled against engine $short, older than this commit's ${ENGINE_KEY:0:12}; $public is unchanged since, so the build is strict"
             fi
@@ -132,7 +135,7 @@ jobs:
           key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
           restore-keys: ${{ steps.cas-key.outputs.prefix }}
       - id: pods-key
-        run: echo "key=mac-pods-${{ hashFiles('apps/browser/macos/Podfile', 'apps/browser/macos/Podfile.lock', 'pnpm-lock.yaml', 'patches/**') }}" >> "$GITHUB_OUTPUT"
+        run: echo "key=pods-${{ hashFiles('apps/browser/macos/Podfile', 'apps/browser/macos/Podfile.lock', 'pnpm-lock.yaml', 'patches/**') }}" >> "$GITHUB_OUTPUT"
       - id: pods
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -140,9 +143,7 @@ jobs:
             apps/browser/macos/Pods
             ~/Library/Caches/CocoaPods
           key: ${{ steps.pods-key.outputs.key }}
-          restore-keys: |
-            mac-pods-
-            pods-
+          restore-keys: pods-
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: packages/ardiacore/vendor/ubo
@@ -164,7 +165,6 @@ jobs:
           git diff --exit-code -- Podfile.lock || { echo "::error::pod install changed apps/browser/macos/Podfile.lock: commit the lockfile pod install writes"; exit 1; }
       - name: Compile the Mac app, unsigned
         id: build
-        continue-on-error: ${{ steps.engine.outputs.strict != 'true' }}
         env:
           SKIP_BUNDLING: "1"
         run: >-
@@ -173,17 +173,18 @@ jobs:
           -xcconfig apps/browser/macos/AdHoc.xcconfig
           ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
           COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$SCRATCH/cas" -quiet build
-      - name: A build against an older engine reports instead of failing
-        if: steps.build.outcome == 'failure'
-        run: echo "::warning::the Mac app did not compile against the older engine (log above); it needs this commit's engine API, so publish its engine before release"
       - name: The build has the app, the engine and the helpers
-        if: steps.build.outcome == 'success'
         run: |
           set -euo pipefail
           app="$SCRATCH/dd/Build/Products/Debug/Ardia.app"
           for part in "Contents/MacOS/Ardia" "Contents/Frameworks/Chromium Framework.framework" "Contents/Helpers/ArdiaPluginHost" "Contents/PlugIns/ArdiaDockTile.plugin"; do
             [ -e "$app/$part" ] || { echo "::error::the build has no $part"; exit 1; }
           done
+      - name: The engine's public headers match a published engine
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' && steps.engine.outputs.strict == 'false' }}
+        run: |
+          echo "::error::engine/ardiacore/src/ardia/core/public changed since the nearest published Mac engine, so this build can't prove the app matches the engine it would ship with: build the engine (docs/engine-build.md), publish it with scripts/publish-engine.sh and commit its prebuilt-engines.tsv row, then re-run"
+          exit 1
       - if: ${{ !cancelled() && github.event_name == 'push' && steps.cas.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:

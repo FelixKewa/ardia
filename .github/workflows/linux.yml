@@ -51,8 +51,8 @@ on:
         default: nearest
 
 concurrency:
-  group: linux-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  group: linux-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 permissions:
   contents: read
@@ -88,7 +88,7 @@ jobs:
   checks:
     name: checks (${{ matrix.name }})
     needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -115,7 +115,7 @@ jobs:
 
   package:
     needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || needs.gate.outputs.run == 'true') }}
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:

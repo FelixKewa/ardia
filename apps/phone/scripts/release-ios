@@ -32,8 +32,8 @@
 # uploads and opens no upload record.
 # Signing and upload take ASC_KEY (path to the .p8), ASC_KEY_ID and ASC_ISSUER, or the account Xcode is signed
 # in to. Output and logs go to dist/ios-expo/<release version>-<build>, or --out.
-# RELEASE_BUILD_SETTINGS adds space-separated build settings to the archive, as scripts/release.sh does for the
-# Mac (CI passes COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=<dir>).
+# RELEASE_COMPILATION_CACHE_CAS_PATH, when set, turns on Xcode's compilation cache for the archive, kept in that
+# directory (CI restores and saves it).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -137,7 +137,10 @@ run_logged hermes "$hermesc" -emit-binary -max-diagnostic-width=80 -O -out "$pre
 /usr/libexec/PlistBuddy -c "Add :ArdiaBuildCommit string $commit" -c "Add :ArdiaBuildDirty string no" -c "Add :ArdiaBuildSource string $bundleSource" -c "Add :ArdiaBuildNative string $nativeCommit, clean" "$prebuilt/stamp.plist" >/dev/null
 
 signing=(-allowProvisioningUpdates ${auth[@]+"${auth[@]}"})
-read -r -a extra_build_settings <<<"${RELEASE_BUILD_SETTINGS:-}"
+extra_build_settings=()
+if [ -n "${RELEASE_COMPILATION_CACHE_CAS_PATH:-}" ]; then
+  extra_build_settings=("COMPILATION_CACHE_ENABLE_CACHING=YES" "COMPILATION_CACHE_CAS_PATH=$RELEASE_COMPILATION_CACHE_CAS_PATH")
+fi
 [ "$unsigned" = 0 ] || signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO)
 run_logged archive xcodebuild archive \
   -workspace "$phoneIos/Ardia.xcworkspace" -scheme Ardia -configuration Release \

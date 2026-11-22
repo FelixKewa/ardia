@@ -74,14 +74,17 @@ holds the rest.
   A newer push cancels the run before it, on `main` too.
 - `mac.yml` compiles the Mac app (Debug, unsigned, `xcode-27`) on pull requests and pushes that touch its native code:
   `apps/browser/macos`, the packages' `ios` folders, the Dock tile and plugin host, the engine's public headers, the
-  patches and the lockfile. It builds against this commit's engine, or the nearest published one before it. Against
-  an older engine the build is strict while `engine/ardiacore/src/ardia/core/public` is unchanged since that engine,
-  and only warns when it changed, since the app may then need engine API that is not published yet.
+  workspace manifests, the patches and the lockfile. It builds against this commit's engine, or the nearest published
+  one before it, and any compiler error fails it. When `engine/ardiacore/src/ardia/core/public` changed since that
+  engine it also fails after the build, asking for the engine to be published first.
 - The heavy workflows (`ios.yml`, `android.yml`, `linux.yml`, `windows.yml`, `mac.yml`) run their vouch `gate` job
   only for pull requests from forks. Pushes, manual runs and branches of this repository skip it and start the build
-  at once.
+  at once. A newer push or pull request run cancels the one before it; manual and release runs each have their own
+  group and are never cancelled. `windows.yml` reads the `full-ci` label in its `identity` job, live, so adding the
+  label and re-running all jobs gives the full run.
 - Caches that would fill the 10 GB limit are saved on pushes to `main` only and pruned to the newest per branch by
-  `caches.yml`: Gradle (`gradle-phone-`), Xcode compilation caches (`xcode-cas-`), Pods (`mac-pods-`, `phone-pods-`).
+  `caches.yml`: Gradle (`gradle-phone-`, which `--main-only` also deletes from every other branch), Xcode compilation
+  caches (`xcode-cas-`), Pods (`pods-`, shared by `mac.yml` and the Release workflow, and `phone-pods-`).
 
 ## ArdiaCore acceptance
 

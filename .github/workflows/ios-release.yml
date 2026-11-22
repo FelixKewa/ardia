@@ -324,7 +324,7 @@ jobs:
           [ -z "$RELEASE_VERSION" ] || args+=(--version "$RELEASE_VERSION")
           if [ "$MODE" = device ]; then args+=(--development); elif [ "$MODE" != upload ]; then args+=(--no-upload); fi
           [ "$DEFAULT_BROWSER" = true ] || args+=(--no-default-browser)
-          export RELEASE_BUILD_SETTINGS="COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=$GITHUB_WORKSPACE/.ci/cas"
+          export RELEASE_COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/.ci/cas"
           apps/phone/scripts/release-ios "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() && steps.cas.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9

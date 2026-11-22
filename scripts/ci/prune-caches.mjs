@@ -4,27 +4,37 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const HELP = `Frees GitHub Actions cache space, which is capped at 10 GB a repository.
-Deletes the caches of pull requests that are no longer open, and for each --newest-only
-key prefix every cache but the newest one of each branch, since a branch cannot restore
-another branch's cache.
+Deletes the caches of pull requests that are no longer open, for each --main-only key
+prefix every cache outside main (open pull requests too: a cache only main should save),
+and for each --newest-only key prefix every cache but the newest one of each branch, since
+a branch cannot restore another branch's cache.
 
-  scripts/ci/prune-caches.mjs [--dry-run] [--repo <owner/name>] [--newest-only <key prefix>]...
+  scripts/ci/prune-caches.mjs [--dry-run] [--repo <owner/name>] [--main-only <key prefix>]...
+                              [--newest-only <key prefix>]...
 
 --dry-run lists what would go and deletes nothing.`;
 
 const PULL_REF = /^refs\/pull\/(\d+)\/merge$/;
+export const MAIN_REF = "refs/heads/main";
 
 export function pullNumberOf(ref) {
   const found = PULL_REF.exec(ref || "");
   return found ? Number(found[1]) : null;
 }
 
-export function plan({ caches, openPulls, newestOnly }) {
+export function plan({ caches, openPulls, newestOnly, mainOnly = [] }) {
   const open = new Set(openPulls);
   const doomed = new Map();
   for (const cache of caches) {
     const number = pullNumberOf(cache.ref);
     if (number !== null && !open.has(number)) doomed.set(cache.id, { ...cache, why: `pull request #${number} is closed` });
+  }
+  for (const prefix of mainOnly) {
+    for (const cache of caches) {
+      if (cache.key.startsWith(prefix) && cache.ref !== MAIN_REF && !doomed.has(cache.id)) {
+        doomed.set(cache.id, { ...cache, why: `only ${MAIN_REF} keeps ${prefix} caches` });
+      }
+    }
   }
   for (const prefix of newestOnly) {
     const newestFirst = caches
@@ -54,16 +64,18 @@ export function sweep(doomed, remove) {
 }
 
 function parse(argv) {
-  const options = { dryRun: false, repo: process.env.GITHUB_REPOSITORY || "", newestOnly: [], help: false };
+  const options = { dryRun: false, repo: process.env.GITHUB_REPOSITORY || "", newestOnly: [], mainOnly: [], help: false };
   for (let index = 0; index < argv.length; index += 1) {
     const word = argv[index];
     if (word === "-h" || word === "--help") options.help = true;
     else if (word === "--dry-run") options.dryRun = true;
     else if (word === "--repo") options.repo = argv[(index += 1)] || "";
     else if (word === "--newest-only") options.newestOnly.push(argv[(index += 1)] || "");
+    else if (word === "--main-only") options.mainOnly.push(argv[(index += 1)] || "");
     else throw new Error(`unknown option ${word} (--help)`);
   }
   if (options.newestOnly.some((prefix) => !prefix)) throw new Error("--newest-only takes a key prefix");
+  if (options.mainOnly.some((prefix) => !prefix)) throw new Error("--main-only takes a key prefix");
   return options;
 }
 
@@ -95,7 +107,7 @@ function main() {
   }
   if (!options.repo) options.repo = gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]).trim();
   const caches = listCaches(options.repo);
-  const doomed = plan({ caches, openPulls: listOpenPulls(options.repo), newestOnly: options.newestOnly });
+  const doomed = plan({ caches, openPulls: listOpenPulls(options.repo), newestOnly: options.newestOnly, mainOnly: options.mainOnly });
   const total = caches.reduce((sum, cache) => sum + cache.size, 0);
   const sizeOf = (list) => list.reduce((sum, cache) => sum + cache.size, 0);
   for (const cache of doomed) console.log(`${options.dryRun ? "would delete" : "delete"} ${cache.key} (${megabytes(cache.size)}, ${cache.ref}): ${cache.why}`);

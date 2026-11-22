@@ -68,6 +68,24 @@ test("each branch keeps its own newest cache, since main cannot restore a branch
   assert.deepEqual(doomed.map((item) => item.id), [1]);
 });
 
+test("a main-only prefix deletes its caches outside main, open pull requests included, and leaves main's to newest-only", () => {
+  const caches = [
+    cache(1, "gradle-phone-aaa", "refs/pull/12/merge", "2026-11-01T00:00:00Z"),
+    cache(2, "gradle-phone-bbb", "refs/heads/feature", "2026-11-02T00:00:00Z"),
+    cache(3, "gradle-phone-ccc", MAIN, "2026-11-03T00:00:00Z"),
+    cache(4, "gradle-phone-ddd", MAIN, "2026-11-04T00:00:00Z"),
+    cache(5, "turbo-aaa", "refs/pull/12/merge", "2026-11-05T00:00:00Z"),
+  ];
+  const doomed = plan({ caches, openPulls: [12], newestOnly: ["gradle-phone-"], mainOnly: ["gradle-phone-"] });
+  assert.deepEqual(doomed.map((item) => item.id).sort(), [1, 2, 3]);
+  assert.match(doomed.find((item) => item.id === 1).why, /only refs\/heads\/main keeps gradle-phone- caches/);
+});
+
+test("--main-only needs a key prefix", () => {
+  const script = fileURLToPath(new URL("./prune-caches.mjs", import.meta.url));
+  assert.throws(() => execFileSync(process.execPath, [script, "--main-only"], { stdio: "pipe" }), /--main-only takes a key prefix/);
+});
+
 test("a cache that is already gone counts as freed, and one failed delete does not stop the rest", () => {
   const doomed = [cache(1, "a", MAIN, "x"), cache(2, "b", MAIN, "x"), cache(3, "c", MAIN, "x"), cache(4, "d", MAIN, "x")];
   const tried = [];
