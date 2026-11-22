@@ -52,6 +52,7 @@ import { closeSettings } from "./state/settings/nav";
 import { applyLaunchSettings, runLaunchScenario } from "./state/app/launch";
 import { frontSheet } from "./state/settings/settingsRules";
 import { inkLayer, lightStatusIcons } from "./lib/statusInk";
+import { whenIdle } from "./lib/whenIdle";
 import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/telemetry";
 import { useIncognito, useSelectedTab } from "./state/tabs/hooks";
 import { syncOffered } from "./state/sync/offer";
@@ -217,8 +218,8 @@ function PageLayer({ away, unseen, children }: { away: boolean; unseen: boolean;
       style={[StyleSheet.absoluteFill, unseen ? styles.unseen : null]}
       pointerEvents={away ? "none" : "box-none"}
       collapsable={false}
-      importantForAccessibility={unseen ? "no-hide-descendants" : "auto"}
-      accessibilityElementsHidden={unseen}
+      importantForAccessibility={unseen || away ? "no-hide-descendants" : "auto"}
+      accessibilityElementsHidden={unseen || away}
     >
       {children}
     </View>
@@ -256,11 +257,10 @@ function useDeckStandby(surface: Surface, pageSettled: boolean, pageId: string |
   }
   useEffect(() => {
     if (!pageSettled) return;
-    const settle = setTimeout(() => {
+    return whenIdle(() => {
       if (!standby) startTransition(() => setStandby(true));
       else if (!deckPullInFlight()) refreshHiddenDeck();
-    }, tabsMotion.deckStandby);
-    return () => clearTimeout(settle);
+    }, tabsMotion.deckStandby, tabsMotion.deckStandbyIdle);
   }, [pageSettled, pageId, standby]);
   return surface !== "start" && (standby || surface === "deck");
 }

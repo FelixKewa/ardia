@@ -2,12 +2,11 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { DeckLookProbe } from "./DeckLookProbe";
 import { useDeckOwnsBar, useSheet, useSurface } from "../../state/browse/hooks";
 import { useHeldDeckOrder, useHeldRootSize, useHeldSearchOpen } from "../../state/browse/deckHold";
-import { beginInteraction, countRender, INTERACTION_WINDOW_MS, interactionPerfEnabled } from "../../state/app/interactionPerf";
+import { beginInteraction, countRender, INTERACTION_WINDOW_MS, interactionPerfEnabled, markNextUiFrame, markTiming } from "../../state/app/interactionPerf";
 import { Keyboard, Platform, StyleSheet, useWindowDimensions, View, type ViewInstance } from "react-native";
 import type { Rect } from "../../lib/menuPlace";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, Easing, runOnJS, runOnUI, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
-import { pictureKey, whenPicturePainted } from "../../lib/shownSnapshots";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { haptics } from "../../state/app/haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,9 +50,9 @@ import {
   closeTabFromDeck,
   stayIncognito,
   consumeDeckEntrance,
-  deckEntranceCapture,
   peekDeckEntrance,
   deckEntered,
+  deckMotionDone,
   leaveIncognito,
   newIncognitoTab,
   newRegularTab,
@@ -188,7 +187,7 @@ export const TabDeck = memo(function TabDeck() {
       shownPhase: shown ? phase : SETTLED,
       expanded: shown ? index : -1,
       progress: shown && index < 0 ? 1 : 0,
-      cardsOpacity: shown && index >= 0 && !(Boolean(live[index]?.snapshotFileName) || deckEntranceCapture(target!) !== null) ? 1 : 0,
+      cardsOpacity: shown && index >= 0 ? 1 : 0,
     };
   });
   const [order, setOrder] = useState<string[]>(first.ids);
@@ -407,7 +406,9 @@ export const TabDeck = memo(function TabDeck() {
       scaleProgress.value = 1;
       positionProgress.value = 1;
       cardsOpacity.value = withTiming(1, { duration: tabsMotion.fade });
-      if (entrance && grid) deckEntered(entrance);
+      if (entrance && grid) deckMotionDone(entrance);
+      markTiming("deck motion");
+      markTiming("deck taps");
       return;
     }
     beginInteraction("deck open", INTERACTION_WINDOW_MS.deckOpen);
@@ -415,56 +416,19 @@ export const TabDeck = memo(function TabDeck() {
     expandedIndex.value = index;
     scaleProgress.value = 0;
     positionProgress.value = 0;
-    const shrink = () => {
-      if (pulls) deckEntered(entrance);
-      cardsOpacity.value = 1;
-      scaleProgress.value = moveTo(1, tabsMotion.openScale);
-      positionProgress.value = moveTo(1, tabsMotion.openPosition, (finished) => {
-        "worklet";
-        if (!finished) return;
-        settlePhase();
-        runOnJS(setPhase)(SETTLED);
-        runOnJS(deckEntered)(entrance);
-      });
-    };
-    const capture = deckEntranceCapture(entrance);
-    if (!capture && !tabs.get(entrance)?.snapshotFileName) {
-      shrink();
-      return () => deckEntered(entrance);
-    }
-    cardsOpacity.value = 0;
-    let frame = 0;
-    let live = true;
-    let waited = false;
-    let stopWaiting = () => {};
-    const waitForPaint = () => {
-      if (!live || waited) return;
-      waited = true;
-      const now = currentTabs();
-      const picture = [...now.open, ...now.privates].find((tab) => tab.id === entrance)?.snapshotFileName;
-      if (!picture) {
-        frame = requestAnimationFrame(shrink);
-        return;
-      }
-      stopWaiting = whenPicturePainted(pictureKey(`deck:${entrance}`, picture), ENTRANCE_PAINT_CAP_MS, (painted) => {
-        if (!painted && !tabs.get(entrance)?.isPrivate) countUsage("deck_pictures_late");
-        frame = requestAnimationFrame(shrink);
-      });
-    };
-    if (capture) {
-      const cap = setTimeout(waitForPaint, ENTRANCE_CAPTURE_CAP_MS);
-      void capture.then(() => {
-        clearTimeout(cap);
-        waitForPaint();
-      });
-      stopWaiting = () => clearTimeout(cap);
-    } else waitForPaint();
-    return () => {
-      live = false;
-      stopWaiting();
-      cancelAnimationFrame(frame);
-      deckEntered(entrance);
-    };
+    markTiming("deck motion");
+    if (pulls) deckEntered(entrance);
+    cardsOpacity.value = 1;
+    scaleProgress.value = moveTo(1, tabsMotion.openScale);
+    positionProgress.value = moveTo(1, tabsMotion.openPosition, (finished) => {
+      "worklet";
+      if (!finished) return;
+      settlePhase();
+      runOnJS(setPhase)(SETTLED);
+      runOnJS(markTiming)("deck taps", Date.now());
+      runOnJS(deckMotionDone)(entrance);
+    });
+    return () => deckEntered(entrance);
   }, [shown]);
 
   useEffect(() => {
@@ -606,7 +570,10 @@ export const TabDeck = memo(function TabDeck() {
     setOrder(ids);
   };
 
-  const settledOpen = (id: string) => openTab(id);
+  const settledOpen = (id: string) => {
+    openTab(id);
+    markTiming("page live");
+  };
 
   const command = useDeckCommand((s) => s.command);
   useEffect(() => {
@@ -637,6 +604,8 @@ export const TabDeck = memo(function TabDeck() {
     beginInteraction("card open", INTERACTION_WINDOW_MS.cardOpen);
     const id = order[index];
     if (!id || phase.kind !== "settled" || dragIndex.value === index) return;
+    markTiming("card tap");
+    runOnUI(markNextUiFrame)("card motion");
     if (searchChrome) Keyboard.dismiss();
     if (grid || (reduceMotion && !pulls)) {
       settledOpen(id);
@@ -655,10 +624,11 @@ export const TabDeck = memo(function TabDeck() {
     openingId.current = id;
     handedOver.current = null;
     prepared.current = null;
+    clearTimeout(landingCap.current);
     if (path === "pulledCard") {
       grown.current = { id, opened: false, steady: reduceMotion };
-      growDeckPull(stackPullTarget(g, id, index, scroll.value, 0), barBackWithPage, reduceMotion);
-      setTimeout(() => handOver(id), reduceMotion ? 0 : criticalSpringLandsMs(DECK_PULL.growResponse, CARD_LANDED) + GROWN_SLACK_MS);
+      growDeckPull(stackPullTarget(g, id, index, scroll.value, 0), barBackWithPage, handOver, reduceMotion);
+      handOverOnLoss(id);
       return;
     }
     if (path !== "deckCard") setOpeningCard({ id, x: deckLeading(g, index - scroll.value) + g.cardWidth / 2, y: g.cardCenterY, path });
@@ -671,6 +641,11 @@ export const TabDeck = memo(function TabDeck() {
         if (finished) runOnJS(handOver)(id);
       });
     });
+    handOverOnLoss(id);
+  };
+
+  const handOverOnLoss = (id: string) => {
+    landingCap.current = setTimeout(() => handOver(id), DECK_PULL.growLostMs);
   };
 
   const grown = useRef<{ id: string; opened: boolean; steady: boolean } | null>(null);
@@ -729,16 +704,12 @@ export const TabDeck = memo(function TabDeck() {
     const state = { id, ready: false, landed: false };
     prepared.current = state;
     beginOpeningTab(id, veiled, openPath.current === "coveringCard" ? coverFrame(g).width : g.cardWidth);
-    const picture = tabs.get(id)?.snapshotFileName ?? null;
-    let waiting = picture ? 2 : 1;
     const ready = () => {
-      waiting -= 1;
-      if (waiting > 0 || prepared.current !== state) return;
+      if (prepared.current !== state || state.ready) return;
       state.ready = true;
       if (state.landed) finishOpen(id);
     };
     whenPageLaidOut(id, HANDOVER_CAP_MS, ready);
-    if (picture) whenPicturePainted(pictureKey(`cover:${id}`, picture), HANDOVER_CAP_MS, ready);
   };
   const coverDeck = (id: string) => {
     if (openingId.current !== id) return;
@@ -789,12 +760,13 @@ export const TabDeck = memo(function TabDeck() {
   const handOver = (id: string) => {
     if (openingId.current !== id || handedOver.current === id) return;
     handedOver.current = id;
+    if (openPath.current !== "coveringCard") clearTimeout(landingCap.current);
     prepareHandOver(id);
     const state = prepared.current;
     if (!state || state.id !== id) return;
     state.landed = true;
     if (state.ready) finishOpen(id);
-    else if (openPath.current !== "pulledCard" && !tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
+    else if (!tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
   };
 
   const closeKeepingSide = (id: string) => {
@@ -1344,7 +1316,6 @@ const DECK_SCREEN_CORNER = iPhoneOr(() => DECK.displayCornerRadius, () => screen
 const CHROME_BACK: MotionCurve = { type: "timing", durationMs: 0 };
 const CHROME_GLASS_MS = 200;
 const PAGE_MOUNT_AFTER_GROWTH_MS = 34;
-const GROWN_SLACK_MS = 32;
 
 const criticalSpringLandsMs = (response: number, within: number) => {
   let x = 1;
@@ -1352,8 +1323,6 @@ const criticalSpringLandsMs = (response: number, within: number) => {
   return (x * response * 1000) / (2 * Math.PI);
 };
 const COVERING_LANDING_CAP_MS = 2 * criticalSpringLandsMs(OPENING_CARD_RESPONSE, CARD_LANDED);
-const ENTRANCE_PAINT_CAP_MS = 250;
-const ENTRANCE_CAPTURE_CAP_MS = 180;
 
 const DECK_RENDER_REACH = 6;
 const DECK_GESTURE_REACH = 3;

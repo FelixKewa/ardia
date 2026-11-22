@@ -22,11 +22,23 @@ export function tabFill(tab: TabFaceTab, tone: string | null, roles: ColorRoles)
 
 type Props = { tab: TabFaceTab; title: string; host: string; tone: string | null; roles: ColorRoles; compact?: boolean; paintedAs?: string };
 
+type Pictures = { shown: string | null; previous: string | null };
+
 export function TabFace({ tab, title, host, tone, roles, compact, paintedAs }: Props) {
   const fill = tabFill(tab, tone, roles);
   const face = <PlainFace tab={tab} title={title} host={host} fill={fill} roles={roles} compact={compact} />;
-  if (tab.snapshotFileName) return <Snapshot key={tab.snapshotFileName} uri={tab.snapshotFileName} fill={fill} under={face} paintedAs={paintedAs} />;
-  return face;
+  const picture = tab.snapshotFileName;
+  const [pictures, setPictures] = useState<Pictures>({ shown: picture, previous: null });
+  if (pictures.shown !== picture) setPictures({ shown: picture, previous: picture ? (pictures.shown ?? pictures.previous) : null });
+  if (!picture) return face;
+  const previous = pictures.shown === picture ? pictures.previous : null;
+  const replaced = () => setPictures((now) => (now.shown === picture && now.previous !== null ? { shown: picture, previous: null } : now));
+  return (
+    <>
+      {previous ? <Snapshot key={previous} uri={previous} fill={fill} under={face} paintedAs={paintedAs} /> : null}
+      <Snapshot key={picture} uri={picture} fill={fill} under={face} paintedAs={paintedAs} over={previous !== null} onPainted={previous ? replaced : undefined} />
+    </>
+  );
 }
 
 function PlainFace({ tab, title, host, fill, roles, compact }: { tab: TabFaceTab; title: string; host: string; fill: string; roles: ColorRoles; compact?: boolean }) {
@@ -65,7 +77,7 @@ function PlainFace({ tab, title, host, fill, roles, compact }: { tab: TabFaceTab
   );
 }
 
-function Snapshot({ uri, fill, under, paintedAs }: { uri: string; fill: string; under: ReactNode; paintedAs?: string }) {
+function Snapshot({ uri, fill, under, paintedAs, over = false, onPainted }: { uri: string; fill: string; under: ReactNode; paintedAs?: string; over?: boolean; onPainted?: () => void }) {
   const [aspect, setAspect] = useState<number | null>(() => snapshotAspect(uri));
   const [loaded, setLoaded] = useState(false);
   const [wasShown] = useState(() => snapshotWasShown(uri));
@@ -81,9 +93,15 @@ function Snapshot({ uri, fill, under, paintedAs }: { uri: string; fill: string; 
       forgetPicturePainted(key);
     };
   }, [loaded, aspect, uri, paintedAs]);
+  const replacesPrevious = loaded && !covered && onPainted !== undefined;
+  useEffect(() => {
+    if (!replacesPrevious) return;
+    const frame = requestAnimationFrame(() => onPainted?.());
+    return () => cancelAnimationFrame(frame);
+  }, [replacesPrevious]);
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: fill }]}>
-      {covered ? under : null}
+    <View style={[StyleSheet.absoluteFill, over && (covered || !loaded) ? null : { backgroundColor: fill }]}>
+      {covered && !over ? under : null}
       <Animated.Image
         source={{ uri }}
         resizeMethod="scale"

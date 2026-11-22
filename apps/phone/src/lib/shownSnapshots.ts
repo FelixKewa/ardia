@@ -22,6 +22,8 @@ const painted = new Set<string>();
 
 export const picturePainted = (key: string) => painted.has(key);
 
+export const anyPicturePainted = (owner: string) => [...painted].some((key) => key.startsWith(`${owner}|`));
+
 export function forgetPicturePainted(key: string) {
   painted.delete(key);
 }

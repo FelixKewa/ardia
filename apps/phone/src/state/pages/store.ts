@@ -138,6 +138,14 @@ export const endPrivateSession = () => void settled(() => pages.endPrivateSessio
 
 export const snapshotPage = (id: string): Promise<PageSnapshot | null> => settled(() => pages.snapshot(id, { maxWidth: 600, quality: 72 }), null);
 
+export function snapshotIsCurrent(id: string): boolean | null {
+  try {
+    return pages.snapshotIsCurrent(id);
+  } catch {
+    return null;
+  }
+}
+
 export const savePageState = (id: string): Promise<string | null> => settled(() => pages.saveState(id), null);
 
 export const pageScrollPosition = (id: string): Promise<PageScrollPosition | null> => settled(() => pages.scrollPosition(id), null);

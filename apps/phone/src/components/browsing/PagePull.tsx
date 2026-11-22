@@ -7,6 +7,7 @@ import { deckPull, PULL_STAGE, pullFades, setDeckOwnsBar } from "../../state/bro
 import { tabsInk, usesGlass, useTheme } from "../ui";
 
 const PULL_OFFSTAGE = 100_000;
+const OTHER_PAGE_POSE = { dx: 0, dy: 0, scale: 1, corner: 0, shadow: 0, seen: 0 };
 const SHADOW_FULL_AT = 0.3;
 const FADE_RISE = 100_000;
 const PRIMED = 0.99;
@@ -35,7 +36,9 @@ export function PagePull({ tabId, barTop, children }: { tabId: string; barTop: n
   const pose = useDerivedValue(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
-    if (stage === PULL_STAGE.idle || !target || deckPull.id.value !== tabId) return null;
+    if (deckPull.awayId.value === tabId) return OTHER_PAGE_POSE;
+    if (stage !== PULL_STAGE.idle && deckPull.id.value !== tabId) return OTHER_PAGE_POSE;
+    if (stage === PULL_STAGE.idle || !target) return null;
     if (pullFades(stage)) return { dx: 0, dy: 0, scale: 1, corner: 0, shadow: 0, seen: 1 - deckPull.fade.value };
     const shrink = deckPull.shrink.value;
     const page = pullPagePose(target, shrink);

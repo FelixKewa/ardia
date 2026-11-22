@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { act } from "react-test-renderer";
 import { TabDeck } from "../components/tabs/TabDeck";
 import { pages } from "../platform/pages";
@@ -37,8 +38,8 @@ const entranceCard = (root: ReturnType<typeof renderSurface>) => {
   return cards.find((card) => card.findAll((node) => typeof node.props.source?.uri === "string" && node.props.source.uri.includes("t2-")).length > 0) ?? (selected ? null : null);
 };
 
-test("opening the deck from a page switches at once, without waiting for the capture, and the leaving card draws the fresh picture as it lands, with no placeholder", async () => {
-  jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1157 }) as never);
+test("opening the deck from a page switches at once, without waiting for the capture, and the leaving card draws the fresh picture with no placeholder: on iPhone as it lands, on Android once the shrink has landed, so the capture's main-thread work never delays the shrink", async () => {
+  const snapshot = jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1157 }) as never);
   await act(async () => {
     void browse.showDeck();
   });
@@ -46,6 +47,15 @@ test("opening the deck from a page switches at once, without waiting for the cap
   expect(prefetched).toEqual([]);
   const root = renderSurface(<TabDeck />, { flushTimers: false });
   await act(async () => {});
+  if (Platform.OS === "android") {
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(entranceCard(root)!.findAll((node) => node.props.source?.uri === EARLIER && typeof node.type === "string")).toHaveLength(1);
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await act(async () => {});
+    expect(snapshot).toHaveBeenCalled();
+  }
   const card = entranceCard(root);
   expect(card).toBeTruthy();
   expect(card!.findAll((node) => node.props.source?.uri === FRESH && typeof node.type === "string")).toHaveLength(1);
