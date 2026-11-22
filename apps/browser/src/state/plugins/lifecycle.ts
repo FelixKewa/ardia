@@ -192,6 +192,8 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
 
 let lastConsentId = 0;
 
+export const UNSAVED = "plugins.json couldn't be saved. Try again.";
+
 export const ALREADY_ASKING = "Ardia is already asking about a plugin. Answer that first, then try again.";
 
 function closeChangedConsent() {
@@ -215,7 +217,7 @@ export function consentTarget(name: string, official = false): PluginListing | u
 export function requestPluginConsent(name: string, official = false): boolean {
   const target = consentTarget(name, official);
   if (currentPlugins().consent || !target?.manifest || !target.hash) return false;
-  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: target.hash } });
+  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: target.hash }, unsaved: null });
   return true;
 }
 
@@ -254,7 +256,8 @@ export function enablePlugin(name: string, hash: string): boolean {
   const current = currentPlugins().listings[name];
   const previous = candidate && recordApproves(current, before) ? (approvalMatches(current, before.approved) ? before.approved : before.previous) : undefined;
   if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn, ...(previous ? { previous } : {}) } }, consent)) {
-    settleInstall(name, { ok: false, reason: "plugins.json couldn't be saved." });
+    usePlugins.setState({ consent: null, unsaved: name });
+    settleInstall(name, { ok: false, reason: UNSAVED });
     return false;
   }
   if (candidate) void promoteCandidate(name, listing, consent);

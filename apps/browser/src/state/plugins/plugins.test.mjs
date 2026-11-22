@@ -508,6 +508,11 @@ test("when plugins.json can't be saved, turning a plugin on or off changes no se
   } finally {
     stub.refusedWrites.on = false;
   }
+  assert.equal(P().consent, null, "a failed enable closes its sheet");
+  assert.equal(P().unsaved, "example");
+  assert.equal(lifecycle.enablePlugin("example", hash), false, "a closed sheet can't approve");
+  assert.ok(lifecycle.requestPluginConsent("example"));
+  assert.equal(P().unsaved, null, "asking again clears the reason");
   assert.ok(lifecycle.enablePlugin("example", hash));
   assert.deepEqual(S().settings.commandBarStart, { openTabs: { limit: 5 } });
   stub.refusedWrites.on = true;

@@ -136,8 +136,14 @@ test("an install whose plugins.json can't be written tells the caller instead of
   } finally {
     stub.refusedWrites.on = false;
   }
-  assert.deepEqual(await done, { ok: false, reason: "plugins.json couldn't be saved." });
+  assert.deepEqual(await done, { ok: false, reason: "plugins.json couldn't be saved. Try again." });
+  assert.equal(P().consent, null, "a settled install leaves no sheet behind");
+  assert.equal(P().unsaved, "cli");
+  const again = installOfficialPlugin("cli", { showSheet: false });
+  assert.equal(P().consent?.name, "cli", "asking again is accepted");
+  assert.equal(P().unsaved, null);
   lifecycle.dismissPluginConsent();
+  assert.deepEqual(await again, { ok: false, reason: "Cancelled.", cancelled: true });
   await settle();
   assert.deepEqual(host.links, []);
 });
