@@ -1,5 +1,6 @@
 import { act } from "react-test-renderer";
 import { FloatingBar } from "../components/browsing/FloatingBar";
+import { HostPill } from "../components/browsing/HostPill";
 import { ChromeSurface, rolesFor } from "../components/ui";
 import { currentTabs } from "../state/tabs/store";
 import { deckOrder } from "../state/tabs/tabsState";
@@ -32,4 +33,17 @@ test("the live bar's tabs, address and + glass sit over its page, so the page's 
   const ghost = bar(false);
   expect(ghost.glass).toEqual([undefined, undefined, undefined]);
   unmount(ghost.root);
+});
+
+test("the collapsed host pill sits over its page while it stands for the bar, and claims nothing while the full bar is out", () => {
+  const order = deckOrder(currentTabs());
+  const tab = order[order.length - 1]!;
+  const claimed = (anchors: boolean) => {
+    const root = renderSurface(<HostPill tab={tab} dark={false} shown={anchors} anchors={anchors} contentStyle={undefined} onExpand={noop} />);
+    const pages = root.root.findAll((node) => node.type === ChromeSurface).map((node) => node.props.overPage as string | undefined);
+    unmount(root);
+    return pages;
+  };
+  expect(claimed(true)).toEqual([tab.id]);
+  expect(claimed(false)).toEqual([undefined]);
 });

@@ -303,7 +303,7 @@ final class GlassView: ExpoView {
   }
 
   private func attachPageEdge() {
-    guard let overPage, window != nil, let scrollView = PageView.host(of: overPage)?.hostedScrollView else {
+    guard let overPage, let window, let host = PageView.host(of: overPage), host.window === window, let scrollView = host.hostedScrollView else {
       if let pageEdge { removeInteraction(pageEdge) }
       pageEdge = nil
       return
