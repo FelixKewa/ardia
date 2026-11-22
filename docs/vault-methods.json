@@ -92,7 +92,7 @@
       ],
       "additionalProperties": false
     },
-    "result": "{status, transfer, ms, readyMs, fillMs, usedCode}"
+    "result": "{status, transfer, ms, readyMs, fillMs, totalMs, createMs, scanMs, transferMs, usedCode, appMs}"
   },
   {
     "name": "vault.log",

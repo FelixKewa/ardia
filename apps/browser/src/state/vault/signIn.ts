@@ -165,7 +165,20 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     noteVaultTiming("ready", result.readyMs, consent);
     noteVaultTiming("fill", result.fillMs, consent);
     recordVaultEvent({ ...base, time: Date.now(), kind: "fill", account: username, outcome: result.status, ms });
-    return { status: result.status, transfer: result.transfer ?? "none", ms, readyMs: result.readyMs ?? null, fillMs: result.fillMs ?? null, usedCode: result.usedCode, appMs: Date.now() - startedAt };
+    const timing = (value: number | undefined) => (typeof value === "number" && value >= 0 ? value : null);
+    return {
+      status: result.status,
+      transfer: result.transfer ?? "none",
+      ms,
+      readyMs: timing(result.readyMs),
+      fillMs: timing(result.fillMs),
+      totalMs: timing(result.totalMs),
+      createMs: timing(result.createMs),
+      scanMs: timing(result.scanMs),
+      transferMs: timing(result.transferMs),
+      usedCode: result.usedCode,
+      appMs: Date.now() - startedAt,
+    };
   } catch (error) {
     const refusal = error instanceof VaultError ? error : new VaultError("failed", error instanceof Error ? error.message : String(error));
     noteVaultRefusal(refusal.code, consent);
@@ -222,7 +235,7 @@ export function watchVault() {
     const state = autoFill(task, form.tab, origin);
     const document = form.document === undefined ? null : String(form.document);
     if (state.stopped || (document !== null && state.documents.has(document))) return;
-    if (document === null && Date.now() - state.lastSuccess < AUTO_RETRY_MS) return;
+    if (Date.now() - state.lastSuccess < AUTO_RETRY_MS) return;
     task.busyTabs.add(form.tab);
     void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true })
       .then(

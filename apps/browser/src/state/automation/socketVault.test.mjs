@@ -290,6 +290,20 @@ test("the sheet's request lives until Touch ID answers, and the client leaving d
   }
 });
 
+test("the reload after an automatic sign-in doesn't sign in again, even though it's a new document", async () => {
+  const { tab } = await freshWindow("https://one.example/login");
+  stub.controlSocket.peers[722] = NODE;
+  const { call } = socketClient(722);
+  await approved(call("vault.taskStart", { sites: ["one.example"], tabs: [tab] }));
+  const before = stub.vaultFake.signIns.length;
+  const form = (document) => emitEvent("vault.loginFormSeen", { tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
+  form(40);
+  await settle();
+  form(41);
+  await settle();
+  assert.equal(stub.vaultFake.signIns.length, before + 1);
+});
+
 test("auto-fill runs once per tab at a time, never repeats a signed-in document, and gives up after a few transient failures", async () => {
   const { tab } = await freshWindow("https://one.example/login");
   stub.controlSocket.peers[716] = NODE;
@@ -310,11 +324,17 @@ test("auto-fill runs once per tab at a time, never repeats a signed-in document,
   await settle();
   assert.equal(stub.vaultFake.signIns.length, before + 1, "a submitted document isn't signed in again");
   stub.vaultFake.signInResult = { status: "failed" };
+  stub.controlSocket.peers[723] = NODE;
+  const fresh = socketClient(723);
+  const { reply } = await approved(fresh.call("vault.taskStart", { sites: ["one.example"], tabs: [tab] }));
+  dropTask((await socketClient(716).ok("vault.status")).tasks[0].task, "ended");
+  const failingFrom = stub.vaultFake.signIns.length;
   for (const doc of [3, 4, 5, 6, 7]) {
     form(doc);
     await settle();
   }
-  assert.equal(stub.vaultFake.signIns.length, before + 4, "three transient failures, then it stops");
+  assert.equal(stub.vaultFake.signIns.length, failingFrom + 3, "three transient failures, then it stops");
+  void reply;
 });
 
 test("a cold login shares the saved-login lookup the task started", async () => {
