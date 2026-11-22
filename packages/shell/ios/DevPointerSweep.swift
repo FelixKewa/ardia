@@ -16,13 +16,18 @@ final class DevPointerSweep: NSObject {
     countHeldHovers()
   }()
 
+  private static func sweeping(_ view: NSView?) -> Bool {
+    guard let sweep = DevPointerSweep.running, let window = view?.window else { return false }
+    return window === sweep.window
+  }
+
   private static func countScrollSteps() {
     let selector = NSSelectorFromString("ardia_scrolled:")
     guard let cls = NSClassFromString("RCTView"), let method = class_getClassMethod(cls, selector) else { return }
     typealias Scrolled = @convention(c) (AnyClass, Selector, NSView?) -> Void
     let original = unsafeBitCast(method_getImplementation(method), to: Scrolled.self)
     let counted: @convention(block) (AnyClass, NSView?) -> Void = { receiver, moved in
-      DevPointerSweep.scrollSteps += 1
+      if DevPointerSweep.sweeping(moved) { DevPointerSweep.scrollSteps += 1 }
       original(receiver, selector, moved)
     }
     method_setImplementation(method, imp_implementationWithBlock(counted))
@@ -35,7 +40,7 @@ final class DevPointerSweep: NSObject {
     let original = unsafeBitCast(method_getImplementation(method), to: Hold.self)
     let counted: @convention(block) (AnyObject) -> ObjCBool = { view in
       let held = original(view, selector)
-      if held.boolValue { DevPointerSweep.heldHovers += 1 }
+      if held.boolValue && DevPointerSweep.sweeping(view as? NSView) { DevPointerSweep.heldHovers += 1 }
       return held
     }
     method_setImplementation(method, imp_implementationWithBlock(counted))
@@ -47,7 +52,7 @@ final class DevPointerSweep: NSObject {
     typealias Handler = @convention(c) (AnyObject, Selector, NSEvent) -> Void
     let original = unsafeBitCast(method_getImplementation(method), to: Handler.self)
     let counted: @convention(block) (AnyObject, NSEvent) -> Void = { view, event in
-      bump()
+      if DevPointerSweep.sweeping(view as? NSView) { bump() }
       original(view, selector, event)
     }
     method_setImplementation(method, imp_implementationWithBlock(counted))
@@ -105,7 +110,8 @@ final class DevPointerSweep: NSObject {
     flags = (spec["control"] as? Bool) ?? true ? [.control] : []
     if let s = spec["scroll"] as? [String: Any], let every = (s["everyMs"] as? NSNumber)?.doubleValue, every > 0 {
       scroll = Scroll(
-        everyMs: every, gestureMs: (s["gestureMs"] as? NSNumber)?.doubleValue ?? 300, delta: (s["delta"] as? NSNumber)?.doubleValue ?? 8,
+        everyMs: max(16, every), gestureMs: (s["gestureMs"] as? NSNumber)?.doubleValue ?? 300,
+        delta: min(1000, max(-1000, (s["delta"] as? NSNumber)?.doubleValue ?? 8)),
         momentumMs: (s["momentumMs"] as? NSNumber)?.doubleValue ?? 0,
         sign: (s["sign"] as? NSNumber)?.doubleValue ?? 0, elastic: (s["elastic"] as? Bool) ?? false, at: (s["at"] as? NSNumber)?.doubleValue)
     } else {
@@ -113,14 +119,15 @@ final class DevPointerSweep: NSObject {
     }
     direct = (spec["direct"] as? Bool) ?? false
     track = (spec["track"] as? Bool) ?? false
-    scrollFirst = (spec["scrollFirst"] as? Bool) ?? false
+    scrollFirst = ((spec["scrollFirst"] as? Bool) ?? false) && direct
     self.promise = promise
     lastTick = started
   }
 
   static func start(windowId: String, spec: [String: Any], promise: Promise) {
     _ = countHover
-    guard running == nil, let window = WindowManager.shared.window(windowId) else {
+    let duration = (spec["durationMs"] as? NSNumber)?.doubleValue ?? 10000
+    guard running == nil, duration.isFinite, duration >= 0, let window = WindowManager.shared.window(windowId) else {
       promise.resolve(nil)
       return
     }
@@ -150,17 +157,19 @@ final class DevPointerSweep: NSObject {
       let select = NSSelectorFromString(quiet ? "ardia_setPointerOverrideQuietly:" : "ardia_setPointerOverride:")
       if let view = NSClassFromString("RCTView") as AnyObject?, view.responds(to: select) { _ = view.perform(select, with: NSValue(point: screen)) }
     }
-    if let moved = NSEvent.mouseEvent(
+    let closing = now >= until
+    if !closing, let moved = NSEvent.mouseEvent(
       with: .mouseMoved, location: windowPoint, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
     {
       NSApp.postEvent(moved, atStart: false)
     }
-    if scrollFirst, let scroll { postScroll(scroll, elapsed: elapsed, at: windowPoint) }
+    let scrolls: Scroll? = closing && !direct ? nil : scroll
+    if scrollFirst, let scrolls { postScroll(scrolls, elapsed: elapsed, at: windowPoint) }
     if track { trackAreas(at: windowPoint, now: now) }
-    if !scrollFirst, let scroll { postScroll(scroll, elapsed: elapsed, at: windowPoint) }
+    if !scrollFirst, let scrolls { postScroll(scrolls, elapsed: elapsed, at: windowPoint) }
     ticks.append([Date().timeIntervalSince1970 * 1000, Double(x), scrolledX(at: windowPoint), late])
-    guard now >= until else { return }
+    guard closing else { return }
     timer?.invalidate()
     timer = nil
     Self.running = nil
@@ -180,10 +189,10 @@ final class DevPointerSweep: NSObject {
   }
 
   private func postScroll(_ scroll: Scroll, elapsed: Double, at windowPoint: NSPoint) {
-    let index = Int(elapsed / scroll.everyMs)
-    let into = elapsed - Double(index) * scroll.everyMs
     if let at = scroll.at { return park(at: at, windowPoint: windowPoint) }
     if scroll.elastic { return stretch(elapsed: elapsed, at: windowPoint) }
+    let index = Int(elapsed / scroll.everyMs)
+    let into = elapsed - Double(index) * scroll.everyMs
     let direction: Double = scroll.sign != 0 ? scroll.sign : index % 2 == 0 ? 1 : -1
     let left = scroll.gestureMs + scroll.momentumMs - into
     let delta: Double
