@@ -192,6 +192,26 @@ test("the background carry leaves a blocked host's cookies behind and still carr
   });
 });
 
+test("a cookie block set after a carry applies to the next carry at once, not after the block cache expires", async () => {
+  const { setSiteSetting } = await import("../../platform/siteSettings.ts");
+  await withSites(twoLabelSites, async () => {
+    try {
+      const { tabId } = setup();
+      S().updateTab(tabId, { url: `${OK}/home` });
+      const page = chromiumPage({ cookies: [cookieOn("okc", "ok.app.test"), cookieOn("blkc", "blk.app.test")], storage: {} });
+      webviews.set(tabId, page);
+      await carrySignIn(tabId, `${OK}/home`, "webkit", null);
+      assert.deepEqual(names(webKit.cookies), ["blkc", "okc"]);
+      await setSiteSetting("", BLOCKED, "cookies", "block");
+      page.jar.cookies = [cookieOn("okc", "ok.app.test"), { ...cookieOn("blkc", "blk.app.test"), value: "changed" }];
+      await carrySignIn(tabId, `${OK}/home`, "webkit", null);
+      assert.equal(webKit.cookies.find((c) => c.name === "blkc").value, "blkc", "the newly blocked host's changed cookie stays in Chromium");
+    } finally {
+      stub.siteSettingsDb.delete(`\n${BLOCKED}`);
+    }
+  });
+});
+
 test("a switch carry leaves a blocked sibling's cookies behind in both directions", async () => {
   await withSites(twoLabelSites, async () => {
     try {

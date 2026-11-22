@@ -1,6 +1,6 @@
 import { exportWebKitCookies, readWebKitSiteData, type PageCookie, type SiteStorage, type StorageChange } from "../../platform/webkit";
 import type { PageEngine } from "../../platform/tabs";
-import { getSiteSettings } from "../../platform/siteSettings";
+import { getSiteSettings, onSiteSettingChange } from "../../platform/siteSettings";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { tabEngine } from "./engines";
@@ -51,6 +51,7 @@ export function liveTabs(s = store()): Live[] {
 export const openIn = (profile: string, site: string, engine: PageEngine) => liveTabs().some((l) => l.profile === profile && l.site === site && l.engine === engine);
 
 const blockCache = new Map<string, { at: number; blocked: boolean }>();
+onSiteSettingChange(() => blockCache.clear());
 
 async function cookiesBlocked(profile: string, origin: string): Promise<boolean> {
   const key = `${profile}|${origin}`;
