@@ -80,8 +80,9 @@ enum PluginFiles {
     SHA256.hash(data: Data("\(text)\u{0}\(folderId)".utf8)).map { String(format: "%02x", $0) }.joined()
   }
 
-  static func approvedFolder(_ path: String, folderId: String, approved: String) -> Result<OpenedFolder, FolderRefusal> {
-    guard let folder = openFolder(path) else { return .failure(FolderRefusal(reason: "its folder is missing")) }
+  static func approvedFolder(_ path: String, folderId: String, approved: String, identity: String? = nil) -> Result<OpenedFolder, FolderRefusal> {
+    guard let opened = openFolder(path) else { return .failure(FolderRefusal(reason: "its folder is missing")) }
+    let folder = identity.map { OpenedFolder(fd: opened.fd, path: opened.path, id: $0) } ?? opened
     guard folder.id == folderId else {
       folder.close()
       return .failure(FolderRefusal(reason: "its folder was replaced since you approved it"))
@@ -118,8 +119,8 @@ enum PluginFiles {
 
   static let maxPageFile = 10 << 20
 
-  static func readPageFile(_ path: String, folderId: String, approved: String, relative: String) -> Data? {
-    guard case .success(let folder) = approvedFolder(path, folderId: folderId, approved: approved) else { return nil }
+  static func readPageFile(_ path: String, folderId: String, approved: String, relative: String, identity: String? = nil) -> Data? {
+    guard case .success(let folder) = approvedFolder(path, folderId: folderId, approved: approved, identity: identity) else { return nil }
     defer { folder.close() }
     let fd = openBeneath(folder.fd, relative, flags: O_RDONLY | O_NONBLOCK)
     guard fd >= 0 else { return nil }
@@ -140,6 +141,31 @@ enum PluginFiles {
       data.append(contentsOf: chunk[0..<got])
       if data.count > limit { return nil }
     }
+  }
+
+  static let maxScriptEntry = 16 << 20
+  static let maxPluginText = 1 << 20
+
+  static func scriptEntry(_ relative: String, in folder: OpenedFolder) -> String? {
+    guard let parts = pathParts(relative) else { return nil }
+    let fd = openBeneath(folder.fd, relative, flags: O_RDONLY | O_NONBLOCK)
+    guard fd >= 0 else { return nil }
+    defer { Darwin.close(fd) }
+    var info = stat()
+    guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_size <= off_t(maxScriptEntry) else { return nil }
+    return parts.joined(separator: "/")
+  }
+
+  static func readText(_ relative: String, in folder: OpenedFolder, limit: Int = maxPluginText) -> Result<String, FolderRefusal> {
+    guard pathParts(relative) != nil else { return .failure(FolderRefusal(reason: "the path isn't a plain path inside the plugin's folder")) }
+    let fd = openBeneath(folder.fd, relative, flags: O_RDONLY | O_NONBLOCK)
+    if fd < 0 { return .failure(FolderRefusal(reason: errno == ELOOP ? "the path goes through a link" : "the file wasn't found")) }
+    defer { Darwin.close(fd) }
+    var info = stat()
+    guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .failure(FolderRefusal(reason: "the path isn't a file")) }
+    guard info.st_size <= off_t(limit), let data = readAll(fd, limit: limit) else { return .failure(FolderRefusal(reason: "the file is over \(limit >> 20) MB")) }
+    guard let text = String(data: data, encoding: .utf8) else { return .failure(FolderRefusal(reason: "the file isn't UTF-8 text")) }
+    return .success(text)
   }
 
   static func localProgram(_ relative: String, in folder: OpenedFolder) -> String? {

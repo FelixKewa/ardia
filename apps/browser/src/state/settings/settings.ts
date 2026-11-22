@@ -27,6 +27,7 @@ import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
+import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
@@ -54,11 +55,7 @@ const text = (d: string, synced = false): SettingSpec<string> => ({ default: d, 
 const width = (d: number): SettingSpec<number> => ({ default: d, valid: isWidth, synced: false, schema: WIDTH });
 const fraction = (d: number, synced = false): SettingSpec<number> => ({ default: d, valid: (v) => typeof v === "number" && v >= 0 && v <= 1, synced, schema: { type: "number", minimum: 0, maximum: 1 } });
 const oneOf = <const V extends readonly string[]>(values: V, d: V[number], synced = false): SettingSpec<V[number]> & { values: V } => ({
-  default: d,
-  values,
-  valid: (v) => values.includes(v as string),
-  synced,
-  schema: { type: "string", enum: values },
+  default: d, values, valid: (v) => values.includes(v as string), synced, schema: { type: "string", enum: values },
 });
 const shaped = <T,>(d: T, valid: (v: unknown) => boolean, schema: JsonSchema, synced = false): SettingSpec<T> => ({ default: d, valid, synced, schema });
 
@@ -81,7 +78,7 @@ export const SETTING_SPECS = {
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),
   sidebarSide: oneOf(["left", "right"], "left", SYNCED),
   autoHideTabs: flag(false, SYNCED),
-  hideToolbarWhileScrolling: flag(true, SYNCED),
+  hideToolbarWhileScrolling: flag(false, SYNCED),
   newTabPosition: oneOf(["top", "bottom", "nextToCurrent"], "bottom", SYNCED),
   newTabButtonPosition: oneOf(["top", "bottom"], "bottom", SYNCED),
   appLinksFirst: flag(false, SYNCED),
@@ -89,6 +86,7 @@ export const SETTING_SPECS = {
   newTabUrl: text("", SYNCED),
   warnBeforeClosingLastTab: flag(true, SYNCED),
   keepTopAppsRunning: flag(false, SYNCED),
+  tabReorderHaptics: flag(true, SYNCED),
   undoReopensClosedTab: flag(false, SYNCED),
   warnBeforeMovingTabsToProfile: flag(true, SYNCED),
   shareTabsAcrossWindows: flag(false),
@@ -112,8 +110,11 @@ export const SETTING_SPECS = {
   closedTopAppTiles: flag(true, SYNCED), topAppFolders: flag(true, SYNCED),
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
+  developerModeSites: shaped<Record<string, boolean>>({}, (v) => isRecordOf(v, (on) => typeof on === "boolean"), recordOf({ type: "boolean" }), SYNCED),
   autoPictureInPicture: flag(true, SYNCED),
   playingNowAcrossProfiles: flag(false, SYNCED),
+  sidebarMediaControls: flag(true, SYNCED),
+  commandScrollZoom: flag(true, SYNCED),
   blockAutoplayEverywhere: flag(false, SYNCED),
   blockNotificationRequests: flag(false, SYNCED),
   videoUpscaling: flag(true, SYNCED),
@@ -129,6 +130,7 @@ export const SETTING_SPECS = {
   selectedTopApp: oneOf(["ring", "fill", "outline"], "ring", SYNCED),
   elementOutlines: flag(true, SYNCED),
   interfaceStyle: oneOf(["glass", "classic"], "glass", SYNCED),
+  windowButtons: oneOf(["native", "trafficLights", "hidden"], "native"),
   glassTintWithTheme: flag(false, SYNCED),
   glassTintAmount: fraction(0.8, SYNCED),
   fadeUnloadedTabs: flag(false, SYNCED),
@@ -160,16 +162,28 @@ export const SETTING_SPECS = {
   pageFrameZeroWhenTabsHidden: flag(false, SYNCED),
   commandBarPlacement: oneOf(["field", "centred", "centredOnClick"], "field", SYNCED),
   commandBarStart: shaped<CommandBarStart>({}, isCommandBarStart, COMMAND_BAR_START_SCHEMA),
+  pressMotion: oneOf(PRESS_MOTIONS, "still"),
+  folderStyle: oneOf(["profile", "neutral"], "profile"),
+  liveFolderIcon: oneOf(["folder", "service"], "folder"),
   spacesFollowAppearance: flag(true),
+  adaptTextToColor: flag(true, SYNCED),
   defaultProfileId: text(DEFAULT_PROFILE_ID),
   showProfileDots: flag(true, SYNCED),
-  profileSwitcherIcons: flag(false, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
+  mouseShortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   openLinksInLittleArdia: flag(true),
+  littleArdiaOpensNewTabLinks: flag(true, SYNCED),
+  littleArdiaShortcutFromAnyApp: flag(false),
   littleArdiaSize: shaped<[number, number]>([900, 640], (v) => Array.isArray(v) && v.length === 2 && v.every(isWidth), { type: "array", prefixItems: [WIDTH, WIDTH], minItems: 2, maxItems: 2 }),
+  engineMode: oneOf(["automatic", "chromium", "webkit"], "automatic"),
   pageEngine: oneOf(["chromium", "webkit"], "chromium"),
   websiteEngines: shaped<Record<string, "chromium" | "webkit">>({}, (v) => isRecordOf(v, (e) => e === "chromium" || e === "webkit"), recordOf({ type: "string", enum: ["chromium", "webkit"] })),
   protectedVideoInWebKit: flag(true),
+  offerWebKitForProtectedVideo: flag(true),
+  engineSwitchKeepsPage: flag(true),
+  engineSwitchAsksAboutUnsavedWork: flag(true),
+  engineSwitchCarriesSiteData: flag(true),
+  webKitFraudWarnings: flag(false),
   launchActions: shaped<string[]>([], (v) => isStringList(v) && v.length <= 20, { type: "array", items: { type: "string" }, maxItems: 20 }),
   omniboxProviders: shaped<ProviderEntry[]>([], isProviderEntryList, PROVIDERS_SCHEMA),
   readerTextSize: oneOf(READER_SIZE_NAMES, "medium", SYNCED),
@@ -205,6 +219,7 @@ export function parseSettings(raw: unknown): Settings {
   const saved = isFields(raw) ? raw : {};
   const value = (key: SettingKey) => (SETTING_SPECS[key].valid(saved[key]) ? saved[key] : SETTING_SPECS[key].default);
   const settings = Object.fromEntries(SETTING_KEYS.map((key) => [key, value(key)])) as Settings;
+  if (saved.hideBookmarksBarImport === true) settings.bookmarksImportDismissed = true;
   return { ...settings, ...withLinkKeysApart(settings, {}) };
 }
 
@@ -215,10 +230,7 @@ export function parseSettingsMeta(raw: unknown): SettingsMeta {
 
 export const validSettingValue = (key: SettingKey, value: unknown) => SETTING_SPECS[key].valid(value);
 
-const engineCache = new WeakMap<
-  CustomSearchEngine[],
-  { legacyUrl: string; extension: ExtensionSearchEngine[]; engines: SearchEngine[] }
->();
+const engineCache = new WeakMap<CustomSearchEngine[], { legacyUrl: string; extension: ExtensionSearchEngine[]; engines: SearchEngine[] }>();
 
 export function searchEngines(settings: Settings): SearchEngine[] {
   const custom = settings.customSearchEngines;
@@ -269,14 +281,14 @@ function withPageFrameDependencies(settings: Settings, patch: Partial<Settings>)
   return patch;
 }
 
-export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>): Pick<BrowserState, "settings" | "settingsMeta"> {
+export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>, { inferring = false } = {}): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
   if (patch.autoHideTabs !== undefined && patch.autoHideTabs !== s.settings.autoHideTabs) noteAutoHideTabsChosen();
   if (patch.minimalismMode !== undefined && patch.minimalismMode !== s.settings.minimalismMode) noteMinimalismToggled(patch.minimalismMode);
   patch = withPageFrameDependencies(s.settings, patch);
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
-  const left = inferred.filter((k) => !(k in patch));
+  const left = inferring ? [...new Set([...inferred, ...Object.keys(patch)])] : inferred.filter((k) => !(k in patch));
   const settingsMeta = added.length || left.length !== inferred.length ? { chosen: added.length ? [...chosen, ...added] : chosen, inferred: left } : s.settingsMeta;
   return { settings: next, settingsMeta };
 }
@@ -334,7 +346,7 @@ function windowsFollowingAutoHideTabs(s: Pick<BrowserState, "settings" | "window
 export type SettingsSlice = {
   settings: Settings;
   settingsMeta: SettingsMeta;
-  updateSettings(patch: Partial<Settings>, options?: { fromSync?: boolean }): void;
+  updateSettings(patch: Partial<Settings>, options?: { fromSync?: boolean; inferred?: boolean }): void;
   setSearchEngine(id: string): void;
   addCustomEngine(input: EngineInput): { id: string } | { error: string };
   updateCustomEngine(id: string, input: EngineInput): string | null;
@@ -347,11 +359,11 @@ const newEngineId = () => `engine-${Date.now().toString(36)}-${(++engineCounter)
 export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSlice> = (set, get) => ({
   settings: DEFAULT_SETTINGS,
   settingsMeta: NO_SETTINGS_META,
-  updateSettings(patch, { fromSync = false } = {}) {
+  updateSettings(patch, { fromSync = false, inferred = false } = {}) {
     set((s) => {
       const windows = windowsFollowingAutoHideTabs(s, patch);
       if (fromSync) return { settings: { ...s.settings, ...withPageFrameDependencies(s.settings, patch) }, ...windows };
-      return { ...choose(s, withLinkKeysApart(s.settings, patch)), ...windows };
+      return { ...choose(s, withLinkKeysApart(s.settings, patch), { inferring: inferred }), ...windows };
     });
   },
 

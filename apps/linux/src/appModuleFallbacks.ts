@@ -60,7 +60,7 @@ const REPORT_FALLBACKS: Record<string, Fallback> = {
 
 const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
   ArdiaApp: APP_FALLBACKS,
-  ArdiaKeychain: { get: refuse("The keychain"), set: refuse("The keychain"), delete: refuse("The keychain") },
+  ArdiaKeychain: { get: refuse("The keychain"), read: refuse("The keychain"), set: refuse("The keychain"), delete: refuse("The keychain") },
   ArdiaTranslate: {
     userLanguages: () => [],
     languageName: (identifier) => identifier,
@@ -85,9 +85,24 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     event: now(undefined),
     call: now(undefined),
     remove: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    linkPrograms: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    unlinkPrograms: answer({ ok: true }),
+    sweepPrograms: answer(undefined),
+    takeAfterUpdateQuitStops: answer({ consent: "", exitedOnTerm: 0, killed: 0 }),
+    setAfterUpdateQuitConsent: now(undefined),
+    legacyProgramsInstalled: answer([]),
+    programRegistry: answer({ claims: {}, failClosed: false, legacyOwners: [] }),
     revealLog: now(undefined),
     revealFolder: now(undefined),
     devSnapshotPage: answer(false),
+    officialPlugins: answer(null),
+    fetchOfficial: answer({ ok: false, code: "unsupported", reason: "plugins aren't available on Linux yet" }),
+    cancelOfficialFetch: now(undefined),
+    promoteOfficial: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    hostFetch: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    storageRead: answer({ status: "error", reason: "plugins aren't available on Linux yet" }),
+    storageWrite: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    readPluginFile: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
   },
   ArdiaAutomation: { start: answer({ state: "off", generation: 0, path: "", reason: "the control socket is unavailable on Linux" }), stop: answer(undefined) },
   ArdiaSystemSignals: {
@@ -100,7 +115,7 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
   },
 };
 
-const DEVELOPER_MODULES = new Set(["ArdiaApp", "ArdiaMagnifyArea", "ArdiaFileDrop", "ArdiaLocation"]);
+const DEVELOPER_MODULES = new Set(["ArdiaApp", "ArdiaMagnifyArea", "ArdiaPeekStage", "ArdiaFileDrop", "ArdiaLocation"]);
 
 export function appModuleFallback(host: ArdiaHost, name: string, method: string): Fallback | undefined {
   if (hostSupports(`${name}.${method}`, host)) return undefined;

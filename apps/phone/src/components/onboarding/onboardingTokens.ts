@@ -1,5 +1,5 @@
 import { Easing } from "react-native-reanimated";
-import { capsule, font, iPhoneOr, settingsLayout, space, spring } from "../ui";
+import { font, iPhoneOr, settingsLayout, shape, space } from "../ui";
 import type { Motion } from "../ui/motion";
 
 type Curve = readonly [number, number, number, number];
@@ -11,6 +11,10 @@ export const onboardingLayout = {
   welcomeTitle: iPhoneOr<TextSize>(font.title, font.hero),
   welcomeSubtitle: iPhoneOr<TextSize>(font.body, font.title3),
   welcomeIconBottom: iPhoneOr(space.xxl, 0),
+  heroTile: 104,
+  heroGlyph: 50,
+  heroRadius: 28,
+  heroGap: space.xxl,
   welcomeGap: iPhoneOr(0, space.xxl),
   welcomeActionsTop: iPhoneOr(space.xxl, 0),
   illustrationInset: space.l,
@@ -21,16 +25,21 @@ export const onboardingLayout = {
   actionsInset: space.xl + space.xs,
   actionsBottom: space.m,
   actionsGap: space.s,
-  rowHeight: 50,
+  rowHeight: iPhoneOr(56, 50),
   rowInset: space.l,
   cardInset: space.xs,
-  cardRadius: 20,
-  cardFill: 0.9,
-  cardShadow: "0px 6px 32px rgba(0, 0, 0, 0.06)",
+  cardRadius: shape.card,
+  cardShadow: "0px 6px 28px rgba(0, 0, 0, 0.07)",
+  sketchScale: iPhoneOr(1.22, 1),
   rowIcons: iPhoneOr(false, true),
   tipIcons: iPhoneOr(false, true),
   secondaryHeight: 44,
-  buttonRadius: (height: number) => iPhoneOr(capsule(height), settingsLayout.primaryButton.radius),
+  buttonRadius: iPhoneOr<number>(shape.card, settingsLayout.primaryButton.radius),
+} as const;
+
+export const onboardingInk = {
+  light: { welcome: "#FFFFFF", steps: "#F2F2F7", subtitle: "rgba(60,60,67,0.88)" },
+  dark: { welcome: "#000000", steps: "#000000", subtitle: "rgba(235,235,245,0.8)" },
 } as const;
 
 export const onboardingCurves = {
@@ -41,15 +50,13 @@ export const onboardingCurves = {
 
 const timing = (duration: number, curve: Curve): Motion => ({ timing: { duration, easing: Easing.bezier(...curve) } });
 
-const composeFade = (duration: number): Motion => ({ timing: { duration, easing: Easing.inOut(Easing.quad) } });
-
 export const onboardingMotion = {
-  stepTravel: iPhoneOr(72, 60),
-  riseDelayMs: iPhoneOr(50, 100),
-  step: iPhoneOr<Motion>(timing(300, onboardingCurves.step), { spring: spring(0.42, 0.9) }),
-  stepReduced: iPhoneOr(timing(150, onboardingCurves.easeOut), composeFade(200)),
-  backdrop: iPhoneOr(timing(300, onboardingCurves.step), composeFade(300)),
-  backdropReduced: iPhoneOr(timing(150, onboardingCurves.easeOut), composeFade(300)),
-  rise: iPhoneOr<Motion>(timing(360, onboardingCurves.rise), { spring: spring(0.7, 0.7) }),
-  riseReduced: iPhoneOr(timing(300, onboardingCurves.easeOut), composeFade(200)),
+  stepTravel: 72,
+  riseDelayMs: 50,
+  step: timing(300, onboardingCurves.step),
+  stepReduced: timing(150, onboardingCurves.easeOut),
+  backdrop: timing(300, onboardingCurves.step),
+  backdropReduced: timing(150, onboardingCurves.easeOut),
+  rise: timing(360, onboardingCurves.rise),
+  riseReduced: timing(300, onboardingCurves.easeOut),
 } as const;

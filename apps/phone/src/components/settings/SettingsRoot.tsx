@@ -7,16 +7,22 @@ import { markSheetFromSettings, openArchive, openSpaces } from "../../state/brow
 import { useSyncEnabled, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName, syncRowSubtitle } from "../../state/sync/syncRules";
 import { showOnboardingFromSettings } from "../../state/onboarding/store";
-import { appVersion, exportOpenTabs, setAppLinks, setArchiveInterval, setAutoOpenKeyboard, setSearchSuggestions, useEngines } from "../../state/settings/actions";
+import { appVersion, exportOpenTabs, setAppLinks, setArchiveInterval, setAutoOpenKeyboard, setDynamicColors, setMaterialYou, setSearchSuggestions, useEngines } from "../../state/settings/actions";
+import { wallpaperColorsEnabled } from "../../lib/material/schemePick";
 import { usePreferences } from "../../state/settings/hooks";
 import { closeSettings, pushSettings } from "../../state/settings/nav";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } from "../../state/tabs/tabModels";
-import { capsule, duration, font, settingsLayout, settingsTint, space, Symbol, useDesign, useTheme, useWarningInk } from "../ui";
+import { controlRadius, duration, font, materialYouOffered, settingsLayout, settingsTint, space, Symbol, useDesign, useTheme, useWarningInk } from "../ui";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
 import { AppearanceRow, ColorRow, MatchMyMac } from "./AppearancePage";
 import { BarButton, Group, IconTile, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
 import { syncOffered } from "../../state/sync/offer";
+import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
+import { browseForMeRowValue } from "../../state/browseForMe/copy";
+import { pageSummaryChoiceOffered, refreshPageSummaryProvider, usePageSummaryProvider } from "../../state/pageSummary/store";
+import { pageSummaryRowValue } from "../../state/pageSummary/copy";
+import { refreshPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 
 const APP_LINKS = [
   { id: "ardia" as const, title: "Ardia" },
@@ -42,9 +48,22 @@ export function SettingsRoot() {
   const synced = useSyncView().search;
   const engineName = syncEnabled && synced ? syncedEngineName(synced, engines) : (engines.find((engine) => engine.id === engineId)?.name ?? "");
   const stacks = useWindowDimensions().fontScale >= settingsLayout.accessibilityFontScale;
-  const redesigned = useDesign() === "redesigned";
+  const design = useDesign();
+  const redesigned = design === "redesigned";
+  const material = design === "material";
+  const dynamicColors = wallpaperColorsEnabled(usePreferences((p) => p.colorChoice), usePreferences((p) => p.dynamicColors));
+  const chatGPT = useChatGPTConnected();
+  const summaryProvider = usePageSummaryProvider();
+  const summaries = usePageSummariesEnabled();
+  const offersBrowseForMe = browseForMeOffered();
+  const offersSummaryChoice = pageSummaryChoiceOffered();
+  useEffect(() => {
+    void refreshChatGPTConnected();
+    void refreshPageSummaryProvider();
+    void refreshPageSummariesEnabled();
+  }, []);
   return (
-    <SettingsPage title="Settings" trailing={<BarButton title="Done" emphasized onPress={closeSettings} />}>
+    <SettingsPage title="Settings" mediumAppBar onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title="Done" emphasized onPress={closeSettings} />}>
       {syncOffered() ? (
         <Group>
           <SyncCard stacks={stacks} />
@@ -78,35 +97,44 @@ export function SettingsRoot() {
           </Pressable>
         ) : null}
       </View>
-      {redesigned ? (
-        <Group>
+      <Group header="General">
+        {redesigned ? (
           <AppearanceRow />
-        </Group>
-      ) : (
-        <Group>
-          <ColorRow />
-          {syncEnabled ? <MatchMyMac /> : null}
-        </Group>
-      )}
-      <Group>
-        <NavRow title="Site Settings" icon="globe" tint={settingsTint.neutral} divider={offersDefault} onPress={() => pushSettings({ page: "siteSettings" })} />
-        {offersDefault ? <NavRow title="Default Browser" icon="safariFill" tint={settingsTint.defaultBrowser} onPress={() => pushSettings({ page: "defaultBrowser" })} /> : null}
+        ) : material ? (
+          <>
+            <ToggleRow title="Dynamic Colors" icon="paintpaletteFill" tint={settingsTint.neutral} value={dynamicColors} divider onChange={setDynamicColors} />
+            {!dynamicColors ? <ColorRow plainIcon /> : null}
+          </>
+        ) : (
+          <>
+            <ColorRow />
+            {syncEnabled ? <MatchMyMac /> : null}
+          </>
+        )}
+        {material ? null : <View style={[styles.divider, { backgroundColor: theme.separator }]} />}
+        {materialYouOffered() ? <ToggleRow title="Material You" icon="handDrawFill" tint={settingsTint.nightShade} value={material} divider onChange={setMaterialYou} /> : null}
+        <NavRow title="Site Settings" icon="globe" tint={settingsTint.neutral} divider onPress={() => pushSettings({ page: "siteSettings" })} />
+        {offersDefault ? <NavRow title="Default Browser" icon="safariFill" tint={settingsTint.defaultBrowser} divider onPress={() => pushSettings({ page: "defaultBrowser" })} /> : null}
+        <PickerRow title="Open App Links In" icon="arrowUpForwardAppFill" tint={settingsTint.appLinks} options={APP_LINKS} selected={appLinks} onSelect={setAppLinks} />
       </Group>
-      <Group>
+      <Group header="Search">
         <NavRow title="Search Engine" icon="magnifyingglass" tint={settingsTint.search} value={engineName} divider onPress={() => pushSettings({ page: "searchEngine" })} />
         <ToggleRow title="Search Suggestions" icon="textMagnifyingglass" tint={settingsTint.blue} value={suggestions} divider onChange={setSearchSuggestions} />
         <ToggleRow title="Auto-Open Keyboard" icon="keyboardFill" tint={settingsTint.keyboard} value={keyboard} onChange={setAutoOpenKeyboard} />
       </Group>
-      <Group>
+      <Group header="Tabs">
         <PickerRow title="Archive Inactive Tabs" icon="archivebox" tint={settingsTint.archive} options={INTERVALS} selected={interval} divider onSelect={setArchiveInterval} />
-        <PickerRow title="Open App Links In" icon="arrowUpForwardAppFill" tint={settingsTint.appLinks} options={APP_LINKS} selected={appLinks} divider onSelect={setAppLinks} />
-        <NavRow title="Clear Browsing Data" icon="eraserFill" tint={settingsTint.clearData} divider onPress={() => pushSettings({ page: "clearData" })} />
-        <Pressable accessibilityRole="button" onPress={exportOpenTabs} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
-          <IconTile icon="squareAndArrowUp" tint={settingsTint.export} />
-          <Text style={[font.body, { color: theme.label }]}>Export Open Tabs</Text>
-        </Pressable>
+        {material ? (
+          <NavRow title="Export Open Tabs" icon="squareAndArrowUp" tint={settingsTint.export} onPress={exportOpenTabs} />
+        ) : (
+          <Pressable accessibilityRole="button" onPress={exportOpenTabs} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
+            <IconTile icon="squareAndArrowUp" tint={settingsTint.export} />
+            <Text style={[font.body, { color: theme.label }]}>Export Open Tabs</Text>
+          </Pressable>
+        )}
       </Group>
-      <Group footer={PHONE_SHARING_COPY.summary}>
+      <Group header="Privacy">
+        <NavRow title="Clear Browsing Data" icon="eraserFill" tint={settingsTint.clearData} divider onPress={() => pushSettings({ page: "clearData" })} />
         <ToggleRow
           title={PHONE_SHARING_COPY.toggle}
           icon="checkmarkShield"
@@ -117,12 +145,23 @@ export function SettingsRoot() {
         />
         <NavRow title={PHONE_SHARING_COPY.whatsSent} icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "whatsSent" })} />
       </Group>
-      <Group>
-        <Pressable accessibilityRole="button" onPress={showOnboardingFromSettings} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
+      {offersBrowseForMe || offersSummaryChoice ? (
+        <Group header="Experimental">
+          {offersBrowseForMe ? (
+            <NavRow title="Browse for Me" icon="sparkleMagnifyingglass" tint={settingsTint.nightShade} value={browseForMeRowValue(chatGPT)} divider={offersSummaryChoice} onPress={() => pushSettings({ page: "browseForMe" })} />
+          ) : null}
+          {offersSummaryChoice ? (
+            <NavRow title="Pinch to Summarize" icon="sparkles" tint={settingsTint.nightShade} value={pageSummaryRowValue(summaries, summaryProvider, chatGPT)} onPress={() => pushSettings({ page: "pageSummary" })} />
+          ) : null}
+        </Group>
+      ) : null}
+      <Group header="About">
+        {material ? <NavRow title="Show Onboarding" icon="handWave" onPress={showOnboardingFromSettings} /> : null}
+        {material ? null : <Pressable accessibilityRole="button" onPress={showOnboardingFromSettings} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
           <IconTile icon="handWave" tint={settingsTint.onboarding} />
           <Text style={[font.body, { color: theme.label }]}>Show Onboarding</Text>
-        </Pressable>
-        <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+        </Pressable>}
+        {material ? null : <View style={[styles.divider, { backgroundColor: theme.separator }]} />}
         <NavRow title="About Ardia" icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "about" })} />
       </Group>
       <Text style={[font.footnote, styles.centered, { color: theme.secondaryLabel }]}>{appVersion()}</Text>
@@ -169,7 +208,7 @@ function SyncCard({ stacks }: { stacks: boolean }) {
 const styles = StyleSheet.create({
   shortcuts: { paddingHorizontal: space.l, gap: space.s },
   fill: { flex: 1 },
-  shortcut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.s, minHeight: 48, borderRadius: capsule(48) },
+  shortcut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.s, minHeight: 48, borderRadius: controlRadius(48), borderCurve: "continuous" },
   medium: { fontWeight: "500" },
   bold: { fontWeight: "600" },
   syncCard: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m },

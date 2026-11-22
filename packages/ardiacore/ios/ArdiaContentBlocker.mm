@@ -68,6 +68,16 @@ void WhenDefaultSettled(void (^then)(void));
 
 namespace ardia_content_blocker {
 
+void ForgetIfGone(NSString *profile) {
+  if (![LoadedProfiles() containsObject:profile]) return;
+  ArdiaCoreProfile *now = ardia_host::LoadedProfile(profile);
+  if (now && now == [LoadedInto() objectForKey:profile] && !ardia_host::IsDeletedProfile(profile)) return;
+  [LoadedProfiles() removeObject:profile];
+  [LoadedInto() removeObjectForKey:profile];
+  [Pages()[profile] fail:@"profile gone"];
+  [Pages() removeObjectForKey:profile];
+}
+
 void LoadIntoProfile(NSString *profile, void (^then)(NSString *error)) {
   then = [then copy];
   StartPreparing();
@@ -128,14 +138,8 @@ NSString *const kFollow =
      "})";
 
 void ForgetGoneProfiles() {
-  for (NSString *profile in LoadedProfiles().array) {
-    ArdiaCoreProfile *now = ardia_host::LoadedProfile(profile);
-    if (now && now == [LoadedInto() objectForKey:profile] && !ardia_host::IsDeletedProfile(profile)) continue;
-    [LoadedProfiles() removeObject:profile];
-    [LoadedInto() removeObjectForKey:profile];
-    [Pages()[profile] fail:@"profile gone"];
-    [Pages() removeObjectForKey:profile];
-  }
+  NSArray<NSString *> *loaded = [LoadedProfiles().array copy];
+  for (NSString *profile in loaded) ForgetIfGone(profile);
 }
 
 void FollowDefault(NSArray<NSString *> *profiles, void (^done)(NSString *error)) {
@@ -155,7 +159,7 @@ void FollowDefault(NSArray<NSString *> *profiles, void (^done)(NSString *error))
         const bool gone = !ardia_host::LoadedProfile(profile) || ardia_host::IsDeletedProfile(profile);
         if (!gone) failed = failed ?: error;
         dispatch_group_leave(group);
-      });
+      }, false);
     }
     dispatch_group_notify(group, dispatch_get_main_queue(), ^{ done(failed); });
   });
@@ -504,6 +508,13 @@ NSArray<NSString *> *Strings(id value) {
   });
 }
 
++ (void)userFilters:(void (^)(NSDictionary<NSString *, id> *, NSString *))completion {
+  NSString *script = @"send({what: 'readUserFilters'}).then((u) => ({content: typeof u.content === 'string' ? u.content : '', enabled: u.enabled !== false, trusted: !!u.trusted}))";
+  Call(kProfile, script, ^(id value, NSString *error) {
+    completion([value isKindOfClass:NSDictionary.class] ? value : nil, error ?: ([value isKindOfClass:NSDictionary.class] ? nil : @"no user filters"));
+  });
+}
+
 + (void)hiddenElementsInProfile:(NSString *)profile completion:(void (^)(NSArray<NSString *> *, NSString *))completion {
   Call(ardia_host::OriginalProfileName(profile), WithHidingRules(kReadHidden), ^(id filters, NSString *error) {
     completion(error ? nil : Strings(filters), error);
@@ -513,12 +524,18 @@ NSArray<NSString *> *Strings(id value) {
 + (void)hideElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *))completion {
   if (ardia_host::IsPrivateProfile(profile)) return completion(@"a private window keeps its hidden elements for the session");
   if (!filters.count) return completion(nil);
-  Call(profile, WithHidingRules(ScriptWith(kHide, @[ filters ])), ^(id, NSString *error) { completion(error); });
+  Call(profile, WithHidingRules(ScriptWith(kHide, @[ filters ])), ^(id, NSString *error) {
+    if (!error) Publish(@{@"userFilters" : @YES});
+    completion(error);
+  });
 }
 
 + (void)restoreElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *))completion {
   if (!filters.count) return completion(nil);
-  Call(ardia_host::OriginalProfileName(profile), WithHidingRules(ScriptWith(kRestore, @[ filters ])), ^(id, NSString *error) { completion(error); });
+  Call(ardia_host::OriginalProfileName(profile), WithHidingRules(ScriptWith(kRestore, @[ filters ])), ^(id, NSString *error) {
+    if (!error) Publish(@{@"userFilters" : @YES});
+    completion(error);
+  });
 }
 
 + (void)devFailNextMessage {

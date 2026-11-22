@@ -8,6 +8,8 @@ import type {
   PageRequestAnswer,
   PageSetup,
   PageSnapshot,
+  RefusedSnapshot,
+  PageSummaryProvider,
   PageScrollPosition,
   PageState,
   PageToneInsets,
@@ -70,11 +72,17 @@ type PagesNative = {
   download(pageId: string, url: string): Promise<void>;
   readableContent(pageId: string): Promise<ReadableContent | null>;
   print?(pageId: string): Promise<boolean>;
+  summarizePage?(pageId: string): Promise<boolean>;
+  dismissPageSummaries?(): Promise<void>;
+  pageSummariesEnabled?(): Promise<boolean>;
+  setPageSummariesEnabled?(enabled: boolean): Promise<boolean>;
+  pageSummaryProvider?(): Promise<string>;
+  setPageSummaryProvider?(provider: PageSummaryProvider): Promise<string>;
   translation?(): Promise<PageTranslationState>;
   translationUrl?(pageUrl: string): Promise<string | null>;
   confirmTranslation?(): Promise<void>;
   presentSystemFind?(pageId: string, text: string | null): Promise<boolean>;
-  snapshot(pageId: string, options: { maxWidth?: number; quality?: number; coveredInsets?: [number, number] }): Promise<PageSnapshot | null>;
+  snapshot(pageId: string, options: { maxWidth?: number; quality?: number; coveredInsets?: [number, number] }): Promise<PageSnapshot | RefusedSnapshot | null>;
   loadHtml(pageId: string, html: string, baseUrl: string): Promise<void>;
   scrollPosition(pageId: string): Promise<PageScrollPosition | null>;
   evaluate(pageId: string, script: string): Promise<string | null>;
@@ -90,6 +98,7 @@ type PagesNative = {
   endPrivateSession(): Promise<void>;
   nightShade(host?: string | null, isPrivate?: boolean): Promise<NightShade>;
   setNightShade(mode: NightShadeMode | null, host?: string | null, isPrivate?: boolean): Promise<void>;
+  forgetNightShadeVerdicts?(since: number | null): Promise<void>;
   opensLinksInApps(host: string): Promise<boolean>;
   setOpensLinksInApps(host: string, opens: boolean | null): Promise<void>;
   siteOpensLinksInApps?(host: string): Promise<boolean | null>;
@@ -159,6 +168,15 @@ export const pages = {
     native().revokeSitePermission?.(origin, permission ?? null) ?? Promise.resolve(false),
   print: (pageId: string): Promise<boolean> => native().print?.(pageId) ?? Promise.resolve(false),
   canPrint: (): boolean => typeof native().print === "function",
+  summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),
+  canSummarize: (): boolean => typeof native().summarizePage === "function",
+  dismissSummaries: (): Promise<void> => native().dismissPageSummaries?.() ?? Promise.resolve(),
+  switchesSummaries: (): boolean => typeof native().setPageSummariesEnabled === "function",
+  summariesEnabled: async (): Promise<boolean> => (await native().pageSummariesEnabled?.()) === true,
+  setSummariesEnabled: async (enabled: boolean): Promise<boolean> => (await native().setPageSummariesEnabled?.(enabled)) === true,
+  choosesSummaryProvider: (): boolean => typeof native().setPageSummaryProvider === "function",
+  summaryProvider: async (): Promise<PageSummaryProvider> => ((await native().pageSummaryProvider?.()) === "chatgpt" ? "chatgpt" : "on_device"),
+  setSummaryProvider: async (provider: PageSummaryProvider): Promise<PageSummaryProvider> => ((await native().setPageSummaryProvider?.(provider)) === "chatgpt" ? "chatgpt" : "on_device"),
   translation: (): Promise<PageTranslationState | null> => native().translation?.() ?? Promise.resolve(null),
   translationUrl: (pageUrl: string): Promise<string | null> => native().translationUrl?.(pageUrl) ?? Promise.resolve(null),
   confirmTranslation: (): Promise<void> => native().confirmTranslation?.() ?? Promise.resolve(),
@@ -185,6 +203,9 @@ export const pages = {
   endPrivateSession: () => native().endPrivateSession(),
   nightShade: (host?: string | null, isPrivate = false) => native().nightShade(host ?? null, isPrivate),
   setNightShade: (mode: NightShadeMode | null, host?: string | null, isPrivate = false) => native().setNightShade(mode, host ?? null, isPrivate),
+  forgetNightShadeVerdicts: async (since: number | null): Promise<void> => {
+    await native().forgetNightShadeVerdicts?.(since);
+  },
   opensLinksInApps: (host: string) => native().opensLinksInApps(host),
   setOpensLinksInApps: (host: string, opens: boolean | null) => native().setOpensLinksInApps(host, opens),
   siteOpensLinksInApps: async (host: string): Promise<boolean | null> => (await native().siteOpensLinksInApps?.(host)) ?? null,

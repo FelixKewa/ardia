@@ -16,6 +16,8 @@ type NativeProps = ViewProps & {
   isPrivate?: boolean;
   savedState?: string;
   toneInsets?: [number, number];
+  bottomInsetTransitionMs?: number;
+  summaryBottomInset?: number;
   obscuredInsets?: [number, number];
   obscuredColors?: [NativeColor | null, NativeColor | null];
   topClearance?: number;
@@ -41,7 +43,7 @@ export const pageObscuresInsets = () => obscuresInsets;
 export const pageReportsDrawn = () => reportsDrawn;
 
 export const PageView = forwardRef<PageViewHandle, PageViewProps>(function PageView(props, ref) {
-  const { onPageState, onPageTone, onPageError, onPageDrawn, onPageCoverHidden, onSwipedPastHistory, coverNativeId, toneInsets, obscuredInsets, obscuredColors, surfaceColor, ...rest } = props;
+  const { onPageState, onPageTone, onPageError, onPageDrawn, onPageCoverHidden, onSwipedPastHistory, coverNativeId, toneInsets, bottomInsetTransitionMs, summaryBottomInset, obscuredInsets, obscuredColors, surfaceColor, ...rest } = props;
   const native = useRef<NativeHandle>(null);
   useImperativeHandle(
     ref,
@@ -73,6 +75,7 @@ export const PageView = forwardRef<PageViewHandle, PageViewProps>(function PageV
   return (
     <NativePageView
       {...rest}
+      {...(Platform.OS === "android" ? { bottomInsetTransitionMs, summaryBottomInset } : {})}
       ref={native}
       toneInsets={toneInsets ? [toneInsets.top, toneInsets.bottom] : undefined}
       obscuredInsets={obscuresInsets && obscuredInsets ? [obscuredInsets.top, obscuredInsets.bottom] : undefined}

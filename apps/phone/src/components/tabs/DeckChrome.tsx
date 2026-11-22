@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { capsule, font, space, SystemGlyph, tabsInk, tabsLayout, useTheme } from "../ui";
+import { capsule, font, IncognitoSpecs, space, tabsInk, tabsLayout, useTheme } from "../ui";
 
 export function deckEmptyWords(searching: boolean, incognito: boolean): { title: string; detail: string | null } {
   if (searching) return { title: "No Matching Tabs", detail: null };
@@ -17,7 +17,7 @@ export function DeckEmpty({ centerY, showsArchive, onArchive, searching = false,
       {words.detail ? <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{words.detail}</Text> : null}
       {showsArchive && !searching && !incognito ? (
         <Pressable accessibilityRole="button" onPress={onArchive} style={styles.archive}>
-          <Text style={[font.subheadline, styles.bold, { color: theme.formAccent }]}>Open Archive</Text>
+          <Text style={[font.subheadline, styles.bold, { color: theme.spaceAccentInk }]}>Open Archive</Text>
         </Pressable>
       ) : null}
     </View>
@@ -33,9 +33,9 @@ export function IncognitoChip({ count, top, onPress }: { count: number; top: num
         accessibilityLabel={`Incognito, ${count} ${count === 1 ? "tab" : "tabs"}`}
         accessibilityHint="Shows the option to close incognito tabs."
         onPress={onPress}
-        style={[styles.chip, { backgroundColor: tabsInk.incognitoCard, borderRadius: capsule(tabsLayout.chipHeight) }]}
+        style={[styles.chip, { backgroundColor: tabsInk.incognitoOnLight, borderRadius: capsule(tabsLayout.chipHeight) }]}
       >
-        <SystemGlyph systemName="eyes" pointSize={tabsLayout.eyesChip} weight="semibold" fitted name="eyes" size={16} color={tabsInk.onDark} />
+        <IncognitoSpecs size={tabsLayout.specsChip} color={tabsInk.onDark} />
         <Text style={[font.subheadline, styles.bold, styles.chipText]}>Incognito</Text>
         <Text style={[font.subheadline, styles.bold, { color: tabsInk.onDarkChip }]}>{count}</Text>
       </Pressable>

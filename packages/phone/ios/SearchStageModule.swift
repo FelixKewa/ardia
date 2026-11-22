@@ -51,7 +51,10 @@ final class SearchStageView: ExpoView {
   private var startWaiters: [() -> Void] = []
   var fieldCenter = BrowseLayout.stageFieldCenter(fieldHeight: BrowseLayout.searchFieldHeight)
   var commandTop: CGFloat?
+  var landsDirectly = false
   var look = StageMorphLook()
+  var corners = StageCorners()
+  var cardPlace = StageCardPlace()
 
   private let keyboardSentinel = UIView()
   private var keyboard: StageKeyboardTracker?
@@ -196,7 +199,7 @@ final class SearchStageView: ExpoView {
   }
 
   private var card: CGRect {
-    CGRect(x: BrowseLayout.panelInset, y: 0, width: (panel?.bounds.width ?? 0) - 2 * BrowseLayout.panelInset, height: max(trayHeight - BrowseLayout.panelAboveKeyboard, 0))
+    CGRect(x: cardPlace.cardInset, y: 0, width: (panel?.bounds.width ?? 0) - 2 * cardPlace.cardInset, height: max(trayHeight - cardPlace.cardGap, 0))
   }
 
   private var trayOffset: CGFloat {
@@ -267,7 +270,7 @@ final class SearchStageView: ExpoView {
     holdReveals()
     if let anchor = pendingAnchor, !keyboardUp, !isCommandBar, !reduceMotion {
       revealsContents = false
-      emergence = StageEmergence(pill: convert(anchor.frame, from: nil), fieldCenter: fieldCenter, face: face?.makeView(), on: panel)
+      emergence = StageEmergence(pill: convert(anchor.frame, from: nil), fieldCenter: fieldCenter, corners: corners, place: cardPlace, face: face?.makeView(), on: panel)
     }
     pendingAnchor = nil
     place()
@@ -388,7 +391,7 @@ final class SearchStageView: ExpoView {
 
   private func beginMorph(from shownSurface: StageMorph.Start?) {
     guard let panel else { return }
-    morph = StageMorph(card: card, fieldCenter: fieldCenter, of: panel, in: self, look: look, from: shownSurface)
+    morph = StageMorph(card: card, fieldCenter: fieldCenter, corners: corners, of: panel, in: self, look: look, from: shownSurface)
     move(.immediate) { [self] in
       isClosing = true
       if !keyboardUp { morph?.appear() }
@@ -420,13 +423,14 @@ final class SearchStageView: ExpoView {
       return
     }
     let target = convert(anchor.frame, from: nil)
+    if let panel { morph.restart(fromCard: card, of: panel, in: self) }
     let carried = face.flatMap { $0.fits(anchor) ? $0 : nil }
     if abs(velocity) < Self.stillReleaseSpeed, let clock = StageKeyboardClock(layer: keyboardSentinel.layer) {
-      morph.fly(to: target, style: anchor.style, carrying: carried, timing: clock.timing, duration: clock.duration)
+      morph.fly(to: target, style: anchor.style, carrying: carried, timing: clock.timing, duration: clock.duration, direct: landsDirectly)
     } else {
       let distance = target.midY - morph.view.frame.midY
       let timing = Motion.smoothSpring.stageTimingParameters(initialVelocity: Motion.relativeVelocity(velocity, over: distance))
-      morph.fly(to: target, style: anchor.style, carrying: carried, timing: timing, duration: Motion.smoothSpring.settlingDuration)
+      morph.fly(to: target, style: anchor.style, carrying: carried, timing: timing, duration: Motion.smoothSpring.settlingDuration, direct: landsDirectly)
     }
     hidePanelUnderMorph()
   }

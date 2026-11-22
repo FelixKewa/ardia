@@ -491,10 +491,17 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   presses.noteRangeSelect(false);
   presses.notePagePressRefused();
   presses.noteDragWithoutDrop();
+  for (const kind of ["gap", "gap", "split_left", "split_right", "split_right", "split_pinned", "split_unpinned", "split_unpinned", "tile", "other_profile", "other_profile", "profile_icon"]) presses.noteSidebarDrop(kind);
+  presses.noteDragProfileSwitch("icon");
+  presses.noteDragProfileSwitch(null);
+  presses.noteDragProfileSwitch("icon");
+  presses.noteDragProfileSwitch("edge");
   presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   const props = events("tab_presses").at(-1).properties;
   assert.equal(props.drags_without_drop, 1);
+  assert.deepEqual([props.drops_gap, props.drops_split_left, props.drops_split_right, props.drops_split_pinned, props.drops_split_unpinned, props.drops_tile], [2, 1, 2, 1, 2, 1]);
+  assert.deepEqual([props.drops_other_profile, props.drops_profile_icon, props.drag_profile_switches, props.drag_profile_holds, props.drag_profile_edge_holds], [2, 1, 4, 2, 1]);
   assert.deepEqual([props.range_selects, props.range_from_shown], [2, 1]);
   assert.deepEqual([props.repeat_presses, props.repeat_on_new_tab, props.repeat_gap_ms_p50, props.repeat_landed_on], [1, 1, 600, "RCTView<Surface"]);
   assert.equal(props.lost_releases, 2);
@@ -689,17 +696,20 @@ test("turning sharing off forgets pending presses and samples, so they never go 
   assert.ok("drop_start_mismatch" in presses.devTabPresses() && "no_press_drift_unknown" in presses.devTabPresses() && "page_refused" in presses.devTabPresses() && "drags_without_drop" in presses.devTabPresses());
 });
 
-test("with sharing off no context is saved, and tab presses stay in the local copy, never queued", async () => {
+test("with sharing off no context is saved, and tab presses aren't counted, kept in the local copy or queued", async () => {
   client.setSharing(false, "settings");
   assert.equal(await diagnostics.recordContext(), null);
   assert.equal(JSON.parse(stub.docs.get("telemetry.json")).context, null);
+  const { flushLocal } = await import("./localStore.ts");
+  flushLocal();
+  const tabPressLines = () => stub.telemetryLocal.records().filter((r) => r.event === "tab_presses");
+  const before = tabPressLines().length;
   presses.notePressStarted();
   presses.notePressEnded("click", "t1");
   presses.emitTabPresses(client.consentToken());
-  const { flushLocal } = await import("./localStore.ts");
   flushLocal();
-  const local = stub.telemetryLocal.records().filter((r) => r.event === "tab_presses");
-  assert.equal(local.at(-1).sent, false);
-  assert.equal(local.at(-1).distinct_id, null);
+  assert.equal(tabPressLines().length, before);
+  assert.deepEqual(tabPressLines().filter((r) => r.sent === false), []);
+  assert.deepEqual(Object.values(presses.devTabPresses()).filter((n) => n !== 0 && n !== false), []);
   assert.equal(client.devState().queued.events, 0);
 });

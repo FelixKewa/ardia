@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
-import { Platform, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/platformCopy";
 import { PROBLEM_TEXT, voiceControl, type Dictation } from "../../state/voice/dictation";
 import { browseSpoken, closeVoiceSearch, openSpeechSettings, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
 import { browseForMeOffered } from "../../state/browseForMe/offer";
-import { ArdiaLogo, capsule, font, FrostSource, LookBackdrop, LookFrost, space, Symbol, useCoverFocus, voiceInk, voiceLayout, type SymbolName, useReduceMotion } from "../ui";
+import { ArdiaLogo, controlRadius, font, FrostSource, LookBackdrop, LookFrost, space, Symbol, useCoverFocus, voiceInk, voiceLayout, type SymbolName, useReduceMotion } from "../ui";
 
 export function VoiceSearchView() {
   const presented = useVoicePresented();
@@ -38,7 +38,7 @@ function VoiceCover() {
         onPress={closeVoiceSearch}
         style={[styles.cancel, { top: insets.top + space.s, right: insets.right + space.l }]}
       >
-        <LookFrost source={VOICE_FROST} variant="glass" dark cornerRadius={capsule(voiceLayout.cancel)} fill={voiceInk.glass} style={styles.cancelFace}>
+        <LookFrost source={VOICE_FROST} variant="glass" dark cornerRadius={controlRadius(voiceLayout.cancel)} fill={voiceInk.glass} style={styles.cancelFace}>
           <Symbol name="xmark" size={voiceLayout.icon} color={voiceInk.label} />
         </LookFrost>
       </Pressable>
@@ -104,7 +104,7 @@ const WAVE_EASE_MS = 100;
 function WaveBar({ height }: { height: number }) {
   const shown = useSharedValue(height);
   useEffect(() => {
-    shown.value = Platform.OS === "ios" ? withTiming(height, { duration: WAVE_EASE_MS, easing: Easing.out(Easing.quad) }) : height;
+    shown.value = withTiming(height, { duration: WAVE_EASE_MS, easing: Easing.out(Easing.quad) });
   }, [height]);
   const style = useAnimatedStyle(() => ({ height: shown.value }));
   return <Animated.View style={[styles.bar, style]} />;
@@ -125,7 +125,7 @@ function Controls({ dictation }: { dictation: Dictation }) {
 function GlassPill({ title, icon, onPress }: { title: string; icon?: SymbolName; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={styles.pillHit}>
-      <LookFrost source={VOICE_FROST} variant="glass" dark cornerRadius={capsule(voiceLayout.pill)} fill={voiceInk.glass} style={styles.pill}>
+      <LookFrost source={VOICE_FROST} variant="glass" dark cornerRadius={controlRadius(voiceLayout.pill)} fill={voiceInk.glass} style={styles.pill}>
         {icon ? <Symbol name={icon} size={voiceLayout.icon} color={voiceInk.label} /> : null}
         <Text style={[font.body, styles.medium, { color: voiceInk.label }]}>{title}</Text>
       </LookFrost>

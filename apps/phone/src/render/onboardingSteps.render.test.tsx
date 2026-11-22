@@ -63,23 +63,22 @@ test.each([
   ["blocking", "Continue"],
   ["sync", "Connect to Your Mac"],
   ["allSet", "Start Browsing"],
-] as const)("the %s step's %s is SwiftUI's capsule on iPhone and Compose's 14-point rounded rectangle on Android", (step, title) => {
+] as const)("the %s step's %s is a 16-point smooth rounded rectangle in the space's accent on iPhone, not a capsule, and Compose's 16-point rounded rectangle on Android", (step, title) => {
   const root = showStep(step);
   const style = buttonStyle(root, title);
-  expect(style.borderRadius).toBeCloseTo(iPhone ? 190 / 6 : 14);
+  expect(style.borderRadius).toBe(16);
+  expect(style.backgroundColor).toBe("#B25B6B");
   expect(style.minHeight).toBeCloseTo(iPhone ? 190 / 3 : 50);
   unmount(root);
 });
 
-onIos("a taller button at a large text size stays a capsule", () => {
+onIos("a taller button at a large text size keeps its 16-point corners instead of growing into a capsule", () => {
   const root = showStep("welcome");
-  const button = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "button" && textIn(node) === "Get Started")[0]!;
-  act(() => button.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 354, height: 90 } } }));
-  expect(buttonStyle(root, "Get Started").borderRadius).toBe(45);
+  expect(buttonStyle(root, "Get Started").borderRadius).toBe(16);
   unmount(root);
 });
 
-onIos("the welcome step is SwiftUI's: the icon 24 points above the words, a 17-point subtitle 12 under the title, the words 32 in, and the button 24 under the space in 24-point margins with 12 below", () => {
+onIos("the welcome step: the icon 24 points above the words, a 17-point subtitle 12 under the title, the words 32 in, and the button 24 under the space in 24-point margins with 12 below", () => {
   const root = showStep("welcome");
   expect(styleOf(root, "welcomeIcon").marginBottom).toBe(24);
   const words = styleOf(root, "welcomeWords");
@@ -106,11 +105,11 @@ test.each(["blocking", "sync", "allSet"] as const)("the %s step puts the words 2
   unmount(root);
 });
 
-test("the sync step's art sits centred in its space, as both native apps' pages do, while the blocking and all-set cards sit at the bottom", () => {
+test("every step's art sits centred in its space, so the blocking and all-set cards leave no empty band above them", () => {
   for (const [step, place] of [
     ["sync", "center"],
-    ["blocking", "flex-end"],
-    ["allSet", "flex-end"],
+    ["blocking", "center"],
+    ["allSet", "center"],
   ] as const) {
     const root = showStep(step);
     expect(styleOf(root, "onboardingIllustration").justifyContent).toBe(place);
@@ -118,15 +117,16 @@ test("the sync step's art sits centred in its space, as both native apps' pages 
   }
 });
 
-onIos("the blocking step's rows are SwiftUI's plain toggles: three titles 50 points tall and 16 in, no icon tiles, dividers 16 in, on a 20-point card of the page colour at 90% with SwiftUI's soft shadow", () => {
+onIos("the blocking step's rows are plain toggles: three titles 56 points tall and 16 in, no icon tiles, dividers 16 in, on a 16-point white card with a soft shadow, under an accent hero tile", () => {
   const root = showStep("blocking");
   const card = hosts(root, "onboardingCard")[0]!;
   const switches = card.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch");
   expect(switches.map((node) => node.props.accessibilityLabel)).toEqual(["Block Ads", "Block Trackers", "Block Cookie Banners"]);
-  for (const row of switches) expect(StyleSheet.flatten(row.props.style)).toMatchObject({ minHeight: 50, paddingHorizontal: 16 });
+  for (const row of switches) expect(StyleSheet.flatten(row.props.style)).toMatchObject({ minHeight: 56, paddingHorizontal: 16 });
   expect(card.findAll((node) => node.type === Symbol)).toHaveLength(0);
   expect(card.findAll((node) => node.type === ToggleRow)).toHaveLength(0);
-  expect(StyleSheet.flatten(card.props.style)).toMatchObject({ borderRadius: 20, paddingVertical: 4, backgroundColor: "rgba(255, 255, 255, 0.9)", boxShadow: "0px 6px 32px rgba(0, 0, 0, 0.06)" });
+  expect(StyleSheet.flatten(card.props.style)).toMatchObject({ borderRadius: 16, paddingVertical: 4, backgroundColor: "#FFFFFF", boxShadow: "0px 6px 28px rgba(0, 0, 0, 0.07)" });
+  expect(hosts(root, "onboardingHero")[0]!.findAll((node) => node.type === Symbol)[0]!.props.name).toBe("handRaised");
   expect(onboardingLayout.rowIcons).toBe(false);
   unmount(root);
 });
@@ -138,13 +138,13 @@ onAndroid("the blocking step keeps Compose's rows with their icon tiles", () => 
   unmount(root);
 });
 
-onIos("the all-set step's tips are SwiftUI's plain rows: body text, 50 points tall, 16 in, no icons, on the same card", () => {
+onIos("the all-set step's tips are plain rows: body text, 56 points tall, 16 in, no icons, on the same card", () => {
   const root = showStep("allSet");
   const card = hosts(root, "onboardingCard")[0]!;
   for (const tip of ["Tap + to search.", "Flick a tab up to close it.", "Swipe a page to go back.", "Old tabs archive after a day."]) expect(textIn(card)).toContain(tip);
   expect(card.findAll((node) => node.type === Symbol)).toHaveLength(0);
   const tip = card.findAll((node) => typeof node.type === "string" && textIn(node) === "Tap + to search." && StyleSheet.flatten(node.props.style)?.minHeight !== undefined)[0]!;
-  expect(StyleSheet.flatten(tip.props.style)).toMatchObject({ minHeight: 50, paddingHorizontal: 16 });
+  expect(StyleSheet.flatten(tip.props.style)).toMatchObject({ minHeight: 56, paddingHorizontal: 16 });
   unmount(root);
 });
 
@@ -192,26 +192,21 @@ const expectTiming = (animation: Animation, from: number, durationMs: number, cu
 
 const shownStep = (root: Root) => root.root.findAll((node) => node.props.testID === "onboardingStep" && node.props.entering !== undefined)[0]!;
 
-test("the step motion is main's Motion.step on iPhone: the new step comes in 72 points from the right and the old leaves 72 to the left, both on 300 ms of (0.05, 0.7, 0.1, 1); Android keeps Compose's 60 dp on its spring", () => {
+test("the step motion is main's Motion.step on both phones: the new step comes in 72 points from the right and the old leaves 72 to the left, both on 300 ms of (0.05, 0.7, 0.1, 1)", () => {
   const root = showStep("blocking");
   const step = shownStep(root);
   const entering = (step.props.entering as () => Built)();
   const exiting = (step.props.exiting as () => Built)();
-  const shift = iPhone ? 72 : 60;
+  const shift = 72;
   expect(entering.initialValues).toEqual({ opacity: 0, transform: [{ translateX: shift }] });
   expect(exiting.initialValues).toEqual({ opacity: 1, transform: [{ translateX: 0 }] });
   expect(entering.animations.transform![0]!.translateX.toValue).toBe(0);
   expect(exiting.animations.transform![0]!.translateX.toValue).toBe(-shift);
-  if (iPhone) {
-    expect(onboardingCurves.step).toEqual([0.05, 0.7, 0.1, 1]);
-    expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
-    expectTiming(entering.animations.transform![0]!.translateX, 72, 300, onboardingCurves.step);
-    expectTiming(exiting.animations.opacity, 1, 300, onboardingCurves.step);
-    expectTiming(exiting.animations.transform![0]!.translateX, 0, 300, onboardingCurves.step);
-  } else {
-    expect(entering.animations.transform![0]!.translateX.type).not.toBe("timing");
-    expect(onboardingMotion.step).toEqual({ spring: expect.objectContaining({ mass: 1 }) });
-  }
+  expect(onboardingCurves.step).toEqual([0.05, 0.7, 0.1, 1]);
+  expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
+  expectTiming(entering.animations.transform![0]!.translateX, 72, 300, onboardingCurves.step);
+  expectTiming(exiting.animations.opacity, 1, 300, onboardingCurves.step);
+  expectTiming(exiting.animations.transform![0]!.translateX, 0, 300, onboardingCurves.step);
   unmount(root);
 });
 
@@ -222,7 +217,7 @@ test("a step going back comes in from the left and the old one leaves to the rig
   expect(exiting.animations.transform![0]!.translateX.toValue).toBe(onboardingMotion.stepTravel);
 });
 
-test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-out) on iPhone and Compose's 200 ms on Android", () => {
+test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-out) on both phones", () => {
   mockMotion.reduced = true;
   const root = showStep("blocking");
   const step = shownStep(root);
@@ -230,45 +225,38 @@ test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-o
   const exiting = (step.props.exiting as () => Built)();
   expect(entering.initialValues.transform).toEqual([{ translateX: 0 }]);
   expect(exiting.animations.transform![0]!.translateX.toValue).toBe(0);
-  if (iPhone) {
-    expectTiming(entering.animations.opacity, 0, 150, onboardingCurves.easeOut);
-    expectTiming(exiting.animations.opacity, 1, 150, onboardingCurves.easeOut);
-  } else {
-    expect(run(entering.animations.opacity, 0, 199).done).toBe(false);
-    expect(run(entering.animations.opacity, 0, 200).done).toBe(true);
-  }
+  expectTiming(entering.animations.opacity, 0, 150, onboardingCurves.easeOut);
+  expectTiming(exiting.animations.opacity, 1, 150, onboardingCurves.easeOut);
   unmount(root);
 });
 
-test("the backdrop cross-fades on the step's motion on iPhone, as main animates both in one transaction", () => {
+test("the backdrop cross-fades on the step's motion on both phones, as main animates both in one transaction", () => {
   useOnboarding.setState({ showing: true, step: "welcome", forward: true });
   const root = renderSurface(<OnboardingView />);
   const backdrop = root.root.findAll((node) => node.props.entering !== undefined && node.props.testID === undefined && node.props.exiting !== undefined)[0]!;
   const entering = (backdrop.props.entering as () => Built)();
   expect(entering.initialValues).toEqual({ opacity: 0 });
-  if (iPhone) expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
-  else expect(run(entering.animations.opacity, 0, 300).done).toBe(true);
+  expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
   unmount(root);
 });
 
-test("the welcome step rises on main's Motion.rise on iPhone: 360 ms of (0.2, 0, 0, 1) after 50 ms; Android keeps Compose's spring after 100 ms", () => {
+test("the welcome step rises on main's Motion.rise on both phones: 360 ms of (0.2, 0, 0, 1) after 50 ms", () => {
   const delay = jest.spyOn(Reanimated, "withDelay");
   const root = showStep("welcome");
   expect(delay).toHaveBeenCalledTimes(1);
   const [wait, rise] = delay.mock.calls[0]! as unknown as [number, Animation];
-  expect(wait).toBe(iPhone ? 50 : 100);
+  expect(wait).toBe(50);
   expect(rise.toValue).toBe(1);
-  if (iPhone) expectTiming(rise, 0, 360, onboardingCurves.rise);
-  else expect(rise.type).not.toBe("timing");
+  expectTiming(rise, 0, 360, onboardingCurves.rise);
   unmount(root);
 });
 
-test("with Reduce Motion the welcome step fades in at once without the tilt, scale or lift, on SwiftUI's 300 ms ease-out on iPhone", () => {
+test("with Reduce Motion the welcome step fades in at once without the tilt, scale or lift, on SwiftUI's 300 ms ease-out on both phones", () => {
   mockMotion.reduced = true;
   const delay = jest.spyOn(Reanimated, "withDelay");
   const root = showStep("welcome");
   expect(delay).not.toHaveBeenCalled();
-  if (iPhone) expect(onboardingMotion.riseReduced).toEqual({ timing: { duration: 300, easing: expect.anything() } });
+  expect(onboardingMotion.riseReduced).toEqual({ timing: { duration: 300, easing: expect.anything() } });
   expect(styleOf(root, "welcomeIcon").transform).toEqual([{ rotate: "-6deg" }, { scale: 1 }]);
   expect(styleOf(root, "welcomeWords").transform).toEqual([{ translateY: 0 }]);
   unmount(root);

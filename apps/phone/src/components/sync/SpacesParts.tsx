@@ -5,14 +5,15 @@ import { openSettings } from "../../state/settings/nav";
 import { openRemote } from "../../state/sync/actions";
 import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
-import { capsule, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
+import { capsule, controlRadius, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
+import type { Point } from "../../lib/menuPlace";
 
 const TILE_MIN_WIDTH = 72;
 const TILE_HEIGHT = 56;
 const TILE_HEIGHT_MAX = 72;
 export const SPACES_LARGE_TEXT = 1.5;
 
-export function Tiles({ tiles, profileId, onFolder, onLink }: { tiles: PinnedTile[]; profileId: string; onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void; onLink: (url: string, title: string, y: number) => void }) {
+export function Tiles({ tiles, profileId, onFolder, onLink }: { tiles: PinnedTile[]; profileId: string; onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void; onLink: (url: string, title: string, at: Point | null) => void }) {
   const { width, fontScale } = useWindowDimensions();
   const height = Math.min(TILE_HEIGHT * fontScale, TILE_HEIGHT_MAX);
   const titled = fontScale < SPACES_LARGE_TEXT;
@@ -48,7 +49,7 @@ function TileButton({
   height: number;
   titled: boolean;
   onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void;
-  onLink: (url: string, title: string, y: number) => void;
+  onLink: (url: string, title: string, at: Point | null) => void;
 }) {
   const theme = useTheme();
   const anchor = useRef<ViewInstance>(null);
@@ -60,8 +61,8 @@ function TileButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={() => (folder ? onFolder(tile, anchor) : openRemote(tile.url, tile.title, profileId, tile.key))}
-      onLongPress={folder ? undefined : (event) => onLink(tile.url, tile.title, event.nativeEvent.pageY)}
-      {...(folder ? {} : screenReaderActions([{ name: "longpress", run: () => onLink(tile.url, tile.title, 0) }]))}
+      onLongPress={folder ? undefined : (event) => onLink(tile.url, tile.title, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
+      {...(folder ? {} : screenReaderActions([{ name: "longpress", run: () => onLink(tile.url, tile.title, null) }]))}
       style={styles.tile}
     >
       <View testID="spaceTileFace" style={[styles.tileFace, { height, backgroundColor: theme.groupFill }]}>
@@ -140,9 +141,9 @@ const styles = StyleSheet.create({
   tileFace: { alignSelf: "stretch", borderRadius: spacesLayout.tileFaceRadius, alignItems: "center", justifyContent: "center" },
   switcherRow: { alignItems: "center", paddingTop: space.xs },
   switcherContent: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.xs },
-  switcher: { flexGrow: 0, maxWidth: "100%", height: 44, borderRadius: capsule(44), borderWidth: StyleSheet.hairlineWidth },
+  switcher: { flexGrow: 0, maxWidth: "100%", height: 44, borderRadius: controlRadius(44), borderCurve: "continuous", borderWidth: StyleSheet.hairlineWidth },
   switch: { width: 52, height: 36, alignItems: "center", justifyContent: "center" },
   dot: { width: spacesLayout.dot, height: spacesLayout.dot, borderRadius: capsule(spacesLayout.dot) },
   unavailable: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacesLayout.stackGap, paddingHorizontal: space.xxl },
-  primary: { minHeight: 44, borderRadius: capsule(44), paddingHorizontal: space.xl, justifyContent: "center", marginTop: spacesLayout.buttonTop },
+  primary: { minHeight: 44, borderRadius: controlRadius(44), borderCurve: "continuous", paddingHorizontal: space.xl, justifyContent: "center", marginTop: spacesLayout.buttonTop },
 });

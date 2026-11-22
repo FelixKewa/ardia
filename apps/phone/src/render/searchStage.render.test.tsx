@@ -1,4 +1,4 @@
-import { Keyboard, Platform, StyleSheet } from "react-native";
+import { Dimensions, Keyboard, Platform, StyleSheet } from "react-native";
 import { State } from "react-native-gesture-handler";
 import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { getAnimatedStyle } from "react-native-reanimated";
@@ -6,6 +6,8 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { SearchTray } from "../components/search/SearchTray";
 import { DesignProvider } from "../components/ui";
+import { FloatingBar } from "../components/browsing/FloatingBar";
+import { useScreenLayout, type ScreenHinge } from "../state/app/screenLayout";
 import * as browse from "../state/browse/store";
 import { usePageUi } from "../state/page/store";
 import { storeNavigation, usePages, type PageState } from "../state/pages/store";
@@ -24,6 +26,7 @@ type StageProps = {
   rowsRevealNativeId?: string | null;
   fieldCenter?: number;
   commandTop?: number | null;
+  landsDirectly?: boolean;
   morphLook?: { usesGlass: boolean; panelTint: string; panelDark: boolean; classicPanel: string };
   onLift?: (lift: { lift: number; up: boolean }) => void;
   onReveal?: (reveal: { late: boolean }) => void;
@@ -175,10 +178,11 @@ onIPhone("the field takes the keyboard as soon as the stage has presented, as ma
   expect(mockFocus).toHaveBeenCalledTimes(1);
 });
 
-onIPhone("a page's long address opens selected and showing its start, as main's field: the native field selects it all when the stage's focus lands, not at mount", () => {
+onIPhone("editing a page's address opens the panel with an empty field, as Arc's does, and selects nothing", () => {
   const root = page();
-  act(() => presentSearch("page", "https://en.wikipedia.org/w/index.php?title=Pastel_de_nata&utm_medium=search&utm_source=ardia"));
-  expect(field(root)!.props.selectsAllOnFocus).toBe(true);
+  act(() => presentSearch("page", "https://en.wikipedia.org/wiki/Pastel_de_nata", null, { currentUrl: "https://en.wikipedia.org/wiki/Pastel_de_nata", currentTabId: currentTabs().open[0]!.id }));
+  expect(useSearch.getState().text).toBe("");
+  expect(field(root)!.props.selectsAllOnFocus).toBe(false);
 });
 
 onIPhone("the stage is told which native view is the field, so it focuses the field itself as it presents", () => {
@@ -331,7 +335,7 @@ onIPhone("the dim fades in once the stage says the panel is up, and fades with t
     { state: State.ACTIVE, translationY: 60 },
   ]);
   expect(mockStage.holdLift).toHaveBeenCalledTimes(1);
-  const travel = 274 + 300;
+  const travel = StyleSheet.flatten(host(root, "traySurface")!.props.style).height as number;
   expect(opacity(host(root, "trayDim"))).toBeCloseTo(1 - 60 / travel, 2);
 });
 
@@ -389,8 +393,8 @@ onIPhone("the stage gets the panel's look, the field's centre and, on a late rev
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   const root = page();
   open();
-  expect(stage().fieldCenter).toBeCloseTo(9 + 47.5 / 2);
-  expect(stage().morphLook).toMatchObject({ usesGlass: true, panelDark: false });
+  expect(stage().fieldCenter).toBeCloseTo(15 + 44 / 2);
+  expect(stage().morphLook).toMatchObject({ usesGlass: false, panelDark: false, frosted: true, classicPanel: "rgba(255,255,255,0.62)" });
   reveal(true);
   expect(counted).toHaveBeenCalledWith("search_reveals_late");
   act(() => browse.cancelSearch());
@@ -409,4 +413,81 @@ onAndroid("Android keeps the sheet tray and its own motion: no stage, and the ba
   expect(mockSeen.props).toBeNull();
   expect(host(root, "trayRoot")).toBeDefined();
   expect(host(root, "trayDim")).toBeDefined();
+});
+
+const safeArea = require("react-native-safe-area-context") as { useSafeAreaInsets: () => { top: number; bottom: number; left: number; right: number } };
+
+const stageCardOf = (root: Root) => {
+  let card: ReactTestInstance | null = host(root, "traySurface")!.parent;
+  while (card && typeof card.type !== "string") card = card.parent;
+  return StyleSheet.flatten(card!.props.style) as { paddingHorizontal?: number; paddingLeft?: number; paddingRight?: number };
+};
+
+for (const [name, hinge, right] of [["open Duo", "fullyOpen", 84], ["closed Duo", "closed", 84]] as const satisfies readonly (readonly [string, ScreenHinge, number])[]) {
+  onIPhone(`on the ${name} the search panel stays out of the sensor strip and its clock: it ends 8 short of the strip, its inner edge`, () => {
+    jest.spyOn(safeArea, "useSafeAreaInsets").mockImplementation(() => ({ top: 0, bottom: 34, left: 0, right }));
+    act(() => useScreenLayout.setState({ hinge }));
+    const root = page();
+    open();
+    advance(400);
+    expect(stageCardOf(root)).toMatchObject({ paddingLeft: 8, paddingRight: right + 8 });
+    act(() => useScreenLayout.setState({ hinge: "none" }));
+  });
+}
+
+onIPhone("with no hinge the search panel runs edge to edge inside the safe area, as Arc's does", () => {
+  const root = page();
+  open();
+  advance(400);
+  const card = stageCardOf(root);
+  expect(card.paddingHorizontal).toBeUndefined();
+  const insets = safeArea.useSafeAreaInsets();
+  expect(card).toMatchObject({ paddingLeft: insets.left, paddingRight: insets.right });
+});
+
+const anchorSpan = (root: Root, width: number) => {
+  let controls: ReactTestInstance | null = root.root.findAll((node) => node.type === FloatingBar)[0]!.parent;
+  while (controls && (typeof controls.type !== "string" || StyleSheet.flatten(controls.props.style).bottom === undefined)) controls = controls.parent;
+  const { left, right } = StyleSheet.flatten(controls!.props.style) as { left: number; right: number };
+  const centre = { ...StyleSheet.flatten(host(root, "floatingBarCentre")!.props.style), ...getAnimatedStyle(host(root, "floatingBarCentre")!) } as { marginLeft?: number; marginRight?: number };
+  return { left: left + 24 + (centre.marginLeft ?? 0), right: width - right - 24 - (centre.marginRight ?? 0) };
+};
+
+const DUO_SCREENS = [
+  { name: "open Duo", width: 951, height: 669, hinge: "fullyOpen", anchor: { left: 527, right: 927 }, direct: true },
+  { name: "closed Duo", width: 466, height: 678, hinge: "closed", anchor: { left: 24, right: 370 }, direct: false },
+] as const satisfies readonly { name: string; width: number; height: number; hinge: ScreenHinge; anchor: { left: number; right: number }; direct: boolean }[];
+
+for (const screen of DUO_SCREENS) {
+  onIPhone(`on the ${screen.name} closing search lands on the address capsule as laid out, ${screen.anchor.left} to ${screen.anchor.right}, ${screen.direct ? "in one move" : "on the phone's path"}, and the capsule never moves after it lands`, () => {
+    const portrait = Dimensions.get("window");
+    Dimensions.set({ window: { ...portrait, width: screen.width, height: screen.height }, screen: { ...portrait, width: screen.width, height: screen.height } });
+    jest.spyOn(safeArea, "useSafeAreaInsets").mockImplementation(() => ({ top: 0, bottom: 34, left: 0, right: 84 }));
+    act(() => useScreenLayout.setState({ hinge: screen.hinge }));
+    const root = page();
+    expect(anchorSpan(root, screen.width)).toEqual(screen.anchor);
+    open();
+    advance(400);
+    expect(stage().landsDirectly).toBe(screen.direct);
+    expect(anchorSpan(root, screen.width)).toEqual(screen.anchor);
+    act(() => browse.cancelSearch());
+    expect(mockStage.close).toHaveBeenLastCalledWith("morph", 0);
+    for (let frame = 0; frame < 20; frame++) {
+      act(() => jest.advanceTimersByTime(16));
+      expect(anchorSpan(root, screen.width)).toEqual(screen.anchor);
+    }
+    act(() => stage().onSettled?.({ landed: true }));
+    for (let frame = 0; frame < 20; frame++) {
+      act(() => jest.advanceTimersByTime(16));
+      expect(anchorSpan(root, screen.width)).toEqual(screen.anchor);
+    }
+    act(() => useScreenLayout.setState({ hinge: "none" }));
+    Dimensions.set({ window: portrait, screen: portrait });
+  });
+}
+
+onIPhone("with no hinge the stage keeps the phone's landing path", () => {
+  page();
+  open();
+  expect(stage().landsDirectly).toBe(false);
 });
