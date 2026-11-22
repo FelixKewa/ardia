@@ -2,7 +2,8 @@ import { readDocument, writeDocument } from "../../platform/documents";
 import { chromeCtrlTabMru } from "../../platform/profiles";
 import { isFields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { activeTabId } from "../browser/model";
 import { noteCtrlTabFollowedChrome } from "../telemetry/settingsPickerCounts";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { ctrlTabChoice, setCtrlTab } from "./commandShortcuts";
@@ -11,8 +12,7 @@ import type { CtrlTabChoice, CtrlTabPreset } from "./ctrlTabKeys";
 const DOC = "chrome-ctrl-tab.json";
 const VERSION = 1;
 const FIRST_LOOK_MS = 3000;
-const POLL_MS = 2000;
-const LAST_LOOK_AFTER_MS = 15000;
+const LOOK_AFTER_LEAVING_MS = 15000;
 const CHROME_SETTINGS = /^(chrome|ardia):\/\/settings(\/|$|\?|#)/;
 
 export type ChromeCtrlTab = Record<string, boolean>;
@@ -70,7 +70,7 @@ async function look(consent: ConsentToken | null) {
   }
 }
 
-const showsChromeSettings = (tabs: ReturnType<typeof useBrowser.getState>["tabs"]) => Object.values(tabs).some((tab) => CHROME_SETTINGS.test(tab.url ?? ""));
+const showsChromeSettings = (s: BrowserState) => Object.keys(s.windows).some((windowId) => CHROME_SETTINGS.test(s.tabs[activeTabId(s, windowId) ?? ""]?.url ?? ""));
 
 let started = false;
 
@@ -78,24 +78,19 @@ export function followChromeCtrlTab() {
   if (started) return;
   started = true;
   const consent = consentToken();
-  let poll: ReturnType<typeof setInterval> | undefined;
-  let lastLook: ReturnType<typeof setTimeout> | undefined;
-  const watch = (shown: boolean) => {
-    if (unsupported) return;
-    if (shown && !poll) {
-      clearTimeout(lastLook);
-      poll = setInterval(() => void look(consent), POLL_MS);
-    } else if (!shown && poll) {
-      clearInterval(poll);
-      poll = undefined;
-      lastLook = setTimeout(() => void look(consent), LAST_LOOK_AFTER_MS);
-    }
+  let shown = false;
+  let lookAfterLeaving: ReturnType<typeof setTimeout> | undefined;
+  const watch = (now: boolean) => {
+    if (now === shown || unsupported) return;
+    shown = now;
+    clearTimeout(lookAfterLeaving);
+    if (!shown) lookAfterLeaving = setTimeout(() => void look(consent), LOOK_AFTER_LEAVING_MS);
   };
   setTimeout(() => {
     void look(consent);
-    watch(showsChromeSettings(useBrowser.getState().tabs));
+    shown = showsChromeSettings(useBrowser.getState());
   }, FIRST_LOOK_MS);
-  useBrowser.subscribeTo(["tabs"], (s, prev) => {
-    if (s.tabs !== prev.tabs) watch(showsChromeSettings(s.tabs));
+  useBrowser.subscribeTo(["tabs", "windows"], (s, prev) => {
+    if (s.tabs !== prev.tabs || s.windows !== prev.windows) watch(showsChromeSettings(s));
   });
 }
