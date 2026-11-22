@@ -42,7 +42,7 @@ export type PointerSweep = {
   direct?: boolean;
   quiet?: boolean;
   scrollFirst?: boolean;
-  scroll?: { everyMs: number; gestureMs?: number; delta?: number; momentumMs?: number; phased?: boolean; sign?: number; elastic?: boolean; at?: number } | null;
+  scroll?: { everyMs: number; gestureMs?: number; delta?: number; momentumMs?: number; sign?: number; elastic?: boolean; at?: number } | null;
 };
 export type PointerSweepResult = {
   ticks: [number, number, number, number][];

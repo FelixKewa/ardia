@@ -58,7 +58,6 @@ final class DevPointerSweep: NSObject {
     let gestureMs: Double
     let delta: Double
     let momentumMs: Double
-    let phased: Bool
     let sign: Double
     let elastic: Bool
     let at: Double?
@@ -80,8 +79,6 @@ final class DevPointerSweep: NSObject {
   private var lastTick: CFTimeInterval
   private var ticks: [[Double]] = []
   private var scrollEvents = 0
-  private var gesture = -1
-  private var gesturePhase = 0
   private let direct: Bool
   private let track: Bool
   private let scrollFirst: Bool
@@ -109,7 +106,7 @@ final class DevPointerSweep: NSObject {
     if let s = spec["scroll"] as? [String: Any], let every = (s["everyMs"] as? NSNumber)?.doubleValue, every > 0 {
       scroll = Scroll(
         everyMs: every, gestureMs: (s["gestureMs"] as? NSNumber)?.doubleValue ?? 300, delta: (s["delta"] as? NSNumber)?.doubleValue ?? 8,
-        momentumMs: (s["momentumMs"] as? NSNumber)?.doubleValue ?? 0, phased: (s["phased"] as? Bool) ?? true,
+        momentumMs: (s["momentumMs"] as? NSNumber)?.doubleValue ?? 0,
         sign: (s["sign"] as? NSNumber)?.doubleValue ?? 0, elastic: (s["elastic"] as? Bool) ?? false, at: (s["at"] as? NSNumber)?.doubleValue)
     } else {
       scroll = nil
@@ -188,40 +185,16 @@ final class DevPointerSweep: NSObject {
     if let at = scroll.at { return park(at: at, windowPoint: windowPoint) }
     if scroll.elastic { return stretch(elapsed: elapsed, at: windowPoint) }
     let direction: Double = scroll.sign != 0 ? scroll.sign : index % 2 == 0 ? 1 : -1
-    var phase: Int64 = 0
-    var momentum: Int64 = 0
-    var delta = 0.0
-    if index != gesture {
-      if gesturePhase == 1 && scroll.phased { send(phase: 4, momentum: 0, delta: 0, continuous: true, at: windowPoint) }
-      gesture = index
-      gesturePhase = 0
-    }
+    let left = scroll.gestureMs + scroll.momentumMs - into
+    let delta: Double
     if into < scroll.gestureMs {
-      phase = gesturePhase == 0 ? 1 : 2
-      gesturePhase = 1
       delta = scroll.delta * direction
-    } else if gesturePhase == 1 {
-      phase = 4
-      gesturePhase = scroll.momentumMs > 0 ? 2 : 3
-    } else if gesturePhase == 2 || gesturePhase == 4 {
-      let left = scroll.gestureMs + scroll.momentumMs - into
-      if left <= 0 {
-        momentum = 3
-        gesturePhase = 3
-      } else {
-        momentum = gesturePhase == 2 ? 1 : 2
-        gesturePhase = 4
-        delta = scroll.delta * direction * left / scroll.momentumMs
-      }
+    } else if left > 0 && scroll.momentumMs > 0 {
+      delta = scroll.delta * direction * left / scroll.momentumMs
     } else {
       return
     }
-    if !scroll.phased {
-      if delta == 0 { return }
-      phase = 0
-      momentum = 0
-    }
-    send(phase: phase, momentum: momentum, delta: delta, continuous: scroll.phased, at: windowPoint)
+    send(delta: delta, at: windowPoint)
   }
 
   private func park(at x: Double, windowPoint: NSPoint) {
@@ -247,13 +220,10 @@ final class DevPointerSweep: NSObject {
     clip.setBoundsOrigin(NSPoint(x: end + pull, y: clip.bounds.origin.y))
   }
 
-  private func send(phase: Int64, momentum: Int64, delta: Double, continuous: Bool, at windowPoint: NSPoint) {
+  private func send(delta: Double, at windowPoint: NSPoint) {
     guard let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: Int32(delta.rounded()), wheel3: 0) else { return }
-    cg.setIntegerValueField(.scrollWheelEventIsContinuous, value: continuous ? 1 : 0)
     cg.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: delta)
     cg.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: delta)
-    cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
-    cg.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
     cg.flags = CGEventFlags(rawValue: UInt64(flags.rawValue))
     let screen = window.convertPoint(toScreen: windowPoint)
     let top = NSScreen.screens.first?.frame.maxY ?? 0
