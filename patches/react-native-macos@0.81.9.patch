@@ -2175,10 +2175,10 @@ index 152e76da136756ebc962ece4cc84e84df7cfce0e..4e38bf09796d31dfc63cf79a081e40ea
   * Hide subviews if they are outside the view bounds.
   * This is an optimisation used predominantly with RKScrollViews
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40edc379ae 100644
+index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..cb8402c6990723e7f7db852a308afd5ef6443cbe 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
-@@ -136,13 +136,150 @@ static NSString *RCTRecursiveAccessibilityLabel(RCTUIView *view) // [macOS]
+@@ -136,13 +136,152 @@ static NSString *RCTRecursiveAccessibilityLabel(RCTUIView *view) // [macOS]
    return str;
  }
  
@@ -2254,6 +2254,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +static NSString *ArdiaHoverHeldEpoch;
 +static NSString *ArdiaHoverConsentEpoch;
 +static NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSNumber *> *> *ArdiaHoverCounts;
++static NSHashTable<RCTView *> *ArdiaHoverWaiting;
++static id ArdiaHoverMoveWatch;
 +static const CFTimeInterval ArdiaHoverHoldLong = 0.3;
 +static NSObject *ArdiaHoverHoldLock(void)
 +{
@@ -2329,7 +2331,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
  #endif // macOS]
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsNameMap;
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsLabelMap;
-@@ -245,6 +382,14 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -245,6 +384,14 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
    // be outside the bounds of `view` (e.g., if -clipsToBounds is NO).
    RCTPlatformView *hitSubview = nil; // [macOS]
    BOOL isPointInside = [self pointInside:point withEvent:event];
@@ -2344,7 +2346,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
    BOOL needsHitSubview = !(_pointerEvents == RCTPointerEventsNone || _pointerEvents == RCTPointerEventsBoxOnly);
    if (needsHitSubview && (![self clipsToBounds] || isPointInside)) {
      // Take z-index into account when calculating the touch target.
-@@ -784,16 +929,38 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -784,58 +931,109 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
    // scroll event occurs either due to trackpad/gesture based scrolling or a scrollwheel event
    // both of which would not cause the mouseExited to be invoked.
  
@@ -2387,7 +2389,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
    }
  
    [self reactViewDidMoveToWindow]; // [macOS] Github#1412
-@@ -801,41 +968,69 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+ 
++  [self ardia_windowChanged]; // [Ardia]
    [super viewDidMoveToWindow];
  }
  
@@ -2486,7 +2489,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
      }
    }
  }
-@@ -943,28 +1138,63 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -943,28 +1141,63 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
  
  - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
  {
@@ -2550,7 +2553,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
  }
  
  - (void)layoutSubviews
-@@ -1196,12 +1426,42 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1196,12 +1429,42 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
    // be rendered as a stretchable image, we'll need to re-render.
    // TODO: detect up-front if re-rendering is necessary
    CGSize oldSize = self.bounds.size;
@@ -2566,8 +2569,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +    [RCTView ardia_layoutChanged]; // [Ardia: hover follows layout, and so does what removeClippedSubviews hides. Ardia]
 +  }
 +#endif // macOS]
- }
- 
++}
++
 +#if TARGET_OS_OSX
 +- (void)viewDidChangeBackingProperties
 +{
@@ -2575,8 +2578,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +  if ([ArdiaBorderImageViews() containsObject:self]) { // [Ardia: a border image follows the new backing density. Ardia]
 +    [self.layer setNeedsDisplay];
 +  }
-+}
-+
+ }
+ 
 +// [Ardia: displayLayer is the only place that copies clipsToBounds to the layer, and nothing asked for one when
 +// overflow changed. A view that stopped clipping at the same size (a group's rows once its fold animation ends)
 +// kept masking its children, which cut the selected row's glow. Ardia]
@@ -2593,7 +2596,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
  - (void)displayLayer:(CALayer *)layer
  {
    if (CGSizeEqualToSize(layer.bounds.size, CGSizeZero)) {
-@@ -1248,17 +1508,8 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1248,17 +1511,8 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
    RCTUIColor *backgroundColor = _backgroundColor;
  #endif // macOS]
  
@@ -2613,7 +2616,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
  
    if (useIOSBorderRendering) {
      layer.cornerRadius = cornerRadii.topLeftHorizontal;
-@@ -1293,9 +1544,10 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1293,9 +1547,10 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
    layer.contents = (id)image.CGImage;
    layer.contentsScale = image.scale;
  #else // [macOS
@@ -2625,7 +2628,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
  #endif // macOS]
    layer.needsDisplayOnBoundsChange = YES;
    layer.magnificationFilter = kCAFilterNearest;
-@@ -1514,6 +1766,20 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1514,6 +1769,20 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
  	return [self focusable] || [super acceptsFirstResponder];
  }
  
@@ -2646,7 +2649,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
  - (void)updateTrackingAreas
  {
    BOOL hasMouseHoverEvent = self.onMouseEnter || self.onMouseLeave;
-@@ -1522,31 +1788,483 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1522,31 +1791,531 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
    if (!wouldRecreateIdenticalTrackingArea) {
      if (_trackingArea) {
        [self removeTrackingArea:_trackingArea];
@@ -2661,6 +2664,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +      // stayed highlighted. Ardia]
 +      if (!hasMouseHoverEvent) {
 +        _hasMouseOver = NO;
++        [self ardia_stopWaiting]; // [Ardia]
 +      }
      }
  
@@ -2674,19 +2678,19 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +      if (_hasMouseOver) {
 +        [RCTView ardia_markHoverDirty]; // [Ardia: hover follows layout: the resized view may have left the pointer. Ardia]
 +      }
-+    }
-+  }
-+
+     }
+   }
+ 
 +  // [Ardia: hover follows layout: the views the check looks at. Ardia]
 +  if (hasMouseHoverEvent) {
 +    if (ArdiaHoverViews == nil) {
 +      ArdiaHoverViews = [NSHashTable weakObjectsHashTable];
-     }
++    }
 +    [ArdiaHoverViews addObject:self];
 +  } else {
 +    [ArdiaHoverViews removeObject:self];
-   }
- 
++  }
++
    [super updateTrackingAreas];
  }
  
@@ -2752,7 +2756,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +
 +// [Ardia: the pointer, or the dev override. Ardia]
 ++ (NSPoint)ardia_pointerOnScreen
- {
++{
 +#if DEBUG
 +  if (ArdiaPointerOverride != nil) {
 +    return ArdiaPointerOverride.pointValue;
@@ -2783,10 +2787,10 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +}
 +
 ++ (void)ardia_noteHoverHeld
-+{
-+  if (ArdiaHoverHeldSince == 0) {
-+    ArdiaHoverHeldSince = CACurrentMediaTime();
-+    @synchronized(ArdiaHoverHoldLock()) {
+ {
++  @synchronized(ArdiaHoverHoldLock()) {
++    if (ArdiaHoverHeldSince == 0) {
++      ArdiaHoverHeldSince = CACurrentMediaTime();
 +      ArdiaHoverHeldEpoch = ArdiaHoverConsentEpoch;
 +    }
 +  }
@@ -2794,14 +2798,20 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +
 ++ (void)ardia_endHoverHold
 +{
-+  if (ArdiaHoverHeldSince == 0) {
-+    return;
++  NSString *epoch = nil;
++  BOOL heldLong = NO;
++  @synchronized(ArdiaHoverHoldLock()) {
++    if (ArdiaHoverHeldSince == 0) {
++      return;
++    }
++    heldLong = CACurrentMediaTime() - ArdiaHoverHeldSince > ArdiaHoverHoldLong;
++    epoch = ArdiaHoverHeldEpoch;
++    ArdiaHoverHeldSince = 0;
++    ArdiaHoverHeldEpoch = nil;
 +  }
-+  if (CACurrentMediaTime() - ArdiaHoverHeldSince > ArdiaHoverHoldLong) {
-+    [self ardia_countHover:@"holds" epoch:ArdiaHoverHeldEpoch];
++  if (heldLong) {
++    [self ardia_countHover:@"holds" epoch:epoch];
 +  }
-+  ArdiaHoverHeldSince = 0;
-+  ArdiaHoverHeldEpoch = nil;
 +}
 +
 ++ (NSString *)ardia_consentEpoch
@@ -2813,7 +2823,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +
 ++ (void)ardia_countHover:(NSString *)kind epoch:(NSString *)epoch
 +{
-+  if (epoch == nil) {
++  if (epoch.length == 0) {
 +    return;
 +  }
 +  @synchronized(ArdiaHoverHoldLock()) {
@@ -2948,8 +2958,10 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +  ArdiaHoverPasses++;
 +#endif
 +  CFTimeInterval sinceScroll = CACurrentMediaTime() - ArdiaHoverHoldState.scrolledAt;
-+  if ([self ardia_holdsHoverInScrolled:YES]) { // [Ardia]
-+    [self ardia_noteHoverHeld]; // [Ardia]
++  // [Ardia: only the scrolling list waits; hover anywhere else is checked at once.
++  NSView *holding = [self ardia_holdsHoverInScrolled:YES] ? ArdiaHoverScrolled : nil;
++  if (holding != nil) {
++    [self ardia_noteHoverHeld];
 +    if (!ArdiaHoverSettling) {
 +      ArdiaHoverSettling = YES;
 +      CFTimeInterval wait = ArdiaHoverScrollSettle - sinceScroll + 0.005;
@@ -2958,9 +2970,10 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +        [RCTView ardia_markHoverDirty];
 +      });
 +    }
-+    return;
++  } else {
++    [self ardia_endHoverHold];
 +  }
-+  [self ardia_endHoverHold]; // [Ardia]
++  // Ardia]
 +  NSPoint screen = [NSEvent mouseLocation];
 +  BOOL pressed = [NSEvent pressedMouseButtons] != 0;
 +#if DEBUG
@@ -2971,14 +2984,16 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +    pressed = ArdiaButtonsOverride.boolValue;
 +  }
 +#endif
-+  [self ardia_hoverDecidedAt:screen]; // [Ardia]
++  if (holding == nil) { // [Ardia]
++    [self ardia_hoverDecidedAt:screen];
++  } // [Ardia]
 +  NSWindow *front = [self ardia_windowUnderPointer:screen];
 +  NSMutableArray<RCTView *> *leaving = [NSMutableArray new];
 +  NSMutableArray<RCTView *> *entering = [NSMutableArray new];
 +  BOOL held = NO;
 +  for (RCTView *view in ArdiaHoverViews.allObjects) {
 +    NSWindow *window = view.window;
-+    if (window == nil) {
++    if (window == nil || (holding != nil && [view isDescendantOf:holding])) { // [Ardia]
 +      continue;
 +    }
 +    BOOL over = window == front && [self ardia_pointer:screen isInside:view];
@@ -3005,8 +3020,10 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +- (void)ardia_setMouseOver:(BOOL)over atScreenPoint:(NSPoint)screen
 +{
 +  _hasMouseOver = over;
-+  _ardiaEnterWaiting = NO;
-+  _ardiaClipCounted = NO;
++  [self ardia_stopWaiting];
++  if (over) {
++    [self ardia_rideScrollIfInside];
++  }
 +  [self ardia_rearmTrackingArea];
 +#if DEBUG
 +  if (ArdiaHoverLog == nil) {
@@ -3038,21 +3055,13 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +// Ardia]
 +
 +// [Ardia: AppKit enters a view anywhere in its bounds, the part its scroll view clips included, while the hover check
-+// counts only the part it shows. An enter that a scroll holds, or that comes over the clipped part, waits: the view's
-+// area keeps the pointer inside and reports its moves, and the first one over the shown part once nothing holds hover
-+// is the enter. A leave goes only to a view that was entered.
++// counts only the part it shows. An enter that a scroll holds, or that comes over the clipped part, waits: one watch on
++// the app's mouse moves, kept only while some view waits, tries it again on each move, and the first one over the
++// shown part once nothing holds hover is the enter. A leave goes only to a view that was entered, and a view that
++// leaves the window while entered or waiting gets its leave once it is gone for good.
 +- (NSTrackingAreaOptions)ardia_trackingOptions
 +{
-+  return NSTrackingActiveAlways | NSTrackingMouseEnteredAndExited | (_hasMouseOver || _ardiaEnterWaiting ? NSTrackingAssumeInside : 0) |
-+      (_ardiaEnterWaiting ? NSTrackingMouseMoved : 0);
-+}
-+
-+- (void)ardia_waitForEnter
-+{
-+  if (!_ardiaEnterWaiting) {
-+    _ardiaEnterWaiting = YES;
-+    [self ardia_rearmTrackingArea];
-+  }
++  return NSTrackingActiveAlways | NSTrackingMouseEnteredAndExited | (_hasMouseOver ? NSTrackingAssumeInside : 0);
 +}
 +
 +- (void)ardia_rearmTrackingArea
@@ -3065,15 +3074,56 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +  [self addTrackingArea:_trackingArea];
 +}
 +
-+- (BOOL)ardia_shows:(NSEvent *)event
++- (void)ardia_rideScrollIfInside
 +{
-+  NSPoint screen = self.window != nil ? [self.window convertPointToScreen:event.locationInWindow] : [RCTView ardia_pointerOnScreen];
-+  return [RCTView ardia_pointer:screen isInside:self];
++  if (ArdiaHoverScrolled != nil && [self isDescendantOf:ArdiaHoverScrolled]) {
++    ArdiaHoverRidesScroll = YES;
++  }
 +}
 +
-+- (void)ardia_enterWith:(NSEvent *)event
++- (void)ardia_waitForEnter
 +{
-+  if (![self ardia_shows:event]) {
++  if (_ardiaEnterWaiting) {
++    return;
++  }
++  _ardiaEnterWaiting = YES;
++  if (ArdiaHoverWaiting == nil) {
++    ArdiaHoverWaiting = [NSHashTable weakObjectsHashTable];
++  }
++  [ArdiaHoverWaiting addObject:self];
++  if (ArdiaHoverMoveWatch == nil) {
++    ArdiaHoverMoveWatch = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
++                                                                handler:^NSEvent *(NSEvent *event) {
++                                                                  [RCTView ardia_retryWaitingEnters];
++                                                                  return event;
++                                                                }];
++  }
++}
++
++- (void)ardia_stopWaiting
++{
++  _ardiaEnterWaiting = NO;
++  _ardiaClipCounted = NO;
++  [ArdiaHoverWaiting removeObject:self];
++}
++
+++ (void)ardia_retryWaitingEnters
++{
++  NSPoint screen = [self ardia_pointerOnScreen];
++  for (RCTView *view in ArdiaHoverWaiting.allObjects) {
++    if (view->_ardiaEnterWaiting && ![view ardia_holdHoverForScroll]) {
++      [view ardia_enterAt:screen];
++    }
++  }
++  if (ArdiaHoverWaiting.allObjects.count == 0 && ArdiaHoverMoveWatch != nil) {
++    [NSEvent removeMonitor:ArdiaHoverMoveWatch];
++    ArdiaHoverMoveWatch = nil;
++  }
++}
++
++- (void)ardia_enterAt:(NSPoint)screen
++{
++  if (![RCTView ardia_pointer:screen isInside:self]) {
 +    if (!_ardiaClipCounted) {
 +      _ardiaClipCounted = YES;
 +      [RCTView ardia_countHover:@"clipped" epoch:[RCTView ardia_consentEpoch]];
@@ -3081,29 +3131,34 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +    [self ardia_waitForEnter];
 +    return;
 +  }
-+  BOOL waited = _ardiaEnterWaiting;
-+  _ardiaEnterWaiting = NO;
-+  _ardiaClipCounted = NO;
++  [self ardia_stopWaiting];
    _hasMouseOver = YES;
-+  if (waited) {
-+    [self ardia_rearmTrackingArea];
-+  }
++  [self ardia_rideScrollIfInside];
++  NSPoint inWindow = self.window != nil ? [self.window convertPointFromScreen:screen] : screen;
    [self sendMouseEventWithBlock:self.onMouseEnter
-                    locationInfo:[self locationInfoFromEvent:event]
-                   modifierFlags:event.modifierFlags
+-                   locationInfo:[self locationInfoFromEvent:event]
+-                  modifierFlags:event.modifierFlags
++                   locationInfo:[self locationInfoFromDraggingLocation:inWindow]
++                  modifierFlags:[NSEvent modifierFlags]
                   additionalData:nil];
  }
  
-+- (void)mouseMoved:(NSEvent *)event
++- (void)ardia_windowChanged
 +{
-+  if (!_ardiaEnterWaiting) {
-+    [super mouseMoved:event];
++  if (self.window != nil || (!_hasMouseOver && !_ardiaEnterWaiting)) {
 +    return;
 +  }
-+  if ([self ardia_holdHoverForScroll]) {
-+    return;
-+  }
-+  [self ardia_enterWith:event];
++  __weak RCTView *weakSelf = self;
++  dispatch_async(dispatch_get_main_queue(), ^{
++    RCTView *view = weakSelf;
++    if (view == nil || view.window != nil) {
++      return;
++    }
++    [view ardia_stopWaiting];
++    if (view->_hasMouseOver) {
++      [view ardia_setMouseOver:NO atScreenPoint:[RCTView ardia_pointerOnScreen]];
++    }
++  });
 +}
 +// Ardia]
 +
@@ -3113,15 +3168,13 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
 +    [self ardia_waitForEnter];
 +    return;
 +  }
-+  [self ardia_enterWith:event]; // [Ardia]
++  [self ardia_enterAt:self.window != nil ? [self.window convertPointToScreen:event.locationInWindow] : [RCTView ardia_pointerOnScreen]]; // [Ardia]
 +}
 +
  - (void)mouseExited:(NSEvent *)event
  {
 +  if (_ardiaEnterWaiting) { // [Ardia]
-+    _ardiaEnterWaiting = NO;
-+    _ardiaClipCounted = NO;
-+    [self ardia_rearmTrackingArea];
++    [self ardia_stopWaiting];
 +  } // [Ardia]
 +  if ([self ardia_holdHoverForScroll]) { // [Ardia]
 +    return;
@@ -3132,7 +3185,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
    _hasMouseOver = NO;
    [self sendMouseEventWithBlock:self.onMouseLeave
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1768,7 +2486,7 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1768,7 +2537,7 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];
@@ -3141,7 +3194,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..7dcb02db0ca01ba0c90cc538152bbf40
      [_eventDispatcher sendEvent:keyboardEvent];
      objc_setAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
    }
-@@ -1794,3 +2512,19 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1794,3 +2563,19 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
  #endif // macOS]
  
  @end

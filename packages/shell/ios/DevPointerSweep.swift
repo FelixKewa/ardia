@@ -113,7 +113,7 @@ final class DevPointerSweep: NSObject {
         everyMs: max(16, every), gestureMs: (s["gestureMs"] as? NSNumber)?.doubleValue ?? 300,
         delta: min(1000, max(-1000, (s["delta"] as? NSNumber)?.doubleValue ?? 8)),
         momentumMs: (s["momentumMs"] as? NSNumber)?.doubleValue ?? 0,
-        sign: (s["sign"] as? NSNumber)?.doubleValue ?? 0, elastic: (s["elastic"] as? Bool) ?? false, at: (s["at"] as? NSNumber)?.doubleValue)
+        sign: ((s["sign"] as? NSNumber)?.doubleValue).map { $0 > 0 ? 1.0 : $0 < 0 ? -1.0 : 0.0 } ?? 0, elastic: (s["elastic"] as? Bool) ?? false, at: (s["at"] as? NSNumber)?.doubleValue)
     } else {
       scroll = nil
     }
@@ -230,7 +230,7 @@ final class DevPointerSweep: NSObject {
   }
 
   private func send(delta: Double, at windowPoint: NSPoint) {
-    guard let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: Int32(delta.rounded()), wheel3: 0) else { return }
+    guard delta.isFinite, abs(delta.rounded()) <= Double(Int32.max), let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: Int32(delta.rounded()), wheel3: 0) else { return }
     cg.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: delta)
     cg.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: delta)
     cg.flags = CGEventFlags(rawValue: UInt64(flags.rawValue))

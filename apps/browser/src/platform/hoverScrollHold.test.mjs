@@ -112,17 +112,299 @@ test("only a full hover check moves the anchor, so every event of one pointer mo
   assert.doesNotMatch(method("- (BOOL)ardia_holdHoverForScroll"), /ardia_hoverDecidedAt/);
 });
 
-test("a long hold is counted in the consent period it began in", () => {
-  assert.match(method("+ (void)ardia_noteHoverHeld"), /ArdiaHoverHeldEpoch = ArdiaHoverConsentEpoch/);
-  assert.match(method("+ (void)ardia_endHoverHold"), /ardia_countHover:@"holds" epoch:ArdiaHoverHeldEpoch/);
+test("a long hold is counted in the consent period it began in, taken under one lock, and never while sharing is off", () => {
+  const note = method("+ (void)ardia_noteHoverHeld");
+  assert.ok(note.indexOf("@synchronized") < note.indexOf("ArdiaHoverHeldSince = CACurrentMediaTime()"), "the hold's start and its epoch are set under the same lock");
+  assert.match(note, /ArdiaHoverHeldEpoch = ArdiaHoverConsentEpoch/);
+  assert.match(method("+ (void)ardia_endHoverHold"), /ardia_countHover:@"holds" epoch:epoch/);
+  assert.match(method("+ (void)ardia_countHover:(NSString *)kind epoch:(NSString *)epoch"), /if \(epoch\.length == 0\) \{\n    return;/);
 });
 
-test("an enter a scroll holds or that comes over a clipped part waits for the pointer to reach the shown part, and only an entered view is left", () => {
-  const enter = method("- (void)ardia_enterWith:(NSEvent *)event");
-  assert.ok(enter.indexOf("ardia_shows:event") < enter.indexOf("_hasMouseOver = YES"), "the shown part is checked before the view counts as entered");
-  assert.match(method("- (NSTrackingAreaOptions)ardia_trackingOptions"), /_ardiaEnterWaiting \? NSTrackingMouseMoved/);
-  assert.match(method("- (void)mouseEntered:(NSEvent *)event"), /ardia_holdHoverForScroll\]\) \{ \/\/ \[Ardia\]\n    \[self ardia_waitForEnter\];/, "an enter a scroll holds keeps waiting for the pointer's moves, so moving onto the shown part later still enters");
-  assert.match(method("- (void)mouseMoved:(NSEvent *)event"), /ardia_enterWith:event/);
-  assert.match(added, /if \(!_hasMouseOver\) \{ \/\/ \[Ardia\]\n    return;/);
+test("AppKit tracking stays on the view's bounds, and a waiting enter never rebuilds a tracking area", () => {
   assert.doesNotMatch(added, /NSTrackingInVisibleRect/, "a view's visibleRect runs past its bounds when it doesn't clip (macOS 14+), so a visible-rect area entered views far from the pointer");
+  assert.doesNotMatch(added, /NSTrackingMouseMoved/);
+  assert.doesNotMatch(method("- (void)ardia_waitForEnter"), /ardia_rearmTrackingArea/);
+});
+
+const installed = new URL("../../../../node_modules/react-native-macos/React/Views/RCTView.m", import.meta.url);
+
+const REPLAYED = [
+  "+ (void)ardia_scrolled:(NSView *)moved",
+  "+ (NSPoint)ardia_pointerOnScreen",
+  "+ (BOOL)ardia_holdsHoverInScrolled:(BOOL)inScrolled",
+  "+ (void)ardia_hoverDecidedAt:(NSPoint)screen",
+  "+ (NSArray<RCTView *> *)ardia_byDepth:(NSArray<RCTView *> *)views deepestFirst:(BOOL)deepestFirst",
+  "+ (void)ardia_setConsentEpoch:(NSString *)epoch",
+  "+ (void)ardia_noteHoverHeld",
+  "+ (void)ardia_endHoverHold",
+  "+ (NSString *)ardia_consentEpoch",
+  "+ (void)ardia_countHover:(NSString *)kind epoch:(NSString *)epoch",
+  "+ (NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *)ardia_takeHoverCounts",
+  "+ (void)ardia_checkHover",
+  "- (void)ardia_setMouseOver:(BOOL)over atScreenPoint:(NSPoint)screen",
+  "- (void)updateTrackingAreas",
+  "- (BOOL)ardia_holdHoverForScroll",
+  "- (NSTrackingAreaOptions)ardia_trackingOptions",
+  "- (void)ardia_rearmTrackingArea",
+  "- (void)ardia_rideScrollIfInside",
+  "- (void)ardia_waitForEnter",
+  "- (void)ardia_stopWaiting",
+  "+ (void)ardia_retryWaitingEnters",
+  "- (void)ardia_enterAt:(NSPoint)screen",
+  "- (void)ardia_windowChanged",
+  "- (void)mouseEntered:(NSEvent *)event",
+  "- (void)mouseExited:(NSEvent *)event",
+];
+
+const PRELUDE = String.raw`#import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
+static CFTimeInterval now = 10;
+static NSPoint pointer;
+#define CACurrentMediaTime replayTime
+static CFTimeInterval replayTime(void) { return now; }
+static id moveHandler;
+static int monitors;
+@interface ReplayEvent : NSEvent
++ (id)addLocalMonitorForEventsMatchingMask:(NSEventMask)mask handler:(id)handler;
+@end
+@implementation ReplayEvent
++ (NSPoint)mouseLocation { return pointer; }
++ (NSUInteger)pressedMouseButtons { return 0; }
++ (NSEventModifierFlags)modifierFlags { return 0; }
++ (id)addLocalMonitorForEventsMatchingMask:(NSEventMask)mask handler:(id)handler { moveHandler = handler; monitors++; return @"watch"; }
++ (void)removeMonitor:(id)monitor { moveHandler = nil; monitors--; }
+@end
+#define NSEvent ReplayEvent
+typedef void (^RCTDirectEventBlock)(NSDictionary *);
+@interface RCTView : NSView {
+@public
+  BOOL _hasMouseOver;
+  BOOL _ardiaEnterWaiting;
+  BOOL _ardiaClipCounted;
+  NSTrackingArea *_trackingArea;
+}
+@property (copy) RCTDirectEventBlock onMouseEnter;
+@property (copy) RCTDirectEventBlock onMouseLeave;
+@property (assign) BOOL inside;
+@property (assign) BOOL detached;
+@end
+@interface ReplayWindow : NSObject
+@end
+@implementation ReplayWindow
+- (NSPoint)convertPointFromScreen:(NSPoint)point { return point; }
+- (NSPoint)convertPointToScreen:(NSPoint)point { return point; }
+- (BOOL)isVisible { return NO; }
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)selector { return [NSMethodSignature signatureWithObjCTypes:"@@:"]; }
+- (void)forwardInvocation:(NSInvocation *)invocation { id nothing = nil; [invocation setReturnValue:&nothing]; }
+@end
+static NSWindow *replayWindow;
+static NSHashTable *ArdiaHoverViews;
+static NSHashTable *ArdiaClippingViews;
+static __weak NSView *ArdiaHoverScrolled;
+static BOOL ArdiaHoverRidesScroll, ArdiaHoverSettling, ArdiaHoverHeld;
+static const CFTimeInterval ArdiaHoverScrollSettle = 0.08;
+`;
+
+const STUBS = String.raw`
+@implementation RCTView
+- (NSWindow *)window { return self.detached ? nil : replayWindow; }
++ (NSWindow *)ardia_windowUnderPointer:(NSPoint)screen { return replayWindow; }
++ (BOOL)ardia_pointer:(NSPoint)screen isInside:(RCTView *)view { return view.window != nil && view.inside; }
++ (void)ardia_markHoverDirty {}
+- (void)ardia_clipSubviewsHiding:(BOOL)hiding {}
+- (NSDictionary *)locationInfoFromDraggingLocation:(NSPoint)location { return nil; }
+- (NSDictionary *)locationInfoFromEvent:(NSEvent *)event { return nil; }
+- (void)sendMouseEventWithBlock:(RCTDirectEventBlock)block locationInfo:(NSDictionary *)info modifierFlags:(NSEventModifierFlags)flags additionalData:(NSDictionary *)data
+{
+  if (block) block(info);
+}
+`;
+
+const SCENARIOS = String.raw`
+static void step(NSView *clip, int x) { now += 0.016; clip.boundsOrigin = NSMakePoint(x, 0); [RCTView ardia_scrolled:clip]; }
+int main(void) {
+  @autoreleasepool {
+    ArdiaHoverViews = [NSHashTable weakObjectsHashTable];
+    NSView *root = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)];
+    NSView *clip = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 200, 200)];
+    RCTView *row = [[RCTView alloc] initWithFrame:NSMakeRect(0, 0, 50, 50)];
+    RCTView *tool = [[RCTView alloc] initWithFrame:NSMakeRect(250, 0, 50, 50)];
+    [root addSubview:clip]; [clip addSubview:row]; [root addSubview:tool];
+    replayWindow = (NSWindow *)[ReplayWindow new];
+    [ArdiaHoverViews addObject:row]; [ArdiaHoverViews addObject:tool];
+    __block int rowIn = 0, rowOut = 0, toolIn = 0;
+    row.onMouseEnter = ^(NSDictionary *i) { rowIn++; };
+    row.onMouseLeave = ^(NSDictionary *i) { rowOut++; };
+    tool.onMouseEnter = ^(NSDictionary *i) { toolIn++; };
+    tool.onMouseLeave = ^(NSDictionary *i) {};
+    [row updateTrackingAreas]; [tool updateTrackingAreas];
+    pointer = NSMakePoint(100, 100);
+    [RCTView ardia_checkHover];
+
+    [RCTView ardia_scrolled:clip];
+    step(clip, 1);
+    pointer = NSMakePoint(130, 100);
+    row.inside = YES;
+    [row mouseEntered:nil];
+    [RCTView ardia_checkHover];
+    int enteredDuringCoast = rowIn;
+    for (int x = 2; x < 80; x++) {
+      row.inside = NO;
+      step(clip, x);
+      if (x == 2) [row mouseExited:nil];
+      [RCTView ardia_checkHover];
+    }
+    printf("momentum %d %d %d\n", enteredDuringCoast, rowOut, row->_hasMouseOver);
+
+    now += 1;
+    [RCTView ardia_checkHover];
+    [RCTView ardia_scrolled:clip];
+    int toolBefore = toolIn;
+    for (int x = 81; x < 95; x++) {
+      step(clip, x);
+      if (x == 85) tool.inside = YES;
+      [RCTView ardia_checkHover];
+    }
+    printf("outside %d\n", toolIn - toolBefore);
+
+    now += 1;
+    tool.inside = NO;
+    [RCTView ardia_checkHover];
+    [RCTView ardia_scrolled:clip];
+    int rebuilt = 0, rowInBefore = rowIn;
+    for (int x = 100; x < 150; x++) {
+      step(clip, x);
+      row.inside = YES;
+      NSTrackingArea *before = row->_trackingArea;
+      [row mouseEntered:nil];
+      if (row->_trackingArea != before) rebuilt++;
+      row.inside = NO;
+      before = row->_trackingArea;
+      [row mouseExited:nil];
+      if (row->_trackingArea != before) rebuilt++;
+    }
+    printf("churn %d %d\n", rebuilt, rowIn - rowInBefore);
+
+    now += 1;
+    [RCTView ardia_checkHover];
+    [RCTView ardia_scrolled:clip];
+    step(clip, 200);
+    row.inside = YES;
+    rowInBefore = rowIn;
+    [row mouseEntered:nil];
+    int heldEnter = rowIn - rowInBefore;
+    pointer = NSMakePoint(140, 100);
+    if (moveHandler) ((id (^)(id))moveHandler)(nil);
+    printf("waiting %d %d %d %d\n", heldEnter, rowIn - rowInBefore, row->_ardiaEnterWaiting, monitors);
+
+    now += 1;
+    row.inside = NO;
+    [RCTView ardia_checkHover];
+    [RCTView ardia_scrolled:clip];
+    step(clip, 210);
+    row.inside = YES;
+    [row mouseEntered:nil];
+    RCTDirectEventBlock enter = row.onMouseEnter, leave = row.onMouseLeave;
+    row.onMouseEnter = nil; row.onMouseLeave = nil;
+    [row updateTrackingAreas];
+    row.onMouseEnter = enter; row.onMouseLeave = leave;
+    [row updateTrackingAreas];
+    printf("handlers %d %d\n", row->_ardiaEnterWaiting, (int)((row->_trackingArea.options & NSTrackingAssumeInside) != 0));
+
+    now += 1;
+    [RCTView ardia_checkHover];
+    row.inside = YES;
+    [row mouseEntered:nil];
+    int outBefore = rowOut;
+    row.detached = YES;
+    [row ardia_windowChanged];
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
+    printf("detach %d %d\n", row->_hasMouseOver, rowOut - outBefore);
+
+    [RCTView ardia_takeHoverCounts];
+    [RCTView ardia_setConsentEpoch:@""];
+    [RCTView ardia_noteHoverHeld];
+    now += 0.5;
+    [RCTView ardia_endHoverHold];
+    [RCTView ardia_countHover:@"clipped" epoch:[RCTView ardia_consentEpoch]];
+    printf("sharingoff %lu\n", (unsigned long)[RCTView ardia_takeHoverCounts].count);
+  }
+  return 0;
+}
+`;
+
+function replayed() {
+  const source = readFileSync(installed, "utf8");
+  const region = (from, to) => source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)));
+  const body = (signature) => {
+    const start = source.indexOf(`${signature}\n{`);
+    assert.notEqual(start, -1, `RCTView.m has no ${signature}`);
+    return source.slice(start, source.indexOf("\n}\n", start) + 3);
+  };
+  return PRELUDE + region("typedef struct {\n  double scrolledAt;", "// [Ardia: removeClippedSubviews hides") + STUBS + REPLAYED.map(body).join("\n") + "\n@end\n" + SCENARIOS;
+}
+
+let replay;
+function replayRun(t) {
+  if (process.platform !== "darwin") return t.skip("AppKit replay runs on macOS"), null;
+  if (replay !== undefined) return replay;
+  const dir = mkdtempSync(join(tmpdir(), "hover-replay-"));
+  try {
+    writeFileSync(join(dir, "replay.m"), replayed());
+    execFileSync("clang", ["-fobjc-arc", "-w", "-framework", "AppKit", "-framework", "QuartzCore", "-o", join(dir, "replay"), join(dir, "replay.m")], { stdio: "pipe" });
+    let out;
+    try {
+      out = execFileSync(join(dir, "replay"), { stdio: "pipe" }).toString();
+    } catch (error) {
+      throw new Error(`the replay stopped: ${error.stdout}${error.stderr}`);
+    }
+    replay = Object.fromEntries(out.trim().split("\n").map((line) => { const [name, ...values] = line.split(" "); return [name, values.map(Number)]; }));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  return replay;
+}
+
+test("a row entered while a list coasts under a still pointer is left as soon as it scrolls away, not when the coast ends", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  const [entered, left, hovered] = r.momentum;
+  assert.equal(entered, 1);
+  assert.equal(left, 1, "the scroll's leave scan turns back on when a row in the list is entered");
+  assert.equal(hovered, 0);
+});
+
+test("hover outside the scrolling list never waits on the scroll", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  assert.equal(r.outside[0], 1, "a toolbar view that moves under a still pointer while the list coasts is entered at once");
+});
+
+test("enters and leaves a scroll holds rebuild no tracking area and deliver nothing", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  assert.deepEqual(r.churn, [0, 0]);
+});
+
+test("a held enter waits on the app's mouse moves and lands on the first move once nothing holds hover", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  const [heldEnter, entered, stillWaiting, watches] = r.waiting;
+  assert.equal(heldEnter, 0);
+  assert.equal(entered, 1);
+  assert.equal(stillWaiting, 0);
+  assert.equal(watches, 0, "the move watch goes once nothing waits");
+});
+
+test("removing a view's hover handlers ends a deferred enter, and a view that leaves the window gets the leave it is owed", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  assert.deepEqual(r.handlers, [0, 0], "no waiting enter or assumed-inside area survives losing both handlers");
+  assert.deepEqual(r.detach, [0, 1]);
+});
+
+test("nothing is counted while sharing is off", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  assert.equal(r.sharingoff[0], 0);
 });
