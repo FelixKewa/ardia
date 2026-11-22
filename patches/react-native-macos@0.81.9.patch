@@ -2175,7 +2175,7 @@ index 152e76da136756ebc962ece4cc84e84df7cfce0e..4e38bf09796d31dfc63cf79a081e40ea
   * Hide subviews if they are outside the view bounds.
   * This is an optimisation used predominantly with RKScrollViews
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..b70abaf968bd529cf317461b0a5ade937e40131d 100644
+index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..cbbd1c7152ba631c1ae1bef89df68bb5d6253fd9 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
 @@ -136,13 +136,156 @@ static NSString *RCTRecursiveAccessibilityLabel(RCTUIView *view) // [macOS]
@@ -2738,7 +2738,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..b70abaf968bd529cf317461b0a5ade93
 +  }
 +  ArdiaHoverHoldState.scrolledAt = now;
 +  ArdiaHoverScrolled = moved;
-+  if (!starts && ArdiaHoverRidesScroll && moved != nil) {
++  if (ArdiaHoverRidesScroll && moved != nil) { // [Ardia: from the first step, a hovered row carried away from the pointer is left at once. Ardia]
 +    NSPoint screen = [NSEvent mouseLocation];
 +#if DEBUG
 +    if (ArdiaPointerOverride != nil) {

@@ -301,6 +301,14 @@ int main(void) {
     printf("coastleave %d %d %d\n", entered, rowOut, row->_hasMouseOver);
 
     quiet();
+    row.inside = YES;
+    [RCTView ardia_checkHover];
+    int outBefore = rowOut;
+    row.inside = NO;
+    step(clip, 15);
+    printf("firstleave %d %d\n", rowOut - outBefore, row->_hasMouseOver);
+
+    quiet();
     step(clip, 20);
     int toolBefore = toolIn;
     tool.inside = YES;
@@ -479,6 +487,12 @@ test("a row entered while a list coasts is left on the very step that scrolls it
   const r = replayRun(t);
   if (!r) return;
   assert.deepEqual(r.coastleave, [1, 1, 0]);
+});
+
+test("a hovered row that a scroll's first step carries away from a still pointer is left on that step", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  assert.deepEqual(r.firstleave, [1, 0]);
 });
 
 test("hover outside the scrolling list is decided on the next check, never held by the scroll", (t) => {
