@@ -9,7 +9,7 @@ import { usePages } from "../tabs/pageState";
 import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
 import { notePasswordManagerChosen, notePasswordPanel, noteProfilesMovedBack } from "../telemetry/passwordManagerCounts";
-import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/lifecycle";
+import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/retiredOfficial";
 import {
   choiceKind,
   fieldProviderSet,
@@ -234,7 +234,7 @@ function newlyTurnedOn(next: PluginsCommit, before: PluginsCommit): string[] {
     const now = recordOf(next, name);
     if (!now.enabled || (was.enabled && was.approved === now.approved)) return false;
     const m = activeManifest(next, name);
-    return !!m?.passwordManager && !!next.listings[name]?.bundled;
+    return !!m?.passwordManager && !!next.listings[name]?.official;
   });
 }
 
