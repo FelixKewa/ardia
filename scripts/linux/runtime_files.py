@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import lzma
 import os
 import pathlib
 import posixpath
+import re
 import shutil
 import stat
 import sys
@@ -19,6 +21,8 @@ SYMBOLS_ROOT = 'ardiacore-linux-x64-symbols'
 MANIFEST_FORMAT = 2
 TARGET_OS = 'linux'
 TARGET_CPU = 'x64'
+HEX40 = re.compile(r'^[0-9a-f]{40}$')
+HEX64 = re.compile(r'^[0-9a-f]{64}$')
 
 
 def archive_name(key):
@@ -33,20 +37,57 @@ def release_tag(key):
     return f'engine-{key[:12]}'
 
 
+def row_built_key(fields, key):
+    if len(fields) < 3 or fields[0] != key:
+        return None
+    return fields[3] if len(fields) > 3 and fields[3] else key
+
+
 def built_key(table, key):
     lines = table.read_text().splitlines() if table.is_file() else []
     for fields in (line.split('\t') for line in lines):
         if fields[0] == key:
-            return fields[3] if len(fields) > 3 and fields[3] else key
+            return row_built_key(fields, key)
     return None
+
+
+def fetched_built_key(directory, key):
+    row, complete = directory / '.engine-row', directory / '.complete'
+    if not row.is_file() or not complete.is_file():
+        return None
+    fields = row.read_text().rstrip('\n').split('\t')
+    if len(fields) != 4 or fields[2] != complete.read_text().strip():
+        return None
+    return row_built_key(fields, key)
+
+
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def serves(directory, key, table):
     path = directory / 'manifest.json'
-    if not path.is_file():
+    if not HEX40.match(key) or not path.is_file():
         return False
-    engine_key = json.loads(path.read_text()).get('engine_key')
-    return bool(engine_key) and engine_key in (key, built_key(table, key))
+    try:
+        manifest = json.loads(path.read_text())
+    except (ValueError, OSError):
+        return False
+    if not isinstance(manifest, dict):
+        return False
+    expected = {'format': MANIFEST_FORMAT, 'target_os': TARGET_OS, 'target_cpu': TARGET_CPU}
+    if any(manifest.get(name) != value for name, value in expected.items()):
+        return False
+    engine_key, chrome_sha256 = manifest.get('engine_key'), manifest.get('chrome_sha256')
+    if not isinstance(engine_key, str) or not HEX40.match(engine_key) or not isinstance(chrome_sha256, str) or not HEX64.match(chrome_sha256):
+        return False
+    if missing(directory) or not (directory / 'chrome').is_file() or sha256_of(directory / 'chrome') != chrome_sha256:
+        return False
+    return engine_key in (key, fetched_built_key(directory, key), built_key(table, key))
 
 
 def missing(directory):

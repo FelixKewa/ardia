@@ -23,7 +23,7 @@ DISPATCH = '''if [ "${1:-}" = --arch ]; then
 fi
 
 '''
-FIXTURE_FILES = ('engine/engine-key.sh', 'scripts/linux/fetch-engine.sh', 'scripts/linux/runtime_files.py', 'scripts/linux/publish-engine.sh',
+FIXTURE_FILES = ('engine/engine-key.sh', 'engine/engine-key.py', 'scripts/linux/fetch-engine.sh', 'scripts/linux/runtime_files.py', 'scripts/linux/publish-engine.sh',
                  'scripts/linux/publish_engine.py', 'scripts/linux/package.py', 'scripts/agent/locked', MAC_FETCH)
 GIT_ENV = {'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_AUTHOR_NAME': 'Test', 'GIT_AUTHOR_EMAIL': 'test@example.com',
            'GIT_COMMITTER_NAME': 'Test', 'GIT_COMMITTER_EMAIL': 'test@example.com'}
@@ -140,7 +140,8 @@ class ArchiveMaker:
         self.table.write_text('')
 
     def manifest(self, key, **overrides):
-        manifest = {'format': 2, 'engine_key': key, 'source_commit': None, 'target_os': 'linux', 'target_cpu': 'x64'}
+        manifest = {'format': 2, 'engine_key': key, 'source_commit': None, 'target_os': 'linux', 'target_cpu': 'x64',
+                    'chrome_sha256': hashlib.sha256(b'runtime').hexdigest()}
         manifest.update(overrides)
         return json.dumps(manifest).encode()
 
@@ -175,6 +176,14 @@ class ArchiveMaker:
 
 
 class RuntimeSelectionTests(unittest.TestCase):
+    def make_engine(self, directory, key, **overrides):
+        fake_runtime(directory, junk=False)
+        manifest = {'format': 2, 'engine_key': key, 'source_commit': None, 'target_os': 'linux', 'target_cpu': 'x64',
+                    'chrome_sha256': hashlib.sha256((directory / 'chrome').read_bytes()).hexdigest()}
+        manifest.update(overrides)
+        (directory / 'manifest.json').write_text(json.dumps(manifest))
+        return directory
+
     def test_an_engine_serves_its_own_key_and_the_keys_whose_rows_name_it(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = pathlib.Path(scratch)
@@ -184,7 +193,7 @@ class RuntimeSelectionTests(unittest.TestCase):
             built, alias, other = 'a' * 40, 'b' * 40, 'c' * 40
             table.write_text(f'{built}\tengine-{built[:12]}\t{"0" * 64}\n{alias}\tengine-{built[:12]}\t{"0" * 64}\t{built}\n')
             self.assertFalse(runtime.serves(engine, built, table))
-            (engine / 'manifest.json').write_text(json.dumps({'engine_key': built}))
+            self.make_engine(engine, built)
             self.assertTrue(runtime.serves(engine, built, table))
             self.assertTrue(runtime.serves(engine, alias, table))
             self.assertFalse(runtime.serves(engine, other, table))
@@ -194,6 +203,44 @@ class RuntimeSelectionTests(unittest.TestCase):
             command = [sys.executable, '-I', LINUX / 'runtime_files.py', 'serves', '--engine', engine, '--table', table, '--key']
             self.assertEqual(run([*command, alias]).returncode, 0)
             self.assertEqual(run([*command, other]).returncode, 1)
+
+    def test_serves_needs_a_linux_x64_manifest_the_runtime_and_the_chrome_it_names(self):
+        built, alias = 'a' * 40, 'b' * 40
+        cases = [
+            ('a manifest alone', lambda engine: (engine / 'manifest.json').write_text(json.dumps({'format': 1, 'engine_key': built, 'target_os': 'mac', 'target_cpu': 'arm64'}))),
+            ('format 1', lambda engine: self.make_engine(engine, built, format=1)),
+            ('a macOS target', lambda engine: self.make_engine(engine, built, target_os='mac')),
+            ('an arm64 target', lambda engine: self.make_engine(engine, built, target_cpu='arm64')),
+            ('no chrome digest', lambda engine: self.make_engine(engine, built, chrome_sha256=None)),
+            ('another chrome', lambda engine: (self.make_engine(engine, built), (engine / 'chrome').write_bytes(b'other'))),
+            ('a missing runtime file', lambda engine: (self.make_engine(engine, built), (engine / 'icudtl.dat').unlink())),
+            ('a broken manifest', lambda engine: (self.make_engine(engine, built), (engine / 'manifest.json').write_text('{'))),
+        ]
+        for name, prepare in cases:
+            with self.subTest(name), tempfile.TemporaryDirectory() as scratch:
+                root = pathlib.Path(scratch)
+                engine = root / 'engine'
+                engine.mkdir()
+                table = root / 'table.tsv'
+                table.write_text(f'{alias}\tengine-{built[:12]}\t{"0" * 64}\t{built}\n')
+                prepare(engine)
+                self.assertFalse(runtime.serves(engine, built, table))
+                self.assertFalse(runtime.serves(engine, alias, table))
+
+    def test_the_row_a_fetch_verified_makes_the_engine_exact_without_the_table(self):
+        built, alias, other, sha = 'a' * 40, 'b' * 40, 'c' * 40, 'd' * 64
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            engine = self.make_engine(root / 'engine', built)
+            empty = root / 'empty.tsv'
+            empty.write_text('')
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            (engine / '.complete').write_text(sha + '\n')
+            (engine / '.engine-row').write_text(f'{alias}\tengine-{built[:12]}\t{sha}\t{built}\n')
+            self.assertTrue(runtime.serves(engine, alias, empty))
+            self.assertFalse(runtime.serves(engine, other, empty))
+            (engine / '.complete').write_text('e' * 64 + '\n')
+            self.assertFalse(runtime.serves(engine, alias, empty))
 
     def test_allowlist_keeps_runtime_files_and_drops_build_files(self):
         with tempfile.TemporaryDirectory() as scratch:
@@ -466,8 +513,11 @@ class FetcherTests(unittest.TestCase):
         again = self.fetch()
         self.assertEqual(again.stdout, f'{engine}\n')
         self.assertIn('cached', again.stderr)
-        serves = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', key, '--table', self.assets.table])
+        self.assertEqual((self.fixture.repo / 'packages/ardiacore/prebuilt-engines-linux.tsv').read_text(), '')
+        serves = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', key])
         self.assertEqual(serves.returncode, 0, serves.stderr)
+        other = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', older])
+        self.assertEqual(other.returncode, 0, other.stderr)
 
     def test_exact_miss_names_the_key_to_build(self):
         older = self.fixture.key()

@@ -23,18 +23,30 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 ## Engine archives
 
-- **Key.** The engine is keyed by `engine/engine-key.sh --platform linux`, the Mac by `--platform macos`: one hash of
-  every file the Linux build reads. That is `engine/` without the `mac` lines of `engine/patches/series` (their
-  patches, and `engine/ardiacore` but for the headers `engine/ardiacore-linux/apply.sh` copies), plus
-  `apps/browser/assets/offline-game` and its pipeline, because the Linux build packs the offline game too
-  (`game-resource.sh`), and `packages/ardiacore/ios/page_script.js`, which the Linux layer compiles in. A Mac-only
-  change keeps the Linux key. The series counts as its lines for Linux, so adding a `mac` line changes nothing here.
-  Uncommitted changes in any of those paths stop the fetcher and the publisher.
+- **Key.** The engine is keyed by `engine/engine-key.sh --platform linux` (`engine/engine-key.py`), the Mac by
+  `--platform macos`: one hash of every file the Linux build reads.
+  - `engine/` without the `mac` lines of `engine/patches/series`, their patches and `engine/ardiacore`. The series is
+    read with `engine/patches/series.py`'s own parser and validation, so the key and the build never disagree about a
+    line (CRLF, comments, an unknown platform), and it counts as its lines for Linux: a new `mac` line changes nothing.
+  - Without the translation units a `BUILD.gn` under `engine/` lists only inside `if (is_mac)`, such as
+    `ac_external_apps.mm`. Headers there stay in both keys, since Linux code may include them.
+  - Plus what `engine/ardiacore-linux/copies.tsv` lists (`<source><TAB><target>`, read by `apply.sh` and the key alike):
+    a few `engine/ardiacore` headers, `packages/ardiacore/ios/page_script.js` and the logos.
+  - Plus `apps/browser/assets/offline-game` and its pipeline, because the Linux build packs the offline game too
+    (`game-resource.sh`).
+  `engine/engine-key.sh --platform linux --paths` gives the git pathspecs of those inputs; uncommitted changes there
+  stop the fetcher and the publisher, and a Mac-only edit doesn't.
 - **Carried-over rows.** A row with a fourth field (`key<TAB>tag<TAB>sha256<TAB>built key`) serves an engine published
   under the built key: the fetcher downloads `ArdiaCore-<built key:12>-linux-x64.tar.xz` and checks its manifest names
-  the built key, and `scripts/linux/runtime_files.py serves` (used by `release.sh` and the `package` job) counts it as
-  this key's exact engine. They map the engines published before the per-platform keys to the new keys of the commits
-  they were built from.
+  the built key. They map the engines published before the per-platform keys to the new keys of the commits they were
+  built from, and the key after `copies.tsv` replaced the copies `apply.sh` spelled out to `engine-165962861895`: the
+  old and new `apply.sh` write byte-identical trees.
+- **Exact.** `scripts/linux/runtime_files.py serves --engine <dir> --key <key>` (used by `release.sh` and the `package`
+  job) calls an engine dir this key's exact engine only when its `manifest.json` is format 2 for `linux`/`x64`, every
+  required runtime file is there, `chrome` matches the manifest's `chrome_sha256`, and the manifest names the key, or
+  the key's row names the manifest's key as its built key. The row is the one the fetcher verified, kept beside the
+  engine as `.engine-row`, so a row from the published table or `ARDIACORE_PREBUILT_LINUX_TABLE` counts too; else the
+  checked-in table.
 - **Archive.** `ArdiaCore-<key12>-linux-x64.tar.xz` holds one directory, `ardiacore-linux-x64/`. It contains the
   allowlisted runtime files and a `manifest.json` (format 2): engine key, source commit, Chromium version, `args.gn` hash,
   chrome hash and build ID, and build and packaging times.

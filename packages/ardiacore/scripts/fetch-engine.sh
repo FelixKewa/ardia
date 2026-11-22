@@ -27,8 +27,8 @@ key_script="$root/engine/engine-key.sh"
 key() { "$key_script" --platform macos "$@"; }
 git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || die "$root isn't a git checkout: a prebuilt engine is matched to its engine key (engine/engine-key.sh --platform macos)"
 key_paths=($(key --paths))
-[ -z "$(git -C "$root" status --porcelain -- "${key_paths[@]}")" ] \
-  || die "$(echo "${key_paths[@]}" | sed 's/ /, /g') have uncommitted changes, and no prebuilt has them: build the engine (docs/engine-build.md)"
+dirty=$(git -C "$root" status --porcelain -- "${key_paths[@]}" | cut -c4- | awk 'NR <= 5' | paste -sd ',' - | sed 's/,/, /g')
+[ -z "$dirty" ] || die "$dirty (in the macOS engine key) have uncommitted changes, and no prebuilt has them: build the engine (docs/engine-build.md)"
 tree=$(key)
 
 remote_table=""

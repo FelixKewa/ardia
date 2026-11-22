@@ -17,7 +17,10 @@ scripts/linux/package.py --out.
 Rows come from packages/ardiacore/prebuilt-engines-linux.tsv
 (key<TAB>tag<TAB>sha256[<TAB>built key]), then from the published table. A
 row with a built key serves an engine published under that other key (one the
-engine key changed from) built from the sources of this key.
+engine key changed from) built from the sources of this key. The row an engine
+was fetched for is kept beside it as .engine-row, so
+scripts/linux/runtime_files.py serves can tell it is the exact engine of this key
+whichever table the row came from.
 Environment:
   ARDIACORE_PREBUILT_REPO          GitHub repo (default ardia-browser/ardia)
   ARDIACORE_PREBUILT_ASSETS        asset base URL (default
@@ -54,12 +57,9 @@ git -C "$root" rev-parse --git-dir >/dev/null 2>&1 \
   || die "$root isn't a git checkout: a prebuilt engine is matched to its engine key (engine/engine-key.sh --platform linux)"
 mapfile -t key_paths < <(engine_key --paths)
 [ "${#key_paths[@]}" -gt 0 ] || die "engine/engine-key.sh --platform linux --paths listed nothing"
-dirty_paths=()
-for path in "${key_paths[@]}"; do
-  [ -z "$(git -C "$root" status --porcelain -- "$path")" ] || dirty_paths+=("$path")
-done
-[ "${#dirty_paths[@]}" = 0 ] \
-  || die "$(printf '%s, ' "${dirty_paths[@]}" | sed 's/, $//') (in the engine key, engine/engine-key.sh) has uncommitted changes, and no prebuilt engine has them: build the engine (docs/linux-port.md)"
+dirty=$(git -C "$root" status --porcelain -- "${key_paths[@]}" | cut -c4- | awk 'NR <= 5' | paste -sd ',' - | sed 's/,/, /g')
+[ -z "$dirty" ] \
+  || die "$dirty (in the Linux engine key, engine/engine-key.sh --platform linux) has uncommitted changes, and no prebuilt engine has them: build the engine (docs/linux-port.md)"
 key=$(engine_key) || die "couldn't compute this checkout's engine key (engine/engine-key.sh --platform linux)"
 
 remote_rows="" remote_loaded=0
@@ -128,6 +128,7 @@ fi
 if [ -f "$dest/.complete" ] && [ "$(cat "$dest/.complete")" = "$sha" ] && cached_key "$selected" "$built"; then
   echo "using the cached Linux engine $short" >&2
   touch "$dest/.complete"
+  printf '%s\t%s\t%s\t%s\n' "$selected" "$tag" "$sha" "$built" >"$dest/.engine-row"
   echo "$dest"
   exit 0
 fi
@@ -149,6 +150,7 @@ rm -f "$tmp/$file"
 rm -rf "$dest"
 mv "$tmp/unpacked/$archive_root" "$dest"
 printf '%s\n' "$sha" >"$dest/.complete"
+printf '%s\t%s\t%s\t%s\n' "$selected" "$tag" "$sha" "$built" >"$dest/.engine-row"
 rm -rf "$tmp"
 trap - EXIT
 

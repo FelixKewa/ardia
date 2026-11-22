@@ -80,6 +80,7 @@ def commit_key(checkout, commit, env=None):
 
 
 def contents_key(source, paths):
+    paths = [path for path in paths if not path.startswith(':')]
     absent = [path for path in paths if not (source / path).exists()]
     if absent:
         raise PublishError(f'{source} has no ' + ', '.join(absent))
@@ -237,7 +238,7 @@ def upload(repo, key, source_commit, pairs, row):
     tag = runtime_files.release_tag(key)
     view = gh('release', 'view', tag, '-R', repo, '--json', 'assets', check=False)
     if view.returncode != 0:
-        notes = f'Prebuilt Linux x64 ArdiaCore engine for engine key {key} (engine/engine-key.sh), built from {source_commit or "an unrecorded commit"}.'
+        notes = f'Prebuilt Linux x64 ArdiaCore engine for engine key {key} (engine/engine-key.sh --platform linux), built from {source_commit or "an unrecorded commit"}.'
         say(f'creating the prerelease {tag} in {repo}')
         gh('release', 'create', tag, '-R', repo, '--prerelease', '--latest=false', '--title', f'Engine {key[:12]}', '--notes', notes)
         assets = set()
