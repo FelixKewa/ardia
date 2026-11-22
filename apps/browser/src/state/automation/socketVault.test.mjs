@@ -590,7 +590,13 @@ test("a site with several saved logins and none named skips auto-fill and logs i
   assert.ok(!log.some((e) => e.kind === "refusal" && e.outcome === "bad_request"));
 });
 
-test("a second login for the same site and task joins the running one instead of busy; another account runs after it, another site alongside", async () => {
+const withoutAppMs = ({ appMs, ...rest }) => rest;
+const formOn = (tab, origin) => (document) => emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin, hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
+const releaseAll = () => {
+  for (const resolve of [...stub.vaultFake.heldSignIns.values()]) resolve();
+};
+
+test("a second login for the same site, task and resolved account joins the running one instead of busy; another account runs after it, another site alongside", async () => {
   const { tab } = await freshWindow("https://one.example/login");
   stub.controlSocket.peers[733] = NODE;
   const { call } = socketClient(733);
@@ -603,17 +609,16 @@ test("a second login for the same site and task joins the running one instead of
   try {
     const first = together("vault.login", { task, site: "one.example", tab });
     await heldCount(1);
-    const second = together("vault.login", { task, site: "one.example" });
+    const named = together("vault.login", { task, site: "one.example", account: "me" });
     const twoA = together("vault.login", { task, site: "two.example", account: "a" });
     await heldCount(2);
     const twoB = together("vault.login", { task, site: "two.example", account: "b" });
     await settle();
     assert.equal(stub.vaultFake.signIns.length, before + 2, "one per site; the join and the other account don't reach the engine yet");
-    assert.deepEqual(stub.vaultFake.signIns.slice(before).map((s) => s.origin).sort(), ["https://one.example", "https://two.example"]);
-    for (const resolve of [...stub.vaultFake.heldSignIns.values()]) resolve();
-    const [a, b, c] = await Promise.all([first, second, twoA]);
+    releaseAll();
+    const [a, b, c] = await Promise.all([first, named, twoA]);
     assert.equal(a.result.status, "signed_in");
-    assert.deepEqual(b.result, a.result, "the joined call gets the running one's answer");
+    assert.deepEqual(withoutAppMs(b.result), withoutAppMs(a.result), "an account named the same as the running one's resolved account joins it");
     assert.equal(c.result.status, "signed_in");
     const [nextB] = await heldCount(1);
     assert.equal(stub.vaultFake.signIns.at(-1).username, "b", "the other account ran after the first");
@@ -625,32 +630,308 @@ test("a second login for the same site and task joins the running one instead of
   const counts = takeVaultCounts();
   assert.equal(counts.vault_logins_joined, 1);
   assert.equal(counts.vault_refusals_busy ?? 0, 0);
+  assert.equal(counts.vault_fills, 3, "a joined sign-in counts once");
 });
 
-test("the task's own sign-ins running together never count as the person's conflict, but a lone one still does", async () => {
+test("when the first login fails choosing its account, a login waiting on the same lookup signs in on its own", async () => {
+  await freshWindow();
+  stub.controlSocket.peers[735] = NODE;
+  const { call } = socketClient(735);
+  let open;
+  stub.vaultFake.listGate = new Promise((resolve) => (open = resolve));
+  try {
+    const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+    const together = concurrentClient(735);
+    const before = stub.vaultFake.signIns.length;
+    const wrong = together("vault.login", { task: reply.result.task, site: "one.example", account: "nobody" });
+    const plain = together("vault.login", { task: reply.result.task, site: "one.example" });
+    await settle();
+    open();
+    assert.equal((await wrong).error.code, "no_login");
+    assert.equal((await plain).result.status, "signed_in");
+    assert.equal(stub.vaultFake.signIns.length, before + 1);
+  } finally {
+    stub.vaultFake.listGate = null;
+  }
+});
+
+test("a login arriving during an auto-fill joins it for the same account and takes over for another, without counting against auto-fill", async () => {
+  const { tab } = await freshWindow("https://one.example/login");
+  stub.controlSocket.peers[736] = NODE;
+  const { call } = socketClient(736);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example", "two.example"], tabs: [tab] }));
+  const task = reply.result.task;
+  const together = concurrentClient(736);
+  takeVaultCounts();
+  const before = stub.vaultFake.signIns.length;
+  stub.vaultFake.holdSignIns = true;
+  try {
+    formOn(tab, "https://one.example")(70);
+    await heldCount(1);
+    const manual = together("vault.login", { task, site: "one.example", tab });
+    await settle();
+    assert.equal(stub.vaultFake.signIns.length, before + 1, "the login joined the auto-fill already signing in as the same account");
+    releaseAll();
+    assert.equal((await manual).result.status, "signed_in");
+  } finally {
+    stub.vaultFake.holdSignIns = false;
+  }
+
+  assert.equal((await call("vault.login", { task, site: "two.example", account: "a", tab })).result.status, "signed_in");
+  const restore = later(31_000);
+  stub.vaultFake.holdSignIns = true;
+  try {
+    formOn(tab, "https://two.example")(71);
+    const [autoAttempt] = await heldCount(1);
+    assert.equal(stub.vaultFake.signIns.at(-1).username, "a");
+    const other = together("vault.login", { task, site: "two.example", account: "b", tab });
+    for (let i = 0; i < 200 && !stub.vaultFake.cancelledSignIns.includes(autoAttempt); i++) await tick();
+    assert.ok(stub.vaultFake.cancelledSignIns.includes(autoAttempt), "the auto-fill for another account was stopped");
+    const [next] = await heldCount(1);
+    assert.equal(stub.vaultFake.signIns.at(-1).username, "b");
+    stub.vaultFake.heldSignIns.get(next)();
+    assert.equal((await other).result.status, "signed_in");
+  } finally {
+    stub.vaultFake.holdSignIns = false;
+    restore();
+  }
+  const counts = takeVaultCounts();
+  assert.equal(counts.vault_logins_joined, 1);
+  assert.equal(counts.vault_refusals_busy ?? 0, 0, "stepping aside isn't a refusal");
+  assert.equal(counts.vault_refusals_task_expired ?? 0, 0);
+});
+
+test("a login that joined an auto-fill keeps its answer when a login for another account arrives, which waits its turn", async () => {
+  const { tab } = await freshWindow("https://two.example/login");
+  stub.controlSocket.peers[744] = NODE;
+  const { call } = socketClient(744);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["two.example"], tabs: [tab] }));
+  const task = reply.result.task;
+  assert.equal((await call("vault.login", { task, site: "two.example", account: "a", tab })).result.status, "signed_in");
+  const together = concurrentClient(744);
+  const restore = later(31_000);
+  stub.vaultFake.holdSignIns = true;
+  try {
+    formOn(tab, "https://two.example")(90);
+    const [autoAttempt] = await heldCount(1);
+    const joined = together("vault.login", { task, site: "two.example", account: "a" });
+    await settle();
+    const other = together("vault.login", { task, site: "two.example", account: "b" });
+    await settle();
+    assert.ok(!stub.vaultFake.cancelledSignIns.includes(autoAttempt), "a run a program's login shares isn't stopped");
+    stub.vaultFake.heldSignIns.get(autoAttempt)();
+    assert.equal((await joined).result?.status, "signed_in");
+    const [next] = await heldCount(1);
+    assert.equal(stub.vaultFake.signIns.at(-1).username, "b");
+    stub.vaultFake.heldSignIns.get(next)();
+    assert.equal((await other).result?.status, "signed_in");
+  } finally {
+    stub.vaultFake.holdSignIns = false;
+    restore();
+  }
+});
+
+test("ending the task answers every waiting login at once: running, joined, queued and still looking up", async () => {
+  await freshWindow();
+  stub.controlSocket.peers[737] = NODE;
+  const { call } = socketClient(737);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["two.example"] }));
+  const task = reply.result.task;
+  const together = concurrentClient(737);
+  stub.vaultFake.holdSignIns = true;
+  try {
+    const lead = together("vault.login", { task, site: "two.example", account: "a" });
+    const [attempt] = await heldCount(1);
+    const joined = together("vault.login", { task, site: "two.example", account: "a" });
+    const queued = together("vault.login", { task, site: "two.example", account: "b" });
+    await settle();
+    dropTask(task, "ended");
+    const answers = await Promise.all([lead, joined, queued]);
+    assert.deepEqual(answers.map((a) => a.error?.code), ["task_expired", "task_expired", "task_expired"]);
+    assert.ok(stub.vaultFake.cancelledSignIns.includes(attempt), "the engine was told to stop");
+    assert.equal(stub.vaultFake.heldSignIns.size, 0);
+  } finally {
+    stub.vaultFake.holdSignIns = false;
+  }
+
+  stub.controlSocket.peers[738] = NODE;
+  const second = socketClient(738);
+  let open;
+  stub.vaultFake.listGate = new Promise((resolve) => (open = resolve));
+  try {
+    const { reply: fresh } = await approved(second.call("vault.taskStart", { sites: ["one.example"] }));
+    const looking = second.call("vault.login", { task: fresh.result.task, site: "one.example" });
+    await settle();
+    const before = stub.vaultFake.signIns.length;
+    dropTask(fresh.result.task, "ended");
+    assert.equal((await looking).error.code, "task_expired", "answered while the lookup still hangs");
+    open();
+    await settle();
+    assert.equal(stub.vaultFake.signIns.length, before, "the late lookup starts nothing");
+  } finally {
+    stub.vaultFake.listGate = null;
+  }
+});
+
+test("a joined login whose task ran out by the time the sign-in finished answers task_expired, not the shared success", async () => {
+  const { tabReloads } = await import("../vault/signIn.ts");
+  const real = tabReloads.reload;
+  const reloaded = [];
+  tabReloads.reload = async (tabId, mayAct) => (mayAct() && reloaded.push(tabId), true);
+  const { tab } = await freshWindow("https://one.example/login");
+  stub.controlSocket.peers[739] = NODE;
+  const { call } = socketClient(739);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  const together = concurrentClient(739);
+  stub.vaultFake.holdSignIns = true;
+  let restore = () => undefined;
+  try {
+    const lead = together("vault.login", { task: reply.result.task, site: "one.example", tab });
+    await heldCount(1);
+    const joined = together("vault.login", { task: reply.result.task, site: "one.example" });
+    await settle();
+    restore = later(16 * 60_000);
+    releaseAll();
+    const answers = await Promise.all([lead, joined]);
+    assert.deepEqual(answers.map((a) => a.error?.code), ["task_expired", "task_expired"]);
+    assert.deepEqual(reloaded, [], "no tab reloads for a task that ran out");
+  } finally {
+    restore();
+    stub.vaultFake.holdSignIns = false;
+    tabReloads.reload = real;
+  }
+});
+
+test("a joined login whose tab moved to another profile answers denied and isn't driven, while the login it joined still signs in", async () => {
+  const { tab } = await freshWindow("https://one.example/login");
+  const other = S().createProfile({ name: "Elsewhere" });
+  stub.controlSocket.peers[743] = NODE;
+  const { call, ok } = socketClient(743);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  const together = concurrentClient(743);
+  stub.vaultFake.holdSignIns = true;
+  try {
+    const lead = together("vault.login", { task: reply.result.task, site: "one.example" });
+    const [attempt] = await heldCount(1);
+    const joined = together("vault.login", { task: reply.result.task, site: "one.example", tab });
+    await settle();
+    S().moveTabToProfile(tab, other);
+    await settle();
+    assert.ok(!stub.vaultFake.cancelledSignIns.includes(attempt), "the lead still wants the sign-in");
+    stub.vaultFake.heldSignIns.get(attempt)();
+    const [a, b] = await Promise.all([lead, joined]);
+    assert.equal(a.result?.status, "signed_in");
+    assert.equal(b.error?.code, "denied");
+    assert.deepEqual((await ok("vault.status")).tasks[0].tabs, []);
+  } finally {
+    stub.vaultFake.holdSignIns = false;
+  }
+});
+
+test("sibling origins of one site take turns instead of meeting the engine's busy, and only the exact origin shares a result", async () => {
+  const { resetRegistrableLookupsForTest } = await import("../engines/siteDataDomains.ts");
+  resetRegistrableLookupsForTest();
+  const sites = stub.ardiaCoreNativeModules.ArdiaSites;
+  const real = sites.call;
+  sites.call = (verb, profile, json) => (verb === "registrableDomains" ? Promise.resolve(JSON.stringify({ domains: JSON.parse(json).hosts.map((h) => h.split(".").slice(-2).join(".")) })) : real(verb, profile, json));
+  stub.passwordStores.set(null, new Map([login("https://a.three.example", "me"), login("https://b.three.example", "me")]));
+  try {
+    await freshWindow();
+    stub.controlSocket.peers[740] = NODE;
+    const { call } = socketClient(740);
+    const { reply } = await approved(call("vault.taskStart", { sites: ["a.three.example", "b.three.example"] }));
+    const together = concurrentClient(740);
+    takeVaultCounts();
+    const before = stub.vaultFake.signIns.length;
+    stub.vaultFake.holdSignIns = true;
+    try {
+      const a = together("vault.login", { task: reply.result.task, site: "a.three.example" });
+      const [first] = await heldCount(1);
+      const b = together("vault.login", { task: reply.result.task, site: "b.three.example" });
+      await settle();
+      assert.equal(stub.vaultFake.signIns.length, before + 1, "the sibling waits its turn");
+      stub.vaultFake.heldSignIns.get(first)();
+      assert.equal((await a).result.status, "signed_in");
+      const [second] = await heldCount(1);
+      assert.equal(stub.vaultFake.signIns.at(-1).origin, "https://b.three.example", "and then signs in itself");
+      stub.vaultFake.heldSignIns.get(second)();
+      assert.equal((await b).result.status, "signed_in");
+    } finally {
+      stub.vaultFake.holdSignIns = false;
+    }
+    const counts = takeVaultCounts();
+    assert.equal(counts.vault_logins_joined ?? 0, 0);
+    assert.equal(counts.vault_refusals_busy ?? 0, 0);
+  } finally {
+    sites.call = real;
+    resetRegistrableLookupsForTest();
+  }
+});
+
+test("a site the task wasn't granted allocates no per-site state, and a tab the task stops driving drops its auto-fill memory", async () => {
+  const { taskFor, undriveTab } = await import("../vault/tasks.ts");
+  const { tab } = await freshWindow("https://one.example/login");
+  stub.controlSocket.peers[741] = NODE;
+  const { call } = socketClient(741);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"], tabs: [tab] }));
+  const { task } = taskFor(reply.result.task, 741);
+  for (const site of ["two.example", "three.example", "four.example"]) assert.equal((await call("vault.login", { task: reply.result.task, site })).error.code, "not_granted");
+  assert.equal(task.sites.size, 0);
+  assert.equal(task.lanes.size, 0);
+  formOn(tab, "https://one.example")(80);
+  await settle();
+  assert.equal(task.auto.size, 1);
+  undriveTab(task, tab);
+  assert.equal(task.auto.size, 0);
+});
+
+test("the conflict a sign-in reports stays a conflict even while the task's other sign-ins run", async () => {
   stub.controlSocket.peers[734] = NODE;
   const { call } = socketClient(734);
   const { reply } = await approved(call("vault.taskStart", { sites: ["one.example", "two.example"] }));
   const task = reply.result.task;
   const together = concurrentClient(734);
-  takeVaultCounts();
   stub.vaultFake.holdSignIns = true;
   try {
     const one = together("vault.login", { task, site: "one.example" });
     const two = together("vault.login", { task, site: "two.example", account: "a" });
     await heldCount(2);
     stub.vaultFake.signInResult = { status: "signed_in", transfer: "complete", conflicts: 1 };
-    for (const resolve of [...stub.vaultFake.heldSignIns.values()]) resolve();
+    releaseAll();
     const answers = await Promise.all([one, two]);
-    for (const answer of answers) {
-      assert.equal(answer.result?.status, "signed_in", JSON.stringify(answer));
-      assert.equal(answer.result.conflicts, 1);
-    }
+    assert.deepEqual(answers.map((a) => a.error?.code), ["conflict", "conflict"]);
   } finally {
     stub.vaultFake.holdSignIns = false;
   }
-  assert.equal((await call("vault.login", { task, site: "one.example" })).error.code, "conflict");
+});
+
+test("the engine's evidence and reasons reach the caller: weak or no evidence for submitted, no submit control, interrupted, and the browser's own password dialogs", async () => {
+  stub.controlSocket.peers[742] = NODE;
+  const { call } = socketClient(742);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  const login = (result) => ((stub.vaultFake.signInResult = result), call("vault.login", { task: reply.result.task, site: "one.example" }));
+  takeVaultCounts();
+  const weak = await login({ status: "submitted", evidence: "weak", transfer: "complete" });
+  assert.equal(weak.result.evidence, "weak");
+  assert.equal((await login({ status: "submitted", evidence: "none" })).result.evidence, "none");
+  assert.equal((await login({ status: "signed_in", transfer: "complete" })).result.evidence, null);
+  const noSubmit = await login({ status: "failed", reason: "no_submit_control" });
+  assert.equal(noSubmit.error.code, "failed");
+  assert.match(noSubmit.error.message, /reason: no_submit_control/);
+  const interrupted = await login({ status: "interrupted" });
+  assert.equal(interrupted.error.code, "failed");
+  assert.match(interrupted.error.message, /reason: interrupted/);
+  for (const reason of ["basic_auth", "proxy_auth"]) {
+    const dialog = await login({ status: "needs_human", reason });
+    assert.equal(dialog.error.code, "needs_human");
+    assert.match(dialog.error.message, new RegExp(`reason: ${reason}`));
+  }
+  assert.match((await login({ status: "failed", reason: "something_new" })).error.message, /reason: something_new/);
   const counts = takeVaultCounts();
-  assert.equal(counts.vault_own_conflicts, 2);
-  assert.equal(counts.vault_refusals_conflict, 1);
+  assert.equal(counts.vault_submitted_evidence_weak, 1);
+  assert.equal(counts.vault_submitted_evidence_none, 1);
+  assert.equal(counts.vault_failures_no_submit_control, 1);
+  assert.equal(counts.vault_failures_interrupted, 1);
+  assert.equal(counts.vault_failures_basic_auth, 1);
+  assert.equal(counts.vault_failures_proxy_auth, 1);
 });

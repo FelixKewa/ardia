@@ -1,4 +1,5 @@
 import type { Program } from "./programs";
+import type { SignInRun } from "./signIn";
 
 export type VaultTask = {
   id: string;
@@ -16,20 +17,13 @@ export type VaultTask = {
   loginsLoading: Promise<void> | null;
   auto: Map<string, AutoFill>;
   busyTabs: Set<string>;
-  sites: Map<string, SiteRun>;
-  running: Set<SiteAttempt>;
+  sites: Map<string, SiteMemory>;
+  lanes: Map<string, SignInRun>;
 };
 
-export type SiteRun = { manual: Promise<SignInAnswer> | null; manualAccount: string | null; manualTab: string | null; manualEndedAt: number; pending: number; auto: Promise<unknown> | null; account: string | null };
-
-export type SiteAttempt = { origin: string; overlapped: boolean };
+export type SiteMemory = { account: string | null; manualPending: number; manualEndedAt: number };
 
 export type SignInAnswer = Record<string, unknown> & { status: string };
-
-export const siteRun = (task: VaultTask, origin: string): SiteRun => {
-  if (!task.sites.has(origin)) task.sites.set(origin, { manual: null, manualAccount: null, manualTab: null, manualEndedAt: 0, pending: 0, auto: null, account: null });
-  return task.sites.get(origin)!;
-};
 
 export type AutoFill = { documents: Set<string>; skipped: Set<string>; lastSuccess: number; failures: number; stopped: boolean };
 
@@ -106,6 +100,7 @@ export const taskIsLive = (task: VaultTask, at = Date.now()) => tasks.get(task.i
 
 export function undriveTab(task: VaultTask, tab: string) {
   task.tabs.delete(tab);
+  for (const key of [...task.auto.keys()]) if (key.startsWith(`${tab}\n`)) task.auto.delete(key);
   byTab.get(tab)?.delete(task.id);
   if (!byTab.get(tab)?.size) byTab.delete(tab);
 }
