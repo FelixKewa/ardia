@@ -16,6 +16,7 @@ public class VaultModule: Module {
     Self.calls.function
   }
 
+  private static var attempts: [String: () -> Void] = [:]
   private static var pendingKeeps: [String: (origin: String, usernames: [String])] = [:]
   private static let store = VaultStore.shared
 
@@ -38,20 +39,34 @@ public class VaultModule: Module {
     }
   }
 
-  private static func authenticate(_ reason: String, _ done: @escaping (Bool, String) -> Void) {
+  private static var prompts: [String: LAContext] = [:]
+  private static var fakePrompts = Set<String>()
+
+  private static func authenticate(_ id: String, _ reason: String, _ done: @escaping (Bool, String) -> Void) {
     let config = LaunchConfig.shared
     if config.background {
       let granted = config.testValue("reauth") == "granted"
+      if let delay = config.testValue("vaultAuthDelayMs").flatMap(Double.init) {
+        fakePrompts.insert(id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay / 1000) {
+          let current = fakePrompts.remove(id) != nil
+          done(granted && current, granted && current ? "granted" : current ? "testDenied" : "cancelled")
+        }
+        return
+      }
       NSLog("[vault] device owner check in a hidden test instance, no prompt: %@", granted ? "granted" : "denied")
       return done(granted, granted ? "granted" : "testDenied")
     }
     let context = LAContext()
     var problem: NSError?
     guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &problem) else { return done(false, "unavailable") }
+    prompts[id] = context
     context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { granted, error in
       let code = (error as? LAError)?.code
-      withExtendedLifetime(context) {
-        DispatchQueue.main.async { done(granted, granted ? "granted" : code == .userCancel || code == .appCancel || code == .systemCancel ? "cancelled" : "failed") }
+      DispatchQueue.main.async {
+        let current = prompts[id] === context
+        if current { prompts.removeValue(forKey: id) }
+        done(granted && current, granted && current ? "granted" : code == .userCancel || code == .appCancel || code == .systemCancel || !current ? "cancelled" : "failed")
       }
     }
   }
@@ -65,23 +80,48 @@ public class VaultModule: Module {
     },
     "signIn": { args, reply in
       let started = DispatchTime.now().uptimeNanoseconds
-      let profile = args.profile, origin = try args.text("origin"), username = try args.text("username"), url = try args.text("url")
-      onVault({ () -> (String?, Double) in
-        let codeStart = DispatchTime.now().uptimeNanoseconds
-        let code = store.code(profile: profile, origin: origin, username: username)?.code(at: Date())
-        return (code, elapsed(since: codeStart))
-      }) { found in
+      let profile = args.profile, origin = try args.text("origin"), username = try args.text("username"), url = try args.text("url"), attempt = try args.text("attempt")
+      guard attempts[attempt] == nil else { return reply.ok(["status": "failed", "reason": "duplicateAttempt"]) }
+      var cancelledEarly = false
+      attempts[attempt] = { cancelledEarly = true }
+      onVault({ store.warm() && store.code(profile: profile, origin: origin, username: username) != nil }) { hasCode in
+        guard !cancelledEarly, attempts[attempt] != nil else {
+          attempts.removeValue(forKey: attempt)
+          return reply.ok(["status": "cancelled", "usedCode": false, "codeMs": 0, "prepareMs": elapsed(since: started), "appMs": elapsed(since: started)])
+        }
         let prepared = elapsed(since: started)
-        ArdiaServices.vaultSignIn(profile: profile, url: url, origin: origin, username: username, code: found.0) { result in
+        var usedCode = false
+        var codeMs = 0.0
+        let provider: ((@escaping (String?) -> Void) -> Void)? = hasCode ? { answer in
+          guard attempts[attempt] != nil else { return answer(nil) }
+          let codeStart = DispatchTime.now().uptimeNanoseconds
+          store.queue.async {
+            let code = store.code(profile: profile, origin: origin, username: username)?.code(at: Date())
+            DispatchQueue.main.async {
+              codeMs = elapsed(since: codeStart)
+              usedCode = code != nil && attempts[attempt] != nil
+              answer(attempts[attempt] != nil ? code : nil)
+            }
+          }
+        } : nil
+        let cancel = ArdiaServices.vaultSignIn(profile: profile, url: url, origin: origin, username: username, codeProvider: provider) { result in
+          attempts.removeValue(forKey: attempt)
           var answer = result
-          answer["usedCode"] = found.0 != nil
-          answer["codeMs"] = found.1
+          answer["usedCode"] = usedCode
+          answer["codeMs"] = codeMs
           answer["prepareMs"] = prepared
           answer["appMs"] = elapsed(since: started)
           reply.ok(answer)
         }
+        if attempts[attempt] != nil { attempts[attempt] = cancel }
       }
     },
+    "cancelSignIn": { args, reply in
+      let attempt = try args.text("attempt")
+      attempts.removeValue(forKey: attempt)?()
+      reply.ok(true)
+    },
+    "warm": { _, reply in onVault({ store.warm() }) { reply.ok($0) } },
     "saveSecret": { args, reply in
       let profile = args.profile, origin = try args.text("origin"), username = try args.text("username")
       guard let code = VerificationCode(otpauth: try args.text("uri")) else { return reply.ok(["saved": false, "reason": "unreadable"]) }
@@ -124,7 +164,13 @@ public class VaultModule: Module {
     },
     "authenticate": { args, reply in
       let started = DispatchTime.now().uptimeNanoseconds
-      authenticate(try args.text("reason")) { granted, how in reply.ok(["granted": granted, "how": how, "ms": elapsed(since: started)]) }
+      authenticate(try args.text("id"), try args.text("reason")) { granted, how in reply.ok(["granted": granted, "how": how, "ms": elapsed(since: started)]) }
+    },
+    "cancelAuthenticate": { args, reply in
+      let id = try args.text("id")
+      prompts.removeValue(forKey: id)?.invalidate()
+      fakePrompts.remove(id)
+      reply.ok(true)
     },
     "appendLog": { args, reply in
       let lines = try args.strings("lines").filter { !$0.contains("\n") && $0.utf8.count <= 8192 }

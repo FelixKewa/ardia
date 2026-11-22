@@ -107,6 +107,13 @@ export const vaultFake = {
   log: [] as string[],
   kept: [] as { tab: string; token: string; origin: string; usernames: string[] }[],
   locked: false,
+  listGate: null as Promise<void> | null,
+  holdSignIns: false,
+  heldSignIns: new Map<string, (status?: string) => void>(),
+  cancelledSignIns: [] as string[],
+  holdAuth: false,
+  heldAuth: new Map<string, (granted: boolean) => void>(),
+  cancelledAuth: [] as string[],
 };
 const vaultCodeKey = (a: { profile: string; origin: string; username: string }) => `${a.profile}\n${a.origin}\n${a.username}`;
 
@@ -527,9 +534,10 @@ const fakeModules = {
   ArdiaPasswords: domain(
     "passwords",
     {
-      list: () => ({
-        passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username, created: l.created, modified: l.created })),
-      }),
+      list: () => {
+        const answer = () => ({ passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username, created: l.created, modified: l.created })) });
+        return vaultFake.listGate ? vaultFake.listGate.then(answer) : answer();
+      },
       unlock: () => ({ unlocked: true }),
       reveal: (args) => ({ password: passwordStores.get(current.device)?.get(loginKey(args))?.password ?? null }),
       remove: (args) => (logins().delete(loginKey(args)), { ok: true }),
@@ -685,13 +693,17 @@ const fakeModules = {
     takeFirstPaintHolds: () => ({ held: 0, painted: 0, loaded: 0, pressed: 0, timedOut: 0, heldMs: 0 }),
   }),
   ArdiaVault: domain("vault", {
-    state: () => ({ problem: null, unlockMs: 0.5, secureEnclave: false, kind: "software" }),
+    state: () => ({ ready: true, problem: null, unlockMs: 0.5, secureEnclave: false, kind: "software" }),
     screenLocked: () => vaultFake.locked,
-    signIn: ({ profile, url, origin, username }) => {
+    signIn: ({ profile, url, origin, username, attempt }) => {
       const code = vaultFake.codes.has(vaultCodeKey({ profile, origin, username }));
       vaultFake.signIns.push({ profile, url, origin, username, code });
-      return { readyMs: 4, fillMs: 3, totalMs: 9, ...vaultFake.signInResult, usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 } as CallResult<"vault.signIn">;
+      const answer = (status?: string) => ({ readyMs: 4, fillMs: 3, totalMs: 9, ...vaultFake.signInResult, ...(status ? { status } : {}), usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 }) as CallResult<"vault.signIn">;
+      if (!vaultFake.holdSignIns) return answer();
+      return new Promise<CallResult<"vault.signIn">>((resolve) => vaultFake.heldSignIns.set(attempt, (status) => (vaultFake.heldSignIns.delete(attempt), resolve(answer(status)))));
     },
+    cancelSignIn: ({ attempt }) => (vaultFake.cancelledSignIns.push(attempt), vaultFake.heldSignIns.get(attempt)?.("cancelled"), true),
+    warm: () => true,
     saveSecret: (args) => (args.uri.startsWith("otpauth://totp/") ? (vaultFake.codes.set(vaultCodeKey(args), args.uri), { saved: true }) : { saved: false, reason: "unreadable" }),
     keepOfferedCode: ({ tab, token, origin, usernames }) => (vaultFake.kept.push({ tab, token, origin, usernames }), { opened: true, kept: true }),
     hasSecret: (args) => vaultFake.codes.has(vaultCodeKey(args)),
@@ -703,7 +715,14 @@ const fakeModules = {
       if (on) vaultFake.always.push({ profile, origin, teamId, identifier, program, added: Date.now() });
       return true;
     },
-    authenticate: ({ reason }) => (vaultFake.authenticated.push(reason), vaultFake.authenticate),
+    authenticate: ({ id, reason }) => {
+      vaultFake.authenticated.push(reason);
+      if (!vaultFake.holdAuth) return vaultFake.authenticate;
+      return new Promise<CallResult<"vault.authenticate">>((resolve) =>
+        vaultFake.heldAuth.set(id, (granted) => (vaultFake.heldAuth.delete(id), resolve({ granted, how: granted ? "granted" : "cancelled", ms: 1 }))),
+      );
+    },
+    cancelAuthenticate: ({ id }) => (vaultFake.cancelledAuth.push(id), vaultFake.heldAuth.get(id)?.(false), true),
     appendLog: ({ lines }) => (vaultFake.log.push(...lines), true),
     readLog: ({ limit }) => vaultFake.log.slice(-limit),
   }),

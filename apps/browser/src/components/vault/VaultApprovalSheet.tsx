@@ -8,13 +8,14 @@ import { useTheme } from "../ui/theme";
 export function VaultApprovalHost() {
   const windowId = useWindowId();
   const request = useVaultApproval((s) => (s.request?.windowId === windowId ? s.request : null));
+  const checking = useVaultApproval((s) => s.checking);
   if (!request) return null;
-  return <VaultApprovalSheet key={request.id} request={request} />;
+  return <VaultApprovalSheet key={request.id} request={request} checking={checking} />;
 }
 
 const hostOf = (origin: string) => origin.replace(/^https?:\/\//, "");
 
-function VaultApprovalSheet({ request }: { request: ApprovalRequest }) {
+function VaultApprovalSheet({ request, checking }: { request: ApprovalRequest; checking: boolean }) {
   const theme = useTheme();
   const [always, setAlways] = useState(false);
   useEffect(() => noteApprovalShown(request.id), [request.id]);
@@ -54,10 +55,10 @@ function VaultApprovalSheet({ request }: { request: ApprovalRequest }) {
           <Text size="small" tone="textSecondary">{`It calls itself “${request.program.claimed}”, which Ardia can't check.`}</Text>
         ) : null}
       </Box>
-      <DialogActions leading={request.mayAlways ? <Checkbox value={always} onChange={setAlways} label={`Always allow ${name} on ${request.sites.length === 1 ? "this site" : "these sites"}`} /> : undefined}>
+      <DialogActions note={checking ? "Confirm with Touch ID or your password…" : undefined} leading={request.mayAlways ? <Checkbox value={always} disabled={checking} onChange={setAlways} label={`Always allow ${name} on ${request.sites.length === 1 ? "this site" : "these sites"}`} /> : undefined}>
         <Box row gap="s">
-          <Button title="Don't Allow" onPress={deny} />
-          <Button title="Allow…" kind="primary" onPress={() => answerApproval(request.id, always ? "always" : "allow")} />
+          <Button title="Don't Allow" disabled={checking} onPress={deny} />
+          <Button title="Allow…" kind="primary" disabled={checking} onPress={() => answerApproval(request.id, always ? "always" : "allow")} />
         </Box>
       </DialogActions>
     </Dialog>

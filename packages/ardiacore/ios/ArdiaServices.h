@@ -98,12 +98,12 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
 
 @interface ArdiaServices (Vault)
 
-+ (void)vaultSignIn:(NSString *)profile
-                url:(NSString *)url
-             origin:(NSString *)origin
-           username:(NSString *)username
-               code:(nullable NSString *)code
-         completion:(ArdiaCoreResult)completion NS_SWIFT_NAME(vaultSignIn(profile:url:origin:username:code:completion:));
++ (dispatch_block_t)vaultSignIn:(NSString *)profile
+                            url:(NSString *)url
+                         origin:(NSString *)origin
+                       username:(NSString *)username
+                   codeProvider:(nullable void (^)(void (^reply)(NSString *_Nullable code)))codeProvider
+                     completion:(ArdiaCoreResult)completion NS_SWIFT_NAME(vaultSignIn(profile:url:origin:username:codeProvider:completion:));
 
 @end
 

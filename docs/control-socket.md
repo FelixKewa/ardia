@@ -587,9 +587,18 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
 - **Bound grants.** An approval belongs to a one-use request id, the connection, the profile and the exact origins, and
   runs out after 60 s. A task is checked in memory (a map) before every sign-in: its connection, that it hasn't run out,
   that the site was granted. Another connection presenting the token gets `denied`.
+- **Revocation is immediate.** Each sign-in is an attempt bound to its task, connection, profile, tab and origin, checked
+  again after the login lookup, before the engine starts, when it answers and before the tab reloads. Ending the task,
+  closing the connection, the task running out, the screen locking or the Mac sleeping (which also end every task and
+  take down a waiting sheet with `locked`), or a driven tab moving to another profile cancels the attempt in the engine
+  at once (`vault.cancelSignIn`) and answers `task_expired`, `locked` or `denied`. The sheet's request stays until Touch
+  ID answers; the client leaving or the request running out dismisses the Touch ID prompt (`LAContext.invalidate`), and
+  each request settles once.
 - **Auto-fill.** While a task covers a site, a sign-in form Chrome finds in a tab the task drives (`tabs`, or a tab a
-  `vault.login` named) signs in at once on Chrome's own form-parsed event (`vault.loginFormSeen`): no timer, no polling,
-  one try per tab and site every 30 s, none after a refusal.
+  `vault.login` named) signs in at once on Chrome's own form-parsed event (`vault.loginFormSeen`, main frame only): no
+  timer, no polling, one attempt per tab at a time, never twice for a document that signed in (the event's document id;
+  without one, not within 30 s of a success), no more after a final refusal (no login, a passkey or a person needed, not
+  granted), and at most three transient failures per tab and site.
 - **Never stuck.** Each failure answers at once with a code: `not_granted`, `no_login`, `no_form`, `needs_passkey`,
   `needs_human` (the site still shows its sign-in page after the fill: a text-message code, a CAPTCHA; or nobody can see
   the sheet, in a background instance without its test answer), `password_manager_plugin` (a plugin keeps the profile's
@@ -599,13 +608,19 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
   AES-GCM with a key derived from a Secure Enclave key that needs no user presence, unwrapped once per launch off the main
   thread), from the password-manager import, `saveVerificationSecret` and, with **Offer to keep verification codes**
   on, the "Set Up Verification Code in Ardia?" offer a setup code on a page raises. The code is computed natively (RFC 6238,
-  about 2 µs) and handed only to the engine's sign-in. A vault copied to another Mac can't be read there; Settings says to
-  set the codes up again. Chrome's own password store is untouched.
+  about 2 µs) and handed only to the engine's sign-in, asked for at the code step. The Secure Enclave key is made with
+  explicit access control (after first unlock, this device only, private key use) and opened through Security, which
+  returns an error where CryptoKit would trap, so a vault copied to another Mac, a damaged one or one from before an
+  enclave reset is set aside (never overwritten) and Settings says to set the codes up again. A file that can't be read
+  right now (permissions, I/O) is retried, never set aside, and writes wait for it. A change is kept in memory only once
+  it's on disk, and the opened vault is dropped after 5 idle minutes (`vault.taskStart` opens it ahead of the sign-in).
+  Chrome's own password store is untouched.
 - **The activity log** is appended in batches (each second, or every 32 entries) on the vault's own queue to
   `Ardia Vault/activity.jsonl` (cut back to 2 MB past 4 MB).
 - **Test seams** (background instances, `docs/agent-brief.md` › Launch variables): `ARDIA_TEST=vaultApproval=allow|always|deny|ignore`
-  answers the sheet once it is on screen, `reauth=granted` answers Touch ID, `vaultKey=software` keeps the vault key in a
-  file instead of the Secure Enclave.
+  answers the sheet once it is on screen, `reauth=granted` answers Touch ID (`vaultAuthDelayMs=<ms>` after that long),
+  `vaultKey=software` keeps the vault key in a file instead of the Secure Enclave, and `vaultFakeSignInMs=<ms>` answers
+  every sign-in `signed_in` after that long without calling the engine, to test revocation of a fill in flight.
 
 ## Native UI: prompts and menus
 

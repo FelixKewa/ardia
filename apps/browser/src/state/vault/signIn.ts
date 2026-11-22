@@ -2,13 +2,17 @@ import { listPasswords } from "../site/passwords";
 import { originOfLogin } from "../site/savedPasswords";
 import { currentManagerPlugin } from "../site/passwordManager";
 import { currentTab } from "../browser/current";
+import { useBrowser } from "../browser/store";
 import { withLivePage } from "../tabs/livePage";
-import { onLoginFormSeen, vaultSignIn, type VaultSignIn } from "../../platform/vault";
+import { cancelVaultSignIn, onLoginFormSeen, vaultSignIn, type VaultSignIn } from "../../platform/vault";
+import { onAppEvent } from "../../platform/app";
+import { secureRandomHex } from "../../platform/secureRandom";
 import { consentToken } from "../telemetry/client";
 import { noteVaultFill, noteVaultRefusal, noteVaultTiming, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
+import { dropApprovals } from "./approval";
 import { programLabel } from "./programs";
-import { driveTab, taskDrivingTab, type VaultTask } from "./tasks";
+import { dropAllTasks, drivenTabs, driveTab, liveTaskCount, onTaskGone, taskDrivingTab, taskIsLive, undriveTab, type AutoFill, type GoneReason, type VaultTask } from "./tasks";
 
 export class VaultError extends Error {
   readonly code: VaultRefusal;
@@ -20,6 +24,8 @@ export class VaultError extends Error {
 }
 
 const AUTO_RETRY_MS = 30_000;
+const AUTO_FAILURES = 3;
+const FINAL_REFUSALS: ReadonlySet<VaultRefusal> = new Set(["not_granted", "no_login", "needs_passkey", "needs_human", "password_manager_plugin", "denied", "bad_request", "task_expired", "locked"]);
 
 const STATUS_CODES: Partial<Record<VaultSignIn["status"], VaultRefusal>> = {
   still_on_login: "needs_human",
@@ -29,26 +35,63 @@ const STATUS_CODES: Partial<Record<VaultSignIn["status"], VaultRefusal>> = {
   no_login: "no_login",
   needs_passkey: "needs_passkey",
   cross_origin: "not_granted",
+  cancelled: "task_expired",
+  busy: "failed",
   failed: "failed",
 };
 
 const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
   needs_human: "The site wants a step only a person can do (a code sent by text, a CAPTCHA).",
-  automation_attached: "Ardia won't sign in while a DevTools client is attached to the sign-in page.",
+  automation_attached: "Ardia won't sign in while a DevTools client is attached to a worker of that site.",
   still_on_login: "Ardia filled the saved login, but the site still shows its sign-in page: it may want a code sent by text, a CAPTCHA or another step only a person can do.",
   no_form: "Ardia didn't find a sign-in form for the saved login on that page.",
   no_login: "Ardia's password store has no saved login for that site and account.",
   needs_passkey: "That site signs in with a passkey, which only the person at the Mac can use.",
   cross_origin: "The sign-in form belongs to another site than the one granted.",
+  cancelled: "The task ended before the sign-in finished.",
+  busy: "Four sign-ins are already running in this profile; try again in a moment.",
   failed: "The sign-in didn't finish.",
 };
+
+const REVOKED: Record<GoneReason | "tab", [VaultRefusal, string]> = {
+  ended: ["task_expired", "The task ended before the sign-in finished, so Ardia stopped it."],
+  expired: ["task_expired", "The task ran out before the sign-in finished, so Ardia stopped it."],
+  closed: ["task_expired", "The connection closed before the sign-in finished, so Ardia stopped it."],
+  locked: ["locked", "The Mac locked or slept before the sign-in finished, so Ardia stopped it and ended the task."],
+  tab: ["denied", "The tab moved to another profile before the sign-in finished, so Ardia stopped it."],
+};
+
+type Attempt = { id: string; task: VaultTask; origin: string; tabId: string | null; revoked: GoneReason | "tab" | null };
+
+const attempts = new Map<string, Attempt>();
+
+function revoke(attempt: Attempt, why: GoneReason | "tab") {
+  if (attempt.revoked) return;
+  attempt.revoked = why;
+  void cancelVaultSignIn(attempt.id).catch(() => false);
+}
+
+function stillAllowed(attempt: Attempt): boolean {
+  if (attempt.revoked) return false;
+  const { task, tabId } = attempt;
+  if (!taskIsLive(task)) revoke(attempt, task.expiresAt <= Date.now() ? "expired" : "closed");
+  else if (!task.origins.has(attempt.origin)) revoke(attempt, "ended");
+  else if (tabId !== null && currentTab(tabId)?.profileId !== task.profileId) revoke(attempt, "tab");
+  return !attempt.revoked;
+}
+
+function checkpoint(attempt: Attempt) {
+  if (stillAllowed(attempt)) return;
+  const [code, message] = REVOKED[attempt.revoked!];
+  throw new VaultError(code, message);
+}
 
 export function pluginRefusal(profileId: string): VaultError | null {
   const plugin = currentManagerPlugin(profileId);
   return plugin ? new VaultError("password_manager_plugin", `This profile's passwords are kept by ${plugin.title}; Ardia's own password store isn't used, and its plugin doesn't sign agents in.`) : null;
 }
 
-export async function cacheLogins(task: VaultTask) {
+async function fetchLogins(task: VaultTask) {
   const saved = await listPasswords(task.engineProfile);
   task.logins.clear();
   for (const login of saved) {
@@ -59,9 +102,18 @@ export async function cacheLogins(task: VaultTask) {
   }
 }
 
-async function usernameFor(task: VaultTask, origin: string, account: string | null): Promise<string> {
-  if (!task.logins.has(origin)) await cacheLogins(task);
-  const names = task.logins.get(origin) ?? [];
+export function cacheLogins(task: VaultTask): Promise<void> {
+  task.loginsLoading ??= fetchLogins(task).catch((error: unknown) => {
+    task.loginsLoading = null;
+    throw error;
+  });
+  return task.loginsLoading;
+}
+
+async function usernameFor(attempt: Attempt, account: string | null): Promise<string> {
+  await cacheLogins(attempt.task);
+  checkpoint(attempt);
+  const names = attempt.task.logins.get(attempt.origin) ?? [];
   if (account !== null) {
     if (names.includes(account)) return account;
     throw new VaultError("no_login", "There's no saved login with that account for this site.");
@@ -76,24 +128,28 @@ function signInUrl(origin: string, tabId: string | null): string {
   return url && originOfLogin(url).toLowerCase() === origin ? url : `${origin}/`;
 }
 
-type Attempt = { task: VaultTask; origin: string; account: string | null; tabId: string | null; why: string; auto: boolean; startedAt?: number };
+type Request = { task: VaultTask; origin: string; account: string | null; tabId: string | null; why: string; auto: boolean; startedAt?: number };
 
-export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now() }: Attempt) {
+export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now() }: Request) {
   const consent = consentToken();
+  const attempt: Attempt = { id: secureRandomHex(16), task, origin, tabId, revoked: null };
+  attempts.set(attempt.id, attempt);
   const base = { profile: task.profileId, site: origin, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), via: auto ? "auto" : "login", reason: why };
   let username: string | null = account;
   try {
     const refused = pluginRefusal(task.profileId);
     if (refused) throw refused;
     if (!task.origins.has(origin)) throw new VaultError("not_granted", "This task wasn't granted that site.");
-    username = await usernameFor(task, origin, account);
-    if (!task.serving() || task.expiresAt <= Date.now()) throw new VaultError("task_expired", "The task ended before Ardia signed in.");
-    const result = await vaultSignIn(task.engineProfile, signInUrl(origin, tabId), origin, username);
+    checkpoint(attempt);
+    username = await usernameFor(attempt, account);
+    checkpoint(attempt);
+    const result = await vaultSignIn(task.engineProfile, signInUrl(origin, tabId), origin, username, attempt.id);
+    checkpoint(attempt);
     const code = STATUS_CODES[result.status];
     if (code) throw new VaultError(code, STATUS_MESSAGES[result.status] ?? "The sign-in didn't finish.");
     if (tabId) {
       driveTab(task, tabId);
-      void withLivePage(tabId, (page) => page.reload(), task.serving).catch(() => false);
+      void withLivePage(tabId, (page) => page.reload(), () => stillAllowed(attempt)).catch(() => false);
     }
     const ms = result.totalMs ?? result.appMs;
     noteVaultFill(auto, result.usedCode, consent);
@@ -107,21 +163,73 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     noteVaultRefusal(refusal.code, consent);
     recordVaultEvent({ ...base, time: Date.now(), kind: "refusal", account: username, outcome: refusal.code });
     throw refusal;
+  } finally {
+    attempts.delete(attempt.id);
   }
+}
+
+function autoFill(task: VaultTask, tab: string, origin: string): AutoFill {
+  const key = `${tab}\n${origin}`;
+  if (!task.auto.has(key)) task.auto.set(key, { documents: new Set(), lastSuccess: 0, failures: 0, stopped: false });
+  return task.auto.get(key)!;
+}
+
+function revokeTab(tab: string) {
+  for (const attempt of attempts.values()) if (attempt.tabId === tab) revoke(attempt, "tab");
+}
+
+let guarding = false;
+
+function guard() {
+  if (guarding) return;
+  guarding = true;
+  onTaskGone((task, why) => {
+    for (const attempt of attempts.values()) if (attempt.task === task) revoke(attempt, why);
+  });
+  onAppEvent((e) => {
+    if (e.type !== "lockedOrAsleep" && e.type !== "screenLocked") return;
+    dropApprovals(undefined, "locked");
+    dropAllTasks("locked");
+  });
+  useBrowser.subscribe((s, prev) => {
+    if (s.tabs === prev.tabs || (!liveTaskCount() && !attempts.size)) return;
+    for (const [task, tab] of drivenTabs()) {
+      if (s.tabs[tab]?.profileId === task.profileId) continue;
+      undriveTab(task, tab);
+      revokeTab(tab);
+    }
+    for (const attempt of attempts.values()) if (attempt.tabId && s.tabs[attempt.tabId]?.profileId !== attempt.task.profileId) revoke(attempt, "tab");
+  });
 }
 
 let watching: { remove(): void } | null = null;
 
-export function watchLoginForms() {
+export function watchVault() {
+  guard();
   watching ??= onLoginFormSeen((form) => {
     if ((!form.hasPassword && !form.hasOneTimeCode) || form.mainFrame === false) return;
     const origin = form.origin.toLowerCase();
     const task = taskDrivingTab(form.tab, origin);
-    if (!task) return;
-    const key = `${form.tab}\n${origin}`;
-    const last = task.autoTried.get(key);
-    if (last !== undefined && (last < 0 || Date.now() - last < AUTO_RETRY_MS)) return;
-    task.autoTried.set(key, Date.now());
-    void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true }).catch(() => task.autoTried.set(key, -1));
+    if (!task || task.busyTabs.has(form.tab)) return;
+    const state = autoFill(task, form.tab, origin);
+    const document = form.document === undefined ? null : String(form.document);
+    if (state.stopped || (document !== null && state.documents.has(document))) return;
+    if (document === null && Date.now() - state.lastSuccess < AUTO_RETRY_MS) return;
+    task.busyTabs.add(form.tab);
+    void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true })
+      .then(
+        () => {
+          state.failures = 0;
+          state.lastSuccess = Date.now();
+          if (document !== null) state.documents.add(document);
+        },
+        (error: unknown) => {
+          const code = error instanceof VaultError ? error.code : "failed";
+          if (FINAL_REFUSALS.has(code) || ++state.failures >= AUTO_FAILURES) state.stopped = true;
+        },
+      )
+      .finally(() => task.busyTabs.delete(form.tab));
   });
 }
+
+export const liveAttempts = () => attempts.size;

@@ -1,7 +1,7 @@
 import { controlPeer } from "../../platform/automation";
 import { isTestInstance } from "../../platform/launchConfig";
 import { secureRandomHex } from "../../platform/secureRandom";
-import { screenLocked } from "../../platform/vault";
+import { screenLocked, warmVault } from "../../platform/vault";
 import { engineProfile } from "../browser/model";
 import { consentToken } from "../telemetry/client";
 import { noteVaultAlwaysAdded, noteVaultGrant, noteVaultRefusal, noteVaultTiming, type VaultRefusal } from "../telemetry/vaultCounts";
@@ -9,7 +9,7 @@ import { clippedReason, recordVaultEvent, vaultLog } from "../vault/activity";
 import { alwaysAllowed, loadVaultAlways, setAlwaysAllowed, useVaultAlways } from "../vault/always";
 import { askApproval, dropApprovals } from "../vault/approval";
 import { mayAlwaysAllow, programKey, programLabel, programOf, signerLine, type Program } from "../vault/programs";
-import { cacheLogins, pluginRefusal, signIn, VaultError, watchLoginForms } from "../vault/signIn";
+import { cacheLogins, pluginRefusal, signIn, VaultError, watchVault } from "../vault/signIn";
 import { addTask, DEFAULT_TTL_SECONDS, dropAllTasks, dropConnectionTasks, dropTask, MAX_SITES, MAX_TTL_SECONDS, siteOrigin, taskFor, tasksOf, type VaultTask } from "../vault/tasks";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { shownWindowId } from "./socketAsk";
@@ -58,12 +58,14 @@ function originsOf(sites: unknown): string[] {
 }
 
 async function taskStart(params: Record<string, unknown>, call: SocketCall) {
+  const consent = consentToken();
   const profileId = profileArg(params.profile);
   const origins = originsOf(params.sites);
   const why = clippedReason(params.why);
   const ttl = Math.min(MAX_TTL_SECONDS, (params.ttlSeconds as number | undefined) ?? DEFAULT_TTL_SECONDS);
   const tabs = ((params.tabs as string[] | undefined) ?? []).map((tab) => tabOf(tab));
   if (tabs.some((t) => t.profileId !== profileId)) throw new OpError("bad_request", "Every tab must be in the task's profile.");
+  watchVault();
   const program = await programFor(call.connection);
   const base = { profile: profileId, site: origins.join(" "), program, task: null, via: "task", reason: why };
   const plugin = pluginRefusal(profileId);
@@ -76,12 +78,12 @@ async function taskStart(params: Record<string, unknown>, call: SocketCall) {
     if (await screenLocked().catch(() => false)) refuse("locked", "The Mac's screen is locked, so nobody can approve the sign-in.", base);
     const windowId = shownWindowId();
     if (!windowId) refuse("needs_human", "Ardia has no window where it can ask the person to approve the sign-in.", base);
-    const outcome = await askApproval({ windowId, connection: call.connection, profileId, profileName: now().profiles[profileId]?.name ?? "", program, sites: origins, why }, call.serving);
+    const outcome = await askApproval({ windowId, connection: call.connection, profileId, profileName: now().profiles[profileId]?.name ?? "", program, sites: origins, why }, call.serving, consent);
     if (!outcome.allow) refuse(outcome.code, outcome.message, base);
     via = outcome.via;
     sheetMs = outcome.sheetMs;
-    noteVaultTiming("sheet", outcome.sheetMs ?? undefined, consentToken());
-    if (outcome.always && (await setAlwaysAllowed(profileId, origins, program, true))) noteVaultAlwaysAdded(consentToken());
+    noteVaultTiming("sheet", outcome.sheetMs ?? undefined, consent);
+    if (outcome.always && (await setAlwaysAllowed(profileId, origins, program, true))) noteVaultAlwaysAdded(consent);
   }
   call.stillServing();
   const startedAt = Date.now();
@@ -98,13 +100,15 @@ async function taskStart(params: Record<string, unknown>, call: SocketCall) {
     expiresAt: startedAt + ttl * 1000,
     tabs: new Set(),
     logins: new Map(),
-    autoTried: new Map(),
+    loginsLoading: null,
+    auto: new Map(),
+    busyTabs: new Set(),
   };
   for (const t of tabs) task.tabs.add(t.id);
   addTask(task);
-  watchLoginForms();
   void cacheLogins(task).catch(() => undefined);
-  noteVaultGrant(via, consentToken());
+  void warmVault().catch(() => false);
+  noteVaultGrant(via, consent);
   recordVaultEvent({ time: startedAt, kind: "grant", profile: profileId, site: origins.join(" "), account: null, program: programLabel(program), signer: program.signer, task: task.id.slice(0, 8), outcome: "granted", via, reason: why });
   return { task: task.id, sites: origins, expiresAt: task.expiresAt, via, sheetMs, program: programRow(program) };
 }
@@ -191,3 +195,5 @@ export const VAULT_METHODS: MethodSpec[] = [
   { name: "vault.status", mutates: false, description: "Which program Ardia sees on this connection, its live tasks and the sites always allowed for it", params: obj({}), result: "{program, tasks, alwaysAllowed}", run: status },
 ];
 
+
+export const vaultMethodsJson = () => `${JSON.stringify(VAULT_METHODS.map(({ name, params, result }) => ({ name, params, result })), null, 2)}\n`;

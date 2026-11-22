@@ -13,8 +13,14 @@ export type VaultTask = {
   expiresAt: number;
   tabs: Set<string>;
   logins: Map<string, string[]>;
-  autoTried: Map<string, number>;
+  loginsLoading: Promise<void> | null;
+  auto: Map<string, AutoFill>;
+  busyTabs: Set<string>;
 };
+
+export type AutoFill = { documents: Set<string>; lastSuccess: number; failures: number; stopped: boolean };
+
+export type GoneReason = "ended" | "expired" | "closed" | "locked";
 
 export const DEFAULT_TTL_SECONDS = 15 * 60;
 export const MAX_TTL_SECONDS = 2 * 60 * 60;
@@ -24,9 +30,9 @@ const tasks = new Map<string, VaultTask>();
 const byConnection = new Map<number, Set<string>>();
 const byTab = new Map<string, Set<string>>();
 const expiry = new Map<string, ReturnType<typeof setTimeout>>();
-const listeners = new Set<(task: VaultTask, why: "ended" | "expired" | "closed") => void>();
+const listeners = new Set<(task: VaultTask, why: GoneReason) => void>();
 
-export const onTaskGone = (listener: (task: VaultTask, why: "ended" | "expired" | "closed") => void) => (listeners.add(listener), () => void listeners.delete(listener));
+export const onTaskGone = (listener: (task: VaultTask, why: GoneReason) => void) => (listeners.add(listener), () => void listeners.delete(listener));
 
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 
@@ -59,7 +65,7 @@ export function driveTab(task: VaultTask, tab: string) {
   byTab.get(tab)!.add(task.id);
 }
 
-export function dropTask(id: string, why: "ended" | "expired" | "closed"): VaultTask | null {
+export function dropTask(id: string, why: GoneReason): VaultTask | null {
   const task = tasks.get(id);
   if (!task) return null;
   tasks.delete(id);
@@ -79,9 +85,19 @@ export function dropConnectionTasks(connection: number) {
   for (const id of [...(byConnection.get(connection) ?? [])]) dropTask(id, "closed");
 }
 
-export function dropAllTasks() {
-  for (const id of [...tasks.keys()]) dropTask(id, "closed");
+export function dropAllTasks(why: GoneReason = "closed") {
+  for (const id of [...tasks.keys()]) dropTask(id, why);
 }
+
+export const taskIsLive = (task: VaultTask, at = Date.now()) => tasks.get(task.id) === task && task.expiresAt > at && task.serving();
+
+export function undriveTab(task: VaultTask, tab: string) {
+  task.tabs.delete(tab);
+  byTab.get(tab)?.delete(task.id);
+  if (!byTab.get(tab)?.size) byTab.delete(tab);
+}
+
+export const drivenTabs = (): [VaultTask, string][] => [...tasks.values()].flatMap((task) => [...task.tabs].map((tab): [VaultTask, string] => [task, tab]));
 
 export type TaskLookup = { task: VaultTask } | { problem: "task_expired" | "denied" };
 

@@ -1,6 +1,5 @@
 import CryptoKit
 import Foundation
-import IOKit
 
 final class VaultStore {
   static let shared = VaultStore()
@@ -20,29 +19,12 @@ final class VaultStore {
     var always: [AlwaysGrant] = []
   }
 
-  private struct KeyFile: Codable {
-    var version = 1
-    var kind: String
-    var wrapped: Data
-    var peer: Data
-    var salt: Data
-    var machine: Data
-    var check: Data
-  }
-
-  private static let machine: Data = {
-    let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"))
-    defer { IOObjectRelease(service) }
-    let uuid = (IORegistryEntryCreateCFProperty(service, "IOPlatformUUID" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String) ?? ""
-    return Data(SHA256.hash(data: Data("ardia-vault-machine\n\(uuid)".utf8)))
-  }()
-
-  private static func checksum(_ wrapped: Data) -> Data { Data(SHA256.hash(data: wrapped)) }
+  static let idleSeconds = 300.0
 
   let queue = DispatchQueue(label: "ardia.vault", qos: .userInitiated)
-  private var loaded = false
   private var key: SymmetricKey?
-  private var contents = Contents()
+  private var contents: Contents?
+  private var eviction: DispatchWorkItem?
   private(set) var problem: String?
   private(set) var unlockMs: Double = 0
 
@@ -59,106 +41,141 @@ final class VaultStore {
     try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
   }
 
-  private func loadIfNeeded() {
-    if loaded { return }
-    loaded = true
-    let started = DispatchTime.now().uptimeNanoseconds
-    defer { unlockMs = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000 }
-    guard let data = try? Data(contentsOf: keyURL) else { return }
-    guard let file = try? JSONDecoder().decode(KeyFile.self, from: data), let restored = restoreKey(file) else {
-      problem = "unrecoverable"
-      setAside()
-      return
-    }
-    key = restored
-    guard let sealed = try? Data(contentsOf: sealedURL) else { return }
-    guard let box = try? AES.GCM.SealedBox(combined: sealed), let plain = try? AES.GCM.open(box, using: restored), let read = try? JSONDecoder().decode(Contents.self, from: plain), read.version == 1 else {
-      problem = "unreadable"
-      return
-    }
-    contents = read
+  private enum Read {
+    case absent
+    case data(Data)
+    case failed
   }
 
-  private func setAside() {
-    let stamp = Int(Date().timeIntervalSince1970)
-    for url in [keyURL, sealedURL] where FileManager.default.fileExists(atPath: url.path) {
+  private func read(_ url: URL) -> Read {
+    guard FileManager.default.fileExists(atPath: url.path) else { return .absent }
+    guard let data = try? Data(contentsOf: url) else { return .failed }
+    return .data(data)
+  }
+
+  private func setAside(_ urls: [URL]) {
+    let stamp = "\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8))"
+    for url in urls where FileManager.default.fileExists(atPath: url.path) {
       try? FileManager.default.moveItem(at: url, to: url.appendingPathExtension("unreadable-\(stamp)"))
     }
   }
 
-  private func restoreKey(_ file: KeyFile) -> SymmetricKey? {
-    switch file.kind {
-    case "software" where software:
-      return file.wrapped.count == 32 ? SymmetricKey(data: file.wrapped) : nil
-    case "secureEnclave":
-      guard file.machine == Self.machine, file.check == Self.checksum(file.wrapped), SecureEnclave.isAvailable, let own = try? SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: file.wrapped),
-        let peer = try? P256.KeyAgreement.PublicKey(rawRepresentation: file.peer), let shared = try? own.sharedSecretFromKeyAgreement(with: peer)
-      else { return nil }
-      return shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: file.salt, sharedInfo: Data("ardia-vault-1".utf8), outputByteCount: 32)
-    default:
-      return nil
+  private func keepWarm() {
+    eviction?.cancel()
+    let drop = DispatchWorkItem { [weak self] in
+      self?.key = nil
+      self?.contents = nil
     }
+    eviction = drop
+    queue.asyncAfter(deadline: .now() + Self.idleSeconds, execute: drop)
   }
 
-  private func makeKey() -> SymmetricKey? {
-    ensureFolder()
-    let file: KeyFile
-    let made: SymmetricKey
-    if software {
-      made = SymmetricKey(size: .bits256)
-      let wrapped = made.withUnsafeBytes { Data($0) }
-      file = KeyFile(kind: "software", wrapped: wrapped, peer: Data(), salt: Data(), machine: Self.machine, check: Self.checksum(wrapped))
-    } else {
-      guard SecureEnclave.isAvailable, let own = try? SecureEnclave.P256.KeyAgreement.PrivateKey() else {
-        problem = "unavailable"
-        return nil
+  private func load() -> Bool {
+    if contents != nil {
+      keepWarm()
+      return true
+    }
+    let started = DispatchTime.now().uptimeNanoseconds
+    defer { unlockMs = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000 }
+    switch read(keyURL) {
+    case .failed:
+      problem = "retry"
+      return false
+    case .absent:
+      setAside([sealedURL])
+      key = nil
+    case .data(let data):
+      guard let file = try? JSONDecoder().decode(VaultKey.File.self, from: data) else {
+        setAside([keyURL, sealedURL])
+        problem = "unrecoverable"
+        key = nil
+        contents = Contents()
+        keepWarm()
+        return true
       }
-      let peer = P256.KeyAgreement.PrivateKey()
-      var salt = Data(count: 32)
-      _ = salt.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
-      guard let shared = try? own.sharedSecretFromKeyAgreement(with: peer.publicKey) else { return nil }
-      made = shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: salt, sharedInfo: Data("ardia-vault-1".utf8), outputByteCount: 32)
-      file = KeyFile(kind: "secureEnclave", wrapped: own.dataRepresentation, peer: peer.publicKey.rawRepresentation, salt: salt, machine: Self.machine, check: Self.checksum(own.dataRepresentation))
+      switch VaultKey.restore(file, software: software) {
+      case .retry:
+        problem = "retry"
+        return false
+      case .unreadable:
+        setAside([keyURL, sealedURL])
+        problem = "unrecoverable"
+        key = nil
+      case .key(let restored):
+        key = restored
+      }
     }
-    guard let data = try? JSONEncoder().encode(file), (try? data.write(to: keyURL, options: [.atomic])) != nil else { return nil }
-    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
-    problem = nil
-    return made
-  }
-
-  private func save() -> Bool {
-    if key == nil { key = makeKey() }
-    guard let key, let plain = try? JSONEncoder().encode(contents), let sealed = try? AES.GCM.seal(plain, using: key).combined else { return false }
-    ensureFolder()
-    guard (try? sealed.write(to: sealedURL, options: [.atomic])) != nil else { return false }
-    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sealedURL.path)
+    var opened = Contents()
+    if let key {
+      switch read(sealedURL) {
+      case .failed:
+        self.key = nil
+        problem = "retry"
+        return false
+      case .absent:
+        break
+      case .data(let sealed):
+        if let box = try? AES.GCM.SealedBox(combined: sealed), let plain = try? AES.GCM.open(box, using: key), let decoded = try? JSONDecoder().decode(Contents.self, from: plain), decoded.version == 1 {
+          opened = decoded
+        } else {
+          setAside([sealedURL])
+          problem = "unreadable"
+        }
+      }
+    }
+    if problem == "retry" { problem = nil }
+    contents = opened
+    keepWarm()
     return true
   }
 
+  private func persist(_ next: Contents) -> Bool {
+    if key == nil {
+      ensureFolder()
+      guard let (file, made) = VaultKey.make(software: software) else {
+        problem = "unavailable"
+        return false
+      }
+      guard let data = try? JSONEncoder().encode(file), (try? data.write(to: keyURL, options: [.atomic])) != nil else { return false }
+      try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
+      key = made
+      problem = nil
+    }
+    guard let key, let plain = try? JSONEncoder().encode(next), let sealed = try? AES.GCM.seal(plain, using: key).combined else { return false }
+    ensureFolder()
+    guard (try? sealed.write(to: sealedURL, options: [.atomic])) != nil else { return false }
+    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: sealedURL.path)
+    contents = next
+    return true
+  }
+
+  private func change(_ edit: (inout Contents) -> Bool) -> Bool {
+    guard load(), var next = contents else { return false }
+    guard edit(&next) else { return true }
+    return persist(next)
+  }
+
+  func warm() -> Bool { load() }
+
   func state() -> [String: Any] {
-    loadIfNeeded()
-    return ["problem": problem as Any? ?? NSNull(), "unlockMs": unlockMs, "secureEnclave": SecureEnclave.isAvailable, "kind": software ? "software" : "secureEnclave"]
+    let ready = load()
+    return ["ready": ready, "problem": problem as Any? ?? NSNull(), "unlockMs": unlockMs, "secureEnclave": SecureEnclave.isAvailable, "kind": software ? "software" : "secureEnclave"]
   }
 
   func saveCode(_ code: VerificationCode, profile: String, origin: String, username: String) -> Bool {
-    loadIfNeeded()
-    contents.codes[Self.codeKey(profile, origin, username)] = code
-    return save()
+    change { $0.codes[Self.codeKey(profile, origin, username)] = code; return true }
   }
 
   func removeCode(profile: String, origin: String, username: String) -> Bool {
-    loadIfNeeded()
-    guard contents.codes.removeValue(forKey: Self.codeKey(profile, origin, username)) != nil else { return true }
-    return save()
+    change { $0.codes.removeValue(forKey: Self.codeKey(profile, origin, username)) != nil }
   }
 
   func code(profile: String, origin: String, username: String) -> VerificationCode? {
-    loadIfNeeded()
-    return contents.codes[Self.codeKey(profile, origin, username)]
+    load() ? contents?.codes[Self.codeKey(profile, origin, username)] : nil
   }
 
   func codes(profile: String) -> [[String: String]] {
-    loadIfNeeded()
+    guard load(), let contents else { return [] }
     return contents.codes.keys.compactMap { key in
       let parts = key.components(separatedBy: "\n")
       guard parts.count == 3, parts[0] == profile else { return nil }
@@ -167,15 +184,14 @@ final class VaultStore {
   }
 
   func always() -> [AlwaysGrant] {
-    loadIfNeeded()
-    return contents.always
+    load() ? contents?.always ?? [] : []
   }
 
   func setAlways(_ grant: AlwaysGrant, on: Bool) -> Bool {
-    loadIfNeeded()
-    let same = { (g: AlwaysGrant) in g.profile == grant.profile && g.origin == grant.origin && g.teamId == grant.teamId && g.identifier == grant.identifier }
-    contents.always.removeAll(where: same)
-    if on { contents.always.append(grant) }
-    return save()
+    change { contents in
+      contents.always.removeAll { $0.profile == grant.profile && $0.origin == grant.origin && $0.teamId == grant.teamId && $0.identifier == grant.identifier }
+      if on { contents.always.append(grant) }
+      return true
+    }
   }
 }

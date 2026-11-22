@@ -117,7 +117,9 @@ export type EngineCalls = {
   "passwords.setUpVerificationCode": [{ tab: string; token: string; generation?: number }, VerificationCodeSetupResult];
   "vault.state": [{}, VaultStoreState];
   "vault.screenLocked": [{}, boolean];
-  "vault.signIn": [Profile & { url: string; origin: string; username: string }, VaultSignIn];
+  "vault.signIn": [Profile & { url: string; origin: string; username: string; attempt: string }, VaultSignIn];
+  "vault.cancelSignIn": [{ attempt: string }, boolean];
+  "vault.warm": [{}, boolean];
   "vault.saveSecret": [Profile & { origin: string; username: string; uri: string }, { saved: boolean; reason?: "unreadable" }];
   "vault.keepOfferedCode": [Profile & { tab: string; token: string; generation?: number; origin: string; usernames: string[] }, VerificationCodeSetupResult];
   "vault.hasSecret": [Profile & { origin: string; username: string }, boolean];
@@ -125,7 +127,8 @@ export type EngineCalls = {
   "vault.removeSecret": [Profile & { origin: string; username: string }, boolean];
   "vault.always": [{}, VaultAlwaysGrant[]];
   "vault.setAlways": [Profile & { origin: string; teamId: string; identifier: string; program: string; on: boolean }, boolean];
-  "vault.authenticate": [{ reason: string }, VaultAuthentication];
+  "vault.authenticate": [{ id: string; reason: string }, VaultAuthentication];
+  "vault.cancelAuthenticate": [{ id: string }, boolean];
   "vault.appendLog": [{ lines: string[] }, boolean];
   "vault.readLog": [{ limit: number }, string[]];
 
