@@ -20,7 +20,7 @@ test("Hide Element from the page menu goes through the blocker's own record, in 
   assert.doesNotMatch(clicked, /executeScript|dispatchEvent/);
   assert.match(contextMenu, /return resolve\(\{tabId: click\.tabId, pageUrl: click\.pageUrl, frameId: click\.frameId\}\);/);
   assert.match(contextMenu, /runContextMenu:\(NSDictionary<NSString \*, id> \*\)menu \{\n  NSArray \*items = Field<NSArray>\(menu, @"items"\) \?: @\[\];\n  \[self noteContextMenuPoint\];/);
-  assert.match(ubo, /^UBO_PATCH="30"$/m);
+  assert.match(ubo, /^UBO_PATCH="31"$/m);
 });
 
 test("a pick counts only with a real click or Return in that page, on the document it started on", () => {
