@@ -75,9 +75,8 @@ async function openTabs(c: ChannelCaller, m: PluginManifest, params: Record<stri
   const checked = urls.map(pluginWebUrl);
   const bad = checked.findIndex((u) => "problem" in u);
   if (bad >= 0) return failure("bad_request", `urls[${bad}] ${(checked[bad] as { problem: string }).problem}.`);
-  const normalised = checked.map((u) => (u as { url: string }).url);
   const current = stillAllowed(c, (now) => canOpenTabs(now.permissions));
-  const body = await applyMethod({ ops: [{ op: "open", urls: normalised, ...(activate === true ? { activate: true } : {}) }] }, current, 0, pluginUrlRule);
+  const body = await applyMethod({ ops: [{ op: "open", urls, ...(activate === true ? { activate: true } : {}) }] }, current, 0, pluginUrlRule);
   const applied = "result" in body ? (body.result as { ok?: boolean; results?: { tabs?: string[] }[] }) : null;
   if (!applied?.ok) return failure(current() ? "failed" : "refused", current() ? "The tabs couldn't open." : "This run of the helper has ended or lost commands, so nothing opened.");
   return { result: { ok: true, tabs: applied.results?.[0]?.tabs ?? [] } };

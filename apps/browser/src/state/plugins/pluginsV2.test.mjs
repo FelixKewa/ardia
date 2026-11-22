@@ -1443,3 +1443,15 @@ test("a plugin's group.create takes only http and https addresses", async () => 
   const made = await ask("arranger", "apply", { ops: [{ op: "group.create", urls: ["https://ok.example/"], window: w, name: "G" }] }, run);
   assert.equal(made.result?.ok, true);
 });
+
+test("an address within the plugin rules opens even when percent-encoding makes it longer than the limit", async () => {
+  await enable(TABBER);
+  const run = await activated("tabber");
+  const w = S().createWindow({ url: "https://a.example/" });
+  const long = `https://example.com/${"é".repeat(400)}`;
+  assert.ok(long.length < 2048 && encodeURI(long).length > 2048);
+  const opened = await ask("tabber", "open", { urls: [long] }, run);
+  assert.equal(opened.result?.ok, true, JSON.stringify(opened.error));
+  const applied = await ask("tabber", "apply", { ops: [{ op: "open", urls: [long], window: w }] }, run);
+  assert.equal(applied.result?.ok, true, JSON.stringify(applied.error));
+});
