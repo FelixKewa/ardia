@@ -179,3 +179,51 @@ test("a page that rewrites the helpers the picker calls still can't get a line b
   t.diagnostic(`${picks} of ${tricks.length} rewritten pages still finished a pick`);
   assert.ok(picks >= tricks.length - 1, "the rewritten pages still pick, so their selectors reach the checks above");
 });
+
+const ch = (code) => String.fromCharCode(code);
+const nested = (depth, inner) => "<div>".repeat(depth) + inner + "</div>".repeat(depth);
+const VARIED = `<!doctype html><body style="margin:0"><main>
+<div id="1st-place">digit id</div>
+<div id="a:b.c">punctuated id</div>
+<div id="café">accented id</div>
+<div id="hero-banner">plain id</div>
+<section data-testid="promo 'x' (y)">quoted test id</section>
+<section data-qa="a/b#c">qa attribute</section>
+<ul><li>one</li><li>two</li><li>third item</li></ul>
+<p class="sc:x a-b">escaped class</p>
+<p class="中文">cjk class</p>
+<x-fancy-card>custom element</x-fancy-card>
+<x-ad${ch(0x81)}box>c1 control tag</x-ad${ch(0x81)}box>
+<x-ad${ch(0x9f)}box>last c1 tag</x-ad${ch(0x9f)}box>
+<x-ad${ch(0xa0)}box>no-break space tag</x-ad${ch(0xa0)}box>
+<table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>table cell</td></tr></table>
+${nested(14, '<span class="leaf-x">deep leaf</span>')}
+${nested(14, "<span>deep anonymous</span>")}
+</main></body>`;
+
+test("every element the real picker can pick on a varied page saves, and the saved rule finds only it", { skip: CHROMIUM_MISSING, timeout: 60_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 900, height: 1600 } });
+  const targets = ["digit id", "punctuated id", "accented id", "plain id", "quoted test id", "qa attribute", "third item", "escaped class", "cjk class", "custom element", "c1 control tag", "last c1 tag", "no-break space tag", "table cell", "deep leaf", "deep anonymous"];
+  for (const target of targets) {
+    await page.setContent(VARIED);
+    const point = await page.evaluate((target) => {
+      const el = [...document.querySelectorAll("main *")].find((node) => node.childElementCount === 0 && node.textContent === target);
+      el.setAttribute("data-fixture-target", "");
+      const box = el.getBoundingClientRect();
+      return [box.left + 4, box.top + box.height / 2];
+    }, target);
+    const result = run(page, trustedPickerCall("start", null));
+    await page.waitForFunction(() => !!window[Symbol.for("ardia.elementPicker")]?.session);
+    await page.mouse.click(point[0], point[1]);
+    const { selector } = await result;
+    const filter = hidingFilter("example.com", savablePickedSelector(selector) ?? "");
+    assert.ok(filter, `${target}: ${JSON.stringify(selector)} saves`);
+    await run(page, trustedPickerCall("unhide", [selector]));
+    const saved = filter.slice("example.com##".length);
+    const found = await page.evaluate((saved) => [...document.querySelectorAll(saved)].map((el) => el.hasAttribute("data-fixture-target")), saved);
+    assert.ok(found.includes(true), `${target}: ${JSON.stringify(saved)} finds the picked element`);
+    if (target !== "deep anonymous") assert.equal(found.length, 1, `${target}: ${JSON.stringify(saved)} finds only the picked element`);
+  }
+});

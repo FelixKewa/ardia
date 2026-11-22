@@ -1,66 +1,40 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { HOSTILE_STRINGS, embedded } from "../../../../../scripts/security/hostile-inputs.mjs";
 import { CHROMIUM_MISSING, launchChromium } from "../../../../../scripts/lib/test-chromium.mjs";
+import { HIDING_CLEANUP, OfflineError, pinnedUblock } from "../../../../../scripts/lib/ublock-pinned.mjs";
 const { hidingFilter, parseHidingFilter, savablePickedSelector } = await import("./hiddenElements.ts");
 
-const uboScript = readFileSync(new URL("../../../../../packages/ardiacore/scripts/ubo.sh", import.meta.url), "utf8");
-const VERSION = /^UBO_VERSION="([^"]+)"/m.exec(uboScript)[1];
-const SHA256 = /^UBO_SHA256="([0-9a-f]{64})"/m.exec(uboScript)[1];
-const ZIP_NAME = `uBlock0_${VERSION}.chromium.zip`;
-const cache = new URL(`../../../node_modules/.cache/ublock/${VERSION}/`, import.meta.url);
-const NEEDED = ["js/static-filtering-parser.js", "js/arglist-parser.js", "js/jsonpath.js", "js/text-utils.js", "lib/csstree/css-tree.js"];
-
-const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
-
-async function pinnedZip() {
-  const vendored = new URL(`../../../../../packages/ardiacore/vendor/ubo/${ZIP_NAME}`, import.meta.url);
-  for (const candidate of [vendored, new URL(ZIP_NAME, cache)]) if (existsSync(candidate) && sha256(candidate) === SHA256) return fileURLToPath(candidate);
-  mkdirSync(cache, { recursive: true });
-  const response = await fetch(`https://github.com/gorhill/uBlock/releases/download/${VERSION}/${ZIP_NAME}`, { signal: AbortSignal.timeout(60_000) });
-  if (!response.ok) throw new Error(`downloading uBlock Origin ${VERSION}: HTTP ${response.status}`);
-  const target = new URL(ZIP_NAME, cache);
-  const partial = new URL(`${ZIP_NAME}.${process.pid}`, cache);
-  writeFileSync(partial, Buffer.from(await response.arrayBuffer()));
-  if (sha256(partial) !== SHA256) {
-    rmSync(partial, { force: true });
-    throw new Error(`uBlock Origin ${VERSION} doesn't match the SHA-256 ubo.sh pins`);
-  }
-  renameSync(partial, target);
-  return fileURLToPath(target);
-}
-
-async function loadParser() {
-  const root = new URL(`unpacked/uBlock0.chromium/`, cache);
-  if (!NEEDED.every((file) => existsSync(new URL(file, root)))) {
-    const zip = await pinnedZip();
-    const out = fileURLToPath(new URL("unpacked/", cache));
-    mkdirSync(out, { recursive: true });
-    execFileSync("unzip", ["-o", "-q", zip, ...NEEDED.map((file) => `uBlock0.chromium/${file}`), "-d", out], { stdio: "ignore" });
-  }
-  const parser = await import(pathToFileURL(fileURLToPath(new URL("js/static-filtering-parser.js", root))).href);
-  const { LineIterator } = await import(pathToFileURL(fileURLToPath(new URL("js/text-utils.js", root))).href);
-  return { sfp: parser, LineIterator };
-}
-
 let ublock = null;
-let unavailable = false;
-try {
-  ublock = await loadParser();
-} catch (error) {
-  if (process.env.CI) throw error;
-  unavailable = `the pinned uBlock Origin parser isn't available offline (${error.message})`;
+let unavailable = CHROMIUM_MISSING;
+if (!unavailable) {
+  try {
+    ublock = await pinnedUblock();
+  } catch (error) {
+    if (!(error instanceof OfflineError) || process.env.CI) throw error;
+    unavailable = error.message;
+  }
 }
+assert.ok(HIDING_CLEANUP, "ubo.sh still holds the hiding cleanup Ardia's compiler runs");
 
-function compiledRules(text) {
-  const { sfp, LineIterator } = ublock;
-  const parser = new sfp.AstFilterParser({ nativeCssHas: true, trustedSource: false });
-  const lines = new LineIterator(sfp.utils.preparser.prune(text, ["chromium", "ublock"]));
-  const rules = [];
+const PARSER_OPTIONS = { trustedSource: true, nativeCssHas: true, maxTokenLength: 7, trustedTokens: new Set() };
+const ENV = ["chromium", "ublock", "native_css_has"];
+
+function compiledRecords(text) {
+  const { sfp, LineIterator, cosmetic } = ublock;
+  const parser = new sfp.AstFilterParser(PARSER_OPTIONS);
+  const records = [];
+  const writer = {
+    properties: new Map([["name", "user-filters"]]),
+    section: "",
+    select(section) {
+      this.section = section;
+    },
+    push(args) {
+      records.push(JSON.stringify(["cosmetic", this.section, ...args]));
+    },
+  };
+  const lines = new LineIterator(sfp.utils.preparser.prune(text, ENV));
   while (!lines.eot()) {
     let line = lines.next();
     while (line.endsWith(" \\")) {
@@ -69,16 +43,14 @@ function compiledRules(text) {
     }
     parser.parse(line);
     if (!parser.isFilter()) continue;
-    rules.push({
-      line,
-      error: parser.hasError(),
-      network: parser.isNetworkFilter(),
-      cosmetic: parser.isCosmeticFilter(),
-      exception: parser.isException(),
-      compiled: parser.isExtendedFilter() ? parser.result.compiled : undefined,
-    });
+    if (parser.hasError()) records.push(JSON.stringify(["refused", line]));
+    else if (parser.isNetworkFilter()) records.push(JSON.stringify(["network", line]));
+    else if (parser.isScriptletFilter()) records.push(JSON.stringify(["scriptlet", line]));
+    else if (parser.isHtmlFilter()) records.push(JSON.stringify(["html", line]));
+    else if (parser.isResponseheaderFilter()) records.push(JSON.stringify(["responseheader", line]));
+    else cosmetic.compile(parser, writer);
   }
-  return rules;
+  return records;
 }
 
 const appendUserFilters = (content, filters) => `${content.trim()}\n${filters.join("\n").trim()}`;
@@ -94,41 +66,40 @@ const USER_LIST = [
   "    , aside.banner",
 ].join("\n");
 
-const baseline = () => compiledRules(USER_LIST).map((r) => JSON.stringify(r));
-
-function addedBy(filters) {
-  const before = baseline();
-  const after = compiledRules(appendUserFilters(USER_LIST, filters)).map((r) => JSON.stringify(r));
-  for (const rule of before) {
-    const at = after.indexOf(rule);
-    assert.ok(at >= 0, `appending ${JSON.stringify(filters)} changed an existing rule: ${rule}`);
-    after.splice(at, 1);
-  }
-  return after.map((r) => JSON.parse(r));
+let page = null;
+async function shippedCleanup(texts) {
+  return page.evaluate(({ texts, code }) => {
+    const µb = {};
+    new Function("µb", code)(µb);
+    return texts.map((text) => µb.ardiaCleanHidingRules(text).text);
+  }, { texts, code: HIDING_CLEANUP });
 }
 
-function onlyRule(filter, input) {
-  const added = addedBy([filter]);
+async function recordsAddedBy(batches) {
+  const [base, ...after] = await shippedCleanup([USER_LIST, ...batches.map((filters) => appendUserFilters(USER_LIST, filters))]);
+  const before = compiledRecords(base);
+  return after.map((text) => {
+    const records = compiledRecords(text);
+    for (const record of before) {
+      const at = records.indexOf(record);
+      assert.ok(at >= 0, `appending changed an existing rule: ${record}`);
+      records.splice(at, 1);
+    }
+    return records.map((r) => JSON.parse(r));
+  });
+}
+
+const plainRecord = (filter, compiled) => ["cosmetic", "COSMETIC_FILTERS:SPECIFIC", 8, filter.slice(0, filter.indexOf("##")), `+${compiled}`];
+
+function assertPlainCosmetic(added, filter, input, { refusedIsInert }) {
   const where = JSON.stringify(input).slice(0, 160);
-  assert.equal(added.length, 1, `${where}: exactly one new line, got ${JSON.stringify(added)}`);
-  const [rule] = added;
-  assert.equal(rule.line, filter, `${where}: the new line is the one the app sent`);
-  return { rule, where };
-}
-
-function assertNeverMoreThanCosmetic(filter, input) {
-  const { rule, where } = onlyRule(filter, input);
-  if (rule.error) return;
-  assert.equal(rule.network, false, `${where}: not a network filter`);
-  assert.equal(rule.cosmetic, true, `${where}: a cosmetic filter, not a scriptlet, HTML or header filter`);
-  assert.equal(rule.exception, false, `${where}: not an exception`);
-  assert.ok(!rule.compiled.startsWith("{"), `${where}: plain CSS, not a procedural or action filter: ${rule.compiled}`);
-}
-
-function assertOnePlainCosmeticRule(filter, input) {
-  const { rule, where } = onlyRule(filter, input);
-  assert.equal(rule.error, false, `${where}: uBlock accepts it`);
-  assertNeverMoreThanCosmetic(filter, input);
+  if (refusedIsInert && added.length === 1 && added[0][0] === "refused" && added[0][1] === filter) return "refused";
+  assert.equal(added.length, 1, `${where}: exactly one compiled record, got ${JSON.stringify(added)}`);
+  const [record] = added;
+  assert.equal(record[0], "cosmetic", `${where}: a cosmetic record, not ${record[0]}`);
+  assert.deepEqual(record.slice(0, 4), plainRecord(filter, "").slice(0, 4), `${where}: a hiding rule for the page's host only`);
+  assert.ok(record[4].startsWith("+") && !record[4].startsWith("+{"), `${where}: plain CSS, not a procedural or action filter: ${record[4]}`);
+  return "plain";
 }
 
 const HOST = "ardia-fixture.test";
@@ -189,19 +160,8 @@ function savedFilters() {
   return saved;
 }
 
-test("nothing the picker can save compiles, under the pinned uBlock parser, to more than one plain cosmetic rule", { skip: unavailable }, () => {
-  const saved = savedFilters();
-  for (const [filter, input] of saved) assertNeverMoreThanCosmetic(filter, input);
-  for (const selector of PICKER_SHAPES) assert.ok(hidingFilter(HOST, selector), `${selector}: an ordinary pick still saves`);
-});
-
-test("what the picker saves and the blocker's own CSS check takes is exactly one plain cosmetic rule", { skip: unavailable || CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
-  const saved = savedFilters();
-  const browser = await launchChromium();
-  t.after(() => browser.close());
-  const page = await browser.newPage();
-  const filters = [...saved.keys()];
-  const takes = await page.evaluate((filters) => filters.map((f) => {
+const cssTakes = (filters) =>
+  page.evaluate((filters) => filters.map((f) => {
     try {
       document.createDocumentFragment().querySelector(f.slice(f.indexOf("##") + 2));
       return true;
@@ -209,29 +169,35 @@ test("what the picker saves and the blocker's own CSS check takes is exactly one
       return false;
     }
   }), filters);
-  let checked = 0;
+
+test("the pinned uBlock compiles every rule the picker can save, after Ardia's cleanup, to one plain cosmetic record or refuses it", { skip: unavailable, timeout: 60_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  page = await browser.newPage();
+  const saved = savedFilters();
+  const filters = [...saved.keys()];
+  const added = await recordsAddedBy(filters.map((f) => [f]));
+  const takes = await cssTakes(filters);
+  const outcomes = { plain: 0, refused: 0 };
   filters.forEach((filter, i) => {
-    if (!takes[i]) return;
-    checked++;
-    assertOnePlainCosmeticRule(filter, saved.get(filter));
+    outcomes[assertPlainCosmetic(added[i], filter, saved.get(filter), { refusedIsInert: !takes[i] })]++;
   });
-  t.diagnostic(`${checked} of ${filters.length} saved filters pass the CSS check and compile as one plain rule`);
-  assert.ok(checked >= PICKER_SHAPES.length);
+  t.diagnostic(`${filters.length} saved filters: ${outcomes.plain} plain cosmetic records, ${outcomes.refused} refused by uBlock and by the blockers' CSS check`);
+  for (const selector of PICKER_SHAPES) assert.ok(hidingFilter(HOST, selector), `${selector}: an ordinary pick still saves`);
+  assert.ok(outcomes.plain >= PICKER_SHAPES.length);
+
+  const batch = PICKER_SHAPES.map((selector) => hidingFilter(HOST, selector));
+  const [together] = await recordsAddedBy([batch]);
+  assert.equal(together.length, batch.length, "a batch adds one record per pick");
+  for (const record of together) assert.ok(record[0] === "cosmetic" && record[3] === HOST && /^\+[^{]/.test(record[4]), JSON.stringify(record));
 });
 
-test("uBlock-only selector syntax is never saved from a pick, even where a browser's querySelector would take it", { skip: unavailable }, () => {
+test("uBlock-only selector syntax is never saved from a pick, even where a browser's querySelector would take it", () => {
   for (const selector of UBLOCK_ONLY) assert.equal(hidingFilter(HOST, selector), null, selector);
   assert.equal(hidingFilter(HOST, 'div[title="a:style(b)"]'), 'ardia-fixture.test##div[title="a:style(b)"]', "a colon inside a quoted value is data");
 });
 
-test("a batch of saved picks adds one plain cosmetic rule per pick and leaves the list's other rules as they were", { skip: unavailable }, () => {
-  const batch = PICKER_SHAPES.map((selector) => hidingFilter(HOST, selector));
-  const added = addedBy(batch);
-  assert.equal(added.length, batch.length);
-  for (const rule of added) assert.ok(rule.cosmetic && !rule.error && !rule.exception && !rule.compiled.startsWith("{"), JSON.stringify(rule));
-});
-
-test("the filters the Hidden Elements list reads back are the rules uBlock compiles as plain cosmetic rules", { skip: unavailable }, () => {
+test("the Hidden Elements list reads every ordinary pick back as the selector that was saved", () => {
   for (const selector of PICKER_SHAPES) {
     const filter = hidingFilter(HOST, selector);
     assert.equal(parseHidingFilter(filter)?.selector, selector);

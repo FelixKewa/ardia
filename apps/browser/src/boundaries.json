@@ -11,6 +11,12 @@
   "import": "a file or browser profile the user chose to import"
  },
  "customEvents": {
+  "ardia:media-element": "Page-world shim names a media element for the isolated world to track; only an HTMLMediaElement is taken, and only its own playback state is read",
+  "ardia:media-fault": "Page-world shim relays a media error on the listed media sites only; a string of at most 64 characters, at most 200 per page, classified natively by WebKitMediaFaults.event",
+  "ardia:media-session": "Page-world shim relays the page's own Media Session: actions filtered to a fixed list, positions must be finite numbers; it describes only the page's own media",
+  "ardia:app-badge": "Page-world shim relays the Badging API from the top frame; native requires the main frame and takes the origin from frameInfo, as for the badge API itself",
+  "ardia:media-action": "Dispatched by the isolated world into the page world to run a media action on the page's own elements. A page that dispatches its own only acts on itself",
+  "ardia:notification-reply": "Sent by the isolated world to WebKit's page-world Notification shim. A page that dispatches its own only misleads its own shim; it carries nothing from other origins",
   "ardia:notification": "WebKit's page-world Notification shim posts it to the isolated world. Any page script can send the same; native ignores the claimed origin and requires the main frame, frameInfo.securityOrigin equal to the top origin and the site's permission set to allow (WebKitTab+Site.swift)"
  },
  "rows": [
@@ -262,6 +268,16 @@
    "guard": "isTrusted and primary button checked before anything is sent (link notes, Peek)"
   },
   {
+   "id": "page-script-listener:dragend",
+   "source": "page",
+   "guard": "isTrusted checked and in-viewport coordinates required before a link drop is sent; native also needs a real mouse release"
+  },
+  {
+   "id": "page-script-listener:dragstart",
+   "source": "page",
+   "guard": "isTrusted checked; notes an http(s) link being dragged"
+  },
+  {
    "id": "page-script-listener:focus",
    "source": "page",
    "guard": "positions UI only; sends nothing privileged"
@@ -270,6 +286,11 @@
    "id": "page-script-listener:focusin",
    "source": "page",
    "guard": "isTrusted checked where it marks typed fields; positions UI only"
+  },
+  {
+   "id": "page-script-listener:focusout",
+   "source": "page",
+   "guard": "positions or hides field UI only"
   },
   {
    "id": "page-script-listener:fullscreenchange",
@@ -287,6 +308,11 @@
    "guard": "isTrusted checked before marking the page as used"
   },
   {
+   "id": "page-script-listener:keystatuseschange",
+   "source": "page",
+   "guard": "DRM key status; feeds the drm message, which native takes from the main frame only"
+  },
+  {
    "id": "page-script-listener:load",
    "source": "page",
    "guard": "lifecycle; sends state that native checks"
@@ -300,6 +326,11 @@
    "id": "page-script-listener:mousemove",
    "source": "page",
    "guard": "isTrusted checked; hover state only"
+  },
+  {
+   "id": "page-script-listener:mouseup",
+   "source": "page",
+   "guard": "isTrusted and primary button checked before Peek; the selection listener only schedules a selection report"
   },
   {
    "id": "page-script-listener:pagehide",
@@ -347,10 +378,15 @@
    "guard": "lifecycle only"
   },
   {
+   "id": "page-script-listener:wheel",
+   "source": "page",
+   "guard": "Scroll direction from the deltas, and Command-scroll zoom spends native wheel credits"
+  },
+  {
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 53,
+   "count": 66,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -485,10 +521,19 @@
    ]
   },
   {
+   "id": "webkit-page-listener-count:WebKitMediaFaults.swift",
+   "source": "page",
+   "guard": "Media and key errors classified by WebKitMediaFaults.event into a fixed shape",
+   "count": 2,
+   "checks": [
+    "packages/ardiacore/ios/WebKitMediaFaults.swift"
+   ]
+  },
+  {
    "id": "webkit-page-listener-count:WebKitNotifications+Scripts.swift",
    "source": "page",
    "guard": "ardia:notification bridge from the page-world shim; native ignores the claimed origin and uses frameInfo",
-   "count": 1,
+   "count": 2,
    "checks": [
     "packages/ardiacore/ios/WebKitNotifications+Scripts.swift"
    ]
@@ -503,10 +548,19 @@
    ]
   },
   {
+   "id": "webkit-page-listener-count:WebKitPageScript+PageWorld.swift",
+   "source": "page",
+   "guard": "Page-world shim for media errors and notifications; what it reports is classified natively (WebKitMediaFaults.event) and notification origins come from frameInfo",
+   "count": 2,
+   "checks": [
+    "packages/ardiacore/ios/WebKitPageScript+PageWorld.swift"
+   ]
+  },
+  {
    "id": "webkit-page-listener-count:WebKitPageScript+Theme.swift",
    "source": "page",
    "guard": "Isolated world; colour validated natively",
-   "count": 7,
+   "count": 8,
    "checks": [
     "packages/ardiacore/ios/WebKitPageScript+Theme.swift"
    ]

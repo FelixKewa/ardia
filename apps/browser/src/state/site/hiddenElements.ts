@@ -44,7 +44,7 @@ export function hidingHost(url: string | null | undefined): string | null {
 }
 
 const CSS_ESCAPE = /\\[0-9a-fA-F]{1,6} ?|\\[^\n\r\f0-9a-fA-F]/g;
-const PICKER_SELECTOR = /^(?:[-\w.#>\s\u00a0-\uffff]|\[[-\w]+="[^"\\]*"\]|:nth-of-type\(\d+\))+$/;
+const PICKER_SELECTOR = /^(?:[-\w.#>\s\u0080-\uffff]|\[[-\w]+="[^"\\]*"\]|:nth-of-type\(\d+\))+$/;
 
 const inPickerGrammar = (selector: string) => PICKER_SELECTOR.test(selector.replace(CSS_ESCAPE, "a"));
 

@@ -3,7 +3,7 @@
 These tests guard the places where data the user didn't type reaches a privileged part of the browser: a page's
 messages and events, values a page returns from evaluated script, other devices' sync records, links from other apps,
 plugin calls and the control socket. They run in the normal checks (`pnpm -C apps/browser test`, the packages'
-portable tests and CI on every pull request) and add about 7 seconds.
+portable tests and CI on every pull request) and add about 9 seconds.
 
 0.2.48 fixed a picked selector with a line break in it, which the content blocker stored as an extra filter line. The
 value had passed a check that was right for the input it expected. These tests check what the privileged
@@ -14,19 +14,37 @@ wrong for an awkward one fails here and not in a release.
 
 | Layer | File | What it checks |
 | --- | --- | --- |
-| Boundary table | `apps/browser/src/boundaries.json`, `apps/browser/src/boundaries.test.mjs` | Every entry point, found by reading the code: Chromium page messages (`page_script.js` sends, `ArdiaWebView+PageMessages.mm` receivers), the page script's DOM listeners, WebKit page messages, listeners and script handlers, every `evaluate` call site in `apps/browser/src`, native event channels (`ShellEvents.swift`), sync adapters, plugin channel methods, control socket families and raw settings writes. Each row names its source and its guard, and the files and symbols it cites must still exist. A new entry point with no row fails, so does a changed call count, and so does a page script listening for a custom DOM event |
+| Boundary table | `apps/browser/src/boundaries.json`, `apps/browser/src/boundaries.test.mjs` | Entry points written in the forms listed under [What the table detects](#what-the-table-detects), plus hand-kept rows for native gates. Each row names its source and its guard, and the files and symbols it cites must still exist. A new entry point in a detected form with no row fails, so does a changed call count, and so does a page script listening for a custom DOM event |
 | Hostile inputs | `scripts/security/hostile-inputs.mjs` | One shared list: CR, LF, CRLF, FF, VT, NEL, U+2028/2029, NUL, BOM, lone surrogates, overlong strings, uBlock filter syntax (scriptlets, exceptions, HTML and header filters, network options, preparser directives, procedural and action operators), script, data, file and engine URL schemes, path traversal, Object prototype keys and wrong types |
-| Validators and sinks | `apps/browser/src/hostileInputs.test.mjs`, `packages/core/src/hostileInputs.test.ts` | Every hostile value through each guard, checked at the sink: a hiding rule is one line that the app, the Mac write guard and the Linux guards all accept, or nothing; a link from another app opens only a web, file, blank or listed Ardia address; plugin URLs are http(s) only; no settings write, sync write or synced record leaves a setting outside its spec; search templates stay http(s); Reader and Find take nothing from a page that changes settings; typed text never becomes a script URL. One case per finding id from the 0.2.48 review, named after it |
-| uBlock compile | `apps/browser/src/state/site/hidingRuleSink.test.mjs` | Downloads the uBlock Origin release `packages/ardiacore/scripts/ubo.sh` pins (checked against its SHA-256, cached in `apps/browser/node_modules/.cache/ublock`) and compiles the user list with each rule the picker could save appended, as `appendUserFilters` and `compileFilters` do. Each adds exactly one line, which uBlock either refuses or reads as a plain cosmetic rule; with the blockers' own `querySelector` check applied, it is always exactly one plain cosmetic rule. Existing rules compile as before |
-| Real browser | `apps/browser/src/state/site/elementPicker.test.mjs`, `packages/ardiacore/tests/page-script-synthetic-input.test.mjs` | Headless Chromium. The picker refuses a planted picker object and ignores synthetic input; a page that rewrites the helpers the picker calls still gets only inert rules saved. The real `page_script.js` sends no gesture-gated message (new-tab link notes, Peek, link drops, screen share) for dispatched events, scripted clicks, `window.open` without activation or the old Hide Element event, and the same harness does see a real click |
+| Validators and sinks | `apps/browser/src/hostileInputs.test.mjs`, `packages/core/src/hostileInputs.test.ts` | Every hostile value through each guard, checked at the sink: a hiding rule is one line that the app, the Mac write guard and the Linux guards all accept, or nothing; a link from another app opens only a web, file, blank or listed Ardia address; plugin URLs are http(s) only, checked at tab creation through the plugin's own `open` and `apply` in `state/plugins/pluginsV2.test.mjs`; no settings write, sync write or synced record leaves a setting outside its spec; search templates stay http(s); Reader and Find take nothing from a page that changes settings; typed text never becomes a script URL. One case per finding id from the 0.2.48 review, named after it |
+| uBlock compile | `apps/browser/src/state/site/hidingRuleSink.test.mjs`, `scripts/lib/ublock-pinned.mjs` | Uses the uBlock Origin release `packages/ardiacore/scripts/ubo.sh` pins. It appends each rule the picker could save to a user list as `appendUserFilters` does, runs Ardia's shipped cleanup from `ubo.sh` in Chromium, then parses as a trusted source (as uBlock treats My filters) and compiles with uBlock's own cosmetic engine. Each rule adds exactly one host-specific plain cosmetic record, or one line uBlock refuses that the blockers' own `querySelector` check refuses too; existing rules compile as before |
+| Real browser | `apps/browser/src/state/site/elementPicker.test.mjs`, `packages/ardiacore/tests/page-script-synthetic-input.test.mjs` | Headless Chromium. Every element the real picker picks on a varied page (ids, test ids, classes, custom and non-ASCII tag names, tables, deep paths) saves; the picker refuses a planted picker object and ignores synthetic input; a page that rewrites the helpers the picker calls still gets only inert rules saved. The real `page_script.js`, with the screen-share picker shim on, sends no gesture-gated message (new-tab link notes, Peek, link drops, screen share) or Hide Element message for dispatched events, scripted clicks, `window.open` or `getDisplayMedia` without activation, or the old Hide Element event; the same harness sees a real click, a real share request and a real link drag get through |
 
 `scripts/lib/test-chromium.mjs` finds the browser: Playwright's own download, `ARDIA_TEST_CHROMIUM`, or the system
-Chrome GitHub's Linux runners ship. Locally, a missing browser or no network skips those cases; in CI, both fail.
+Chrome GitHub's Linux runners ship. `scripts/lib/ublock-pinned.mjs` checks the uBlock zip's SHA-256 on every run, keeps
+the unpacked tree under a directory named by that SHA (published only once complete), and retries a download that
+fails on the network; CI restores both from its cache. Locally, a missing browser or no network skips those cases. A
+checksum mismatch, a broken archive or an import error fails everywhere, and in CI everything fails.
+
+## What the table detects
+
+The guarantee is only as wide as these forms. An entry point written another way (a destructured `evaluate`, a
+listener added through a helper with a different name, a message kind built at run time) isn't found; give it a
+hand-kept row (`"detected": false`) and prefer one of these forms. `boundaries.test.mjs` proves each form with a fixture
+that must raise a missing row.
+
+| Surface | Forms |
+| --- | --- |
+| Chromium page messages | `send("kind"` or `post("kind"` in `page_script.js`, and `[kind isEqualToString:@"kind"]` in the `.mm` files that receive page messages. A kind is letters, digits, `_`, `-`, `.` and `:` |
+| Page script listeners | `addEventListener("event"`, with the name on the same line or the next, and `apply(alias, target, ["event"` where `alias` is any name the script binds to `EventTarget.prototype.addEventListener` (plus `listen` and `addListener`). Each script's total count of both forms is pinned, so a listener with a computed name still changes it |
+| WebKit page messages | `post(`/`send(` with a quoted kind in `WebKit*.swift` scripts, and `case "kind":` in `WebKitTab.pageMessage`, `WebKitTab+Site.swift` and `WebKitTab+FieldProviders.swift`; listener counts per script as above; every `userContentController(` handler |
+| Evaluated script | `.evaluate(`, `?.evaluate(`, `.evaluate?.(`, `.evaluate<…>(` with any generic, and `["evaluate"](`, counted per file in `apps/browser/src` |
+| Others | `ShellEvents.Channel` cases, exported sync adapters, `case "method":` in the plugin channel, `SOCKET_FAMILIES`, and spreads of the settings object outside the settings writer |
 
 ## Adding an entry point
 
-When code starts taking data from a page, a frame, another device, another app, a plugin or the socket, the boundary
-test names it. Then:
+When code starts taking data from a page, a frame, another device, another app, a plugin or the socket in one of the
+detected forms, the boundary test names it. Anything else needs a hand-kept row. Then:
 
 1. Add its row to `apps/browser/src/boundaries.json`: `id` as the failure printed it, `source` (one of `sources`),
    `guard` (what refuses bad input, in a sentence) and `checks` (`path#symbol` of the guard, so the row can't outlive
