@@ -213,7 +213,7 @@ public actor SyncEngine {
     return message
   }
 
-  public func answerVault(id: String, allow: Bool, always: Bool, signature: String) throws {
+  public func answerVault(id: String, allow: Bool, always: Bool, signature: String?) throws {
     try checkLive()
     try load()
     try mutate("companionAnswerVault", VaultAnswerInput(id: id, allow: allow, always: always, at: now().millisecondsSince1970, sig: signature))

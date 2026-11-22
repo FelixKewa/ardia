@@ -146,15 +146,9 @@ function VaultApproval({ request, vaultKey, keyFailed, now, onDone }: { request:
                 {busy === "allow" ? <ProgressView modifiers={[frame({ maxWidth: FILL })]} /> : <Label title="Allow with Face ID" systemImage="faceid" modifiers={[frame({ maxWidth: FILL })]} />}
               </Button>
             ) : null}
-            {request.trusted ? (
-              <Button onPress={() => void answer(false)} modifiers={[buttonStyle("bordered"), ROUNDED, controlSize("large"), disabled(busy !== null)]}>
-                <Text modifiers={[frame({ maxWidth: FILL })]}>Don’t Allow</Text>
-              </Button>
-            ) : (
-              <Button onPress={onDone} modifiers={[buttonStyle("bordered"), ROUNDED, controlSize("large")]}>
-                <Text modifiers={[frame({ maxWidth: FILL })]}>Not Now</Text>
-              </Button>
-            )}
+            <Button onPress={() => void answer(false)} modifiers={[buttonStyle("bordered"), ROUNDED, controlSize("large"), disabled(busy !== null)]}>
+              {busy === "deny" ? <ProgressView modifiers={[frame({ maxWidth: FILL })]} /> : <Text modifiers={[frame({ maxWidth: FILL })]}>Don’t Allow</Text>}
+            </Button>
           </Section>
         </Form>
       </NavigationStack>

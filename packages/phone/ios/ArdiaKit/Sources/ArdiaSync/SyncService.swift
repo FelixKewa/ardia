@@ -521,9 +521,26 @@ public final class SyncService {
     return key.fingerprint
   }
 
-  private func signVault(_ message: String, for request: VaultApprovalRequest, allow: Bool) async -> Result<String, VaultPhoneKeyError> {
+  private func declineVault(_ id: String) async -> VaultAnswerOutcome {
+    if isDemo {
+      snapshot.vaultRequests?.removeAll { $0.id == id }
+      return .sent
+    }
+    guard let engine else { return .failed }
+    do {
+      try await engine.answerVault(id: id, allow: false, always: false, signature: nil)
+    } catch SyncError.refused {
+      return .gone
+    } catch {
+      return .failed
+    }
+    Task { await runCycle() }
+    return .sent
+  }
+
+  private func signVault(_ message: String, for request: VaultApprovalRequest) async -> Result<String, VaultPhoneKeyError> {
     let sites = request.sites.compactMap { URL(string: $0)?.host() }.joined(separator: ", ")
-    let reason = allow ? "Let \(request.program) sign in to \(sites)" : "Turn down \(request.program) signing in to \(sites)"
+    let reason = "Let \(request.program) sign in to \(sites)"
     do {
       return .success(try await VaultPhoneKey.loadOrCreate().sign(message, reason: reason))
     } catch let error as VaultPhoneKeyError {
@@ -547,10 +564,11 @@ public final class SyncService {
 
   public func answerVault(id: String, allow: Bool, always: Bool) async -> VaultAnswerOutcome {
     guard let request = vaultRequests.first(where: { $0.id == id }) else { return .gone }
+    guard allow else { return await declineVault(id) }
     guard request.trusted == true else { return .untrusted }
     let always = always && request.alwaysOffered == true
     if isDemo {
-      switch await signVault("demo \(id)", for: request, allow: allow) {
+      switch await signVault("demo \(id)", for: request) {
       case .failure(let error): return error == .cancelled ? .cancelled : .unavailable
       case .success: break
       }
@@ -567,7 +585,7 @@ public final class SyncService {
       return .failed
     }
     let signature: String
-    switch await signVault(message, for: request, allow: allow) {
+    switch await signVault(message, for: request) {
     case .failure(let error): return error == .cancelled ? .cancelled : .unavailable
     case .success(let made): signature = made
     }

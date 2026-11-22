@@ -271,7 +271,7 @@ export function companionVaultChallenge(input: { id: string; allow: boolean; alw
   return message === null ? refused : { saved: true, message };
 }
 
-export function companionAnswerVault(input: { id: string; allow: boolean; always: boolean; at: number; sig: string }) {
+export function companionAnswerVault(input: { id: string; allow: boolean; always: boolean; at: number; sig?: string | null }) {
   const c = loaded();
   const answer = answerVaultRequest(c.scopes[APP], (c.vaultAnswers ??= []), input, c.device);
   if (!answer) return refused;

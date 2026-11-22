@@ -1256,7 +1256,7 @@ function companionVaultChallenge(input                                          
   return message === null ? refused : { saved: true, message };
 }
 
-function companionAnswerVault(input                                                                          ) {
+function companionAnswerVault(input                                                                                  ) {
   const c = loaded();
   const answer = answerVaultRequest(c.scopes[APP], (c.vaultAnswers ??= []), input, c.device);
   if (!answer) return refused;
@@ -2149,10 +2149,11 @@ function vaultChallengeFor(app                        , answers                 
   return request ? vaultChallenge(request, me, input.allow === true, input.always === true) : null;
 }
 
-function answerVaultRequest(app                        , answers                     , input                               , me        )                           {
+function answerVaultRequest(app                        , answers                     , input                                       , me        )                           {
   const request = openRequest(app, answers, input, me);
-  if (!request || typeof input.sig !== "string" || !input.sig) return null;
-  const answer = vaultAnswerFor(request, input.allow === true, input.always === true, me, input.at, input.sig);
+  const allow = input.allow === true;
+  if (!request || (allow && (typeof input.sig !== "string" || !input.sig))) return null;
+  const answer = vaultAnswerFor(request, allow, input.always === true, me, input.at, allow ? (input.sig          ) : "");
   answers.push(answer);
   return answer;
 }
@@ -2225,7 +2226,7 @@ function vaultAnswerOf(key        , v         )                           {
   if (!key.startsWith(VAULT_ANSWER) || !v || typeof v !== "object") return null;
   const r = v                           ;
   const id = key.slice(VAULT_ANSWER.length);
-  if (r.id !== id || !ID.test(id) || !text(r.n, 128) || !text(r.p, 128) || !text(r.m, 128) || !text(r.by, 128) || !sitesOk(r.s) || !text(r.sig, 200) || !BASE64.test(r.sig          )) return null;
+  if (r.id !== id || !ID.test(id) || !text(r.n, 128) || !text(r.p, 128) || !text(r.m, 128) || !text(r.by, 128) || !sitesOk(r.s) || !text(r.sig, 200) || (r.a === true ? !BASE64.test(r.sig          ) : r.sig !== "")) return null;
   if (typeof r.a !== "boolean" || typeof r.al !== "boolean" || typeof r.x !== "number" || typeof r.at !== "number") return null;
   return r                     ;
 }

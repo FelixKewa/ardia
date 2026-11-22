@@ -47,7 +47,7 @@ export function vaultAnswerOf(key: string, v: unknown): VaultAnswerRecord | null
   if (!key.startsWith(VAULT_ANSWER) || !v || typeof v !== "object") return null;
   const r = v as Record<string, unknown>;
   const id = key.slice(VAULT_ANSWER.length);
-  if (r.id !== id || !ID.test(id) || !text(r.n, 128) || !text(r.p, 128) || !text(r.m, 128) || !text(r.by, 128) || !sitesOk(r.s) || !text(r.sig, 200) || !BASE64.test(r.sig as string)) return null;
+  if (r.id !== id || !ID.test(id) || !text(r.n, 128) || !text(r.p, 128) || !text(r.m, 128) || !text(r.by, 128) || !sitesOk(r.s) || !text(r.sig, 200) || (r.a === true ? !BASE64.test(r.sig as string) : r.sig !== "")) return null;
   if (typeof r.a !== "boolean" || typeof r.al !== "boolean" || typeof r.x !== "number" || typeof r.at !== "number") return null;
   return r as VaultAnswerRecord;
 }

@@ -92,10 +92,11 @@ export function vaultChallengeFor(app: ScopeState | undefined, answers: VaultAns
   return request ? vaultChallenge(request, me, input.allow === true, input.always === true) : null;
 }
 
-export function answerVaultRequest(app: ScopeState | undefined, answers: VaultAnswerRecord[], input: AnswerInput & { sig: string }, me: string): VaultAnswerRecord | null {
+export function answerVaultRequest(app: ScopeState | undefined, answers: VaultAnswerRecord[], input: AnswerInput & { sig?: string | null }, me: string): VaultAnswerRecord | null {
   const request = openRequest(app, answers, input, me);
-  if (!request || typeof input.sig !== "string" || !input.sig) return null;
-  const answer = vaultAnswerFor(request, input.allow === true, input.always === true, me, input.at, input.sig);
+  const allow = input.allow === true;
+  if (!request || (allow && (typeof input.sig !== "string" || !input.sig))) return null;
+  const answer = vaultAnswerFor(request, allow, input.always === true, me, input.at, allow ? (input.sig as string) : "");
   answers.push(answer);
   return answer;
 }

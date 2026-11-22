@@ -401,7 +401,8 @@ the Mac; the first answer wins and the other side closes.
   iPhone therefore keeps its own P-256 key in the Secure Enclave (`.privateKeyUsage` and `.userPresence`, this
   device only), made the first time a request needs it (`VaultPhoneKey` in ArdiaKit). An answer's `sig` signs
   `vaultChallenge`: the length-prefixed id, nonce, profile, sites in order, expiry, Always Allow offered, Mac, phone,
-  allow and always. Signing is what asks for Face ID or the passcode, once, for Allow and for Don't Allow. The iOS
+  allow and always. Signing an Allow is what asks for Face ID or the passcode, once. Don't Allow goes out unsigned,
+  with no prompt, from a trusted phone or not: a denial can't grant anything (below). The iOS
   Simulator can't use Secure Enclave keys with an access control, so a simulator build signs with a software key
   behind the same prompt; a real iPhone is the only proof of the Secure Enclave path.
 - **Trusting a phone.** The Mac takes answers only from keys the owner trusted on it: Settings › Sync › the iPhone's
@@ -410,12 +411,15 @@ the Mac; the first answer wins and the other side closes.
   `sign-in-approval-phones.json` in an `ARDIA_DATA_DIR` test instance); verifying and keeping them is native
   (`packages/sync/ios/Core/VaultPhoneKeys.swift`, CryptoKit), and Stop Sign-In Approvals… forgets one.
 - **Mac** (`apps/browser/src/state/sync/vaultApprovals.ts`): `askPhoneForVaultApproval({id, nonce, profile, program,
-  sites, why, alwaysOffered, expiresAt}, consent?)` resolves `{allow, always, nonce, phone, signature}` or `null`. It is
+  sites, why, alwaysOffered, expiresAt}, consent?)` resolves only a verified Allow, `{allow: true, always, nonce,
+  phone, signature}`, or `null`. It is
   `null` at once when sync isn't running, no phone has written in 14 days, or the ask is malformed (sites must be bare
   `https://` origins), and `null` at the expiry (at most 10 minutes). While an ask is open the engine cycles every 2 s.
   An answer counts only if every bound field matches the open ask, its `by` is a phone, the record's author device is
   that phone, and its signature verifies against that phone's trusted key over the Mac's own challenge; `always` is
-  never true unless the ask offered it. Unsigned, wrongly signed and untrusted answers are ignored and counted. Once
+  never true unless the ask offered it. Unsigned, wrongly signed and untrusted Allows are ignored and counted. A Don't
+  Allow, signed or not, only ends the phone's side of that one request: the ask resolves `null`, so the Mac's own
+  sheet keeps waiting for the owner, and later requests are asked as usual. Once
   settled, or on `cancelPhoneVaultApproval(id)` when the Mac's own sheet answers first, the Mac deletes the request and
   answer, which closes the phone's sheet.
 - **iPhone** (`packages/sync/src/companion/vault.ts`): the view lists open requests (never the nonce) with whether the

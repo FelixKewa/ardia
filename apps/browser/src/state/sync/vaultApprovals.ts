@@ -5,7 +5,7 @@ import { notePhoneApproval } from "../telemetry/vaultPhoneApprovalCounts";
 import { scheduleSync, syncWritesOpen, useSync } from "./engine";
 
 export type VaultApprovalAsk = { id: string; nonce: string; profile: string; program: string; sites: string[]; why?: string; alwaysOffered: boolean; expiresAt: number };
-export type VaultApprovalAnswer = { allow: boolean; always: boolean; nonce: string; phone: string; signature: string };
+export type VaultApprovalAnswer = { allow: true; always: boolean; nonce: string; phone: string; signature: string };
 export type PhoneCheck = "ok" | "unenrolled" | "bad_signature";
 export type PhoneKey = { phone: string; name: string; fingerprint: string; trusted: boolean };
 
@@ -177,7 +177,8 @@ export function vaultApprovalsAdapter(me: string, app: () => ScopeState | undefi
 function settleFromPhone(request: VaultRequestRecord, answer: VaultAnswerRecord) {
   const entry = openAsks.get(request.id);
   if (!entry || !channel) return;
+  if (!answer.a) return finish(request.id, null, "denied");
   const check = channel.verify(answer.by, vaultChallenge(request, answer.by, answer.a, answer.al), answer.sig);
   if (check !== "ok") return notePhoneApproval(check, entry.consent);
-  finish(request.id, { allow: answer.a, always: answer.a && answer.al && request.ao, nonce: answer.n, phone: answer.by, signature: answer.sig }, answer.a ? "allowed" : "denied");
+  finish(request.id, { allow: true, always: answer.al && request.ao, nonce: answer.n, phone: answer.by, signature: answer.sig }, "allowed");
 }

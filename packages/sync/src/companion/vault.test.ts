@@ -75,7 +75,7 @@ class Mac {
         isPhone: (device) => (visible(this.state, "dev:").get(`dev:${device}`) as { k?: string } | undefined)?.k === "phone",
         answered: (request, answer) => {
           const raw = this.trusted.get(answer.by);
-          const good = !!raw && verify("sha256", Buffer.from(vaultChallenge(request, answer.by, answer.a, answer.al)), publicFromRaw(raw), Buffer.from(answer.sig, "base64"));
+          const good = !answer.a || (!!raw && verify("sha256", Buffer.from(vaultChallenge(request, answer.by, answer.a, answer.al)), publicFromRaw(raw), Buffer.from(answer.sig, "base64")));
           if (!good) return void this.rejected.push(answer);
           this.live = this.live.filter((r) => r.id !== request.id);
           this.answers.push({ request, answer });
@@ -311,10 +311,11 @@ test("the phone's key reaches the Mac, the view says whether this Mac trusts it,
   const base = { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al: false, by: PHONE, at: folder.now };
   apply({ ...base, sig: forged(vaultChallenge(request, PHONE, true, false), impostor.privateKey) });
   apply({ ...base, sig: forged(vaultChallenge({ ...request, s: ["https://evil.example"] }, PHONE, true, false), phone.keys.privateKey) });
+  apply({ ...base, sig: "" });
   apply({ ...base, a: false, sig: forged(vaultChallenge(request, PHONE, true, false), phone.keys.privateKey) });
-  assert.deepEqual([mac.answers.length, mac.rejected.length], [0, 4]);
+  assert.deepEqual([mac.answers.length, mac.rejected.length], [0, 3]);
   apply({ ...base, sig: forged(vaultChallenge(request, PHONE, true, false), phone.keys.privateKey) });
-  assert.deepEqual([mac.answers.length, mac.rejected.length], [1, 4]);
+  assert.deepEqual([mac.answers.length, mac.rejected.length], [1, 3]);
 });
 
 test("the challenge is length-prefixed, so no field can bleed into the next", () => {
@@ -322,4 +323,21 @@ test("the challenge is length-prefixed, so no field can bleed into the next", ()
   assert.equal(vaultChallenge(request, PHONE, true, true), `20:ardia-vault-answer-136:${request.id}22:${NONCE}3:p:11:217:https://a.example17:https://b.example13:18000000000001:126:${MAC}27:${PHONE}1:11:1`);
   assert.notEqual(vaultChallenge({ ...request, s: ["https://a.example17:https://b.example"] }, PHONE, true, true), vaultChallenge(request, PHONE, true, true));
   assert.equal(vaultChallenge({ ...request, ao: false }, PHONE, true, true).endsWith("1:11:0"), true);
+});
+
+test("Don't Allow goes out unsigned and needs no trust, while an Allow without a signature is refused before it leaves the phone", async () => {
+  const folder = new Folder();
+  const mac = new Mac(folder);
+  const phone = new Phone(folder).launch();
+  await phone.cycle();
+  await mac.sync();
+  mac.ask();
+  await mac.sync();
+  assert.equal((await phone.requests())[0]!.trusted, false);
+  (globalThis as { __host?: Host }).__host = phone.host();
+  assert.deepEqual(companionAnswerVault({ id: ID, allow: true, always: false, at: folder.now }), { saved: false, refused: true });
+  assert.deepEqual(companionAnswerVault({ id: ID, allow: false, always: true, at: folder.now }), { saved: true });
+  await phone.cycle();
+  await mac.sync();
+  assert.deepEqual(mac.answers.map(({ answer }) => [answer.a, answer.al, answer.sig]), [[false, false, ""]]);
 });

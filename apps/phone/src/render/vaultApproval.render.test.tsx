@@ -89,20 +89,22 @@ onIos("a program the Mac won't let you always allow (the ardia command, an inter
   unmount(root);
 });
 
-onIos("before the Mac trusts this iPhone, the sheet shows its key's code and how to trust it there, offers no Allow, and makes the key if there is none", async () => {
+onIos("before the Mac trusts this iPhone, the sheet shows its key's code and how to trust it there, offers no Allow but still lets you say no, and makes the key if there is none", async () => {
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   const prepare = jest.spyOn(sync, "prepareVaultKey").mockResolvedValue("4979 42AC F8F3 4E6A 2DBB");
   useSync.setState({ view: { ...EMPTY_VIEW, vaultRequests: [{ ...request, trusted: false }], vaultKey: null } });
   const root = renderSurface(<VaultApprovalSheet />);
   await act(async () => undefined);
   expect(prepare).toHaveBeenCalledTimes(1);
-  expect(texts(root.root)).toEqual(expect.arrayContaining(["Trust This iPhone First", "Not Now"]));
+  expect(texts(root.root)).toEqual(expect.arrayContaining(["Trust This iPhone First", "Don’t Allow"]));
   expect(texts(root.root)).not.toContain("Allow with Face ID");
   expect(within(root.root, (props) => typeof props.onIsOnChange === "function")).toEqual([]);
   act(() => useSync.setState({ view: { ...EMPTY_VIEW, vaultRequests: [{ ...request, trusted: false }], vaultKey: "4979 42AC F8F3 4E6A 2DBB" } }));
   expect(texts(root.root)).toContain("4979 42AC F8F3 4E6A 2DBB");
   expect(counted).toHaveBeenCalledWith("vault_requests_untrusted");
-  await press(button(root.root, "Not Now"));
+  const answer = jest.spyOn(sync, "answerVaultRequest").mockResolvedValue("sent");
+  await press(button(root.root, "Don’t Allow"));
+  expect(answer).toHaveBeenCalledWith(request.id, false, false);
   expect(presented(root)).toBe(false);
   unmount(root);
 });

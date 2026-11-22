@@ -90,7 +90,7 @@ async function setUp({ phoneSeenDaysAgo = 0, enrolled = true } = {}) {
     await phone.sync();
     const [key, value] = [...visible(phone.state, VAULT_REQUEST)][0];
     const request = vaultRequestOf(key, value);
-    const sig = signWith(signer, vaultChallenge(request, PHONE, allow, always));
+    const sig = allow ? signWith(signer, vaultChallenge(request, PHONE, allow, always)) : "";
     answers.set(`${VAULT_ANSWER}${request.id}`, { ...vaultAnswerFor(request, allow, always, PHONE, Date.now(), sig), ...change });
     await phone.sync();
   };
@@ -216,5 +216,40 @@ test("a phone's key is trusted only once the owner confirms its fingerprint on t
   await mac.sync();
   assert.equal(visible(mac.state, VAULT_TRUST).has(vaultTrustKey(PHONE, MAC)), false);
   assert.equal(phoneKeys()[0].trusted, false);
+  connectVaultApprovals(null);
+});
+
+test("the phone's Don't Allow needs no signature and can't allow anything: it only drops the phone's side of that one request", async () => {
+  takeVaultPhoneApprovalCounts();
+  const { mac, phoneAnswers } = await setUp({ enrolled: false });
+  const first = askPhoneForVaultApproval(ask(), "vault-approvals-test");
+  await mac.sync();
+  await phoneAnswers(false, false);
+  await mac.sync();
+  assert.equal(await first, null);
+  assert.equal(takeVaultPhoneApprovalCounts().vault_phone_denied, 1);
+  await mac.sync();
+  assert.deepEqual([...visible(mac.state, VAULT_REQUEST).keys()], []);
+  const second = askPhoneForVaultApproval(ask(), "vault-approvals-test");
+  await mac.sync();
+  assert.equal(vaultApprovalsAsking(), true);
+  connectVaultApprovals(null);
+  assert.equal(await second, null);
+});
+
+test("a denial from the phone, forged or not, leaves the Mac's own sheet waiting for the owner", async () => {
+  const { askApproval, dropApprovals, useVaultApproval } = await import("../vault/approval.ts");
+  const { programOf } = await import("../vault/programs.ts");
+  const { mac, phoneAnswers } = await setUp();
+  const outcome = askApproval({ windowId: "w1", connection: 7, profileId: "profile-1", profileName: "Personal", program: programOf(null, null), sites: ["https://github.com"], why: "deploy" }, () => true, "vault-approvals-test");
+  const shown = useVaultApproval.getState().request;
+  assert.ok(shown, "the Mac sheet opened");
+  await mac.sync();
+  await phoneAnswers(false, false);
+  await mac.sync();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(useVaultApproval.getState().request?.id, shown.id);
+  dropApprovals(7);
+  assert.equal((await outcome).allow, false);
   connectVaultApprovals(null);
 });
