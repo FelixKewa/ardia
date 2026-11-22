@@ -92,7 +92,7 @@
       ],
       "additionalProperties": false
     },
-    "result": "{status, transfer, conflicts, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}"
+    "result": "{status, transfer, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}"
   },
   {
     "name": "vault.log",

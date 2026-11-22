@@ -191,6 +191,7 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
       scanMs: timing(result.scanMs),
       transferMs: timing(result.transferMs),
       conflicts: result.conflicts ?? 0,
+      refills: result.refills ?? 0,
       usedCode: result.usedCode,
       appMs: Date.now() - startedAt,
     };
