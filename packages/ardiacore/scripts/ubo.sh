@@ -225,63 +225,67 @@ const ardiaOpensAcrossBreak = filter => {
     return false;
 };
 
-µb.ardiaCleanHidingRules = function(text) {
+µb.ardiaCleanHidingRules = function(text, { countNeighbours = false } = {}) {
     const lines = text.split('\n');
     const bodyOf = line => line.endsWith('\r') ? line.slice(0, -1) : line;
     const eolOf = line => line.endsWith('\r') ? '\r' : '';
-    const blank = i => { lines[i] = eolOf(lines[i]); };
     const inert = body => body.trim() === '' || body.trim().startsWith('!');
-    let removed = 0;
-    let quarantined = 0;
+    const keepsWorking = body => inert(body) || ardiaPlainHidingRule(body.trim());
+    let spans = 0;
+    let disabled = 0;
+    const disable = i => {
+        if ( keepsWorking(bodyOf(lines[i])) ) { return; }
+        lines[i] = '! ' + lines[i];
+        disabled += 1;
+    };
     for ( let i = 0; i < lines.length; i++ ) {
         const filter = bodyOf(lines[i]).trim();
         if ( filter.includes('\r') ) {
-            if ( ardiaStorableHidingRule(filter) && ardiaOpensAcrossBreak(filter) ) {
-                blank(i);
-                removed += 1;
-            }
+            if ( ardiaStorableHidingRule(filter) === false || ardiaOpensAcrossBreak(filter) === false ) { continue; }
+            const parts = filter.split('\r');
+            const eol = eolOf(lines[i]);
+            lines.splice(i, 1, ...parts.map(part => part + eol));
+            spans += 1;
+            for ( let j = i; j < i + parts.length; j++ ) { disable(j); }
+            i += parts.length - 1;
             continue;
         }
         if ( ardiaStorableHidingRule(filter) === false || ardiaSelectorLeftOpen(filter) === false ) { continue; }
         let joined = filter;
         let end = i;
-        let endOpen = true;
         for ( let j = i + 1; j < lines.length; j++ ) {
             const body = bodyOf(lines[j]);
             if ( body.includes('\r') ) { break; }
             joined += '\r' + body;
             if ( joined.length > ardiaOldHidingRuleLength ) { break; }
-            if ( ardiaStorableHidingRule(joined) === false ) { continue; }
-            end = j;
-            endOpen = ardiaSelectorLeftOpen(joined);
+            if ( ardiaStorableHidingRule(joined) ) { end = j; }
         }
-        blank(i);
-        removed += 1;
-        for ( let j = i + 1; j <= end; j++ ) {
-            const body = bodyOf(lines[j]);
-            if ( endOpen === false ) {
-                blank(j);
-                removed += 1;
-            } else if ( inert(body) === false && ardiaPlainHidingRule(body.trim()) === false ) {
-                lines[j] = '! ' + lines[j];
-                quarantined += 1;
-            }
-        }
+        spans += 1;
+        for ( let j = i; j <= end; j++ ) { disable(j); }
         i = end;
     }
-    let suspects = 0;
-    const plain = lines.map(line => ardiaPlainHidingRule(bodyOf(line).trim()));
-    for ( let i = 0; i < lines.length; i++ ) {
-        const body = bodyOf(lines[i]);
-        if ( inert(body) || ardiaCosmeticRule.test(body.trim()) ) { continue; }
-        if ( plain[i - 1] || plain[i + 1] ) { suspects += 1; }
+    let neighbours = 0;
+    if ( countNeighbours ) {
+        const plain = new Map();
+        const plainAt = i => {
+            if ( i < 0 || i >= lines.length ) { return false; }
+            if ( plain.has(i) === false ) { plain.set(i, ardiaPlainHidingRule(bodyOf(lines[i]).trim())); }
+            return plain.get(i);
+        };
+        for ( let i = 0; i < lines.length; i++ ) {
+            const body = bodyOf(lines[i]);
+            if ( inert(body) || ardiaCosmeticRule.test(body.trim()) ) { continue; }
+            if ( plainAt(i - 1) || plainAt(i + 1) ) { neighbours += 1; }
+        }
     }
-    return { text: lines.join('\n'), removed, quarantined, suspects };
+    return { text: lines.join('\n'), spans, disabled, neighbours };
 };
 '''
 patch("js/storage.js",
       "µb.saveUserFilters = function(content) {\n",
       hiding_cleanup.lstrip("\n") +
+      "\n"
+      "let ardiaCleanupGate = Promise.resolve();\n"
       "\n"
       "const ardiaBackUpFilters = async text => {\n"
       "    const key = 'ardiaSplitHidingRulesBackups';\n"
@@ -299,37 +303,49 @@ patch("js/storage.js",
       "    await vAPI.storage.set({ [key]: before + n });\n"
       "};\n"
       "\n"
-      "µb.ardiaRemoveSplitHidingRules = async function() {\n"
+      "const ardiaCleanUserFilters = async function() {\n"
       "    try {\n"
-      "        const details = await this.loadUserFilters();\n"
+      "        const details = await io.get(µb.userFiltersPath);\n"
       "        if ( details instanceof Object === false || typeof details.content !== 'string' ) { return; }\n"
-      "        const { text, removed, quarantined, suspects } = this.ardiaCleanHidingRules(details.content);\n"
+      "        const { text, spans, disabled, neighbours } = µb.ardiaCleanHidingRules(details.content, { countNeighbours: true });\n"
       "        const seen = await vAPI.storage.get('ardiaHidingRulesNextToScriptRules');\n"
-      "        if ( seen?.ardiaHidingRulesNextToScriptRules !== suspects ) {\n"
-      "            await vAPI.storage.set({ ardiaHidingRulesNextToScriptRules: suspects });\n"
+      "        if ( seen?.ardiaHidingRulesNextToScriptRules !== neighbours ) {\n"
+      "            await vAPI.storage.set({ ardiaHidingRulesNextToScriptRules: neighbours });\n"
       "        }\n"
-      "        if ( removed + quarantined === 0 ) { return; }\n"
-      "        this.selfieManager.destroy();\n"
-      "        this.removeCompiledFilterList(this.userFiltersPath);\n"
+      "        if ( text === details.content ) { return; }\n"
+      "        µb.selfieManager.destroy();\n"
+      "        µb.removeCompiledFilterList(µb.userFiltersPath);\n"
       "        if ( await ardiaBackUpFilters(details.content) === false ) {\n"
       "            ubolog('Saved Hide Element rules could not be backed up before cleanup');\n"
       "            return;\n"
       "        }\n"
-      "        await io.put(this.userFiltersPath, text);\n"
-      "        const after = await this.loadUserFilters();\n"
+      "        await io.put(µb.userFiltersPath, text);\n"
+      "        const after = await io.get(µb.userFiltersPath);\n"
       "        if ( after instanceof Object === false || after.content !== text ) {\n"
       "            ubolog('Saved Hide Element rules that need cleanup are still stored');\n"
       "            return;\n"
       "        }\n"
-      "        await ardiaAddToCount('ardiaSplitHidingRulesRemoved', removed);\n"
-      "        await ardiaAddToCount('ardiaHidingRulesQuarantined', quarantined);\n"
-      "        ubolog(`Removed ${removed} and commented out ${quarantined} saved filter lines Hide Element could not have written`);\n"
+      "        await ardiaAddToCount('ardiaSplitHidingRulesRemoved', spans);\n"
+      "        await ardiaAddToCount('ardiaHidingRulesQuarantined', disabled);\n"
+      "        ubolog(`Commented out ${disabled} lines of ${spans} saved filters Hide Element could not have written`);\n"
       "    } catch (reason) {\n"
       "        ubolog(reason);\n"
       "    }\n"
       "};\n"
       "\n"
-      "µb.saveUserFilters = function(content) {\n")
+      "µb.ardiaRemoveSplitHidingRules = function() {\n"
+      "    ardiaCleanupGate = ardiaCleanupGate.then(ardiaCleanUserFilters);\n"
+      "    return ardiaCleanupGate;\n"
+      "};\n"
+      "\n"
+      "µb.saveUserFilters = async function(content) {\n"
+      "    await ardiaCleanupGate;\n")
+patch("js/storage.js",
+      "µb.loadUserFilters = function() {\n"
+      "    return io.get(this.userFiltersPath);\n",
+      "µb.loadUserFilters = async function() {\n"
+      "    await ardiaCleanupGate;\n"
+      "    return io.get(this.userFiltersPath);\n")
 patch("js/storage.js",
       "µb.compileFilters = function(rawText, details = {}) {\n",
       "µb.compileFilters = function(rawText, details = {}) {\n"
