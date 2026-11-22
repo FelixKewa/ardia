@@ -10,11 +10,14 @@ import { webviews } from "../tabs/webviewHandles";
 import { togglePopover } from "../tabs/popoverDismiss";
 import { closeReader, readerState } from "../reader/reader";
 import { isSleeping } from "../tabs/sleepingTabs";
-import { pickerCall } from "./elementPicker";
+import { pickerCall as sharedPickerCall, trustedPickerCall } from "./elementPicker";
+import { NATIVE_PICK_CONFIRMATION } from "../../platform/pickConfirmation";
 import {
   noteElementHidden,
   noteElementPickerCancelled,
   noteElementPickerFromContextMenu,
+  noteElementPickRefused,
+  noteElementPickUnconfirmed,
   noteHiddenElementsRestored,
   noteHiddenElementWriteFailure,
   notePickedSelectorEscaped,
@@ -25,7 +28,7 @@ const HIDING_RULE = /^[a-z0-9.-]+##(?![+^\s])(?!.*\/\*)[^\0-\x1f\x7f\x85\u2028\u
 const MAX_FILTER = 1024;
 
 export type HiddenElement = { filter: string; host: string; selector: string; session: boolean };
-type PickResult = { selector?: string; cancelled?: boolean } | null;
+export type PickResult = { selector?: string; cancelled?: boolean; refused?: boolean } | null;
 
 export function hidingHost(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -118,6 +121,13 @@ export function runHidingCommand(command: string, tabId: string): boolean {
   return true;
 }
 
+const pickerCall = NATIVE_PICK_CONFIRMATION ? trustedPickerCall : sharedPickerCall;
+
+export function acceptedPick(result: PickResult, confirmed: boolean, samePage: boolean): string | null {
+  if (!result || result.refused || !confirmed || !samePage) return null;
+  return typeof result.selector === "string" ? result.selector : null;
+}
+
 const picking = new Set<string>();
 
 export const isPickingElement = (tabId: string) => picking.has(tabId);
@@ -135,17 +145,27 @@ export async function startHidingElement(tabId: string, point: [number, number] 
   if (readerState(tabId).active) await closeReader(tabId);
   picking.add(tabId);
   let result: PickResult = null;
+  let confirmed = false;
   try {
     void web.focus();
+    const armed = NATIVE_PICK_CONFIRMATION && web.armElementPick ? await web.armElementPick() : null;
     result = await web.evaluate<PickResult>(pickerCall("start", point));
+    confirmed = !NATIVE_PICK_CONFIRMATION || (armed !== null && !!web.takeElementPick && (await web.takeElementPick(armed)));
   } catch {
     result = null;
   } finally {
     picking.delete(tabId);
   }
+  if (result?.refused) noteElementPickRefused(consent);
+  else if (typeof result?.selector === "string" && !confirmed) noteElementPickUnconfirmed(consent);
   const after = pageOf(tabId);
   const samePage = after?.host === page.host && after.profile === page.profile;
-  const picked = samePage && typeof result?.selector === "string" ? result.selector : null;
+  const offered = typeof result?.selector === "string" ? result.selector : null;
+  const picked = acceptedPick(result, confirmed, samePage);
+  if (offered && !picked) {
+    void web.evaluate(pickerCall("unhide", [offered])).catch(() => {});
+    return void noteElementPickerCancelled(consent);
+  }
   const savable = picked ? savablePickedSelector(picked) : null;
   const filter = savable ? hidingFilter(page.host, savable) : null;
   if (!filter) {
@@ -182,7 +202,8 @@ function unhideInOpenTabs(profile: string, elements: HiddenElement[]) {
     const host = hidingHost(tab.url);
     if (!host || engineProfile(s, tab.profileId) !== profile) continue;
     const selectors = elements.filter((e) => coversHost(e.host, host)).map((e) => e.selector);
-    if (selectors.length) void webviews.get(tab.id)?.evaluate(pickerCall("unhide", selectors));
+    const web = webviews.get(tab.id);
+    if (selectors.length) void web?.evaluate(pickerCall("unhide", selectors));
   }
 }
 
@@ -229,7 +250,8 @@ function applySessionHiding(s: BrowserState, session: Record<string, string[]>, 
   const host = hidingHost(tab.url);
   const filters = session[engineProfile(s, tab.profileId)] ?? [];
   const selectors = filters.map((f) => parseHidingFilter(f)).filter((e): e is HiddenElement => !!e && !!host && coversHost(e.host, host)).map((e) => e.selector);
-  if (selectors.length) void webviews.get(tab.id)?.evaluate(pickerCall("apply", selectors));
+  const web = webviews.get(tab.id);
+  if (selectors.length) void web?.evaluate(pickerCall("apply", selectors));
 }
 
 useBrowser.subscribeTo(["tabs"], (s, prev) => {

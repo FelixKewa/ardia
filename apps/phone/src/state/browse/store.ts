@@ -58,6 +58,7 @@ import { anyPicturePainted, noteSnapshotPageTop, noteSnapshotShown, pictureKey, 
 import { DECK_PULL } from "../../lib/deckPull";
 import { runOnUI } from "react-native-reanimated";
 import { showToast } from "../toasts/store";
+import { PRIVATE_PAGES_UNAVAILABLE, refuseIncognito } from "../tabs/privatePages";
 import { hideArchiveCard } from "./archiveCard";
 import { cutDeckPullFromRest, deckPull, deckPullArmed, deckPullFades, deckPullGrowing, deckStandbyId, endDeckPull, fadeDeckPullFromRest, landDeckPullFromRest, noteDeckPullEntrance, PULL_STAGE, showPulledPage, whenDeckStandby } from "./deckPull";
 import { beginInteraction, cutInteraction, INTERACTION_WINDOW_MS, markNextUiFrame, markTiming } from "../app/interactionPerf";
@@ -300,12 +301,18 @@ export function stopOpeningTab(id: string) {
 }
 
 export function openTab(id: string) {
+  const tabs = currentTabs();
+  if (!tabs.open.some((tab) => tab.id === id) && !tabs.privates.some((tab) => tab.id === id)) return;
   showPulledPage();
   takeLeavingPicture(id);
   hideArchiveCard();
   dismissSearch();
   showSpaceOf(id);
-  setIncognito(isPrivateTab(currentTabs(), id));
+  if (!setIncognito(isPrivateTab(currentTabs(), id))) {
+    closePrivateTabs();
+    useBrowse.setState({ surface: "start", sheet: null, opening: null, veiled: null, covered: null });
+    return;
+  }
   if (currentTabs().selectedId !== id) selectTabById(id);
   useBrowse.setState({ surface: "browsing", sheet: null, opening: null, veiled: null, covered: null, leaving: null });
   const tab = findTab(currentTabs(), id);
@@ -322,7 +329,7 @@ export function newTab() {
 
 export function newIncognitoTab() {
   const was = useTabs.getState().incognito;
-  setIncognito(true);
+  if (!setIncognito(true)) return;
   presentSearch(trayOrigin(), "", was);
 }
 
@@ -334,15 +341,14 @@ export function newRegularTab() {
 
 export function switchDeckIncognito() {
   const was = useTabs.getState().incognito;
-  if (!was) countUsage("deck_incognito_switches");
-  setIncognito(!was);
+  if (setIncognito(!was) && !was) countUsage("deck_incognito_switches");
 }
 
 export function toggleTrayIncognito() {
   const was = useTabs.getState().incognito;
   if (searchState().incognitoOnCancel === null) useSearch.setState({ incognitoOnCancel: was });
+  if (!setIncognito(!was)) return;
   if (!was) countUsage("tray_incognito_switches");
-  setIncognito(!was);
   refreshSearchRows();
 }
 
@@ -641,6 +647,15 @@ export function swipedPastHistory(id: string, direction: "back" | "forward") {
   if (closing && !closing.isPrivate) countUsage("tabs_swiped_closed");
   if (previous) openTab(previous.id);
   else show("start");
+}
+
+export function pageOpenFailed(id: string, code: string) {
+  if (code !== PRIVATE_PAGES_UNAVAILABLE || !isPrivateTab(currentTabs(), id)) return;
+  const wasShowing = useBrowse.getState().surface === "browsing" && currentTabs().selectedId === id;
+  refuseIncognito();
+  if (searchState().open) dismissSearch();
+  closePrivateTabs();
+  if (wasShowing) show("start");
 }
 
 export const openArchive = () => useBrowse.setState({ sheet: "archive" });
