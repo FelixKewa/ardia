@@ -86,17 +86,18 @@ function Snapshot({ uri, fill, under, paintedAs, over = false, onLoaded, onPaint
   const [loaded, setLoaded] = useState(false);
   const [wasShown] = useState(() => snapshotWasShown(uri));
   const [covered, setCovered] = useState(() => !wasShown || !snapshotLoadedOnce(uri));
+  const [failed, setFailed] = useState(false);
   const appear = useSharedValue(wasShown ? 1 : 0);
   const appearing = useAnimatedStyle(() => ({ opacity: appear.value }));
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded && !failed) return;
     const key = paintedAs ? pictureKey(paintedAs, uri) : uri;
     const frame = requestAnimationFrame(() => notePicturePainted(key));
     return () => {
       cancelAnimationFrame(frame);
       forgetPicturePainted(key);
     };
-  }, [loaded, aspect, uri, paintedAs]);
+  }, [loaded, failed, aspect, uri, paintedAs]);
   const replacesPrevious = loaded && !covered && onPainted !== undefined;
   useEffect(() => {
     if (!replacesPrevious) return;
@@ -105,8 +106,8 @@ function Snapshot({ uri, fill, under, paintedAs, over = false, onLoaded, onPaint
   }, [replacesPrevious]);
   return (
     <View style={[StyleSheet.absoluteFill, over && (covered || !loaded) ? null : { backgroundColor: fill }]}>
-      {covered && !over ? under : null}
-      <Animated.Image
+      {(covered || failed) && !over ? under : null}
+      {failed ? null : <Animated.Image
         source={{ uri }}
         resizeMethod="scale"
         onLoad={(event) => {
@@ -129,9 +130,10 @@ function Snapshot({ uri, fill, under, paintedAs, over = false, onLoaded, onPaint
           });
         }}
         style={[aspect ? [styles.snapshot, { aspectRatio: aspect }] : StyleSheet.absoluteFill, appearing]}
+        onError={() => setFailed(true)}
         resizeMode="cover"
         fadeDuration={0}
-      />
+      />}
     </View>
   );
 }
