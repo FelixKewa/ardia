@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-import json, re, subprocess, sys, time
+import json, os, re, subprocess, sys, time
 
 try:
     payload = json.load(sys.stdin)
     command = payload.get("tool_input", {}).get("command", "")
-    cwd = payload.get("cwd") or None
+    cwd = payload.get("cwd") or os.getcwd()
 except Exception:
     sys.exit(0)
 
-G = r"(?:^|[;&|(`\n]\s*|\$\(\s*)(?:\w+=\S*\s+)*git\s+(?:-C\s+\S+\s+)?"
+G = r"(?:^|[;&|(`\n]\s*|\$\(\s*)(?:\w+=\S*\s+)*git\s+(?:-C\s+(?P<dir>\"[^\"]*\"|'[^']*'|\S+)\s+)?"
+CD = re.compile(r"(?:^|[;&|(`\n]\s*)(?:cd|pushd)(?:\s+(?P<dir>\"[^\"]*\"|'[^']*'|[^\s;&|)`]+))?")
 rules = [
     (G + r"checkout\b(?!\s+-b\b)", "git checkout"),
     (G + r"restore\b(?![^;&|\n]*--staged)", "git restore (without --staged)"),
@@ -17,12 +18,81 @@ rules = [
     (G + r"clean\b", "git clean"),
     (G + r"switch\b", "git switch"),
 ]
+
+
+def unquote(word):
+    if len(word) >= 2 and word[0] == word[-1] and word[0] in "\"'":
+        word = word[1:-1]
+    return os.path.expanduser(os.path.expandvars(word))
+
+
+def resolve(base, word):
+    if word is None or word == "-":
+        return os.path.expanduser("~") if word is None else base
+    return os.path.normpath(os.path.join(base, unquote(word)))
+
+
+def directory_at(position, git_dir):
+    directory = cwd
+    for move in CD.finditer(command, 0, position):
+        directory = resolve(directory, move.group("dir"))
+    if git_dir:
+        directory = resolve(directory, git_dir)
+    return directory
+
+
+def git_in(directory, *args, timeout=10):
+    return subprocess.run(
+        ["git", "-C", directory, *args], capture_output=True, text=True, timeout=timeout
+    )
+
+
+def nearest_existing(directory):
+    while not os.path.isdir(directory):
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            return None
+        directory = parent
+    return directory
+
+
+def absolute_git_path(directory, flag):
+    found = git_in(directory, "rev-parse", "--path-format=absolute", flag)
+    if found.returncode != 0:
+        return None
+    return os.path.realpath(found.stdout.strip())
+
+
+def shared_git_dir():
+    project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
+    return absolute_git_path(project, "--git-common-dir")
+
+
+def is_shared_checkout(directory, shared):
+    existing = nearest_existing(directory)
+    if existing is None:
+        return False
+    own = absolute_git_path(existing, "--git-dir")
+    return own is not None and own == shared
+
+
+try:
+    shared = shared_git_dir()
+except Exception:
+    shared = None
+
 for pattern, name in rules:
-    if re.search(pattern, command):
+    for match in re.finditer(pattern, command):
+        try:
+            if shared is None or not is_shared_checkout(directory_at(match.start(), match.group("dir")), shared):
+                continue
+        except Exception:
+            pass
         print(
             f"Blocked: {name} in the shared checkout wipes other agents' uncommitted work. "
             "Undo your own hunks by editing the file; read an old version with `git show <rev>:<path>`; "
-            "unstage with `git restore --staged <path>`.",
+            "unstage with `git restore --staged <path>`. For branch work, use a git worktree or a scratch clone, "
+            "where this guard lets it through.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -30,18 +100,12 @@ for pattern, name in rules:
 STALE_AFTER_SECONDS = 6 * 3600
 
 
-def git(*args, timeout=10):
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=timeout
-    )
-
-
-def missing_upstream_age():
+def missing_upstream_age(directory):
     try:
-        if git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != "main":
+        if git_in(directory, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != "main":
             return None
-        git("fetch", "-q", "origin", "main", timeout=15)
-        dates = git("log", "--first-parent", "--format=%ct", "HEAD..origin/main").stdout.split()
+        git_in(directory, "fetch", "-q", "origin", "main", timeout=15)
+        dates = git_in(directory, "log", "--first-parent", "--format=%ct", "HEAD..origin/main").stdout.split()
         if not dates:
             return None
         return len(dates), time.time() - int(dates[-1])
@@ -49,8 +113,9 @@ def missing_upstream_age():
         return None
 
 
-if re.search(G + r"commit\b", command):
-    stale = missing_upstream_age()
+commit = re.search(G + r"commit\b", command)
+if commit:
+    stale = missing_upstream_age(directory_at(commit.start(), commit.group("dir")))
     if stale and stale[1] > STALE_AFTER_SECONDS:
         count, age = stale
         print(
