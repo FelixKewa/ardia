@@ -5,12 +5,12 @@ export const FAQ: Question[] = [
   {
     id: "install",
     question: "Is it safe to open?",
-    answer: "Signed and notarized by Apple, so macOS opens it without a fuss. The source is on GitHub if you’d rather check yourself.",
+    answer: "On a Mac, yes: it’s signed and notarized by Apple, so macOS opens it without a fuss. The Windows build isn’t signed yet, so Windows asks first. The source is on GitHub if you’d rather check yourself.",
   },
   {
     question: "What does it collect?",
     answer:
-      "Once a day the app sends one anonymous “opened today” count with its version and macOS version and no persistent ID, so we know how many people use it. Update checks are counted by version and day, and whether it’s a new copy’s first. Each launch also reads one small file, the same for everyone, so we can switch off a speed-up that misbehaves. Nothing else, unless you tick the box. Then crash reports and counts, never your sites or searches.",
+      "Once a day the app sends one anonymous “opened today” count with its version, update channel, macOS version and chip, and no persistent ID, so we know how many people use it. Update checks are counted by version and day, and whether it’s a new copy’s first. Each launch also reads one small file, the same for everyone, so we can switch off a speed-up that misbehaves. Nothing else, unless you tick the box. Then crash reports and counts, never your sites or searches.",
   },
   {
     question: "And this website?",
@@ -18,7 +18,7 @@ export const FAQ: Question[] = [
   },
   {
     question: "Coming from Arc?",
-    answer: "Same sidebar, same muscle memory. The importer brings your spaces, pinned tabs and their names along.",
+    answer: "Same sidebar, same muscle memory. The importer brings your spaces, pinned tabs, folders, splits, themes and Air Traffic Control rules along.",
     more: { path: "arc/", label: "See what comes over." },
   },
   { question: "Is this Dia?", answer: "No. It dresses like Dia, or like Arc if you ask." },

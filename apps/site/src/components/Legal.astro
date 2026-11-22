@@ -11,8 +11,9 @@ interface Props {
   kicker: string;
   description: string;
   lede: string;
+  updated?: string;
 }
-const { title, heading, kicker, description, lede } = Astro.props;
+const { title, heading, kicker, description, lede, updated = LEGAL.updated } = Astro.props;
 ---
 
 <Base title={title} description={description}>
@@ -23,7 +24,7 @@ const { title, heading, kicker, description, lede } = Astro.props;
         <p class="label kicker">{kicker}</p>
         <h1 class="poster" id="legal-title">{heading}</h1>
         <p class="lede">{lede}</p>
-        <p class="label fine">Last updated {LEGAL.updated}</p>
+        <p class="label fine">Last updated {updated}</p>
       </div>
     </section>
     <section class="block last">
