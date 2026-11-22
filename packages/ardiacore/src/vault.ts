@@ -1,5 +1,6 @@
-export type VaultSignInStatus = "signed_in" | "submitted" | "still_on_login" | "filled" | "no_form" | "no_login" | "needs_passkey" | "needs_human" | "automation_attached" | "cross_origin" | "busy" | "cancelled" | "failed";
-export type VaultSignIn = { status: VaultSignInStatus; reason?: string; readyMs?: number; fillMs?: number; totalMs?: number; createMs?: number; scanMs?: number; transferMs?: number; cookies?: number; localStorage?: number; usedCode: boolean; codeMs: number; prepareMs: number; appMs: number };
+export type VaultSignInStatus = "signed_in" | "submitted" | "still_on_login" | "filled" | "no_form" | "no_login" | "needs_passkey" | "needs_human" | "cross_origin" | "cancelled" | "failed";
+export type VaultTransfer = "none" | "complete" | "partial" | "conflict" | "timed_out";
+export type VaultSignIn = { status: VaultSignInStatus; reason?: string; readyMs?: number; fillMs?: number; totalMs?: number; createMs?: number; scanMs?: number; transferMs?: number; transfer?: VaultTransfer; cookies?: number; cookiesRemoved?: number; localStorage?: number; transferFailed?: number; blockedRequests?: number; usedCode: boolean; codeMs: number; prepareMs: number; appMs: number };
 export type VaultStoreState = { ready: boolean; problem: "unrecoverable" | "unreadable" | "unavailable" | "retry" | null; unlockMs: number; secureEnclave: boolean; kind: "software" | "secureEnclave" };
 export type VaultAlwaysGrant = { profile: string; origin: string; teamId: string; identifier: string; program: string; added: number };
 export type VaultLoginFormSeen = { tab: string; origin: string; hasUsername: boolean; hasPassword: boolean; hasOneTimeCode: boolean; mainFrame: boolean; document?: string | number; at: number };

@@ -8,7 +8,7 @@ import { cancelVaultSignIn, onLoginFormSeen, vaultSignIn, type VaultSignIn } fro
 import { onAppEvent } from "../../platform/app";
 import { secureRandomHex } from "../../platform/secureRandom";
 import { consentToken } from "../telemetry/client";
-import { noteVaultFill, noteVaultRefusal, noteVaultTiming, type VaultRefusal } from "../telemetry/vaultCounts";
+import { noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
 import { dropApprovals } from "./approval";
 import { programLabel } from "./programs";
@@ -30,27 +30,29 @@ const FINAL_REFUSALS: ReadonlySet<VaultRefusal> = new Set(["not_granted", "no_lo
 const STATUS_CODES: Partial<Record<VaultSignIn["status"], VaultRefusal>> = {
   still_on_login: "needs_human",
   needs_human: "needs_human",
-  automation_attached: "denied",
   no_form: "no_form",
   no_login: "no_login",
   needs_passkey: "needs_passkey",
   cross_origin: "not_granted",
   cancelled: "task_expired",
-  busy: "failed",
   failed: "failed",
 };
 
 const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
   needs_human: "The site wants a step only a person can do (a code sent by text, a CAPTCHA).",
-  automation_attached: "Ardia won't sign in while a DevTools client is attached to a worker of that site.",
   still_on_login: "Ardia filled the saved login, but the site still shows its sign-in page: it may want a code sent by text, a CAPTCHA or another step only a person can do.",
   no_form: "Ardia didn't find a sign-in form for the saved login on that page.",
   no_login: "Ardia's password store has no saved login for that site and account.",
   needs_passkey: "That site signs in with a passkey, which only the person at the Mac can use.",
-  cross_origin: "The sign-in form belongs to another site than the one granted.",
+  cross_origin: "The sign-in page isn't on the saved login's site. For single sign-on, grant the identity provider's site, sign in there (it needs its own saved login), then reload the tab.",
   cancelled: "The task ended before the sign-in finished.",
-  busy: "Four sign-ins are already running in this profile; try again in a moment.",
   failed: "The sign-in didn't finish.",
+};
+
+const TRANSFER_REFUSALS: Partial<Record<NonNullable<VaultSignIn["transfer"]>, [VaultRefusal, string]>> = {
+  conflict: ["conflict", "You signed in to this site yourself while the agent was signing in, so Ardia kept your session; nothing was changed."],
+  partial: ["failed", "The sign-in finished, but Ardia could move only part of the session to the profile, so the tab may not be signed in."],
+  timed_out: ["failed", "The sign-in finished, but moving the session to the profile took too long, so the tab may not be signed in."],
 };
 
 const REVOKED: Record<GoneReason | "tab", [VaultRefusal, string]> = {
@@ -60,6 +62,8 @@ const REVOKED: Record<GoneReason | "tab", [VaultRefusal, string]> = {
   locked: ["locked", "The Mac locked or slept before the sign-in finished, so Ardia stopped it and ended the task."],
   tab: ["denied", "The tab moved to another profile before the sign-in finished, so Ardia stopped it."],
 };
+
+export const tabReloads = { reload: (tabId: string, mayAct: () => boolean) => withLivePage(tabId, (page) => page.reload(), mayAct) };
 
 type Attempt = { id: string; task: VaultTask; origin: string; tabId: string | null; revoked: GoneReason | "tab" | null };
 
@@ -145,19 +149,23 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     checkpoint(attempt);
     const result = await vaultSignIn(task.engineProfile, signInUrl(origin, tabId), origin, username, attempt.id);
     checkpoint(attempt);
+    noteVaultTransfer(result.transfer, result, consent);
+    noteVaultTiming("create", result.createMs, consent);
+    noteVaultTiming("scan", result.scanMs, consent);
+    noteVaultTiming("transfer", result.transferMs, consent);
     const code = STATUS_CODES[result.status];
     if (code) throw new VaultError(code, STATUS_MESSAGES[result.status] ?? "The sign-in didn't finish.");
-    if (tabId) {
-      driveTab(task, tabId);
-      void withLivePage(tabId, (page) => page.reload(), () => stillAllowed(attempt)).catch(() => false);
-    }
+    const transfer = TRANSFER_REFUSALS[result.transfer ?? "none"];
+    if (transfer) throw new VaultError(...transfer);
+    if (tabId) driveTab(task, tabId);
+    if (tabId && result.status === "signed_in" && result.transfer === "complete") void tabReloads.reload(tabId, () => stillAllowed(attempt)).catch(() => false);
     const ms = result.totalMs ?? result.appMs;
     noteVaultFill(auto, result.usedCode, consent);
     noteVaultTiming(auto ? "autofill" : "login", ms, consent);
     noteVaultTiming("ready", result.readyMs, consent);
     noteVaultTiming("fill", result.fillMs, consent);
     recordVaultEvent({ ...base, time: Date.now(), kind: "fill", account: username, outcome: result.status, ms });
-    return { status: result.status, ms, readyMs: result.readyMs ?? null, fillMs: result.fillMs ?? null, usedCode: result.usedCode, appMs: Date.now() - startedAt };
+    return { status: result.status, transfer: result.transfer ?? "none", ms, readyMs: result.readyMs ?? null, fillMs: result.fillMs ?? null, usedCode: result.usedCode, appMs: Date.now() - startedAt };
   } catch (error) {
     const refusal = error instanceof VaultError ? error : new VaultError("failed", error instanceof Error ? error.message : String(error));
     noteVaultRefusal(refusal.code, consent);

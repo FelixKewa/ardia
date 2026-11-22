@@ -572,7 +572,7 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
 | Method | What it does |
 | --- | --- |
 | `vault.taskStart {sites, why?, ttlSeconds?, profile?, tabs?}` | Asks the person: Ardia's own sheet in the last focused window names the program, who signed it, the sites, the profile and the reason, then Touch ID (or the Mac's password) confirms. The iPhone can approve the same request (`askPhoneForVaultApproval`, Face ID there); the first answer wins. Returns `{task, sites, expiresAt, via, program}`: a 32-hex token that lives until `vault.taskEnd`, the timeout (`ttlSeconds`, 15 min by default, 2 h at most), or this connection closing. Only `https` sites (a test instance also takes `http://localhost`) |
-| `vault.login {task, site, tab?, account?, why?}` | Signs in to a granted site with its saved login, and its verification code when Ardia keeps one: the engine signs in inside a hidden context of the profile that the token DevTools connection can't reach (`-[ArdiaCoreProfile vaultSignInAtURL:origin:username:oneTimeCode:completion:]`), then Ardia reloads `tab`, signed in through the profile's cookies. Returns `{status, ms, readyMs, fillMs, usedCode}` (`signed_in`, `submitted`) |
+| `vault.login {task, site, tab?, account?, why?}` | Signs in to a granted site with its saved login, and its verification code when Ardia keeps one: the engine signs in inside an isolated in-memory partition the token DevTools connection can't reach (`-[ArdiaCoreProfile vaultSignInAtURL:origin:username:codeProvider:completion:]`), then moves the session (the cookies of the hosts its main frame went through, the origin's localStorage) into the profile, and Ardia reloads `tab` only after `signed_in` with the move `complete`. Returns `{status, transfer, ms, readyMs, fillMs, usedCode}` (`signed_in`, `submitted`). The page must be on the saved login's own site, or the engine answers at once with `not_granted`; for single sign-on, grant the identity provider's site (it needs its own saved login), sign in there, then reload the agent's tab so it finishes the round trip |
 | `vault.taskEnd {task}` | Ends a task early |
 | `vault.status` | The program Ardia sees on this connection, its live tasks and the sites always allowed for it |
 | `vault.log {limit?, since?, profile?}` | Grants, sign-ins and refusals: time, profile, site, account, program, signer, task (its first 8 hex digits), outcome, how it was allowed. The agent's `why` is left out unless the person turns on **Show agents' reasons in ardia vault log** |
@@ -603,7 +603,9 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
   `needs_human` (the site still shows its sign-in page after the fill: a text-message code, a CAPTCHA; or nobody can see
   the sheet, in a background instance without its test answer), `password_manager_plugin` (a plugin keeps the profile's
   passwords; plugins stay write-only toward agents), `task_expired`, `denied`, `locked` (the screen is locked, so nobody
-  can approve). A site with several saved logins needs `account`; the error says how many, never which.
+  can approve), `conflict` (the person signed in to the site themselves while the agent was signing in, so Ardia kept
+  their session and changed nothing), `failed` (also when only part of the session moved into the profile, or the move
+  timed out; the message says which). A site with several saved logins needs `account`; the error says how many, never which.
 - **Verification codes.** Ardia keeps TOTP secrets in its own vault store (`Ardia Vault/vault.sealed` in the data folder,
   AES-GCM with a key derived from a Secure Enclave key that needs no user presence, unwrapped once per launch off the main
   thread), from the password-manager import, `saveVerificationSecret` and, with **Offer to keep verification codes**

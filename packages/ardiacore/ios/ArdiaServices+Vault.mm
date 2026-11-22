@@ -27,7 +27,7 @@
     if (!page) return settle(@{@"status" : @"failed", @"reason" : @"badURL"});
     if (NSString *fake = [ArdiaLaunchConfig.shared testValue:@"vaultFakeSignInMs"]) {
       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(fake.doubleValue * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        settle(@{@"status" : @"signed_in", @"readyMs" : @(fake.doubleValue), @"fillMs" : @0, @"totalMs" : @(fake.doubleValue), @"fake" : @YES});
+        settle(@{@"status" : @"signed_in", @"readyMs" : @(fake.doubleValue), @"fillMs" : @0, @"totalMs" : @(fake.doubleValue), @"transfer" : @"complete", @"fake" : @YES});
       });
       return;
     }

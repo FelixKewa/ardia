@@ -420,3 +420,40 @@ test("the iPhone's Allow grants the task and closes the Mac sheet only with the 
     Object.assign(phoneApprovals, real);
   }
 });
+
+test("the session's move into the profile decides the answer: a conflict or a partial move is an error, and only a complete move after signed_in reloads the tab", async () => {
+  const { tabReloads } = await import("../vault/signIn.ts");
+  const real = tabReloads.reload;
+  const reloaded = [];
+  tabReloads.reload = async (tabId) => (reloaded.push(tabId), true);
+  try {
+    const { tab } = await freshWindow("https://one.example/login");
+    stub.controlSocket.peers[721] = NODE;
+    const { call, ok } = socketClient(721);
+    const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+    const login = (result) => ((stub.vaultFake.signInResult = result), call("vault.login", { task: reply.result.task, site: "one.example", tab }));
+
+    const conflict = await login({ status: "signed_in", transfer: "conflict" });
+    assert.equal(conflict.error.code, "conflict");
+    assert.match(conflict.error.message, /signed in to this site yourself/);
+    assert.equal((await login({ status: "signed_in", transfer: "partial" })).error.code, "failed");
+    assert.equal((await login({ status: "signed_in", transfer: "timed_out" })).error.code, "failed");
+    assert.deepEqual(reloaded, [], "nothing reloads after a failed move");
+
+    assert.equal((await login({ status: "submitted", transfer: "complete" })).result.status, "submitted");
+    assert.deepEqual(reloaded, [], "submitted alone doesn't reload");
+    const signedIn = await login({ status: "signed_in", transfer: "complete", createMs: 2, scanMs: 1, transferMs: 3, cookiesRemoved: 1, blockedRequests: 2 });
+    assert.equal(signedIn.result.transfer, "complete");
+    assert.deepEqual(reloaded, [tab]);
+
+    assert.match((await login({ status: "cross_origin" })).error.message, /identity provider/);
+    const counts = takeVaultCounts();
+    assert.equal(counts.vault_transfers_conflict, 1);
+    assert.equal(counts.vault_refusals_conflict, 1);
+    assert.equal(counts.vault_blocked_requests, 2);
+    assert.ok(counts.vault_transfer_ms_count >= 1);
+    void ok;
+  } finally {
+    tabReloads.reload = real;
+  }
+});

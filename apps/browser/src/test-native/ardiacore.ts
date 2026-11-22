@@ -698,7 +698,7 @@ const fakeModules = {
     signIn: ({ profile, url, origin, username, attempt }) => {
       const code = vaultFake.codes.has(vaultCodeKey({ profile, origin, username }));
       vaultFake.signIns.push({ profile, url, origin, username, code });
-      const answer = (status?: string) => ({ readyMs: 4, fillMs: 3, totalMs: 9, ...vaultFake.signInResult, ...(status ? { status } : {}), usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 }) as CallResult<"vault.signIn">;
+      const answer = (status?: string) => ({ readyMs: 4, fillMs: 3, totalMs: 9, transfer: "complete", ...vaultFake.signInResult, ...(status ? { status } : {}), usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 }) as CallResult<"vault.signIn">;
       if (!vaultFake.holdSignIns) return answer();
       return new Promise<CallResult<"vault.signIn">>((resolve) => vaultFake.heldSignIns.set(attempt, (status) => (vaultFake.heldSignIns.delete(attempt), resolve(answer(status)))));
     },
