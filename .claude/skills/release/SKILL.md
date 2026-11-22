@@ -22,7 +22,8 @@ There are two channels (`docs/releasing.md` › Channels):
 - **Stable** (`0.2.37`): everything below, about 2 h with the smoke test, the update test, the ratchet, the
   perf gate and the site's benchmarks. Its perf is compared with the previous **stable** release, never a nightly.
 
-When the owner asks for a nightly, or a fix is ready and nobody said stable, run the nightly loop.
+When the owner asks for a nightly, or asks for a release without saying stable, run the nightly loop. A fix being
+ready is not a request: never start a nightly or a stable unless the owner asks for a release in that request.
 
 ## The nightly loop
 

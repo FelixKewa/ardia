@@ -9,7 +9,6 @@ except Exception:
     sys.exit(0)
 
 G = r"(?:^|[;&|(`\n]\s*|\$\(\s*)(?:\w+=\S*\s+)*git\s+(?:-C\s+(?P<dir>\"[^\"]*\"|'[^']*'|\S+)\s+)?"
-CD = re.compile(r"(?:^|[;&|(`\n]\s*)(?:cd|pushd)(?:\s+(?P<dir>\"[^\"]*\"|'[^']*'|[^\s;&|)`]+))?")
 rules = [
     (G + r"checkout\b(?!\s+-b\b)", "git checkout"),
     (G + r"restore\b(?![^;&|\n]*--staged)", "git restore (without --staged)"),
@@ -18,6 +17,9 @@ rules = [
     (G + r"clean\b", "git clean"),
     (G + r"switch\b", "git switch"),
 ]
+WORD = re.compile(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'|[^\s;&|()`<>]+")
+ASSIGNMENT = re.compile(r"\w+=\S*$")
+HOME = os.path.expanduser("~")
 
 
 def unquote(word):
@@ -26,18 +28,108 @@ def unquote(word):
     return os.path.expanduser(os.path.expandvars(word))
 
 
-def resolve(base, word):
-    if word is None or word == "-":
-        return os.path.expanduser("~") if word is None else base
+def joined(base, word):
     return os.path.normpath(os.path.join(base, unquote(word)))
 
 
-def directory_at(position, git_dir):
-    directory = cwd
-    for move in CD.finditer(command, 0, position):
-        directory = resolve(directory, move.group("dir"))
+class Shell:
+    def __init__(self, directory):
+        self.directory = directory
+        self.previous = directory
+        self.pushed = []
+
+    def snapshot(self):
+        return (self.directory, self.previous, list(self.pushed))
+
+    def restore(self, snapshot):
+        self.directory, self.previous, self.pushed = snapshot[0], snapshot[1], list(snapshot[2])
+
+    def move(self, target):
+        self.previous, self.directory = self.directory, target
+
+    def run(self, name, argument):
+        if name == "cd":
+            if argument is None:
+                self.move(HOME)
+            elif argument == "-":
+                self.move(self.previous)
+            else:
+                self.move(joined(self.directory, argument))
+        elif name == "pushd":
+            if argument is None:
+                if self.pushed:
+                    top = self.pushed.pop()
+                    self.pushed.append(self.directory)
+                    self.move(top)
+            else:
+                self.pushed.append(self.directory)
+                self.move(joined(self.directory, argument))
+        elif name == "popd" and self.pushed:
+            self.move(self.pushed.pop())
+
+
+def skip_quoted(text, index):
+    quote = text[index]
+    index += 1
+    while index < len(text) and text[index] != quote:
+        index += 2 if quote == '"' and text[index] == "\\" else 1
+    return index + 1
+
+
+def directory_at(position, git_dir=None):
+    shell = Shell(cwd)
+    scopes = []
+    at_command = True
+    index = 0
+    text = command[:position]
+    while index < len(text):
+        char = text[index]
+        if char in "'\"":
+            index = skip_quoted(text, index)
+            at_command = False
+        elif text.startswith("$(", index):
+            scopes.append(shell.snapshot())
+            index += 2
+            at_command = True
+        elif char == "(":
+            scopes.append(shell.snapshot())
+            index += 1
+            at_command = True
+        elif char == ")":
+            if scopes:
+                shell.restore(scopes.pop())
+            index += 1
+            at_command = False
+        elif char in ";&|\n{}":
+            index += 1
+            at_command = True
+        elif char.isspace():
+            index += 1
+        elif at_command:
+            word = WORD.match(text, index)
+            if not word:
+                index += 1
+                continue
+            index = word.end()
+            name = word.group(0)
+            if ASSIGNMENT.match(name):
+                continue
+            at_command = False
+            if name in ("cd", "pushd", "popd"):
+                while index < len(text) and text[index] in " \t":
+                    index += 1
+                argument = WORD.match(text, index) if name != "popd" else None
+                value = None
+                if argument and (argument.group(0) == "-" or not argument.group(0).startswith("-")):
+                    value = argument.group(0)
+                    index = argument.end()
+                shell.run(name, value)
+        else:
+            word = WORD.match(text, index)
+            index = word.end() if word else index + 1
+    directory = shell.directory
     if git_dir:
-        directory = resolve(directory, git_dir)
+        directory = joined(directory, git_dir)
     return directory
 
 
@@ -64,8 +156,8 @@ def absolute_git_path(directory, flag):
 
 
 def shared_git_dir():
-    project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
-    return absolute_git_path(project, "--git-common-dir")
+    own_checkout = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    return absolute_git_path(own_checkout, "--git-common-dir")
 
 
 def is_shared_checkout(directory, shared):

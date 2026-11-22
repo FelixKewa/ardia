@@ -1,8 +1,8 @@
 # Agent brief (read first)
 
-You are one of several engineers working **in parallel in the same working tree** on
-Ardia, a macOS browser that must reach **full feature and visual parity with Dia**
-(The Browser Company). The feature checklist is `docs/dia-feature-parity.md`; the
+You are one of several engineers working **in parallel on the same repository**, some in the shared root
+checkout and some in their own worktrees or clones, on Ardia, a macOS browser that must reach **full feature
+and visual parity with Dia** (The Browser Company). The feature checklist is `docs/dia-feature-parity.md`; the
 visual spec (colors, sizes, animations recovered from Dia's binary) is `docs/dia-spec.md`.
 The user is demanding: no sloppy work, every hover state/animation/detail matters.
 How the code is laid out and named (folders, import direction, tokens, state, the translation layer, environment

@@ -24,8 +24,8 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   reproduce each finding before fixing it.
 - **Worktrees are fine.** Use a git worktree or a scratch clone for isolated feature, PR and full-send work, so
   you can switch branches, reset and stash without touching anyone else. `scripts/agent/guard-git` only blocks
-  `checkout`, `switch`, `restore`, `stash`, `reset --hard` and `clean` in the shared root checkout, where other
-  sessions keep uncommitted work: there, undo your own hunks by editing and stage as below. `~/chromium-build` stays
+  `checkout`, `switch`, `restore`, `stash`, `reset --hard` and `clean` in the shared root checkout (the primary
+  checkout of the repo the guard itself lives in), where other sessions keep uncommitted work: there, undo your own hunks by editing and stage as below. `~/chromium-build` stays
   one shared build tree for every worktree; build in it only under `scripts/agent/locked chromium`.
 - **Commit straight to `main`** from the shared checkout, or push a branch from your worktree. Stage only your
   own hunks (`git add -p` or explicit paths), never someone else's work in progress. Never stage with
@@ -61,7 +61,8 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   labelled `incomplete`, `needs-rebase` or `vouch:unvouched`, with no push, comment or review by a person for 7 days,
   gets a two-line note and `stale`; 7 more quiet days close it. A push or comment clears `stale`, and the author's
   comment reopens a PR it closed. Team and collaborator PRs, `vouch:trusted`, `ready`, `pinned` and `keep-open` are
-  skipped; add `keep-open` to hold one. Dispatch it with `dry_run` to see what it would do.
+  never touched; add `keep-open` to hold one. A run acts on at most 40 PRs (`max_prs` on dispatch) and stops
+  cleanly at a rate limit; dispatch it with `dry_run` to see what it would do.
 - **Merging.** The owner's own PRs (`mantrakp04`) may merge on local verification without waiting for GitHub CI,
   when the owner says so or in a full send; run CI's checks for what changed locally first, then watch the merged
   run and fix forward if it fails. Every other PR waits for its CI to pass.

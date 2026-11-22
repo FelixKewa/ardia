@@ -9,6 +9,10 @@ on:
         description: Only log what the sweep would change
         type: boolean
         default: false
+      max_prs:
+        description: Most pull requests to nudge, close or clear in this run
+        type: number
+        default: 40
   pull_request_target:
     types: [synchronize, reopened, edited, ready_for_review]
   issue_comment:

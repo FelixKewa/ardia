@@ -1,36 +1,41 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const guard = join(dirname(fileURLToPath(import.meta.url)), "guard-git");
+const source = join(dirname(fileURLToPath(import.meta.url)), "guard-git");
 const root = realpathSync(mkdtempSync(join(tmpdir(), "guard-git-")));
 const shared = join(root, "shared");
 const worktree = join(root, "worktree");
 const clone = join(root, "clone");
+const linked = join(root, "linked-guard");
 
 function git(directory, ...args) {
   execFileSync("git", ["-C", directory, ...args], { stdio: "ignore" });
 }
 
-mkdirSync(shared);
-git(shared, "init", "-q", "-b", "work");
-git(shared, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init");
+mkdirSync(join(shared, "scripts", "agent"), { recursive: true });
 mkdirSync(join(shared, "apps"));
+copyFileSync(source, join(shared, "scripts", "agent", "guard-git"));
+git(shared, "init", "-q", "-b", "work");
+git(shared, "add", "scripts");
+git(shared, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init");
 git(shared, "worktree", "add", "-q", "-b", "feature", worktree);
 git(root, "clone", "-q", shared, clone);
+symlinkSync(join(shared, "scripts", "agent", "guard-git"), linked);
 
 test.after(() => rmSync(root, { recursive: true, force: true }));
 
-function verdict(command, cwd = shared, project = shared) {
-  const result = spawnSync("python3", [guard], {
-    input: JSON.stringify({ tool_input: { command }, cwd }),
-    encoding: "utf8",
-    env: { ...process.env, CLAUDE_PROJECT_DIR: project },
-  });
+const guardOf = (checkout) => join(checkout, "scripts", "agent", "guard-git");
+
+function verdict(command, cwd = shared, { guard = guardOf(shared), project = shared } = {}) {
+  const env = { ...process.env };
+  if (project === null) delete env.CLAUDE_PROJECT_DIR;
+  else env.CLAUDE_PROJECT_DIR = project;
+  const result = spawnSync("python3", [guard], { input: JSON.stringify({ tool_input: { command }, cwd }), encoding: "utf8", env });
   return result.status === 2 ? "blocked" : result.status === 0 ? "allowed" : `status ${result.status}: ${result.stderr}`;
 }
 
@@ -72,6 +77,33 @@ test("the directory a command moves to decides, by cd or git -C", () => {
   assert.equal(verdict(`cd ${worktree} && git switch main; cd ${shared} && git stash`), "blocked");
 });
 
+test("relative paths resolve from where the command already is", () => {
+  assert.equal(verdict("cd ../shared/apps && git stash", worktree), "blocked");
+  assert.equal(verdict("cd ../worktree && git switch main", shared), "allowed");
+  assert.equal(verdict("git -C ../clone reset --hard HEAD", shared), "allowed");
+  assert.equal(verdict("cd apps && cd .. && git stash", shared), "blocked");
+  assert.equal(verdict("cd .. && cd shared && git clean -fd", clone), "blocked");
+});
+
+test("a subshell's cd ends with the subshell", () => {
+  assert.equal(verdict(`(cd ${worktree} && git switch main)`), "allowed");
+  assert.equal(verdict(`(cd ${worktree}); git switch main`), "blocked");
+  assert.equal(verdict(`echo $(cd ${worktree}) && git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && (cd ${shared}) && git stash`), "allowed");
+  assert.equal(verdict(`(cd ${worktree} && echo ")" && git switch main)`), "allowed");
+  assert.equal(verdict(`cd ${worktree} && (cd ${shared} && git stash)`), "blocked");
+});
+
+test("pushd, popd and cd - follow the directory stack", () => {
+  assert.equal(verdict(`pushd ${worktree} && git switch main`), "allowed");
+  assert.equal(verdict(`pushd ${worktree} && popd && git switch main`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && pushd ${shared} && popd && git stash`), "allowed");
+  assert.equal(verdict(`pushd ${worktree} && pushd ${clone} && pushd && git stash`), "allowed");
+  assert.equal(verdict(`pushd ${worktree} >/dev/null; popd >/dev/null; git clean -fd`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && cd - && git stash`), "blocked");
+  assert.equal(verdict(`cd ${shared} && cd - && git stash`, clone), "allowed");
+});
+
 test("a fresh clone made in the same command may switch at once", () => {
   const fresh = join(root, "fresh");
   assert.equal(verdict(`git clone --depth 1 x ${fresh} && cd ${fresh} && git switch -c topic`), "allowed");
@@ -82,9 +114,20 @@ test("text that only mentions a command is judged by where it would run", () => 
   assert.equal(verdict(`python3 - <<'EOF'\nprint("x")\ngit checkout -- file\nEOF`), "blocked");
 });
 
-test("a session started in a worktree still guards the shared checkout", () => {
-  assert.equal(verdict("git switch main", worktree, worktree), "allowed");
-  assert.equal(verdict("git switch main", shared, worktree), "blocked");
+test("the shared checkout is the one the guard lives in, whatever CLAUDE_PROJECT_DIR says", () => {
+  assert.equal(verdict("git switch main", shared, { project: null }), "blocked");
+  assert.equal(verdict("git switch main", root, { project: null }), "allowed");
+  assert.equal(verdict(`cd ${shared} && git stash`, root, { project: null }), "blocked");
+  assert.equal(verdict("git switch main", shared, { project: clone }), "blocked");
+  assert.equal(verdict("git switch main", clone, { project: clone }), "allowed");
+  assert.equal(verdict("git switch main", worktree, { project: root }), "allowed");
+  assert.equal(verdict("git switch main", shared, { guard: linked, project: null }), "blocked");
+  assert.equal(verdict("git switch main", worktree, { guard: linked, project: null }), "allowed");
+});
+
+test("a session started in a worktree still guards the shared checkout and frees its own", () => {
+  assert.equal(verdict("git switch main", worktree, { guard: guardOf(worktree), project: worktree }), "allowed");
+  assert.equal(verdict("git switch main", shared, { guard: guardOf(worktree), project: worktree }), "blocked");
 });
 
 test("outside any repository nothing is blocked", () => {

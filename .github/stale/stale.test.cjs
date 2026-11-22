@@ -5,12 +5,14 @@ const stale = require("./stale.cjs");
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse("2026-11-22T12:00:00Z");
 const TEAM = "shivamhwp\nmantrakp04\n";
+const VOUCHED = "friend\n-spammer spam and abuse\n";
+const ACTIONS_BOT = { login: "github-actions[bot]", type: "Bot" };
 
 function ago(days) {
   return new Date(NOW - days * DAY).toISOString();
 }
 
-function pr(number, login, { labels = [], association = "CONTRIBUTOR", created = ago(30), updated = ago(20), state = "open" } = {}) {
+function pr(number, login, { labels = [], association = "CONTRIBUTOR", created = ago(30), updated, state = "open" } = {}) {
   return {
     number,
     state,
@@ -19,36 +21,48 @@ function pr(number, login, { labels = [], association = "CONTRIBUTOR", created =
     labels: labels.map((name) => ({ name })),
     base: { ref: "main" },
     created_at: created,
-    updated_at: updated,
+    updated_at: updated === undefined ? created : updated,
   };
 }
 
 const human = (login) => ({ login, type: "User" });
 const bot = (login) => ({ login, type: "Bot" });
-const commented = (days, actor) => ({ event: "commented", created_at: ago(days), actor, user: actor });
-const labeled = (days, name, actor = bot("github-actions[bot]")) => ({ event: "labeled", created_at: ago(days), label: { name }, actor });
-const unlabeled = (days, name, actor = bot("github-actions[bot]")) => ({ event: "unlabeled", created_at: ago(days), label: { name }, actor });
+const commented = (days, actor, body = "hi") => ({ event: "commented", created_at: ago(days), actor, user: actor, body });
+const warned = (days) => commented(days, ACTIONS_BOT, `note\n${stale.WARNED_MARKER}`);
+const closeNote = (days) => commented(days, ACTIONS_BOT, `closing\n${stale.CLOSED_MARKER}`);
+const closed = (days, actor = ACTIONS_BOT) => ({ event: "closed", created_at: ago(days), actor });
+const labeled = (days, name, actor = ACTIONS_BOT) => ({ event: "labeled", created_at: ago(days), label: { name }, actor });
+const unlabeled = (days, name, actor = ACTIONS_BOT) => ({ event: "unlabeled", created_at: ago(days), label: { name }, actor });
 const committed = (days) => ({ event: "committed", committer: { date: ago(days) }, author: { date: ago(days) } });
 
-function fakeGithub({ pulls = [], timelines = {}, issues = {}, reopenFails = false } = {}) {
+function fakeGithub({ pulls = [], current = {}, timelines = {}, issues = {}, failOn = null } = {}) {
   const calls = [];
-  const record = (name, result = {}) => async (params) => {
+  const timelineReads = {};
+  const record = (name) => async (params) => {
     calls.push({ name, params });
-    if (name === "pulls.update" && params.state === "open" && reopenFails) {
-      throw Object.assign(new Error("branch gone"), { status: 422 });
+    if (failOn) {
+      const error = failOn(name, params, calls.filter((call) => !READS.has(call.name)).length);
+      if (error) throw error;
     }
-    return { data: result };
+    return { data: {} };
   };
-  const github = {
+  return {
     calls,
     paginate: async (method, params) => {
       calls.push({ name: method.endpointName, params });
       if (method.endpointName === "pulls.list") return pulls;
-      return timelines[params.issue_number] || [];
+      const number = params.issue_number;
+      timelineReads[number] = (timelineReads[number] || 0) + 1;
+      const timeline = timelines[number];
+      return typeof timeline === "function" ? timeline(timelineReads[number]) : timeline || [];
     },
     rest: {
       pulls: {
         list: Object.assign(async () => ({ data: pulls }), { endpointName: "pulls.list" }),
+        get: async (params) => {
+          calls.push({ name: "pulls.get", params });
+          return { data: current[params.pull_number] || pulls.find((item) => item.number === params.pull_number) };
+        },
         update: record("pulls.update"),
       },
       issues: {
@@ -64,8 +78,9 @@ function fakeGithub({ pulls = [], timelines = {}, issues = {}, reopenFails = fal
       },
     },
   };
-  return github;
 }
+
+const READS = new Set(["pulls.list", "pulls.get", "issues.listEventsForTimeline", "issues.get"]);
 
 function fakeCore() {
   const lines = [];
@@ -82,28 +97,41 @@ function context(eventName, payload = {}) {
 }
 
 function writes(github) {
-  return github.calls.filter((call) => !["pulls.list", "issues.listEventsForTimeline", "issues.get"].includes(call.name));
+  return github.calls.filter((call) => !READS.has(call.name));
 }
 
-async function runWith(github, eventName, payload) {
-  return stale.run({ github, context: context(eventName, payload), core: fakeCore(), team: TEAM, now: () => NOW, pace: async () => {} });
+async function runWith(github, eventName, payload, options = {}) {
+  let paced = 0;
+  const result = await stale.run({
+    github,
+    context: context(eventName, payload),
+    core: options.core || fakeCore(),
+    team: TEAM,
+    vouched: VOUCHED,
+    now: () => NOW,
+    pace: async () => { paced += 1; },
+    limit: options.limit,
+  });
+  if (options.onPaced) options.onPaced(paced);
+  return result;
 }
 
 const team = stale.parseTeam(TEAM);
 
-test("only outside pull requests with a target label and no keep label are eligible", () => {
+test("only outside pull requests with a target label and no protection are eligible", () => {
   assert.equal(stale.isEligible(pr(1, "outsider", { labels: ["incomplete"] }), team), true);
   assert.equal(stale.isEligible(pr(2, "outsider", { labels: ["needs-rebase"] }), team), true);
   assert.equal(stale.isEligible(pr(3, "outsider", { labels: ["vouch:unvouched"] }), team), true);
   assert.equal(stale.isEligible(pr(4, "outsider", { labels: [] }), team), false);
-  for (const keep of ["ready", "pinned", "keep-open", "vouch:trusted"]) {
+  for (const keep of ["ready", "pinned", "keep-open", "vouch:trusted", "vouch:denounced"]) {
+    assert.equal(stale.isProtected(pr(5, "outsider", { labels: ["incomplete", keep] }), team), true, keep);
     assert.equal(stale.isEligible(pr(5, "outsider", { labels: ["incomplete", keep] }), team), false, keep);
   }
-  assert.equal(stale.isEligible(pr(6, "MantraKP04", { labels: ["incomplete"] }), team), false);
+  assert.equal(stale.isProtected(pr(6, "MantraKP04", { labels: ["incomplete"] }), team), true);
   for (const association of ["OWNER", "MEMBER", "COLLABORATOR"]) {
-    assert.equal(stale.isEligible(pr(7, "someone", { labels: ["incomplete"], association }), team), false, association);
+    assert.equal(stale.isProtected(pr(7, "someone", { labels: ["incomplete"], association }), team), true, association);
   }
-  assert.equal(stale.isEligible(pr(8, "dependabot[bot]", { labels: ["incomplete"] }), team), false);
+  assert.equal(stale.isProtected(pr(8, "dependabot[bot]", { labels: ["incomplete"] }), team), true);
   assert.equal(stale.isEligible(pr(9, "outsider", { labels: ["incomplete"], state: "closed" }), team), false);
 });
 
@@ -116,57 +144,85 @@ test("bot comments and label changes are not activity; people, pushes and stale 
   assert.equal(stale.lastActivity(item, [unlabeled(5, "incomplete", human("maintainer"))]), NOW - 30 * DAY);
 });
 
-test("a week of quiet nudges, another quiet week after the nudge closes, activity in between clears it", () => {
+test("a push of old commits counts through an update no timeline event explains", () => {
+  const pushed = pr(1, "outsider", { created: ago(30), updated: ago(2) });
+  assert.equal(stale.lastActivity(pushed, [committed(25), labeled(20, "incomplete")]), NOW - 2 * DAY);
+  const botTouched = pr(2, "outsider", { created: ago(30), updated: ago(9) });
+  assert.equal(stale.lastActivity(botTouched, [committed(25), labeled(9, "incomplete")]), NOW - 25 * DAY);
+});
+
+test("a week of quiet nudges, another quiet week after the warning closes, activity in between clears it", () => {
   const quiet = pr(1, "outsider", { labels: ["incomplete"] });
   assert.equal(stale.decide({ pr: quiet, events: [commented(8, human("outsider"))], now: NOW, team }).action, "nudge");
   assert.equal(stale.decide({ pr: quiet, events: [commented(6, human("outsider"))], now: NOW, team }).action, "wait");
   const marked = pr(2, "outsider", { labels: ["incomplete", "stale"] });
-  assert.equal(stale.decide({ pr: marked, events: [commented(15, human("outsider")), labeled(8, "stale")], now: NOW, team }).action, "close");
-  assert.equal(stale.decide({ pr: marked, events: [commented(15, human("outsider")), labeled(5, "stale")], now: NOW, team }).action, "wait");
-  assert.equal(stale.decide({ pr: marked, events: [labeled(8, "stale"), commented(2, human("outsider"))], now: NOW, team }).action, "unstale");
-  const nowReady = pr(3, "outsider", { labels: ["ready", "stale"] });
-  assert.equal(stale.decide({ pr: nowReady, events: [], now: NOW, team }).action, "unstale");
+  assert.equal(stale.decide({ pr: marked, events: [commented(15, human("outsider")), warned(8), labeled(8, "stale")], now: NOW, team }).action, "close");
+  assert.equal(stale.decide({ pr: marked, events: [commented(15, human("outsider")), warned(5), labeled(5, "stale")], now: NOW, team }).action, "wait");
+  assert.equal(stale.decide({ pr: marked, events: [warned(8), labeled(8, "stale"), commented(2, human("outsider"))], now: NOW, team }).action, "unstale");
+  assert.equal(stale.decide({ pr: pr(3, "outsider", { labels: ["stale"] }), events: [], now: NOW, team }).action, "unstale");
 });
 
-test("the notes say what is missing in two lines", () => {
+test("a stale label added by hand never starts the close countdown", () => {
+  const manual = pr(1, "outsider", { labels: ["incomplete", "stale"] });
+  const byHand = [commented(20, human("outsider")), labeled(10, "stale", human("maintainer"))];
+  assert.equal(stale.decide({ pr: manual, events: byHand, now: NOW, team }).action, "nudge");
+  const someoneElse = [commented(20, human("outsider")), commented(10, human("maintainer"), stale.WARNED_MARKER), labeled(10, "stale", human("maintainer"))];
+  assert.equal(stale.decide({ pr: manual, events: someoneElse, now: NOW, team }).action, "nudge");
+  const recent = [commented(3, human("outsider")), labeled(2, "stale", human("maintainer"))];
+  assert.equal(stale.decide({ pr: manual, events: recent, now: NOW, team }).action, "wait");
+});
+
+test("protected pull requests are left alone even when they carry stale", () => {
+  for (const keep of ["ready", "keep-open", "pinned", "vouch:trusted"]) {
+    const kept = pr(1, "outsider", { labels: ["incomplete", "stale", keep] });
+    assert.equal(stale.decide({ pr: kept, events: [warned(9)], now: NOW, team }).action, "skip", keep);
+  }
+  const owner = pr(2, "mantrakp04", { labels: ["incomplete", "stale"] });
+  assert.equal(stale.decide({ pr: owner, events: [warned(9)], now: NOW, team }).action, "skip");
+});
+
+test("the notes say what is missing in two lines and carry their markers", () => {
   const both = pr(1, "outsider", { labels: ["incomplete", "needs-rebase"] });
   const nudge = stale.nudgeBody(both);
-  assert.equal(nudge.split("\n").length, 2);
-  assert.match(nudge, /@outsider/);
-  assert.match(nudge, /needs a rebase/);
-  assert.match(nudge, /CONTRIBUTING\.md/);
-  assert.match(nudge, /closes in 7 days/);
-  const close = stale.closeBody(pr(2, "outsider", { labels: ["needs-rebase"] }));
-  assert.equal(close.split("\n").length, 2);
-  assert.match(close, /14 days/);
-  assert.match(close, /comment here and it reopens/);
-  assert.doesNotMatch(close, /CONTRIBUTING/);
+  const [first, second, marker] = nudge.split("\n");
+  assert.equal(marker, stale.WARNED_MARKER);
+  assert.match(first, /@outsider/);
+  assert.match(first, /needs a rebase/);
+  assert.match(first, /CONTRIBUTING\.md/);
+  assert.match(second, /closes in 7 days/);
+  const close = stale.closeBody(pr(2, "outsider", { labels: ["needs-rebase"] })).split("\n");
+  assert.equal(close.length, 3);
+  assert.equal(close[2], stale.CLOSED_MARKER);
+  assert.match(close[0], /14 days/);
+  assert.match(close[1], /comment here and it reopens/);
   assert.match(stale.needsOf(pr(3, "outsider", { labels: ["vouch:unvouched"] })), /waiting on an update/);
 });
 
-function sweepFixture() {
+function sweepFixture(options = {}) {
   const pulls = [
     pr(1, "quiet", { labels: ["incomplete"] }),
-    pr(2, "marked", { labels: ["needs-rebase", "stale"] }),
+    pr(2, "marked", { labels: ["needs-rebase", "stale"], updated: ago(9) }),
     pr(3, "fresh", { labels: ["incomplete"], updated: ago(1) }),
     pr(4, "mantrakp04", { labels: ["incomplete"] }),
-    pr(5, "answered", { labels: ["incomplete", "stale"] }),
+    pr(5, "answered", { labels: ["incomplete", "stale"], updated: ago(1) }),
     pr(6, "kept", { labels: ["incomplete", "stale", "keep-open"] }),
+    pr(7, "unlabelled", { labels: ["stale"] }),
   ];
   const timelines = {
     1: [commented(10, human("quiet"))],
-    2: [commented(20, human("marked")), labeled(9, "stale")],
-    5: [labeled(9, "stale"), commented(1, human("answered"))],
+    2: [commented(20, human("marked")), warned(9), labeled(9, "stale")],
+    5: [warned(9), labeled(9, "stale"), commented(1, human("answered"))],
   };
-  return fakeGithub({ pulls, timelines });
+  return fakeGithub({ pulls, timelines, ...options });
 }
 
-test("the sweep nudges, closes and clears, and skips fresh, team and kept pull requests", async () => {
+test("the sweep nudges, closes and clears, and never touches fresh, team or protected pull requests", async () => {
   const github = sweepFixture();
   const report = await runWith(github, "schedule");
-  assert.deepEqual(report, { nudge: [1], close: [2], unstale: [5, 6] });
-  const timelineReads = github.calls.filter((call) => call.name === "issues.listEventsForTimeline").map((call) => call.params.issue_number);
-  assert.deepEqual(timelineReads, [1, 2, 5]);
+  assert.deepEqual(
+    { nudge: report.nudge, close: report.close, unstale: report.unstale, deferred: report.deferred, stopped: report.stopped },
+    { nudge: [1], close: [2], unstale: [5, 7], deferred: [], stopped: null },
+  );
   assert.deepEqual(
     writes(github).map((call) => [call.name, call.params.issue_number || call.params.pull_number]),
     [
@@ -176,53 +232,147 @@ test("the sweep nudges, closes and clears, and skips fresh, team and kept pull r
       ["issues.createComment", 2],
       ["pulls.update", 2],
       ["issues.removeLabel", 5],
-      ["issues.removeLabel", 6],
+      ["issues.removeLabel", 7],
     ],
   );
+  const touched = github.calls.map((call) => call.params.issue_number || call.params.pull_number);
+  for (const untouched of [3, 4, 6]) assert.equal(touched.includes(untouched), false, `#${untouched}`);
   assert.equal(writes(github).find((call) => call.name === "pulls.update").params.state, "closed");
+});
+
+test("every write is paced, not only the first of each pull request", async () => {
+  let paced = 0;
+  const github = sweepFixture();
+  await runWith(github, "schedule", {}, { onPaced: (count) => { paced = count; } });
+  assert.equal(paced, writes(github).length - 1);
 });
 
 test("a dry-run dispatch writes nothing but reports the same plan", async () => {
   const github = sweepFixture();
   const report = await runWith(github, "workflow_dispatch", { inputs: { dry_run: "true" } });
-  assert.deepEqual(report, { nudge: [1], close: [2], unstale: [5, 6] });
+  assert.deepEqual([report.nudge, report.close, report.unstale], [[1], [2], [5, 7]]);
   assert.deepEqual(writes(github), []);
 });
 
-test("a push or edit by a person clears the label at once; a bot's does not", async () => {
+test("a pull request that gains keep-open or a comment during the sweep is not closed", async () => {
+  const kept = sweepFixture({ current: { 2: pr(2, "marked", { labels: ["needs-rebase", "stale", "keep-open"] }) } });
+  const keptReport = await runWith(kept, "schedule");
+  assert.deepEqual(keptReport.close, []);
+  assert.deepEqual(keptReport.changed, [2]);
+  assert.equal(writes(kept).some((call) => (call.params.issue_number || call.params.pull_number) === 2), false);
+
+  const answered = sweepFixture({
+    timelines: {
+      1: [commented(10, human("quiet"))],
+      2: (read) => [commented(20, human("marked")), warned(9), labeled(9, "stale"), ...(read > 1 ? [commented(0, human("marked"))] : [])],
+    },
+  });
+  const answeredReport = await runWith(answered, "schedule");
+  assert.deepEqual(answeredReport.close, []);
+  assert.deepEqual(answeredReport.unstale.includes(2), true);
+  assert.equal(writes(answered).some((call) => call.name === "pulls.update"), false);
+});
+
+test("a close is not announced twice when the comment landed but the close did not", async () => {
+  const github = sweepFixture({
+    pulls: [pr(2, "marked", { labels: ["needs-rebase", "stale"], updated: ago(9) })],
+    timelines: { 2: [commented(20, human("marked")), warned(9), labeled(9, "stale"), closeNote(1)] },
+  });
+  await runWith(github, "schedule");
+  assert.deepEqual(writes(github).map((call) => call.name), ["pulls.update"]);
+});
+
+test("the sweep stops at its cap and defers the rest", async () => {
+  const pulls = [1, 2, 3, 4, 5].map((number) => pr(number, `quiet${number}`, { labels: ["incomplete"] }));
+  const github = fakeGithub({ pulls });
+  const report = await runWith(github, "schedule", {}, { limit: 2 });
+  assert.deepEqual(report.nudge, [1, 2]);
+  assert.deepEqual(report.deferred, [3, 4, 5]);
+  assert.equal(writes(github).filter((call) => call.name === "issues.createComment").length, 2);
+  const dispatched = await runWith(fakeGithub({ pulls }), "workflow_dispatch", { inputs: { dry_run: "true", max_prs: 3 } });
+  assert.deepEqual(dispatched.nudge, [1, 2, 3]);
+  assert.equal(stale.MAX_PRS_PER_RUN, 40);
+});
+
+test("a rate limit stops the sweep cleanly with a summary instead of failing", async () => {
+  const pulls = [1, 2, 3].map((number) => pr(number, `quiet${number}`, { labels: ["incomplete"] }));
+  const limited = Object.assign(new Error("You have exceeded a secondary rate limit"), { status: 403, response: { headers: {} } });
+  const github = fakeGithub({ pulls, failOn: (name, params) => (name === "issues.createComment" && params.issue_number === 2 ? limited : null) });
+  const core = fakeCore();
+  const report = await runWith(github, "schedule", {}, { core });
+  assert.match(report.stopped, /#2/);
+  assert.equal(writes(github).some((call) => call.params.issue_number === 3), false);
+  assert.ok(core.lines.some((line) => /stopped: rate limited at #2/.test(line)));
+  assert.equal(stale.isRateLimit({ status: 429 }), true);
+  assert.equal(stale.isRateLimit({ status: 403, message: "Resource not accessible by integration", response: { headers: {} } }), false);
+  const forbidden = fakeGithub({ pulls, failOn: (name) => (name === "issues.createComment" ? Object.assign(new Error("nope"), { status: 403 }) : null) });
+  await assert.rejects(runWith(forbidden, "schedule"));
+});
+
+test("a push or edit by a person clears the label at once; a bot's does not, nor on protected pull requests", async () => {
   const github = fakeGithub();
   const pull = pr(1, "outsider", { labels: ["incomplete", "stale"] });
   assert.equal(await runWith(github, "pull_request_target", { pull_request: pull, sender: human("outsider") }), "unstale");
   assert.equal(await runWith(github, "pull_request_target", { pull_request: pull, sender: bot("github-actions[bot]") }), null);
+  const kept = pr(2, "outsider", { labels: ["incomplete", "stale", "keep-open"] });
+  assert.equal(await runWith(github, "pull_request_target", { pull_request: kept, sender: human("outsider") }), null);
   assert.deepEqual(writes(github).map((call) => call.name), ["issues.removeLabel"]);
 });
 
-function closedPull(number, login, merged_at = null) {
-  return { ...pr(number, login, { labels: ["incomplete", "stale"], state: "closed" }), pull_request: { merged_at } };
+function closedPull(number, login, { merged_at = null, labels = ["incomplete", "stale"] } = {}) {
+  return { ...pr(number, login, { labels, state: "closed" }), pull_request: { merged_at } };
 }
 
-test("a comment on an open stale pull request clears the label", async () => {
+test("a comment on an open stale pull request clears the label unless it is protected", async () => {
   const github = fakeGithub();
-  const issue = { ...pr(1, "outsider", { labels: ["stale"] }), pull_request: {} };
+  const issue = { ...pr(1, "outsider", { labels: ["incomplete", "stale"] }), pull_request: {} };
   assert.equal(await runWith(github, "issue_comment", { issue, comment: { user: human("someone") } }), "unstale");
   assert.equal(await runWith(github, "issue_comment", { issue, comment: { user: bot("coderabbitai[bot]") } }), null);
+  const ready = { ...pr(2, "outsider", { labels: ["ready", "stale"] }), pull_request: {} };
+  assert.equal(await runWith(github, "issue_comment", { issue: ready, comment: { user: human("someone") } }), null);
   assert.deepEqual(writes(github).map((call) => call.name), ["issues.removeLabel"]);
 });
 
 test("the author's comment reopens a pull request the sweep closed, and only that", async () => {
-  const github = fakeGithub({ issues: { 1: { closed_by: { login: "github-actions[bot]" } }, 2: { closed_by: { login: "mantrakp04" } } } });
+  const github = fakeGithub({
+    timelines: {
+      1: [warned(15), closeNote(8), closed(8)],
+      2: [warned(15), closeNote(8), closed(8), { event: "reopened", created_at: ago(6), actor: human("mantrakp04") }, closed(5, human("mantrakp04"))],
+      4: [warned(15), closed(8)],
+      5: [warned(15), closeNote(8), closed(3)],
+    },
+  });
   assert.equal(await runWith(github, "issue_comment", { issue: closedPull(1, "outsider"), comment: { user: human("Outsider") } }), "reopen");
   assert.equal(await runWith(github, "issue_comment", { issue: closedPull(1, "outsider"), comment: { user: human("bystander") } }), null);
   assert.equal(await runWith(github, "issue_comment", { issue: closedPull(2, "outsider"), comment: { user: human("outsider") } }), null);
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(3, "outsider", ago(1)), comment: { user: human("outsider") } }), null);
+  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(3, "outsider", { merged_at: ago(1) }), comment: { user: human("outsider") } }), null);
+  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(4, "outsider"), comment: { user: human("outsider") } }), null);
+  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(5, "outsider"), comment: { user: human("outsider") } }), null);
   assert.deepEqual(
     writes(github).map((call) => [call.name, call.params.state || call.params.name]),
     [["pulls.update", "open"], ["issues.removeLabel", "stale"]],
   );
 });
 
+test("a denounced author's pull request closed by Vouch is never reopened", async () => {
+  const github = fakeGithub({
+    timelines: {
+      1: [warned(15), closeNote(1), closed(1)],
+      2: [warned(15), closeNote(8), closed(8)],
+    },
+  });
+  const labelled = closedPull(1, "spammer", { labels: ["incomplete", "stale", "vouch:denounced"] });
+  assert.equal(await runWith(github, "issue_comment", { issue: labelled, comment: { user: human("spammer") } }), null);
+  const listedOnly = closedPull(2, "spammer");
+  assert.equal(await runWith(github, "issue_comment", { issue: listedOnly, comment: { user: human("spammer") } }), null);
+  assert.deepEqual(writes(github), []);
+});
+
 test("a pull request that can't reopen gets one line asking for a new one", async () => {
-  const github = fakeGithub({ issues: { 1: { closed_by: { login: "github-actions[bot]" } } }, reopenFails: true });
+  const github = fakeGithub({
+    timelines: { 1: [warned(15), closeNote(8), closed(8)] },
+    failOn: (name, params) => (name === "pulls.update" && params.state === "open" ? Object.assign(new Error("branch gone"), { status: 422 }) : null),
+  });
   assert.equal(await runWith(github, "issue_comment", { issue: closedPull(1, "outsider"), comment: { user: human("outsider") } }), "unreopenable");
   const comment = writes(github).find((call) => call.name === "issues.createComment");
   assert.match(comment.params.body, /open a new pull request/);
