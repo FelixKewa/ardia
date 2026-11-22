@@ -2271,9 +2271,10 @@ look changes in one place:
     its mic (on Material You to the search bar, since Compose draws the mic). The iPhone scanner is a full-screen
     React Native `Modal` over the SwiftUI connect page, so it settles focus from the modal's `onDismiss` instead
     (`afterScanner`, `ExpoSyncConnectPage.tsx`): Cancel, VoiceOver's Escape and the system close go back to Scan Code;
-    a scanned code goes to "Recovery phrase added"; Enter Recovery Phrase pushes its page only then, so the pushed
-    page takes focus as any pushed page does. The native side is `accessibilityFocusRequest` (`settingsUI.tsx`,
-    `SettingsUIModule.swift`), a counter that moves VoiceOver focus to the view each time it goes up.
+    a scanned code goes to "Recovery phrase added", and with a folder already chosen the connection starts only after
+    that focus request, so a connection that succeeds at once cannot close the page first; Enter Recovery Phrase pushes
+    its page only then, so the pushed page takes focus as any pushed page does. The native side is
+    `accessibilityFocusRequest` (`settingsUI.tsx`, `SettingsUIModule.swift`), a counter that moves VoiceOver focus to the view each time it goes up.
   - The native busy action (`ExpoSettingsAction`) keeps one button mounted, idle or busy, with the spinner beside it
     and hidden from VoiceOver, and keeps the title it had when the work began (Choose Folder stays Choose Folder
     while the first pick connects).

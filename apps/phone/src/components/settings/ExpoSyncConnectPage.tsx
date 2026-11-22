@@ -60,6 +60,7 @@ export function ExpoSyncConnectPage() {
   const phrase = useConnectDraft((s) => s.phrase);
   const [scans] = useState(canScanCodes);
   const [scanning, setScanning] = useState(false);
+  const [coverShown, setCoverShown] = useState(false);
   const scannerExit = useRef<ScannerExit | null>(null);
   const [scannerFocus, setScannerFocus] = useState(NO_SCANNER_FOCUS);
   const [connecting, setConnecting] = useState(false);
@@ -85,8 +86,13 @@ export function ExpoSyncConnectPage() {
   useEffect(() => () => session?.abandon(), [session]);
   useEffect(() => () => setConnectPhrase(""), []);
   useEffect(() => {
-    if (session && hasPhrase) void session.connectIfReady(phrase).then(finished);
-  }, [session, phrase, hasPhrase]);
+    if (session && hasPhrase && !coverShown) void session.connectIfReady(phrase).then(finished);
+  }, [session, phrase, hasPhrase, coverShown]);
+
+  const openScanner = () => {
+    setCoverShown(true);
+    setScanning(true);
+  };
 
   const closeScanner = (exit: ScannerExit) => {
     scannerExit.current = exit;
@@ -97,6 +103,7 @@ export function ExpoSyncConnectPage() {
     const next = afterScanner(scannerExit.current, scannerFocus);
     scannerExit.current = null;
     setScannerFocus(next);
+    setCoverShown(false);
     if (next.pushWords) pushSettings({ page: "syncWords" });
   };
 
@@ -127,7 +134,7 @@ export function ExpoSyncConnectPage() {
             </HStack>
           ) : (
             <PhraseButtons stacked={!buttonsFit}>
-              {scans ? <ExpoSettingsAction title={syncWords.scanCode} systemImage="qrcode.viewfinder" size="compact" isDisabled={busy} focusRequest={scannerFocus.scanCode} onPress={() => setScanning(true)} /> : null}
+              {scans ? <ExpoSettingsAction title={syncWords.scanCode} systemImage="qrcode.viewfinder" size="compact" isDisabled={busy} focusRequest={scannerFocus.scanCode} onPress={openScanner} /> : null}
               <ExpoSettingsAction title={syncWords.enterRecoveryPhrase} systemImage="character.cursor.ibeam" size="compact" emphasis={scans ? "secondary" : "primary"} isDisabled={busy} onPress={() => pushSettings({ page: "syncWords" })} />
             </PhraseButtons>
           )}

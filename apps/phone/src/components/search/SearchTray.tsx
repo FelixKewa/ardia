@@ -15,7 +15,7 @@ import { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageHan
 import { useScreenLayout } from "../../state/app/screenLayout";
 import { isOpenDuo } from "../../lib/bottomBarSpan";
 import { initialPresence, presenceSettled, presenceShown, presenceTarget } from "../../lib/sheetPresence";
-import { clampedProgress, keyboardIsUp, keyboardProgress, liveLift, TRAY_LIFT, trayDragDismisses, trayDragOffset, trayDragReleasesKeyboard, trayDragTranslation, trayMaxHeight, trayOffset, trayVelocity } from "../../lib/trayMotion";
+import { clampedProgress, keyboardIsUp, keyboardProgress, liveLift, TRAY_LIFT, trayDragDismisses, trayDragOffset, trayDragReleasesKeyboard, trayDragTranslation, trayOffset, trayVelocity } from "../../lib/trayMotion";
 import { useOnboarding } from "../../state/onboarding/store";
 import { useVoice } from "../../state/voice/store";
 import { idleScrub, SCRUB, scrubBegin, scrubEnd, scrubMove, type RowFrame, type ScrubState } from "../../lib/trayScrub";
@@ -42,7 +42,7 @@ import { useTrayKeyboard } from "./useTrayKeyboard";
 import { useKeyboardTopFromBottom } from "./useKeyboardHeight";
 import { chromeInk, chromeLayout, nativeClassicChrome } from "../ui/tokens";
 import { incognitoTheme, type Theme } from "../ui/theme";
-import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelPreferredHeight, searchPanelRadius, type SearchPanelCorners } from "./searchPanelTokens";
+import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelRadius, searchTrayHeight, type SearchPanelCorners } from "./searchPanelTokens";
 import type { Point } from "../../lib/menuPlace";
 
 
@@ -179,7 +179,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   useLayoutEffect(() => {
     if (arcPanel && !closing) clearPagePrefill();
   }, []);
-  const trayHeight = command ? command.maxHeight : trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, window.fontScale, rowsHeight), window.height - insets.top - place.gapAbove, resting, place.gapAboveKeyboard);
+  const trayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
   const extend = placement === "underKeyboard" ? window.height : 0;
   const closedOnPressIn = useRef(false);
   const closeFromTouch = () => {
@@ -543,7 +543,7 @@ function StagedTray() {
   const placement = searchPanelPlacement(arcPanel, command !== null);
   const place = searchPanelPlace(placement, resting, hinged);
   const corners = place.corners;
-  const trayHeight = command ? command.maxHeight : trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, window.fontScale, rowsHeight), window.height - insets.top - place.gapAbove, resting, place.gapAboveKeyboard);
+  const trayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
   const underKeyboard = place.underKeyboard;
   const newTabPanelNow = useRef(!editsPage && arcPanel);
   newTabPanelNow.current = !editsPage && arcPanel;

@@ -1,3 +1,4 @@
+import { trayMaxHeight } from "../../lib/trayMotion";
 import { browseLayout, capsule, controlSize, floatingBarLayout, floatingPanelLayout, font, glyphSlot, space, stroke } from "../ui/tokens";
 
 export const searchPanel = {
@@ -65,3 +66,8 @@ export function searchPanelPlace(placement: SearchPanelPlacement, resting: numbe
 
 export const searchPanelPreferredHeight = (placement: SearchPanelPlacement, fieldHeight: number, fontScale: number, rowsHeight: number) =>
   placement === "underKeyboard" ? searchPanelHeight(fieldHeight, fontScale) : Math.min(searchPanelHeight(fieldHeight, fontScale), searchPanelFieldBlock(fieldHeight) + rowsHeight);
+
+export type SearchTrayHeightInput = { commandBarMaxHeight: number | null; placement: SearchPanelPlacement; place: SearchPanelPlace; fieldHeight: number; fontScale: number; rowsHeight: number; windowHeight: number; safeTop: number; resting: number };
+
+export const searchTrayHeight = ({ commandBarMaxHeight, placement, place, fieldHeight, fontScale, rowsHeight, windowHeight, safeTop, resting }: SearchTrayHeightInput) =>
+  commandBarMaxHeight ?? trayMaxHeight(searchPanelPreferredHeight(placement, fieldHeight, fontScale, rowsHeight), windowHeight - safeTop - place.gapAbove, resting, place.gapAboveKeyboard);

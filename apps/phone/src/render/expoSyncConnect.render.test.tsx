@@ -224,3 +224,39 @@ onIos("on iPhone, picking the first folder keeps Choose Folder mounted and named
   expect(spinners.length).toBeGreaterThan(0);
   unmount(rendered);
 });
+
+onIos("on iPhone, with a folder already chosen, a scanned code connects only after the cover has gone and focus has gone to the phrase it added, so a connection that succeeds at once cannot close the page first", async () => {
+  jest.spyOn(scan, "prepareCamera").mockImplementation(async () => "unavailable");
+  const focusWhenConnecting: (number | undefined)[] = [];
+  let rendered: Root | null = null;
+  const added = () => within(destination(rendered!, "syncConnect"), (props) => props.title === "Recovery phrase added")[0];
+  const session = createConnectSession(
+    {
+      pickFolder: async () => ({ folder: "/sync", name: "Ardia Sync" }),
+      connect: async () => {
+        focusWhenConnecting.push(added() ? focusRequestOf(added()!) : undefined);
+        return { result: "connected" };
+      },
+      forgetFolder: async () => undefined,
+    },
+    (phrase) => phrase === WORDS,
+  );
+  jest.spyOn(syncActions, "canPickSyncFolderFirst").mockReturnValue(true);
+  jest.spyOn(syncActions, "syncConnectSession").mockReturnValue(session as never);
+  openSettings({ page: "syncConnect" });
+  rendered = renderSurface(<SettingsView />);
+  await act(async () => undefined);
+  const connect = () => destination(rendered!, "syncConnect");
+  await press(byLabel(connect(), "Choose Folder…"));
+  await act(async () => undefined);
+  expect(session.state().folder?.name).toBe("Ardia Sync");
+  await press(byLabel(connect(), "Scan Code"));
+  await act(async () => scanner(rendered!).props.onScan(WORDS));
+  expect(focusWhenConnecting).toEqual([]);
+  expect(settingsNav().stack.at(-1)).toEqual({ page: "syncConnect" });
+  expect(focusRequestOf(added()!)).toBe(0);
+  await act(async () => scannerModal(rendered!).props.onDismiss());
+  expect(focusWhenConnecting).toEqual([1]);
+  expect(settingsNav().stack.at(-1)).toEqual({ page: "root" });
+  unmount(rendered!);
+});
