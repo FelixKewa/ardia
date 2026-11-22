@@ -6,8 +6,9 @@ export const VAULT_REFUSALS = ["not_granted", "no_login", "no_form", "needs_pass
 export type VaultRefusal = (typeof VAULT_REFUSALS)[number];
 export type VaultGrantVia = "sheet" | "phone" | "always";
 export type VaultTiming = "login" | "autofill" | "unlock" | "sheet" | "ready" | "fill" | "decide" | "profile" | "seed" | "load" | "scan" | "transfer";
-export const VAULT_FAILURES = ["unreachable", "field_missing", "field_changed", "steps", "no_submit_control", "interrupted", "basic_auth", "proxy_auth"] as const;
+export const VAULT_FAILURES = ["unreachable", "field_missing", "field_changed", "steps", "no_submit_control", "interrupted", "basic_auth", "proxy_auth", "get_form", "error_page"] as const;
 export const VAULT_EVIDENCE = ["strong", "weak", "none"] as const;
+const SIGNAL_FIELDS = { navigated: "navigated", httpOnlyCookie: "session_cookie", formGone: "form_gone", pathChanged: "path_changed" } as const;
 export const noteVaultFailure = (reason: string | undefined, consent?: ConsentToken | null) => {
   if (reason && (VAULT_FAILURES as readonly string[]).includes(reason)) bump(`vault_failures_${reason}`, consent);
 };
@@ -15,7 +16,7 @@ export const VAULT_TRANSFERS = ["none", "complete", "partial", "sent", "timed_ou
 export type VaultTransferOutcome = (typeof VAULT_TRANSFERS)[number];
 
 const MAX_SAMPLES = 200;
-const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_filled", "vault_codes_kept", "vault_always_added", ...VAULT_REFUSALS.map((code) => `vault_refusals_${code}`), "vault_grants_sheet", "vault_grants_phone", "vault_grants_always", "vault_phone_approvals", "vault_logins_joined", "vault_autofill_skipped_several", "vault_autofill_held_for_login", ...VAULT_TRANSFERS.map((t) => `vault_transfers_${t}`), ...VAULT_FAILURES.map((r) => `vault_failures_${r}`), ...VAULT_EVIDENCE.map((e) => `vault_submitted_evidence_${e}`), "vault_conflict_keys", "vault_transfer_failures", "vault_blocked_requests"] as const;
+const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_filled", "vault_codes_kept", "vault_always_added", ...VAULT_REFUSALS.map((code) => `vault_refusals_${code}`), "vault_grants_sheet", "vault_grants_phone", "vault_grants_always", "vault_phone_approvals", "vault_logins_joined", "vault_autofill_skipped_several", "vault_autofill_held_for_login", ...VAULT_TRANSFERS.map((t) => `vault_transfers_${t}`), ...VAULT_FAILURES.map((r) => `vault_failures_${r}`), ...VAULT_EVIDENCE.map((e) => `vault_submitted_evidence_${e}`), ...Object.values(SIGNAL_FIELDS).map((s) => `vault_signals_${s}`), "vault_conflict_keys", "vault_transfer_failures", "vault_blocked_requests"] as const;
 
 let counts: Record<string, number> = {};
 let samples: Record<VaultTiming, number[]> = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], decide: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
@@ -43,6 +44,10 @@ export function noteVaultTransfer(outcome: VaultTransferOutcome | undefined, sum
 export type VaultCoordination = "joined" | "skipped_several" | "held_for_login";
 const COORDINATION_FIELDS: Record<VaultCoordination, string> = { joined: "vault_logins_joined", skipped_several: "vault_autofill_skipped_several", held_for_login: "vault_autofill_held_for_login" };
 export const noteVaultCoordination = (what: VaultCoordination, consent?: ConsentToken | null) => bump(COORDINATION_FIELDS[what], consent);
+
+export function noteVaultSignals(signals: Record<string, boolean> | null, consent?: ConsentToken | null) {
+  for (const [name, field] of Object.entries(SIGNAL_FIELDS)) if (signals?.[name] === true) bump(`vault_signals_${field}`, consent);
+}
 
 export const noteVaultEvidence = (evidence: string | undefined, consent?: ConsentToken | null) => {
   if (evidence && (VAULT_EVIDENCE as readonly string[]).includes(evidence)) bump(`vault_submitted_evidence_${evidence}`, consent);

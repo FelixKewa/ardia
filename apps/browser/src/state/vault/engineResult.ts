@@ -1,6 +1,6 @@
 import type { VaultSignIn } from "../../platform/vault";
 import type { ConsentToken } from "../telemetry/client";
-import { noteVaultEvidence, noteVaultFailure, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
+import { noteVaultEvidence, noteVaultFailure, noteVaultSignals, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
 import type { SignInAnswer } from "./tasks";
 
@@ -46,7 +46,17 @@ const REASON_MESSAGES: Record<NonNullable<VaultSignIn["reason"]>, string> = {
   interrupted: "The sign-in was interrupted before it finished (reason: interrupted).",
   basic_auth: "The site asks for its password in the browser's own sign-in dialog, which only a person can answer (reason: basic_auth).",
   proxy_auth: "A proxy asks for a password in the browser's own sign-in dialog, which only a person can answer (reason: proxy_auth).",
+  get_form: "The sign-in didn't finish: the form would send the password in the page's address, so Ardia didn't submit it (reason: get_form).",
+  error_page: "The sign-in didn't finish: the site or the browser showed an error page (reason: error_page).",
 };
+
+const SIGNALS = ["navigated", "httpOnlyCookie", "formGone", "pathChanged"] as const;
+
+function signalsOf(result: VaultSignIn): Record<string, boolean> | null {
+  const given = result.signals;
+  if (!given || typeof given !== "object") return null;
+  return Object.fromEntries(SIGNALS.filter((name) => typeof given[name] === "boolean").map((name) => [name, given[name]!]));
+}
 
 const TRANSFER_REFUSALS: Partial<Record<NonNullable<VaultSignIn["transfer"]>, [VaultRefusal, string]>> = {
   sent: ["failed", "The sign-in finished and its session was sent to the profile, but Ardia couldn't confirm it arrived, so the tab may not be signed in."],
@@ -89,6 +99,7 @@ export function judge(result: VaultSignIn, auto: boolean, username: string, base
   noteVaultTiming("transfer", result.transferMs, consent);
   if (result.status !== "signed_in") noteVaultFailure(result.reason, consent);
   if (result.status === "submitted") noteVaultEvidence(result.evidence, consent);
+  noteVaultSignals(signalsOf(result), consent);
   const refuse = (error: VaultError, drive = false, reload = false) => runRefusal(error, username, base, consent, drive, reload);
   const code = STATUS_CODES[result.status];
   if (code) return refuse(new VaultError(code, engineMessage(result)));
@@ -109,6 +120,7 @@ export function judge(result: VaultSignIn, auto: boolean, username: string, base
     status: result.status,
     transfer: result.transfer ?? "none",
     evidence: result.evidence ?? null,
+    signals: signalsOf(result),
     reason: result.reason ?? null,
     ms,
     readyMs: timing(result.readyMs),

@@ -944,6 +944,29 @@ test("evidence reaches the caller, and a weak submitted sign-in whose session mo
   }
 });
 
+test("signals reach the caller as the engine's booleans and are counted, and get_form and error_page name themselves", async () => {
+  stub.controlSocket.peers[748] = NODE;
+  const { call } = socketClient(748);
+  const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
+  const login = (result) => ((stub.vaultFake.signInResult = result), call("vault.login", { task: reply.result.task, site: "one.example" }));
+  takeVaultCounts();
+  const weak = await login({ status: "submitted", evidence: "weak", transfer: "complete", signals: { navigated: false, httpOnlyCookie: true, formGone: true, pathChanged: false, extra: "x" } });
+  assert.deepEqual(weak.result.signals, { navigated: false, httpOnlyCookie: true, formGone: true, pathChanged: false });
+  assert.equal((await login({ status: "signed_in", transfer: "complete" })).result.signals, null);
+  const getForm = await login({ status: "failed", reason: "get_form" });
+  assert.equal(getForm.error.code, "failed");
+  assert.match(getForm.error.message, /password in the page's address.*\(reason: get_form\)/);
+  const errorPage = await login({ status: "failed", reason: "error_page" });
+  assert.equal(errorPage.error.code, "failed");
+  assert.match(errorPage.error.message, /error page \(reason: error_page\)/);
+  const counts = takeVaultCounts();
+  assert.equal(counts.vault_signals_session_cookie, 1);
+  assert.equal(counts.vault_signals_form_gone, 1);
+  assert.equal(counts.vault_signals_navigated ?? 0, 0);
+  assert.equal(counts.vault_failures_get_form, 1);
+  assert.equal(counts.vault_failures_error_page, 1);
+});
+
 test("failed with no_submit_control names it", async () => {
   stub.controlSocket.peers[745] = NODE;
   const { call } = socketClient(745);
