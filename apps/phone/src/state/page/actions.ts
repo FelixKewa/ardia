@@ -427,7 +427,7 @@ function downloadEvent(event: DownloadEvent) {
     return;
   }
   const uri = event.uri;
-  showToast(downloadedToast(event.fileName), "download", TOAST_LONG_DURATION_MS, uri ? () => quietly(() => downloads.open(uri)) : null);
+  showToast(downloadedToast(event.fileName), "download", TOAST_LONG_DURATION_MS, uri ? { label: actionWords.open, run: () => quietly(() => downloads.open(uri)) } : null);
 }
 
 function pageEvent(event: PageEngineEvent) {

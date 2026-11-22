@@ -4,7 +4,7 @@ import { Pressable } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { withAlpha } from "../../lib/color";
 import { copy } from "../../lib/platformCopy";
-import { actionWords } from "../../lib/sharedWords";
+import { actionWords, destinationWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
   canSummarizePages,
@@ -131,9 +131,9 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
           {canPrintPages() ? <ListRow icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
         </Group>
         <Group>
-          <ListRow icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
-          <ListRow icon="folderFill" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
-          <ListRow icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
+          <ListRow icon="clockArrow" title={destinationWords.history} enabled onPress={() => openFromMenu("history")} />
+          <ListRow icon="folderFill" title={destinationWords.bookmarks} enabled onPress={() => openFromMenu("bookmarks")} />
+          <ListRow icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openFromMenu("downloads")} />
         </Group>
         <Group>
           {model.pageRows ? <SwitchRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}

@@ -29,7 +29,7 @@ const APP_LINKS = [
   { id: "ardia", title: "Ardia" },
   { id: "app", title: "App" },
 ] as const;
-const SHORTCUTS = [{ id: "archive", title: "Archive" }, { id: "spaces", title: "Spaces" }];
+const SHORTCUTS = [{ id: "archive", title: destinationWords.archive }, { id: "spaces", title: destinationWords.spaces }];
 const ARCHIVE_ONLY = SHORTCUTS.filter((shortcut) => shortcut.id === "archive");
 const SYNC_TILE = 56;
 const TOP_SECTION_SPACING = 12;
@@ -62,7 +62,7 @@ export function ExpoSettingsRoot() {
   }, []);
   return (
     <ExpoSettingsDone>
-      <Form modifiers={modifierList(navigationTitle("Settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+      <Form modifiers={modifierList(navigationTitle(destinationWords.settings), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
         {syncOffered() ? (
           <Section modifiers={[listSectionSpacing(TOP_SECTION_SPACING)]}>
             <NavigationLink value={link({ page: "sync" })}>

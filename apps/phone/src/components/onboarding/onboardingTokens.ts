@@ -1,5 +1,5 @@
 import { Easing } from "react-native-reanimated";
-import { easeOutBezier, font, iPhoneOr, motionAliases, shape, space, tabsMotion } from "../ui";
+import { departBezier, easeOutBezier, font, iPhoneOr, motionAliases, shape, space, tabsMotion } from "../ui";
 import type { Motion } from "../ui/motion";
 
 type Curve = readonly [number, number, number, number];
@@ -29,7 +29,6 @@ export const onboardingLayout = {
   rowInset: space.l,
   cardInset: space.xs,
   cardRadius: shape.card,
-  cardShadow: "0px 6px 28px rgba(0, 0, 0, 0.07)",
   sketchScale: iPhoneOr(1.22, 1),
   rowIcons: iPhoneOr(false, true),
   tipIcons: iPhoneOr(false, true),
@@ -46,7 +45,7 @@ export const onboardingInk = {
 
 export const onboardingCurves = {
   step: [0.05, 0.7, 0.1, 1] as Curve,
-  rise: [0.2, 0, 0, 1] as Curve,
+  rise: departBezier as Curve,
   easeOut: easeOutBezier as Curve,
 } as const;
 

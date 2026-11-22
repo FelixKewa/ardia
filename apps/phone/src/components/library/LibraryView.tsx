@@ -37,7 +37,7 @@ import { EmptyState } from "../settings/SettingsKit";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { actionWords, dismissWords } from "../../lib/sharedWords";
 import { listSheetWords } from "./listSheetWords";
-import { ConfirmSheet, Favicon, iconRoles, LoadingState, NoResultsState, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName } from "../ui";
+import { ConfirmSheet, Favicon, iconRoles, LoadingState, NoResultsState, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName, Tappable, FieldAccessory, slopToReach, smoothCorners } from "../ui";
 
 const FOLDER = "folder:";
 const ROW_FAVICON = 20;
@@ -151,22 +151,22 @@ export function LibraryView() {
       <View style={[styles.column, { paddingTop: frame ? 0 : insets.top }]}>
         <View style={styles.top}>
           {folderKey ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={popLibraryPage} style={styles.topButton}>
+            <Tappable kind="icon" label="Back" onPress={popLibraryPage} style={styles.topButton}>
               <Symbol name="chevronLeft" size={20} color={theme.spaceAccentInk} />
-            </Pressable>
+            </Tappable>
           ) : (
-            <Pressable accessibilityRole="button" accessibilityLabel={dismissWords.done} onPress={closeLibrary} style={styles.topButton}>
+            <Tappable kind="text" label={dismissWords.done} onPress={closeLibrary} style={styles.topButton}>
               <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>{dismissWords.done}</Text>
-            </Pressable>
+            </Tappable>
           )}
           <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.bold, styles.title, { color: theme.label }]}>
             {folderKey ? folder?.title || "Untitled Folder" : LIBRARY_NAMES[section]}
           </Text>
           <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
             {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel={actionWords.more} onPress={onPress} style={[styles.topButton, styles.end]}>
+              <Tappable kind="icon" label={actionWords.more} onPress={onPress ?? (() => undefined)} style={[styles.topButton, styles.end]}>
                 <Symbol name={iconRoles.more} size={22} color={theme.spaceAccentInk} />
-              </Pressable>
+              </Tappable>
             )}
           </MenuTrigger>
         </View>
@@ -187,17 +187,19 @@ function Switcher({ section }: { section: LibrarySection }) {
       {LIBRARY_SECTIONS.map((item) => {
         const selected = item === section;
         return (
-          <Pressable
+          <Tappable
             key={item}
+            kind="icon"
             testID={`librarySection:${item}`}
-            accessibilityRole="tab"
-            accessibilityLabel={LIBRARY_NAMES[item]}
-            accessibilityState={{ selected }}
+            role="tab"
+            label={LIBRARY_NAMES[item]}
+            selected={selected}
+            hitSlop={slopToReach(SWITCHER_HEIGHT * 1.5, SWITCHER_HEIGHT)}
             onPress={() => showLibrarySection(item)}
             style={[styles.segment, selected ? { backgroundColor: theme.groupFill } : null]}
           >
             <Symbol name={SECTION_SYMBOLS[item]} size={17} color={selected ? theme.label : theme.secondaryLabel} />
-          </Pressable>
+          </Tappable>
         );
       })}
     </View>
@@ -221,9 +223,7 @@ function SearchField({ prompt, query, onChange }: { prompt: string; query: strin
         autoCapitalize="none"
       />
       {query ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => onChange("")}>
-          <Symbol name="xmarkCircleFill" size={18} color={theme.secondaryLabel} />
-        </Pressable>
+        <FieldAccessory icon={iconRoles.clearText} label={actionWords.clearText} color={theme.secondaryLabel} layout="slop" onPress={() => onChange("")} />
       ) : null}
     </View>
   );
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   title: { flexShrink: 1, textAlign: "center" },
   bold: { fontWeight: "600" },
   switcher: { flexDirection: "row", alignSelf: "center", padding: space.hair, borderRadius: radius.field - space.xs, marginTop: space.xs },
-  segment: { minWidth: SWITCHER_HEIGHT * 1.5, height: SWITCHER_HEIGHT, alignItems: "center", justifyContent: "center", borderRadius: radius.field - space.xs - space.hair },
+  segment: { minWidth: SWITCHER_HEIGHT * 1.5, height: SWITCHER_HEIGHT, alignItems: "center", justifyContent: "center", borderRadius: radius.field - space.xs - space.hair, ...smoothCorners },
   search: {
     flexDirection: "row",
     alignItems: "center",

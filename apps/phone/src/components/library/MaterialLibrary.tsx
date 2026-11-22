@@ -265,7 +265,7 @@ function LibrarySearchBar({ prompt, query, onQuery, onEnd }: { prompt: string; q
         autoCapitalize="none"
         style={[materialType.bodyLarge, styles.input, { color: scheme.onSurface }]}
       />
-      {query ? <IconButton testID="materialLibraryClear" label="Clear Text" icon="xmark" color={scheme.onSurfaceVariant} onPress={() => onQuery("")} /> : null}
+      {query ? <IconButton testID="materialLibraryClear" label={actionWords.clearText} icon="xmark" color={scheme.onSurfaceVariant} onPress={() => onQuery("")} /> : null}
     </View>
   );
 }

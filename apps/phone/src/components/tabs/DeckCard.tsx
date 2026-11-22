@@ -10,7 +10,7 @@ import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, tabsMotion, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
+import { barHeight, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
 import { OPENING_COVER_ID } from "../../state/browse/store";
@@ -590,9 +590,10 @@ const styles = StyleSheet.create({
     gap: space.xs,
     paddingHorizontal: space.s,
     paddingVertical: space.xs,
-    borderRadius: 999,
+    borderRadius: tabsLayout.receivedBadgeRadius,
+    ...smoothCorners,
   },
-  badgeText: { fontSize: 11, lineHeight: 13, fontWeight: "600" },
+  badgeText: { ...font.caption2, fontWeight: "600" },
   reach: { position: "absolute", left: 0, top: 0, transformOrigin: "left top" },
   header: { position: "absolute", left: 0, top: 0, height: tabsLayout.headerHeight, overflow: "hidden" },
   headerRow: { position: "absolute", left: 0, top: 0, width: HEADER_ROW_ROOM, flexDirection: "row", alignItems: "center", gap: tabsLayout.headerSpacing, height: tabsLayout.headerHeight },

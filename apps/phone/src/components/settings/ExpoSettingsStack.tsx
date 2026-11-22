@@ -46,7 +46,7 @@ const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: Settings
 };
 
 const TITLES: Record<SettingsRoute["page"], string> = {
-  root: "Settings",
+  root: destinationWords.settings,
   appearance: "Appearance",
   theme: "Theme",
   searchEngine: "Search Engine",

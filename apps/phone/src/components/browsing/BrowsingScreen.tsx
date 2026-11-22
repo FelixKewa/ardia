@@ -8,7 +8,7 @@ import { BAR_SHOWN, barShown, bottomBarCollapses, followScroll, obscuredBottom, 
 import type { Design } from "../../lib/design";
 import { neighbours, PAGER } from "../../lib/pagerPhysics";
 import { useSystemBars } from "../../state/app/systemBars";
-import { useFrozenOrder, useNavigation, usePageTone, watchPageLoad } from "../../state/browse/hooks";
+import { useFrozenOrder, useNavigation, usePageTone } from "../../state/browse/hooks";
 import { armDeckPull, beginDeckPull, deckPull, disarmDeckPull, releaseDeckPull, trackDeckPull, type PullSettled } from "../../state/browse/deckPull";
 import { refreshHiddenDeck } from "../../state/browse/deckHold";
 import { closePageMenu, editPageQuery, openDockedSiteSettings, openPageMenu } from "../../state/page/actions";
@@ -29,8 +29,6 @@ import {
   browseLayout,
   chromeLayout,
   isDarkColor,
-  LoadingLine,
-  type LoadWatch,
   Menu,
   Shade,
   rolesFor,
@@ -69,7 +67,7 @@ import { redesignedBarCenterFromBottom } from "../../lib/deckGeometry";
 import { useDemoMotion } from "./DemoMotion";
 import { PagerBackdrop, PagerNeighbour, useTabPager } from "./TabPager";
 import { TabSwipeHint } from "./tabSwipeHint";
-import { launchArguments } from "../../state/app/launchFlags";
+import { PageProgressLine } from "./PageProgressLine";
 import { labTrace } from "../../platform/lab";
 import { shownTone } from "../../lib/pageTone";
 import { besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
@@ -213,9 +211,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
         {pagerCards(left, right, arrived ? tab : null).map(({ card, side }) => (
           <PagerNeighbour key={card.id} pager={pager} tab={card} side={side} width={width} statusHeight={insets.top} statusOver={underBar} hasLeft={left !== null} hasRight={right !== null} coverId={ARRIVAL_COVER_ID} />
         ))}
-        <View style={[styles.loading, { top: insets.top }]} pointerEvents="none">
-          <PageLoadingLine tabId={tab.id} />
-        </View>
+        <PageProgressLine tabId={tab.id} top={insets.top} />
         </PageStack>
         {materialBarHosted && design === "material" ? null : (
         <GestureDetector gesture={barGesture}>
@@ -426,20 +422,10 @@ export function barSwipeUp(enabled: boolean, pagerActive: { value: number }, ope
     });
 }
 
-function PageLoadingLine({ tabId }: { tabId: string }) {
-  const watch = useMemo<LoadWatch>(() => {
-    const loadFreeze = launchArguments().loadFreeze;
-    if (loadFreeze !== null) return (show) => (show(loadFreeze, true), () => undefined);
-    return (show) => watchPageLoad(tabId, show);
-  }, [tabId]);
-  return <LoadingLine watch={watch} />;
-}
-
 
 const styles = StyleSheet.create({
   outgoing: { overflow: "hidden" },
   page: { flex: 1 },
-  loading: { position: "absolute", left: 0, right: 0 },
   statusOver: { position: "absolute", left: 0, right: 0, top: 0 },
   bar: { position: "absolute", left: 0, right: 0, bottom: 0 },
   replacedBar: { opacity: 0 },

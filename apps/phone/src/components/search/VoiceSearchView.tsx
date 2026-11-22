@@ -112,7 +112,7 @@ function Controls({ dictation }: { dictation: Dictation }) {
   const control = voiceControl(dictation);
   return (
     <View style={styles.controls}>
-      {control?.kind === "done" ? <OverlayGlassButton title="Done" icon="stopFill" frostSource={VOICE_FROST} onPress={stopListening} /> : null}
+      {control?.kind === "done" ? <OverlayGlassButton title={dismissWords.done} icon="stopFill" frostSource={VOICE_FROST} onPress={stopListening} /> : null}
       {control?.kind === "search" ? <OverlayGlassButton title="Search" frostSource={VOICE_FROST} onPress={() => searchSpoken(control.text)} /> : null}
       {control?.kind === "search" && browseForMeOffered() ? <OverlayGlassButton title="Browse for Me" icon="sparkleMagnifyingglass" frostSource={VOICE_FROST} onPress={() => browseSpoken(control.text)} /> : null}
       {control?.kind === "tryAgain" ? <ActionButton testID="voiceTryAgain" title={actionWords.tryAgain} icon="micFill" tone="overlay" onPress={() => void startListening()} stretch /> : null}
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: voiceLayout.logo / 2,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
+    boxShadow: voiceInk.logoShadow,
   },
   message: { alignItems: "center", gap: space.m, alignSelf: "stretch" },
   transcript: { backgroundColor: voiceInk.transcript, borderRadius: voiceLayout.transcriptRadius, paddingHorizontal: space.xl, paddingVertical: space.m, overflow: "hidden", ...smoothCorners },

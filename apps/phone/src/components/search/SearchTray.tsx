@@ -27,7 +27,7 @@ import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage, reportLaunchTray } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, closingGate, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
+import { browseLayout, capsule, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
 import { useSolidChrome } from "../ui/LookViews";
 import { actionWords } from "../../lib/sharedWords";
 import { panelRowLayout, panelTitleLines, SuggestionRow } from "./SuggestionRow";
@@ -414,9 +414,9 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
         <Animated.View
           testID="trayPanel"
           style={[
-            command ? commandPanelPlace(command) : [styles.searchPanelSheet, { left: insets.left, right: insets.right, bottom: -extend, height: trayHeight + extend }],
+            command ? commandPanelPlace(command, fieldHeight) : [styles.searchPanelSheet, { left: insets.left, right: insets.right, bottom: -extend, height: trayHeight + extend }],
             panelCornerStyle(panelRadius, corners),
-            { boxShadow: incognito ? floatingPanelLayout.incognitoShadow : floatingPanelLayout.shadow },
+            { boxShadow: shadowCss("floating", incognito) },
             trayStyle,
           ]}
         >
@@ -809,7 +809,7 @@ function StagedTray() {
               testID="trayStagedContent"
               {...closingGate(closing)}
             >
-              <View testID="traySurface" style={[panelCornerStyle(panelRadius, corners), { height: trayHeight + underKeyboard, boxShadow: incognito ? floatingPanelLayout.incognitoShadow : floatingPanelLayout.shadow }]}>
+              <View testID="traySurface" style={[panelCornerStyle(panelRadius, corners), { height: trayHeight + underKeyboard, boxShadow: shadowCss("floating", incognito) }]}>
                 <SearchPanelFace incognito={incognito} dark={theme.dark} panelRadius={panelRadius} corners={corners} />
                 <View style={[styles.clip, panelCornerStyle(panelRadius, corners), { height: trayHeight + underKeyboard }]}>
                   <TrayContentContext.Provider value={measuredRows}>
@@ -844,7 +844,7 @@ const DepartContext = createContext<() => void>(() => undefined);
 
 const PANEL_HOME: MotionTarget = { opacity: 1, translateY: 0 };
 const PANEL_DEPARTED: MotionTarget = { opacity: 0, translateY: -floatingPanelLayout.departLift };
-const PANEL_DEPART: MotionCurve = { type: "timing", durationMs: floatingPanelLayout.departMs, curve: [0.2, 0, 0, 1] };
+const PANEL_DEPART: MotionCurve = { type: "timing", durationMs: floatingPanelLayout.departMs, curve: [...departBezier] };
 
 function useLeavingActions() {
   const depart = useContext(DepartContext);

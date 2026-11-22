@@ -1,4 +1,4 @@
-import { listWords } from "../../lib/sharedWords";
+import { actionWords, listWords } from "../../lib/sharedWords";
 import { useEffect, useRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -7,7 +7,7 @@ import type { MaterialScheme } from "../../lib/material/schemes";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { useCanReopen } from "../../state/tabs/hooks";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { Symbol, type MenuItem } from "../ui";
+import { Symbol } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
 import { materialBottomBar, materialDuration, materialMove, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { MenuTrigger } from "../ui/MenuTrigger";
@@ -97,7 +97,7 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
         )}
       </View>
       <MenuTrigger items={moreItems} {...menu} place={{ top: below, right: side }}>
-        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label="More" scheme={scheme} turned onPress={onPress ?? noop} />}
+        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label={actionWords.more} scheme={scheme} turned onPress={onPress ?? noop} />}
       </MenuTrigger>
     </Animated.View>
   );

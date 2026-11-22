@@ -30,7 +30,7 @@ const lightRoles = {
   fieldFill: "rgba(0,0,0,0.06)",
   fieldStroke: "rgba(0,0,0,0.06)",
   rowIcon: "rgba(0,0,0,0.42)",
-  rowHighlight: "rgba(0,0,0,0.05)",
+  rowHighlight: "rgba(0,0,0,0.06)",
   plusFill: "rgba(118,118,128,0.16)",
   chevronFill: "rgba(118,118,128,0.12)",
   controlEdge: "rgba(0,0,0,0.06)",
@@ -82,7 +82,7 @@ const darkRoles: ColorRoles = {
   fieldFill: "rgba(255,255,255,0.12)",
   fieldStroke: "rgba(255,255,255,0.08)",
   rowIcon: "rgba(255,255,255,0.5)",
-  rowHighlight: "rgba(255,255,255,0.08)",
+  rowHighlight: "rgba(255,255,255,0.1)",
   plusFill: "rgba(255,255,255,0.16)",
   chevronFill: "rgba(255,255,255,0.13)",
   controlEdge: "rgba(255,255,255,0.1)",
@@ -162,6 +162,8 @@ export const readerLayout = { minLeadAspect: 0.75, maxWidth: 680, topBar: 52, ch
 export const dialogLayout = { width: 312, radius: shape.panel, fieldHeight: 48 } as const;
 
 export const settingsLayout = {
+  removeDot: 24,
+  removeGlyph: 14,
   expoListTop: 12,
   groupRadius: shape.panel,
   rowMinHeight: 52,
@@ -409,7 +411,7 @@ export const scanInk = {
   soft: "rgba(255,255,255,0.75)",
 } as const;
 
-export const scanLayout = { frame: 250, frameStroke: 3, frameArmShare: 0.18, noteRadius: 12, cancelInset: 8 } as const;
+export const scanLayout = { frame: 250, frameStroke: 3, frameArmShare: 0.18, noteRadius: 12, cancelInset: 8, unavailableIcon: 48 } as const;
 
 export const voiceInk = {
   label: "#FFFFFF",
@@ -418,6 +420,7 @@ export const voiceInk = {
   bar: "rgba(255,255,255,0.85)",
   glass: "rgba(255,255,255,0.18)",
   transcript: "rgba(0,0,0,0.18)",
+  logoShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
 } as const;
 
 export const voiceLayout = {
@@ -438,7 +441,7 @@ export const failureLayout = { icon: 36, textWidth: 320, button: 40 } as const;
 
 export const archiveCardLayout = { radius: 16, tile: 28, maxWidth: 520, aboveBarCenter: 28, tint: "#B059EE" } as const;
 
-export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: shape.card, stripHeight: 64, arrowLift: 26, shadowRadius: 12, sheetRadius: 38 } as const;
+export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: shape.card, stripHeight: 64, arrowLift: 26, arrowGlyph: 22, wordsVertical: 10, sheetRadius: 38 } as const;
 
 export const floatingBarLayout = {
   control: FLOATING_BAR_PLACE.control,
@@ -446,7 +449,6 @@ export const floatingBarLayout = {
   bottomGap: FLOATING_BAR_PLACE.bottomGap,
   glyph: 19,
   menuGlyph: 17,
-  plusSymbol: 23.6,
   menuSymbol: 23.3,
   privateSymbol: 28,
   addressLead: 13,
@@ -458,24 +460,9 @@ export const floatingBarLayout = {
 
 export const floatingPanelLayout = {
   inset: 8,
-  radius: 32.75,
   aboveKeyboard: 8,
   departLift: 120,
   departMs: 200,
-  fieldInset: 9,
-  fieldBottom: 1,
-  fieldEdge: stroke.chrome,
-  fieldLight: { fill: "rgba(118,118,128,0.12)", edge: "rgba(0,0,0,0)" },
-  fieldDark: { fill: "rgba(118,118,128,0.24)", edge: "rgba(255,255,255,0)" },
-  panelRadius: shape.panel,
-  panelLight: "#FFFFFF",
-  panelDark: "#1C1C1E",
-  reachRows: 5.5,
-  tintShare: 0.55,
-  incognitoShare: 0.85,
-  incognitoFill: "#151517",
-  shadow: "0px 4px 36px rgba(0, 0, 0, 0.1)",
-  incognitoShadow: "0px 4px 36px rgba(0, 0, 0, 0.3)",
 } as const;
 
 export const startLayout = {
@@ -634,6 +621,9 @@ export const expoSpacesLayout = {
 } as const;
 
 export const spacesLayout = {
+  switchWidth: 52,
+  switchHeight: 36,
+  switchUnselectedOpacity: 0.35,
   headerCircle: 32,
   bannerGap: 10,
   bannerPadding: 12,
@@ -693,6 +683,8 @@ export const tabsLayout = {
   emptyWidth: 300,
   archiveTop: 52,
   archiveButton: 44,
+  archiveMoreGlyph: 20,
+  receivedBadgeRadius: 6,
   archiveField: 40,
   archiveTile: 28,
 } as const;
@@ -731,6 +723,7 @@ export const font = {
   subheadline: { fontSize: 15, lineHeight: 20 },
   footnote: { fontSize: 13, lineHeight: 18 },
   caption: { fontSize: 12, lineHeight: 16 },
+  caption2: { fontSize: 11, lineHeight: 13 },
 } as const;
 
 export const browseLayout = {

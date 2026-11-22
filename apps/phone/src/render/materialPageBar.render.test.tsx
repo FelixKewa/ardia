@@ -445,3 +445,18 @@ onAndroid("turning Collapse Bottom Bar off keeps the Material bottom bar unfolde
   expect(pageView.props.obscuredInsets.bottom).toBe(barHeight(24, "material"));
   unmount(root);
 });
+
+onAndroid("the Material bar's + says New Tab, or New Incognito Tab on an Incognito page, as every other bar's + does", () => {
+  const plain = screen();
+  expect(pressable(plain, "materialBarPlus").props.accessibilityLabel).toBe("New Tab");
+  unmount(plain);
+  const privateTab = { ...currentTabs().open[0]!, isPrivate: true };
+  const incognito = renderSurface(
+    <DesignProvider design="material">
+      <BrowsingScreen tab={privateTab} />
+    </DesignProvider>,
+    { flushTimers: false },
+  );
+  expect(pressable(incognito, "materialBarPlus").props.accessibilityLabel).toBe("New Incognito Tab");
+  unmount(incognito);
+});

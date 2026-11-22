@@ -86,7 +86,7 @@ function useStartLeading(incognito: boolean): { icon: SymbolName; label: string;
     if (!incognito) countUsage("start_no_tabs_button_taps");
     open();
   };
-  return syncs ? { icon: "laptop", label: "Synced Tabs", testID: "startBarSynced", onPress } : { icon: "archivebox", label: destinationWords.archive, testID: "startBarArchive", onPress };
+  return syncs ? { icon: "laptop", label: destinationWords.spaces, testID: "startBarSynced", onPress } : { icon: "archivebox", label: destinationWords.archive, testID: "startBarArchive", onPress };
 }
 
 const styles = StyleSheet.create({

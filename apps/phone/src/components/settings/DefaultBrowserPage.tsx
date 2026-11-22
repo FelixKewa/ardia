@@ -3,7 +3,7 @@ import { AppState, Platform, StyleSheet, Text, useWindowDimensions, View } from 
 import { askForDefaultBrowser, refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
 import { popSettings } from "../../state/settings/nav";
 import { defaultBrowserCopy } from "../../state/settings/settingsRules";
-import { ActionButton, AppIcon, font, ink, PrimaryButton, radius, settingsLayout, settingsTint, space, spacesLayout, Symbol, useTheme } from "../ui";
+import { ActionButton, AppIcon, font, ink, PrimaryButton, radius, settingsLayout, settingsTint, space, spacesLayout, Symbol, useTheme, smoothCorners } from "../ui";
 import { SettingsPage } from "./SettingsKit";
 
 export function DefaultBrowserSteps({ onLater, onDone }: { onLater?: () => void; onDone?: () => void }) {
@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
   list: { gap: space.m },
   centered: { textAlign: "center" },
   fill: { flex: 1 },
-  card: { borderRadius: radius.card, overflow: "hidden" },
+  card: { borderRadius: radius.card, ...smoothCorners, overflow: "hidden" },
   step: { flexDirection: "row", alignItems: "center", gap: space.m, minHeight: 52, paddingHorizontal: space.l },
-  tile: { width: settingsLayout.tile, height: settingsLayout.tile, borderRadius: spacesLayout.stepTileRadius, alignItems: "center", justifyContent: "center" },
+  tile: { width: settingsLayout.tile, height: settingsLayout.tile, borderRadius: spacesLayout.stepTileRadius, ...smoothCorners, alignItems: "center", justifyContent: "center" },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: spacesLayout.stepDividerInset },
   actions: { gap: space.s },
 });

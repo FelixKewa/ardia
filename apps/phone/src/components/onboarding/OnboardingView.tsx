@@ -4,7 +4,7 @@ import Animated, { Easing, FadeIn, FadeInLeft, FadeInRight, FadeOut, FadeOutLeft
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { advanceOnboarding, finishOnboarding, useOnboarding } from "../../state/onboarding/hooks";
 import { refreshSettings, setBlockingCategory, useBlocking } from "../../state/settings/actions";
-import { ActionButton, AppIcon, appIconLayout, closingGate, focusForScreenReader, LookBackdrop, ModalOverlay, moveTo, onboardingArt, font, PrimaryButton, radius, settingsTint, shadowRadius, smoothCorners, space, Symbol, tabsMotion, ToggleRow as SwitchRow, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { ActionButton, AppIcon, appIconLayout, closingGate, focusForScreenReader, LookBackdrop, ModalOverlay, moveTo, onboardingArt, font, PrimaryButton, radius, settingsTint, shadowCss, smoothCorners, space, Symbol, tabsMotion, ToggleRow as SwitchRow, useTheme, type SymbolName, useReduceMotion } from "../ui";
 import type { Motion } from "../ui/motion";
 import { useDesign } from "../ui";
 import { useMaterialRipple } from "../ui/MaterialSurfaces";
@@ -179,7 +179,7 @@ function DefaultBrowserStep() {
       <View style={[styles.fill, styles.art]}>
         <LinkBubble />
       </View>
-      <View style={[styles.browserSheet, { backgroundColor: theme.groupFill, shadowColor: theme.trayShadow }]}>
+      <View style={[styles.browserSheet, { backgroundColor: theme.groupFill, boxShadow: shadowCss("floating", theme.dark) }]}>
         <DefaultBrowserSteps onLater={advanceOnboarding} onDone={advanceOnboarding} />
       </View>
     </View>
@@ -348,8 +348,8 @@ function OnboardingCard({ children }: { children: ReactNode }) {
   const style = useDesign() === "material"
     ? [styles.materialCard, { backgroundColor: scheme.surfaceContainerHigh }]
     : onboardingLayout.rowIcons
-    ? [styles.card, { backgroundColor: theme.groupFill, shadowColor: theme.trayShadow }]
-    : [styles.plainCard, { backgroundColor: theme.groupFill, boxShadow: theme.dark ? undefined : onboardingLayout.cardShadow }];
+    ? [styles.card, { backgroundColor: theme.groupFill, boxShadow: shadowCss("card", theme.dark) }]
+    : [styles.plainCard, { backgroundColor: theme.groupFill, boxShadow: shadowCss("card", theme.dark) }];
   return (
     <View testID="onboardingCard" style={style}>
       {children}
@@ -422,7 +422,7 @@ function AllSet() {
       sitsLow
       illustration={
         onboardingLayout.tipIcons ? (
-          <Animated.View entering={FadeIn.duration(tabsMotion.surfaceFade)} style={[styles.card, styles.tips, { backgroundColor: theme.groupFill, shadowColor: theme.trayShadow }]}>
+          <Animated.View entering={FadeIn.duration(tabsMotion.surfaceFade)} style={[styles.card, styles.tips, { backgroundColor: theme.groupFill, boxShadow: shadowCss("card", theme.dark) }]}>
             {TIPS.map((tip) => (
               <View key={tip.text} style={styles.tip}>
                 <View style={styles.tipIcon}>
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   materialCard: { borderRadius: materialShape.medium, paddingVertical: 8, overflow: "hidden" },
   centeredText: { textAlign: "center" },
   illustration: { flex: 1, paddingHorizontal: onboardingLayout.illustrationInset },
-  card: { borderRadius: radius.card, ...smoothCorners, paddingVertical: space.xs, elevation: 8, shadowOpacity: 0.4, shadowRadius: shadowRadius.card },
+  card: { borderRadius: radius.card, ...smoothCorners, paddingVertical: space.xs },
   plainCard: { borderRadius: onboardingLayout.cardRadius, borderCurve: "continuous", paddingVertical: onboardingLayout.cardInset },
   plainTip: { minHeight: onboardingLayout.rowHeight, justifyContent: "center", paddingHorizontal: onboardingLayout.rowInset },
   art: { alignItems: "center", justifyContent: "center", paddingHorizontal: space.huge },
@@ -500,9 +500,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: onboardingArt.sheetRadius,
     paddingTop: space.huge - space.l,
     paddingBottom: space.m,
-    elevation: 10,
-    shadowOpacity: 0.08,
-    shadowRadius: shadowRadius.card,
   },
   tips: { paddingHorizontal: space.xl, paddingVertical: space.xl, gap: space.xl },
   tip: { flexDirection: "row", alignItems: "center", gap: space.m },

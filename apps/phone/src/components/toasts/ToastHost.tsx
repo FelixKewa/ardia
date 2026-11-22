@@ -7,10 +7,9 @@ import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, useToast } from "../../state/toasts/hooks";
 import { pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace } from "../../state/toasts/placement";
-import { dismissesToast, toastDragReturn, toastSemantics } from "../../state/toasts/semantics";
+import { dismissesToast, toastDragReturn, toastSemantics, toastSpokenLabel } from "../../state/toasts/semantics";
 import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/toasts/store";
 import { font, space, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
-import { toastActionLayout } from "./toastTokens";
 import { materialBottomBar } from "../ui/materialTokens";
 
 const ICONS: Record<ToastIcon, SymbolName> = {
@@ -61,7 +60,8 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const drag = useSharedValue(0);
-  const semantics = toastSemantics(Boolean(toast?.onTap), Platform.OS);
+  const actionLabel = toast?.action?.label ?? null;
+  const semantics = toastSemantics(actionLabel, Platform.OS);
   useEffect(() => {
     drag.value = 0;
     if (toast && semantics.announcement === "announceForAccessibility") AccessibilityInfo.announceForAccessibility(toast.message);
@@ -99,7 +99,7 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
       <Text style={[font.subheadline, styles.text, { color: theme.toastLabel }]} numberOfLines={3}>
         {toast.message}
       </Text>
-      {semantics.pressable ? <Symbol name="chevronRight" size={toastActionLayout.chevron} color={theme.toastLabel} /> : null}
+      {actionLabel !== null ? <Text testID="toastAction" style={[font.subheadline, styles.action, { color: theme.toastLabel }]}>{actionLabel}</Text> : null}
     </>
   );
   return (
@@ -107,7 +107,7 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
       <GestureDetector gesture={gesture}>
         <Animated.View key={toast.id} entering={reduceMotion ? REDUCED_IN : toastIn} exiting={reduceMotion ? REDUCED_OUT : toastOut} style={[styles.origin, dragged]}>
           {semantics.pressable ? (
-            <Pressable testID="toast" accessibilityRole="button" accessibilityLabel={toast.message} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} onPress={tapToast} style={pressStyle}>
+            <Pressable testID="toast" accessibilityRole="button" accessibilityLabel={toastSpokenLabel(toast.message, actionLabel)} accessibilityLiveRegion={semantics.liveRegion} accessibilityActions={semantics.actions} onAccessibilityAction={onAccessibilityAction} onPress={tapToast} style={pressStyle}>
               {content}
             </Pressable>
           ) : (
@@ -162,4 +162,5 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   text: { fontWeight: "600", flexShrink: 1 },
+  action: { fontWeight: "700" },
 });

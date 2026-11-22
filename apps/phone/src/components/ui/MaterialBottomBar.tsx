@@ -20,6 +20,7 @@ import { MaterialIconButton } from "./MaterialIconButton";
 import { MenuTrigger } from "./MenuTrigger";
 import { useMaterialRipple } from "./MaterialSurfaces";
 import { materialBottomBar, materialShape, materialSize, materialType } from "./materialTokens";
+import { actionWords } from "../../lib/sharedWords";
 
 export type MaterialPageBarProps = {
   tab: BrowserTab;
@@ -135,7 +136,7 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
         </Pressable>
       </View>
       {showsPlus ? (
-        <MaterialIconButton testID="materialBarPlus" icon="plus" label="New Search" scheme={scheme} onPress={onPlus} />
+        <MaterialIconButton testID="materialBarPlus" icon="plus" label={tab.isPrivate ? actionWords.newIncognitoTab : actionWords.newTab} scheme={scheme} onPress={onPlus} />
       ) : null}
     </>
   );
@@ -162,7 +163,7 @@ export function MaterialAddressContent({ address, scheme, testID }: { address: R
 
 function OverviewControls({ scheme, search, incognito, privateCount = 0, onCloseIncognito, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
   const { input, text, change, focus, blur } = search;
-  const fabLabel = incognito ? "New Incognito Tab" : "New Tab";
+  const fabLabel = incognito ? actionWords.newIncognitoTab : actionWords.newTab;
   const closesIncognito = menusShown && privateCount > 0 && onCloseIncognito !== undefined;
   const closeItems = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
   return (
@@ -215,7 +216,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
           returnKeyType="search"
           style={[materialType.bodyLarge, styles.field, { color: scheme.onSurface }]}
         />
-        {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label="Clear Search" scheme={scheme} onPress={() => change("")} /> : null}
+        {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label={actionWords.clearText} scheme={scheme} onPress={() => change("")} /> : null}
       </Pressable>
       <MenuTrigger
         items={plusMenuItems(incognito, canReopen)}
@@ -252,7 +253,7 @@ function StartControls({ scheme, incognito, onSearch }: MaterialStartBarProps & 
       <Pressable
         testID="materialStartSearch"
         accessibilityRole="button"
-        accessibilityLabel={incognito ? "New Incognito Tab" : "New Tab"}
+        accessibilityLabel={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
         accessibilityHint="Opens search."
         android_ripple={field}
         onPress={onSearch}

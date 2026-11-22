@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { type GestureResponderEvent, Pressable, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
+import { type GestureResponderEvent, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
 import { acknowledgeSyncReset, changeSyncFolder, pastedText, setDeviceName, stopSyncing, syncNow } from "../../state/sync/actions";
 import { useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { haptics } from "../../state/app/haptics";
 import { useSync } from "../../state/sync/store";
 import { syncNowFeedback, connectMessage, deviceIcon, inboxNotice, shownProfile, deviceSeen, isSyncConnected, isSyncOff, orderedDevices, sendReceivers, syncHeroSubtitle } from "../../state/sync/syncRules";
 import { popSettings, pushSettings } from "../../state/settings/nav";
-import { controlRadius, ConfirmSheet, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
+import { ActionButton, ConfirmSheet, iconRoles, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
 import { copy } from "../../lib/platformCopy";
 import { destinationWords, syncWords } from "../../lib/sharedWords";
 import { ButtonRow, Divider, Group, IconTile, NavRow, SettingsPage, ValueRow } from "../settings/SettingsKit";
@@ -29,23 +29,6 @@ export function SyncHero({ title, subtitle, warning, children }: { title: string
   );
 }
 
-export function CapsuleButton({ title, onPress, prominent, enabled = true, icon }: { title: string; onPress: () => void; prominent?: boolean; enabled?: boolean; icon?: SymbolName }) {
-  const theme = useTheme();
-  const ink = prominent ? theme.groupFill : theme.formAccent;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      style={[styles.capsule, { backgroundColor: prominent ? theme.label : theme.tertiaryFill, opacity: enabled ? 1 : 0.4 }]}
-    >
-      {icon ? <Symbol name={icon} size={16} color={ink} /> : null}
-      <Text style={[font.body, styles.bold, { color: ink }]}>{title}</Text>
-    </Pressable>
-  );
-}
-
 export const SYSTEM_PASTE_SIZE = { width: 262 / 3, height: 103 / 3 } as const;
 
 export function PasteAction({ onText }: { onText: (text: string) => void }) {
@@ -56,7 +39,7 @@ export function PasteAction({ onText }: { onText: (text: string) => void }) {
   if (pasteButtonIsNative()) {
     return <PasteButton testID="systemPaste" accessibilityLabel="Paste" tint={theme.formAccent} onPaste={take} style={[styles.systemPaste, SYSTEM_PASTE_SIZE]} />;
   }
-  return <CapsuleButton title="Paste" icon="docOnDoc" onPress={() => void pastedText().then(take)} />;
+  return <ActionButton title="Paste" icon={iconRoles.copyText} variant="filled" tone="neutral" size="compact" stretch onPress={() => void pastedText().then(take)} />;
 }
 
 function FeatureRow({ icon, title, divider }: { icon: SymbolName; title: string; divider?: boolean }) {
@@ -157,7 +140,7 @@ export function SyncPage() {
   return (
     <SettingsPage title={destinationWords.sync} onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
       <SyncHero title={destinationWords.sync} subtitle={hero.text} warning={hero.isWarning}>
-        {off ? <CapsuleButton title={syncWords.connect} prominent onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
+        {off ? <ActionButton title={syncWords.connect} variant="filled" tone="accent" size="compact" stretch onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
       </SyncHero>
       {off ? (
         <Group header="What You Get" footer={copy().syncFeatureFooter}>
@@ -236,18 +219,6 @@ const styles = StyleSheet.create({
   bold: { fontWeight: "600" },
   centered: { textAlign: "center" },
   systemPaste: { alignSelf: "center", marginTop: space.s },
-  capsule: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.xs + 2,
-    minHeight: 48,
-    paddingHorizontal: space.xl,
-    borderRadius: controlRadius(48),
-    borderCurve: "continuous",
-    marginTop: space.s,
-    alignSelf: "stretch",
-  },
   feature: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 44, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.xs },
   featureIcon: { width: 28, alignItems: "center" },
   row: { flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap, minHeight: settingsLayout.rowMinHeight, paddingHorizontal: settingsLayout.rowInset },

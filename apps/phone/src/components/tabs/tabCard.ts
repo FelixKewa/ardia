@@ -3,6 +3,7 @@ import { useHeldWhileDeckHidden } from "../../state/browse/deckHold";
 import { useTabs } from "../../state/tabs/store";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { screenReaderActions } from "../ui";
+import { pageWords } from "../../lib/sharedWords";
 
 export const CARD_MENU_ACTION = "Tab Options";
 
@@ -10,7 +11,7 @@ export const CLOSE_TAB = "Close Tab";
 
 export const TAB_CARD_HINT = "Opens the tab.";
 
-export const UNTITLED_TAB = "New Tab";
+export const UNTITLED_TAB = pageWords.untitledTab;
 
 export const tabCardTitle = (tab: BrowserTab, host: string) => tab.title || host || UNTITLED_TAB;
 

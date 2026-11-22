@@ -15,7 +15,7 @@ import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
 import { useIncognito } from "../../state/tabs/hooks";
-import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, themeEditorLayout, useDesign, useProfileLook, useTheme, type ProfileColor } from "../ui";
+import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, themeEditorLayout, useDesign, useProfileLook, useTheme, type ProfileColor, usePressStyle } from "../ui";
 import { MaterialSettingsLeading } from "./MaterialSettingsKit";
 import { Divider, Group, IconTile, NavRow, SettingsPage, ToggleRow } from "./SettingsKit";
 import { actionWords } from "../../lib/sharedWords";
@@ -147,6 +147,7 @@ function CustomSwatch({ selected }: { selected: boolean }) {
   const colors = useMemo(() => (saved ? themePalette(saved) : RAINBOW), [saved]);
   const ring = useMemo(() => (saved ? themeAccent(saved) : settingsTint.neutral), [saved]);
   const side = settingsLayout.swatch;
+  const pressStyle = usePressStyle("icon", { style: CUSTOM_SWATCH_HIT });
   return (
     <Pressable
       accessibilityRole="radio"
@@ -154,7 +155,7 @@ function CustomSwatch({ selected }: { selected: boolean }) {
       accessibilityHint="Opens the theme editor"
       accessibilityState={{ selected }}
       onPress={() => openThemeEditor(look)}
-      style={[styles.swatchHit, styles.swatchCell]}
+      style={pressStyle}
     >
       <SwatchRing ring={ring} selected={selected}>
         <View testID="customSwatch" style={[styles.swatch, { experimental_backgroundImage: linearGradientCss(colors, true, side, side) }]} />
@@ -165,13 +166,14 @@ function CustomSwatch({ selected }: { selected: boolean }) {
 
 function Swatch({ color, selected, grid }: { color: ProfileColor; selected: boolean; grid: boolean }) {
   const swatch = PROFILE_COLORS[color].swatch;
+  const pressStyle = usePressStyle("icon", { style: grid ? CUSTOM_SWATCH_HIT : styles.swatchHit });
   return (
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel={PROFILE_COLORS[color].name}
       accessibilityState={{ selected }}
       onPress={() => setColorChoice(color)}
-      style={[styles.swatchHit, grid ? styles.swatchCell : null]}
+      style={pressStyle}
     >
       <SwatchRing ring={swatch} selected={selected}>
         <View style={[styles.swatch, { backgroundColor: swatch }]} />
@@ -199,3 +201,5 @@ const styles = StyleSheet.create({
   ring: { borderRadius: capsule(RING), borderWidth: settingsLayout.swatchRing },
   swatch: { width: settingsLayout.swatch, height: settingsLayout.swatch, borderRadius: capsule(settingsLayout.swatch) },
 });
+
+const CUSTOM_SWATCH_HIT = [styles.swatchHit, styles.swatchCell];

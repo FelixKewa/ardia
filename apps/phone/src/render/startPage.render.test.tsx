@@ -295,7 +295,7 @@ test("when the page width changes with the same space selected, the pager moves 
   unmount(root);
 });
 
-test("with no tabs open the bar's Tabs button becomes Archive, or Synced Tabs when sync is on, so Start never leads to an empty tab view", () => {
+test("with no tabs open the bar's Tabs button becomes Archive, or Spaces when sync is on, so Start never leads to an empty tab view", () => {
   withTabs(0);
   const deck = jest.spyOn(browseStore, "showDeck").mockImplementation(async () => undefined);
   const archive = jest.spyOn(browseStore, "openArchive").mockImplementation(() => undefined);
@@ -311,7 +311,7 @@ test("with no tabs open the bar's Tabs button becomes Archive, or Synced Tabs wh
   withSpaces([profile("work", "Work")]);
   const synced = start();
   expect(host(synced, "startBarArchive")).toBeUndefined();
-  press(synced, "Synced Tabs");
+  press(synced, "Spaces");
   expect(spaces).toHaveBeenCalledTimes(1);
   unmount(synced);
   act(() => withTabs(1));

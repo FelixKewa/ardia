@@ -5,13 +5,12 @@ import { cameraErrorAccess, makeScanJudge, openCameraSettings, prepareCamera, ty
 import { haptics } from "../../state/app/haptics";
 import { SCAN_REJECTED } from "../../state/sync/syncRules";
 import { copy } from "../../lib/platformCopy";
-import { actionWords, dismissWords } from "../../lib/sharedWords";
+import { actionWords, dismissWords, syncWords } from "../../lib/sharedWords";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
-import { ActionButton, CodeCamera, controlSize, font, ink, ModalOverlay, Portal, scanInk, scanLayout, smoothCorners, space, Symbol, tabsMotion } from "../ui";
+import { ActionButton, CodeCamera, controlSize, font, ink, ModalOverlay, Portal, scanInk, scanLayout, scanMotion, smoothCorners, space, Symbol, tabsMotion } from "../ui";
 import { OverlayCancelButton, OverlayGlassButton } from "../ui/LookViews";
 
-const CAMERA_STOP_MS = 120;
 
 type Props = { onScan: (phrase: string) => void; onEnterWords: () => void; onCancel: () => void; inline?: boolean };
 
@@ -25,7 +24,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
   const leave = (then: () => void) => {
     if (leaving) return;
     setLeaving(true);
-    setTimeout(then, CAMERA_STOP_MS);
+    setTimeout(then, scanMotion.cameraStopMs);
   };
   useEffect(() => {
     void prepareCamera().then(setAccess);
@@ -77,7 +76,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
               ) : (
                 <View />
               )}
-              <OverlayGlassButton title={ENTER_WORDS} onPress={() => leave(onEnterWords)} />
+              <OverlayGlassButton title={syncWords.enterRecoveryPhrase} onPress={() => leave(onEnterWords)} />
             </View>
           </>
         ) : null}
@@ -125,16 +124,15 @@ function FinderCorners() {
 function Unavailable({ icon, title, message, onSettings, onEnterWords }: { icon: "gearshape" | "qrcodeViewfinder"; title: string; message: string; onSettings?: () => void; onEnterWords: () => void }) {
   return (
     <View style={styles.unavailable}>
-      <Symbol name={icon} size={48} color={scanInk.unavailableIcon} />
+      <Symbol name={icon} size={scanLayout.unavailableIcon} color={scanInk.unavailableIcon} />
       <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white, styles.centered]}>{title}</Text>
       <Text style={[font.subheadline, styles.soft]}>{message}</Text>
       {onSettings ? <ActionButton testID="scanOpenSettings" title={actionWords.openSettings} tone="overlay" onPress={onSettings} stretch /> : null}
-      <OverlayGlassButton title={ENTER_WORDS} onPress={onEnterWords} />
+      <OverlayGlassButton title={syncWords.enterRecoveryPhrase} onPress={onEnterWords} />
     </View>
   );
 }
 
-const ENTER_WORDS = "Enter Words Instead";
 
 const styles = StyleSheet.create({
   screen: { ...StyleSheet.absoluteFill, backgroundColor: ink.black },

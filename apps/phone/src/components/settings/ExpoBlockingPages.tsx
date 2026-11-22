@@ -38,6 +38,7 @@ import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
 import { FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
 import { haptics } from "../../state/app/haptics";
 import { ExpoBusyButton, ExpoBusyToolbarAction, ExpoHero } from "./ExpoSettingsParts";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
 
 const FILL = Number.MAX_SAFE_INTEGER;
 
@@ -185,7 +186,7 @@ function AddListSheet({ open, onOpen, onClose }: { open: boolean; onOpen: () => 
             </Form>
             <Toolbar.Content>
               <ToolbarItem placement="cancellationAction">
-                <Button label="Cancel" role="cancel" onPress={close} modifiers={[disabled(adding)]} />
+                <Button label={dismissWords.cancel} role="cancel" onPress={close} modifiers={[disabled(adding)]} />
               </ToolbarItem>
               <ToolbarItem placement="confirmationAction">
                 <ExpoBusyToolbarAction title="Add" busy={adding} ready={url !== null} onPress={() => void add()} />
@@ -220,7 +221,7 @@ export function ExpoFilterListPage({ route }: { route: SettingsRoute }) {
       {list.state === "failed" ? (
         <Section>
           <Label title={list.failure ?? "This list couldn’t be updated."} icon={<Image systemName="exclamationmark.triangle.fill" modifiers={modifierList(legibleInk("orange"))} />} />
-          <Button label="Try Again" onPress={() => void updateLists()} modifiers={[disabled(updating)]} />
+          <Button label={actionWords.tryAgain} onPress={() => void updateLists()} modifiers={[disabled(updating)]} />
         </Section>
       ) : null}
       <Section footer={list.skippedCount > 0 ? <Text>{copy().filterRulesUnsupported}</Text> : undefined}>
@@ -294,7 +295,7 @@ export function ExpoTrustedSitesPage() {
       </List>
       <Toolbar.Content>
         <ToolbarItem placement="topBarTrailing">
-          <Button label={editing ? "Done" : "Edit"} onPress={() => setEditing(!editing)} modifiers={editing ? [font({ weight: "semibold" })] : []} />
+          <Button label={editing ? dismissWords.done : "Edit"} onPress={() => setEditing(!editing)} modifiers={editing ? [font({ weight: "semibold" })] : []} />
         </ToolbarItem>
       </Toolbar.Content>
     </Toolbar>

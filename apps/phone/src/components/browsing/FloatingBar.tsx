@@ -1,13 +1,14 @@
 import { useEffect, useRef, type ComponentProps } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useBarReturn } from "./barReturn";
+import { AddressFace } from "./AddressFace";
 import { NotSecureLock } from "./NotSecureLock";
 import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, PressScale, Symbol, usePressStyle, type ColorRoles } from "../ui";
+import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, floatingBarLayout, PressScale, Symbol, type ColorRoles } from "../ui";
 import { newTabLabel } from "./barWords";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { TabStack } from "./BottomBar";
@@ -16,6 +17,7 @@ import { useDeckOwnsBar } from "../../state/browse/hooks";
 import { PullGhost, PullGlyphs } from "./PagePull";
 import { IncognitoGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
 import { DUO_PLUS_ABOVE, type DuoSqueeze } from "../../lib/bottomBarSpan";
+import { pageWords } from "../../lib/sharedWords";
 
 type Props = {
   tab: BrowserTab;
@@ -55,7 +57,7 @@ export function barAddress(tab: BrowserTab): BarAddress {
   const shown = display(tab.url);
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(tab.url)?.[1]?.toLowerCase() ?? null;
   return {
-    host: withoutPort(shown.host, tab.url) || tab.title || "New Tab",
+    host: withoutPort(shown.host, tab.url) || tab.title || pageWords.untitledTab,
     insecure: scheme === "http",
     isPrivate: tab.isPrivate,
     iconUrl: tab.faviconUrl,
@@ -89,7 +91,6 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
   const addressFade = useAnimatedStyle(() => (squeeze ? { opacity: 1 - shut(progress.value) } : { opacity: 1 }), [squeeze]);
   const dotsFade = useAnimatedStyle(() => (squeeze && address.insecure ? { opacity: 1 - shut(progress.value) } : { opacity: 1 }), [squeeze, address.insecure]);
   const lockFade = useAnimatedStyle(() => ({ opacity: shut(progress.value) }));
-  const addressPress = usePressStyle("text", { style: styles.addressHit });
   const leading = (
     <Animated.View testID="floatingBarLeading" collapsable={false} style={back.leading} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
       <FloatingTabsButton tab={tab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} ghost={!handed} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
@@ -109,25 +110,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
         <Animated.View testID="floatingBarCentreGlyphs" nativeID={ids?.face} collapsable={false} style={[styles.addressRow, back.centreGlyphs]}>
         <PullGlyphs style={styles.addressRow}>
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Address"
-          accessibilityValue={{ text: spokenAddress(address) }}
-          accessibilityHint="Opens search with this page’s address."
-          onPress={onAddress}
-          onPressIn={haptics.barPress}
-          style={addressPress}
-        >
-          {address.isPrivate ? <Symbol name={privateMark} size={floatingBarLayout.privateSymbol} color={ink.secondary} /> : null}
-          {address.insecure ? (
-            <NotSecureLock testID="floatingBarNotSecure" size={floatingBarLayout.siteIcon} color={ink.notSecure} />
-          ) : address.isPrivate ? null : address.pageUrl ? (
-            <Favicon iconUrl={address.iconUrl} pageUrl={address.pageUrl} size={floatingBarLayout.siteIcon} />
-          ) : null}
-          <Text testID="floatingBarHost" maxFontSizeMultiplier={floatingBarLayout.maxTextScale} numberOfLines={1} ellipsizeMode="middle" style={[styles.host, { color: ink.foreground }]}>
-            {address.host}
-          </Text>
-        </Pressable>
+        <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} />
         </Animated.View>
         <PressScale label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} onPress={onMore} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
@@ -245,7 +228,6 @@ const styles = StyleSheet.create({
   address: { flex: 1, height: floatingBarLayout.control, flexDirection: "row", alignItems: "center" },
   addressRow: { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" },
   addressHit: { flex: 1, height: floatingBarLayout.control, flexDirection: "row", alignItems: "center", gap: floatingBarLayout.addressSpacing, paddingLeft: floatingBarLayout.addressLead },
-  host: { flexShrink: 1, fontSize: floatingBarLayout.hostText },
   menu: { width: floatingBarLayout.control, height: floatingBarLayout.control, alignItems: "center", justifyContent: "center" },
   ghost: { alignItems: "center", justifyContent: "center" },
   ghostRow: { flexDirection: "row", alignItems: "center" },

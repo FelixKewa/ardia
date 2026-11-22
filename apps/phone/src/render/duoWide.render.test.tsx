@@ -232,3 +232,23 @@ test("search in wide is a command bar 127 under the card top, 35 in from each si
   expect(placed).toBeNull();
   unmount(root);
 });
+
+test("the wide toolbar and the sidebar draw the browsing bar's own address face, and the page's progress line is the shared one pinned to the card's top", () => {
+  const { AddressFace } = require("../components/browsing/AddressFace") as typeof import("../components/browsing/AddressFace");
+  const { PageProgressLine } = require("../components/browsing/PageProgressLine") as typeof import("../components/browsing/PageProgressLine");
+  useShape(OPEN, { name: "wide" });
+  const root = redesigned();
+  const faces = () => root.root.findAll((node) => node.type === AddressFace);
+  expect(faces()).toHaveLength(1);
+  expect(faces()[0]!.props.testIDPrefix).toBe("duo");
+  const { barAddress } = require("../components/browsing/FloatingBar") as typeof import("../components/browsing/FloatingBar");
+  const selected = currentTabs().open.find((tab) => tab.id === currentTabs().selectedId)!;
+  expect(host(root, "duoHost").props.children).toBe(barAddress(selected).host);
+  press(button(root, "Show Sidebar"));
+  settle();
+  expect(faces()).toHaveLength(2);
+  const progress = root.root.findAll((node) => node.type === PageProgressLine);
+  expect(progress).toHaveLength(1);
+  expect(progress[0]!.props.top).toBe(0);
+  unmount(root);
+});

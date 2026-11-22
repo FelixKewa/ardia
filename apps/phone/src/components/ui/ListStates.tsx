@@ -13,21 +13,24 @@ type EmptyStateProps = {
   message?: string;
   action?: { title: string; onPress: () => void };
   testID?: string;
+  ink?: { label: string; secondary: string };
 };
 
-export function EmptyState({ title, glyph, message, action, testID }: EmptyStateProps) {
+export function EmptyState({ title, glyph, message, action, testID, ink }: EmptyStateProps) {
   const theme = useTheme();
+  const label = ink?.label ?? theme.label;
+  const secondary = ink?.secondary ?? theme.secondaryLabel;
   return (
     <View testID={testID} style={styles.column}>
       {glyph ? (
         <View style={styles.glyph} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Symbol name={glyph} size={emptyStateLayout.glyph} color={theme.secondaryLabel} />
+          <Symbol name={glyph} size={emptyStateLayout.glyph} color={secondary} />
         </View>
       ) : null}
-      <Text accessibilityRole="header" style={[font.title3, styles.title, { color: theme.label }]}>
+      <Text accessibilityRole="header" style={[font.title3, styles.title, { color: label }]}>
         {title}
       </Text>
-      {message ? <Text style={[font.subheadline, styles.message, { color: theme.secondaryLabel }]}>{message}</Text> : null}
+      {message ? <Text style={[font.subheadline, styles.message, { color: secondary }]}>{message}</Text> : null}
       {action ? (
         <View style={styles.action}>
           <ActionButton title={action.title} onPress={action.onPress} variant="plain" tone="accent" size="compact" />

@@ -8,6 +8,7 @@ import { popSettings, type SettingsRoute } from "../../state/settings/nav";
 import { CLEAR_RANGES, clearChoice, clearFooter, clearIsEmpty, clearMessage, clearTitle, type ClearRange } from "../../state/settings/settingsRules";
 import { modifierList, settingsChrome, settingsSwitchStyle } from "../ui";
 import { ExpoBusyButton } from "./ExpoSettingsParts";
+import { destinationWords } from "../../lib/sharedWords";
 
 export function ExpoClearDataPage({ onCleared = popSettings }: { route?: SettingsRoute; onCleared?: () => void }) {
   const [range, setRange] = useState<ClearRange>("today");
@@ -43,7 +44,7 @@ export function ExpoClearDataPage({ onCleared = popSettings }: { route?: Setting
         </Picker>
       </Section>
       <Section title="Clear" footer={<Text modifiers={[contentTransition("opacity")]}>{clearFooter(choice, range, byTime)}</Text>}>
-        {toggle("History", history, setHistory)}
+        {toggle(destinationWords.history, history, setHistory)}
         {toggle("Cache", cache, setCache)}
         {toggle("Cookies and Site Data", cookies, setCookies)}
         {range === "allTime" ? toggle("Archived Tabs", archive, setArchive) : null}

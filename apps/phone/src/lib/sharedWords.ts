@@ -16,8 +16,15 @@ export const actionWords = {
   copied: "Copied",
   share: "Share",
   tryAgain: "Try Again",
+  open: "Open",
+  setUp: "Set Up",
+  showTabs: "Show Tabs",
   openSettings: "Open Settings",
   color: "Color",
+} as const;
+
+export const pageWords = {
+  untitledTab: actionWords.newTab,
 } as const;
 
 export const dismissWords = {

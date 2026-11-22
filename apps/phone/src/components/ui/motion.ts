@@ -101,13 +101,17 @@ export const deckChromeMotion = { pill: spring(0.2, 1), pillScale: 0.9, chromeSh
 
 export const pageMenuMotion = { titleFade: 150 } as const;
 
+export const scanMotion = { cameraStopMs: 120 } as const;
+
 export const toastMotion = { snappy: spring(0.3, 0.86) } as const;
 
 export const snapSpring = { stiffness: 1500, damping: 2 * Math.sqrt(1500), mass: 1 } as const;
 
 export const settingsMotion = { swatchRing: spring(0.3, 0.86), titleFade: snapSpring } as const;
 
-export const tabsCurve = { easeOut: WorkletEasing.bezier(0, 0, 0.58, 1), easeInOut: WorkletEasing.bezier(0.42, 0, 0.58, 1), depart: WorkletEasing.bezier(0.2, 0, 0, 1) } as const;
+export const departBezier = [0.2, 0, 0, 1] as const;
+
+export const tabsCurve = { easeOut: WorkletEasing.bezier(0, 0, 0.58, 1), easeInOut: WorkletEasing.bezier(0.42, 0, 0.58, 1), depart: WorkletEasing.bezier(...departBezier) } as const;
 
 export const pressMotion = { scale: 0.93, spring: spring(0.12, 1), reducedOpacityMs: 0 } as const;
 

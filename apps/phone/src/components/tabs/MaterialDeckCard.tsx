@@ -16,6 +16,7 @@ import { materialShape, materialSize, materialType } from "../ui/materialTokens"
 import { nativeMenus } from "../ui/MenuTrigger";
 import { DeckCardMenu, deckCardStyles, ReceivedBadge, sameCard, useCardPlacement, type DeckCardProps } from "./DeckCard";
 import { MATERIAL_DECK, materialOnScreen, useDeckScheme } from "./MaterialDeckLayout";
+import { pageWords } from "../../lib/sharedWords";
 
 export const MaterialDeckCard = memo(function MaterialDeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow }: DeckCardProps) {
   countRender("DeckCard");
@@ -49,7 +50,7 @@ export const MaterialDeckCard = memo(function MaterialDeckCard({ tab, index, geo
   const bar = deckBarBand(g, barHeight(g.safeBottom, "material"), 1);
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: placed.value.expanded && !underBars ? deckBarBand(g, 0, scaleProgress.value).grown : 0 }] }), [g, underBars]);
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tab.title || host || pageWords.untitledTab;
   const fill = tone.top ?? scheme.surfaceContainerLow;
   const cardContents = (
     <>

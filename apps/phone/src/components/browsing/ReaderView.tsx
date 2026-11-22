@@ -18,7 +18,7 @@ import {
 } from "../../state/page/pagePrompts";
 import { copy } from "../../lib/platformCopy";
 import { dismissWords } from "../../lib/sharedWords";
-import { ChromeSurface, font, motionAliases, readerInk, readerLayout, smoothCorners, space, Symbol, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
+import { ChromeSurface, EmptyState, font, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
 import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { readerGlyphs } from "./readerTokens";
@@ -122,9 +122,8 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
           <ActivityIndicator accessibilityLabel="Loading article" color={ink.secondary} />
         </View>
       ) : load.kind === "failed" ? (
-        <View style={[styles.center, styles.gap]}>
-          <Symbol name="docPlaintext" size={readerGlyphs.noArticle} color={ink.secondary} />
-          <Text style={[font.title3, styles.bold, { color: ink.ink }]}>No Article Found</Text>
+        <View style={styles.center}>
+          <EmptyState testID="readerNoArticle" title={NO_ARTICLE} glyph="docPlaintext" ink={{ label: ink.ink, secondary: ink.secondary }} />
         </View>
       ) : (
         <FlatList
@@ -172,6 +171,7 @@ function Paragraph({ text, family, size, color }: { text: string; family: string
 }
 
 const WEB_IMAGE = /^https?:\/\//i;
+const NO_ARTICLE = "No Article Found";
 
 function LeadImage({ uri }: { uri: string }) {
   const [aspect, setAspect] = useState<number | null>(null);
@@ -197,7 +197,6 @@ const styles = StyleSheet.create({
   bold: { fontWeight: "600" },
   medium: { fontWeight: "500" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  gap: { gap: space.m },
   header: { gap: space.s, paddingHorizontal: space.xl, paddingTop: space.s, maxWidth: readerLayout.maxWidth, alignSelf: "center", width: "100%" },
   paragraph: { paddingHorizontal: space.xl, maxWidth: readerLayout.maxWidth, alignSelf: "center", width: "100%" },
   lead: { width: "100%", marginTop: space.s, borderRadius: readerLayout.leadRadius, ...smoothCorners },

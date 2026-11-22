@@ -26,21 +26,22 @@ test("a toast without an action is an alert with no press, and swiping it away h
   expect(toast.props.accessibilityRole).toBe("alert");
   expect(toast.props.onPress).toBeUndefined();
   expect(toast.props.accessibilityActions.map((action: { name: string }) => action.name)).toEqual(["escape", "dismiss"]);
-  expect(symbols(root)).not.toContain("chevronRight");
+  expect(root.root.findAll((node) => node.props.testID === "toastAction")).toHaveLength(0);
   act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "dismiss" } }));
   expect(useToasts.getState().toast).toBeNull();
   unmount(root);
 });
 
-test("a toast with an action is a button that dims on press with the shared look, shows a chevron, and runs its action on tap", () => {
+test("a toast with an action is a button that dims on press with the shared look, names its action in words and to screen readers, and runs it on tap", () => {
   const tapped = jest.fn();
   const root = renderSurface(<ToastHost />);
-  act(() => showToast("Downloaded otter.pdf", "download", 3000, tapped));
+  act(() => showToast("Downloaded otter.pdf", "download", 3000, { label: "Open", run: tapped }));
   const toast = root.root.findAll((node) => node.props.testID === "toast" && typeof node.props.style === "function")[0]!;
   expect(toast.props.accessibilityRole).toBe("button");
-  expect(toast.props.accessibilityLabel).toBe("Downloaded otter.pdf");
+  expect(toast.props.accessibilityLabel).toBe("Downloaded otter.pdf, Open");
   expect(toast.props.accessibilityActions.map((action: { name: string }) => action.name)).toEqual(["escape", "dismiss"]);
-  expect(symbols(root)).toContain("chevronRight");
+  expect(root.root.findAll((node) => node.props.testID === "toastAction" && typeof node.type === "string")[0]!.props.children).toBe("Open");
+  expect(symbols(root)).not.toContain("chevronRight");
   expect(StyleSheet.flatten(toast.props.style({ pressed: false })).opacity).toBeUndefined();
   expect(StyleSheet.flatten(toast.props.style({ pressed: true })).opacity).toBe(press.filledOpacity);
   act(() => toast.props.onPress());

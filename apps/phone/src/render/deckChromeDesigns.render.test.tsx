@@ -4,7 +4,7 @@ import { act } from "react-test-renderer";
 import { DeckBar } from "../components/tabs/DeckBar";
 import { IncognitoChip } from "../components/tabs/DeckChrome";
 import { TabDeck } from "../components/tabs/TabDeck";
-import { BarPlusGlyph, ConfirmSheet, controlSize, DesignProvider, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsInk } from "../components/ui";
+import { BarPlusGlyph, ConfirmSheet, controlRadius, controlSize, DesignProvider, press, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsLayout } from "../components/ui";
 import { IncognitoEyes } from "../components/ui/IncognitoEyes";
 import { DECK, DECK_ARC, deckGeometry, redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import { designFor, type Design } from "../lib/design";
@@ -98,6 +98,17 @@ test("the original deck keeps its bar and its Incognito chip, and none of the re
   expect(host(root, "deckBottomBar")).toBeUndefined();
   expect(host(root, "archiveCapsule")).toBeUndefined();
   expect(host(root, "archiveCardPlace")).toBeDefined();
+  unmount(root);
+});
+
+test("the original deck's Incognito chip is a continuous rounded rectangle on the control radius, not a capsule, and dims on press", () => {
+  const root = renderSurface(<IncognitoChip count={2} top={0} onPress={() => undefined} />);
+  const chip = root.root.findAll((node) => node.props.testID === "deckIncognitoChip" && typeof node.props.style === "function")[0]!;
+  const rest = StyleSheet.flatten(chip.props.style({ pressed: false }));
+  expect(rest).toMatchObject({ borderRadius: controlRadius(tabsLayout.chipHeight), borderCurve: "continuous" });
+  expect(rest.borderRadius).toBeLessThan(tabsLayout.chipHeight / 2);
+  expect(StyleSheet.flatten(chip.props.style({ pressed: true })).opacity).toBe(press.filledOpacity);
+  expect(chip.props.accessibilityLabel).toBe("Incognito, 2 tabs");
   unmount(root);
 });
 

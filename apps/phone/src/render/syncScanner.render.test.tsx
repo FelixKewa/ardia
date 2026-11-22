@@ -72,7 +72,7 @@ test("the scanner's Cancel is the voice screen's: the shared top-right overlay b
   expect(flat(cancel)).toMatchObject({ width: voiceLayout.cancel, height: voiceLayout.cancel });
   expect(flat(cancel).right).toBeDefined();
   expect(flat(cancel).left).toBeUndefined();
-  expect(root.root.findAll((node) => node.type === OverlayGlassButton && node.props.title === "Enter Words Instead")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === OverlayGlassButton && node.props.title === "Enter Recovery Phrase")).toHaveLength(1);
   unmount(root);
 });
 

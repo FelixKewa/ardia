@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { actionWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
@@ -9,9 +9,9 @@ import { editPageQuery, menuBack, menuForward, menuReload, menuStop, openPageMen
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { isSyncableUrl, type BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
-import { capsule, controlRadius, chromeInk, ChromeSurface, iconRoles, IncognitoSpecs, isDarkColor, PressScale, rolesFor, smoothCorners, Symbol, Tappable, usePressStyle, useTheme, type SymbolName } from "../ui";
-import { barAddress, spokenAddress, type BarAddress } from "../browsing/FloatingBar";
-import { NotSecureLock } from "../browsing/NotSecureLock";
+import { capsule, controlRadius, ChromeSurface, floatingBarLayout, iconRoles, isDarkColor, PressScale, rolesFor, smoothCorners, Symbol, Tappable, useTheme, type SymbolName } from "../ui";
+import { AddressFace } from "../browsing/AddressFace";
+import { barAddress } from "../browsing/FloatingBar";
 import { DUO } from "./duoLayout";
 
 type Props = { showsAddress: boolean; sidebarShown: boolean; sidebar?: SharedValue<number>; onToggleSidebar: () => void };
@@ -90,33 +90,11 @@ const ADDRESS_FACES = {
 
 export function DuoAddressField({ layout, tab, dark, leading, onPress }: { layout: DuoAddressLayout; tab: BrowserTab | null; dark: boolean; leading?: ReactNode; onPress: () => void }) {
   const face = ADDRESS_FACES[layout];
-  const address = tab ? barAddress(tab) : null;
-  const pressStyle = usePressStyle("text", { style: layout === "toolbar" ? styles.hostButton : styles.sidebarFieldHit });
   return (
     <ChromeSurface testID={face.testID} shape={face.shape} cornerRadius={face.corner} dark={dark} style={[layout === "toolbar" ? styles.address : styles.sidebarField, smoothCorners]}>
       {leading}
-      <Pressable accessibilityRole="button" accessibilityLabel="Address" accessibilityValue={{ text: spokenAddress(address) }} accessibilityHint="Opens search with this page’s address." onPress={onPress} style={pressStyle}>
-        <HostLabel address={address} dark={dark} />
-      </Pressable>
+      <AddressFace address={tab ? barAddress(tab) : null} dark={dark} testIDPrefix="duo" style={layout === "toolbar" ? styles.hostButton : styles.sidebarFieldHit} onPress={onPress} />
     </ChromeSurface>
-  );
-}
-
-export function HostLabel({ address, dark }: { address: BarAddress | null; dark: boolean }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
-  const roles = rolesFor(dark);
-  return (
-    <View testID="duoHost" style={styles.host} pointerEvents="none">
-      {address?.isPrivate ? <IncognitoSpecs size={DUO.hostLock} color={roles.foregroundSecondary} /> : null}
-      {address?.insecure ? (
-        <NotSecureLock testID="duoHostNotSecure" size={DUO.hostLock} color={ink.notSecure} />
-      ) : address?.isPrivate ? null : address?.pageUrl ? (
-        <Symbol name="lockFill" size={DUO.hostLock} color={roles.foregroundSecondary} />
-      ) : null}
-      <Text testID="duoHostText" maxFontSizeMultiplier={DUO.hostMaxTextScale} numberOfLines={1} ellipsizeMode="middle" style={[styles.hostText, styles.hostName, { color: roles.foregroundPrimary }]}>
-        {address?.host ?? ""}
-      </Text>
-    </View>
   );
 }
 
@@ -127,10 +105,7 @@ const styles = StyleSheet.create({
   addressSlot: { flexShrink: 1, minWidth: 0 },
   address: { height: DUO.addressHeight, flexDirection: "row", alignItems: "center", gap: DUO.addressGap, paddingLeft: DUO.addressLead - DUO.addressSidebarInset, paddingRight: DUO.addressTrail },
   sidebarButton: { width: DUO.addressSidebarButton, height: DUO.addressHeight, alignItems: "center", justifyContent: "center" },
-  hostButton: { flexShrink: 1, height: DUO.addressHeight, justifyContent: "center" },
+  hostButton: { flexShrink: 1, height: DUO.addressHeight, flexDirection: "row", alignItems: "center", gap: floatingBarLayout.addressSpacing },
   sidebarField: { height: DUO.sidebarFieldHeight },
-  sidebarFieldHit: { flex: 1, paddingHorizontal: DUO.sidebarFieldPadding, justifyContent: "center", alignItems: "flex-start" },
-  host: { flexDirection: "row", alignItems: "center", gap: DUO.hostGap },
-  hostText: { fontSize: DUO.hostText },
-  hostName: { flexShrink: 1 },
+  sidebarFieldHit: { flex: 1, paddingHorizontal: DUO.sidebarFieldPadding, flexDirection: "row", alignItems: "center", gap: floatingBarLayout.addressSpacing },
 });

@@ -26,8 +26,8 @@ struct ContinueWithChatGPTButton: View {
       }
       .frame(maxWidth: .infinity, minHeight: 48)
       .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
-      .background(colorScheme == .dark ? Color.white : Color.black, in: .rect(cornerRadius: Radius.field, style: .continuous))
-      .contentShape(.rect(cornerRadius: Radius.field, style: .continuous))
+      .background(colorScheme == .dark ? Color.white : Color.black, in: .rect(cornerRadius: Radius.control, style: .continuous))
+      .contentShape(.rect(cornerRadius: Radius.control, style: .continuous))
     }
     .buttonStyle(PressableStyle())
     .disabled(account.isSigningIn)

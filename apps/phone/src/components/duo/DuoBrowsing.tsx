@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScreenLayout, type ScreenFold } from "../../state/app/screenLayout";
 import { useSystemBars } from "../../state/app/systemBars";
-import { useSurface, watchPageLoad } from "../../state/browse/hooks";
+import { useSurface } from "../../state/browse/hooks";
 import { consumeDeckEntrance, deckEntered, leaveDeck, pageLaidOut, useBrowse } from "../../state/browse/store";
 import { closePageMenu } from "../../state/page/actions";
 import { useFindOpen, useMenuOpen, useReaderTabId } from "../../state/page/hooks";
@@ -12,9 +12,10 @@ import { useSearchOpen } from "../../state/search/hooks";
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { currentTabs } from "../../state/tabs/store";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { LoadingLine, LookBackdrop, shadowCss, smoothCorners, tabsCurve, usePresence, useReduceMotion, useTheme, type LoadWatch } from "../ui";
+import { LookBackdrop, shadowCss, smoothCorners, tabsCurve, usePresence, useReduceMotion, useTheme } from "../ui";
 import { FindBar } from "../browsing/FindBar";
 import { PageCover } from "../browsing/PageCover";
+import { PageProgressLine } from "../browsing/PageProgressLine";
 import { PageFailureView } from "../browsing/PageFailureView";
 import { PageSurface } from "../browsing/PageSurface";
 import { PageMenu } from "../browsing/PageMenu";
@@ -145,9 +146,7 @@ function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null
             <PageSurface key={tab.id} tab={tab} toneBottom={0} obscured={NO_INSETS} topClearance={DUO.toolbarClearance} testID="duoPage" />
             <PageCover key={`${tab.id}:cover`} tab={tab} />
             <PageFailureView key={`${tab.id}:failure`} tabId={tab.id} />
-            <View style={styles.loading} pointerEvents="none">
-              <DuoLoadingLine tabId={tab.id} />
-            </View>
+            <PageProgressLine tabId={tab.id} top={0} />
           </>
         ) : null}
       </View>
@@ -156,11 +155,6 @@ function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null
 }
 
 const NO_INSETS = { top: 0, bottom: 0 } as const;
-
-function DuoLoadingLine({ tabId }: { tabId: string }) {
-  const watch = useMemo<LoadWatch>(() => (show) => watchPageLoad(tabId, show), [tabId]);
-  return <LoadingLine watch={watch} />;
-}
 
 function PageOverlays({ tab, width, height }: { tab: BrowserTab; width: number; height: number }) {
   const menuOpen = useMenuOpen();
@@ -185,5 +179,4 @@ const styles = StyleSheet.create({
   place: { position: "absolute" },
   card: { borderRadius: DUO.cardRadius, ...smoothCorners },
   cardClip: { flex: 1, borderRadius: DUO.cardRadius, ...smoothCorners, overflow: "hidden" },
-  loading: { position: "absolute", top: 0, left: 0, right: 0 },
 });

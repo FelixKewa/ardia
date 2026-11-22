@@ -4,10 +4,10 @@ import { canPickSyncFolderFirst, checkPhrase, connectSync, syncConnectSession } 
 import { IDLE_CONNECT, type ConnectState } from "../../state/sync/connectSession";
 import { haptics } from "../../state/app/haptics";
 import { chooseFolderTitle, setupStepLabel, connectMessage, MAC_HINT, phraseFooter } from "../../state/sync/syncRules";
-import { capsule, font, radius, settingsLayout, space, spacesLayout, Symbol, tabsMotion, useDesign, useTheme, useReduceMotion } from "../ui";
+import { ActionButton, capsule, font, radius, settingsLayout, space, spacesLayout, Symbol, tabsMotion, useDesign, useTheme, useReduceMotion } from "../ui";
 import { BarButton, CrossfadeText, Group, SettingsPage } from "../settings/SettingsKit";
 import Animated, { FadeIn, FadeOut, SlideInRight, SlideOutRight } from "react-native-reanimated";
-import { CapsuleButton, PasteAction, SyncHero } from "./SyncPage";
+import { PasteAction, SyncHero } from "./SyncPage";
 import { SyncScan } from "./SyncScan";
 import { copy } from "../../lib/platformCopy";
 import type { ConnectResult } from "../../platform/sync";
@@ -124,8 +124,8 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                 </Animated.View>
               ) : (
                 <Animated.View key="ways" entering={STEP_IN} exiting={STEP_OUT} style={styles.ways}>
-                  {scans ? <CapsuleButton title={syncWords.scanCode} icon="qrcodeViewfinder" prominent enabled={!busy} onPress={() => setScanning(true)} /> : null}
-                  <CapsuleButton title={syncWords.enterRecoveryPhrase} icon="textCursor" prominent={!scans} enabled={!busy} onPress={() => setEntering(true)} />
+                  {scans ? <ActionButton title={syncWords.scanCode} icon="qrcodeViewfinder" variant="filled" tone="accent" size="compact" stretch disabled={busy} onPress={() => setScanning(true)} /> : null}
+                  <ActionButton title={syncWords.enterRecoveryPhrase} icon="textCursor" variant="filled" tone={scans ? "neutral" : "accent"} size="compact" stretch disabled={busy} onPress={() => setEntering(true)} />
                 </Animated.View>
               )}
             </Step>
@@ -142,7 +142,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                       <Connecting />
                     </Animated.View>
                   ) : (
-                    <CapsuleButton title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} onPress={() => void session.pickFolder(phrase).then(finished)} />
+                    <ActionButton title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} variant="filled" tone="neutral" size="compact" stretch onPress={() => void session.pickFolder(phrase).then(finished)} />
                   )}
                   {picked.failure && connectMessage(picked.failure) ? <Problem text={connectMessage(picked.failure)!} /> : null}
                 </>
@@ -153,7 +153,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                       <Connecting />
                     </Animated.View>
                   ) : (
-                    <CapsuleButton title={chooseFolderTitle(lastResult)} enabled={hasPhrase} onPress={() => void connect()} />
+                    <ActionButton title={chooseFolderTitle(lastResult)} variant="filled" tone="neutral" size="compact" stretch disabled={!hasPhrase} onPress={() => void connect()} />
                   )}
                   {failure ? <Problem text={failure} /> : null}
                 </>

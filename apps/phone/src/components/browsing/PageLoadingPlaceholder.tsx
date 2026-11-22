@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } fro
 import { Favicon, motionAliases, smoothCorners, useTheme } from "../ui";
 import { siteHost } from "./FloatingBar";
 import { loadingPlaceholderLayout as layout } from "./pageStateTokens";
+import { pageWords } from "../../lib/sharedWords";
 
 export type PlaceholderTab = { url: string; title: string; faviconUrl: string | null; themeColorHex: string | null };
 
@@ -21,7 +22,7 @@ export function pageTheme(hex: string | null): PageTheme | null {
 
 export function distinctTitle(title: string, host: string | null): string | null {
   const trimmed = title.trim();
-  if (!trimmed) return host === null ? "New Tab" : null;
+  if (!trimmed) return host === null ? pageWords.untitledTab : null;
   if (host === null) return trimmed;
   const bare = (text: string) => text.toLowerCase().replaceAll("www.", "");
   if (bare(trimmed) === bare(host) || trimmed.toLowerCase().startsWith("http")) return null;
@@ -41,7 +42,7 @@ export function PageLoadingPlaceholder({ tab, revealed = false }: { tab: Placeho
     reveal.value = withDelay(layout.revealDelayMs, withTiming(1, { duration: layout.revealMs, easing: motionAliases.loadingRevealEase }));
   }, []);
   const shown = useAnimatedStyle(() => ({ opacity: reveal.value }));
-  const spoken = tab.title.trim() || host || "New Tab";
+  const spoken = tab.title.trim() || host || pageWords.untitledTab;
   return (
     <Animated.View
       testID="pageLoadingPlaceholder"

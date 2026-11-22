@@ -81,7 +81,7 @@ onAndroid("on Android the Library opens in the drawn sheet with its title, Done,
   expect(textOf(root)).toContain("History");
   const tabs = hosts(root.root, (props) => props.accessibilityRole === "tab" && typeof props.testID === "string" && (props.testID as string).startsWith("librarySection:"));
   expect(tabs.map((tab) => tab.props.accessibilityLabel)).toEqual(["History", "Bookmarks", "Downloads"]);
-  expect(tabs[0]!.props.accessibilityState).toEqual({ selected: true });
+  expect(tabs[0]!.props.accessibilityState).toMatchObject({ selected: true });
   expect(hosts(root.root, (props) => props.testID === "librarySearch")[0]!.props.placeholder).toBe("Search History");
   await act(async () => section(root, "downloads").props.onPress());
   expect(useLibrary.getState().section).toBe("downloads");

@@ -225,7 +225,7 @@ test("the page view is given the profile's surface for what shows behind a swipe
 
 test("the browsing + is spoken as New Tab, or New Incognito Tab in Incognito, and draws the bars' shared + glyph; the classic bar's + says the same", () => {
   const { BarPlusGlyph } = require("../components/ui") as typeof import("../components/ui");
-  const spoken = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => typeof node.props.onPress === "function" && (node.props.accessibilityLabel === "New Tab" || node.props.accessibilityLabel === "New Incognito Tab" || node.props.accessibilityLabel === "New Search")).map((node) => node.props.accessibilityLabel as string);
+  const spoken = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => typeof node.props.onPress === "function" && (node.props.accessibilityLabel === "New Tab" || node.props.accessibilityLabel === "New Incognito Tab")).map((node) => node.props.accessibilityLabel as string);
   const plain = page("redesigned");
   expect(new Set(spoken(plain))).toEqual(new Set(["New Tab"]));
   expect(host(plain, "floatingBarPlus")!.findAll((node) => node.type === BarPlusGlyph).length).toBeGreaterThan(0);
@@ -251,5 +251,18 @@ test("the address answers a press with the shared dim and the bar's tap haptic, 
   const style = address.props.style as (state: { pressed: boolean }) => unknown;
   expect(StyleSheet.flatten(style({ pressed: true }) as never)).toMatchObject({ opacity: 0.35 });
   expect(StyleSheet.flatten(style({ pressed: false }) as never).opacity).toBeUndefined();
+  unmount(root);
+});
+
+test("the browsing address is the shared address face and the page's progress line is the shared one, set below the status bar", () => {
+  const { AddressFace } = require("../components/browsing/AddressFace") as typeof import("../components/browsing/AddressFace");
+  const { PageProgressLine } = require("../components/browsing/PageProgressLine") as typeof import("../components/browsing/PageProgressLine");
+  const root = page("redesigned");
+  const faces = root.root.findAll((node) => node.type === AddressFace);
+  expect(faces).toHaveLength(1);
+  expect(faces[0]!.props.testIDPrefix).toBe("floatingBar");
+  const progress = root.root.findAll((node) => node.type === PageProgressLine);
+  expect(progress).toHaveLength(1);
+  expect(StyleSheet.flatten(host(root, "pageProgressLine")!.props.style)).toMatchObject({ position: "absolute", left: 0, right: 0, top: progress[0]!.props.top });
   unmount(root);
 });

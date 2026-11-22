@@ -4,7 +4,7 @@ import { queryPrefixLength, type TrayRow } from "../../state/search/omnibox";
 import { countRender } from "../../state/app/interactionPerf";
 import type { Design } from "../../lib/design";
 import type { Point } from "../../lib/menuPlace";
-import { browseLayout, Favicon, font, MaterialIconButton, radius, screenReaderActions, space, Symbol, tabsMotion, useDesign, type ColorRoles, type SymbolName } from "../ui";
+import { browseLayout, Favicon, font, MaterialIconButton, radius, screenReaderActions, space, Symbol, tabsMotion, useDesign, type ColorRoles, type SymbolName, Tappable } from "../ui";
 import { useMaterialRipple } from "../ui/MaterialSurfaces";
 import { materialBottomBar, materialSize, materialType } from "../ui/materialTokens";
 import { searchPanel } from "./searchPanelTokens";
@@ -132,11 +132,11 @@ function RowContent({ row, typed, roles, interactive, onRefine }: { row: TrayRow
               onPress={() => onRefine(row)}
             />
           ) : (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Refine ${row.title}`} onPress={() => onRefine(row)} style={styles.refine}>
+            <Tappable kind="icon" label={`Refine ${row.title}`} onPress={() => onRefine(row)} style={styles.refine}>
               <View style={styles.refineGlyph}>
                 <Symbol name="arrowUpForward" size={15} color={roles.rowIcon} />
               </View>
-            </Pressable>
+            </Tappable>
           )
         ) : (
           <View style={material ? styles.materialRefine : styles.refine}>

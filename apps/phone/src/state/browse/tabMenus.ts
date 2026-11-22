@@ -1,6 +1,6 @@
 import { copy } from "../../lib/platformCopy";
 import { actionWords } from "../../lib/sharedWords";
-import { iconRoles } from "../../components/ui/iconRoles";
+import { iconRoleSymbols as iconRoles } from "../../lib/iconRoles";
 import { mobileClean } from "@ardia/core/src/mobile";
 import { hostOf } from "@ardia/core/src/omnibox";
 import { copyText, pressHaptic, shareLink, successHaptic } from "../../platform/system";

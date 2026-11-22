@@ -17,7 +17,7 @@ import { useTabs } from "../../state/tabs/store";
 import { recencyOrder, type BrowserTab } from "../../state/tabs/tabModels";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
-import { capsule, ChromeSurface, ConfirmSheet, Favicon, font, iconRoles, IncognitoSpecs, rolesFor, shadowCss, smoothCorners, startInk, startLayout, Symbol, Tappable, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { capsule, ChromeSurface, ConfirmSheet, Favicon, font, iconRoles, IncognitoSpecs, rolesFor, shadowCss, smoothCorners, startInk, startLayout, Symbol, Tappable, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem, usePressStyle } from "../ui";
 import { confirmInSheet, MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger";
 import { barAddress } from "../browsing/FloatingBar";
 import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
@@ -250,6 +250,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
   const roles = rolesFor(dark);
   const title = tabTitle(tab);
   const host = barAddress(tab).host;
+  const rowHitStyle = usePressStyle("text", { style: styles.rowHit });
   return (
     <MenuTrigger frost={null} items={[{ label: CLOSE_TAB, destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
       {({ onLongPress }) => (
@@ -262,7 +263,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
             accessibilityState={{ selected }}
             onPress={onOpen}
             onLongPress={onLongPress}
-            style={styles.rowHit}
+            style={rowHitStyle}
           >
             <View style={styles.rowIcon}>{tab.isPrivate ? <IncognitoSpecs size={DUO.sidebarPrivateGlyph} color={roles.secondaryLabel} /> : <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url || null} size={DUO.sidebarRowIcon} />}</View>
             <Text numberOfLines={1} style={[font.body, styles.rowTitle, { color: roles.foregroundPrimary }]}>
@@ -305,13 +306,13 @@ function SidebarTile({ tile, dark, onOpen }: { tile: PinnedTile; dark: boolean; 
   const folder = tile.folder?.length ? tile.folder : null;
   const label = remoteTitle(tile.title, tile.url);
   const face = (onPress: () => void) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={folder ? "Shows the folder’s tabs." : undefined} onPress={onPress} style={styles.tileSlot}>
+    <Tappable kind="icon" label={label} hint={folder ? "Shows the folder’s tabs." : undefined} onPress={onPress} style={styles.tileSlot}>
       <ChromeSurface testID="duoSidebarTile" shape="rounded" cornerRadius={startLayout.tileRadius} dark={dark} style={styles.tile}>
         <View pointerEvents="none" style={folder ? styles.folderInk : null}>
           {folder ? <Symbol name="folderFill" size={startLayout.tileIcon * startLayout.folderIconShare} color={rolesFor(dark).formAccent} /> : <Favicon iconUrl={null} pageUrl={tile.url} size={startLayout.tileIcon} />}
         </View>
       </ChromeSurface>
-    </Pressable>
+    </Tappable>
   );
   if (!folder) return face(() => onOpen(tile));
   return (

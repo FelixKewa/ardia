@@ -14,7 +14,8 @@ export const TOAST_DISMISS_ACTION = "dismiss";
 
 export const TOAST_ESCAPE_ACTION = "escape";
 
-export function toastSemantics(hasAction: boolean, os: string): ToastSemantics {
+export function toastSemantics(actionLabel: string | null, os: string): ToastSemantics {
+  const hasAction = actionLabel !== null;
   const announcement: ToastAnnouncement = os === "ios" ? "announceForAccessibility" : "liveRegion";
   return {
     pressable: hasAction,
@@ -24,6 +25,8 @@ export function toastSemantics(hasAction: boolean, os: string): ToastSemantics {
     actions: [{ name: TOAST_ESCAPE_ACTION }, { name: TOAST_DISMISS_ACTION, label: dismissWords.close }],
   };
 }
+
+export const toastSpokenLabel = (message: string, actionLabel: string | null) => (actionLabel === null ? message : `${message}, ${actionLabel}`);
 
 export const dismissesToast = (actionName: string) => actionName === TOAST_ESCAPE_ACTION || actionName === TOAST_DISMISS_ACTION;
 
