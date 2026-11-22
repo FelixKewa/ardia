@@ -36,7 +36,7 @@ done
 app_symbols="$dist/$(app_symbols_name "$version")"
 app_uuids="$dist/$(app_uuids_name "$version")"
 for file in "$app_symbols" "$app_uuids"; do
-  [ -s "$file" ] || die "no $file: a release ships the app's symbols, or its crashes can't be named (scripts/release.sh packs them; in CI the sign job's release artifact carries them)"
+  [ -f "$file" ] && [ -s "$file" ] || die "no $file: a release ships the app's symbols, or its crashes can't be named (scripts/release.sh packs them; in CI the sign job's release artifact carries them)"
   assets+=("$file")
 done
 echo "PASS  the app's symbols join the release"

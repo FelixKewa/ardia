@@ -448,6 +448,11 @@ test("publish.sh refuses a dist without both of the app's symbol files, dry run 
   writeFileSync(join(empty, uuids), "");
   assert.match(publishFrom(empty).stderr, new RegExp(`no \\S+/${uuids.replaceAll(".", "\\.")}`));
 
+  const dirSymbols = distWith("dir-symbols", [uuids]);
+  mkdirSync(join(dirSymbols, symbols));
+  assert.notEqual(publishFrom(dirSymbols).status, 0);
+  assert.match(publishFrom(dirSymbols).stderr, new RegExp(`no \\S+/${symbols.replaceAll(".", "\\.")}`));
+
   const both = publishFrom(distWith("both", [symbols, uuids]));
   assert.match(both.stdout, /PASS {2}the app's symbols join the release/);
   assert.doesNotMatch(both.stderr, /a release ships the app's symbols/);
@@ -491,7 +496,7 @@ test("the Release workflow carries the app's dSYM from the build job's archive t
   const signGate = signSteps.findIndex((step) => step.includes("name: The app's symbols"));
   const signUpload = signSteps.findIndex((step) => step.includes("actions/upload-artifact@") && /\n\s+name: release\n/.test(`${step}\n`));
   assert.ok(signGate > 0 && signGate < signUpload, "sign checks the app's symbols before it uploads the release artifact");
-  assert.match(signSteps[signGate], /for file in "\$DIST\/Ardia-\$VERSION-symbols\.tar\.xz" "\$DIST\/Ardia-\$VERSION-uuids\.txt"; do\n\s+\[ -s "\$file" \] \|\| \{[^\n]*exit 1; \}/);
+  assert.match(signSteps[signGate], /for file in "\$DIST\/Ardia-\$VERSION-symbols\.tar\.xz" "\$DIST\/Ardia-\$VERSION-uuids\.txt"; do\n\s+\[ -f "\$file" \] && \[ -s "\$file" \] \|\| \{[^\n]*exit 1; \}/);
   assert.doesNotMatch(signSteps[signGate], /\n\s+if:/);
 
   assert.deepEqual(artifactPaths(jobs.publish, "download", "release"), ["dist/${{ inputs.version }}"]);
@@ -501,7 +506,7 @@ test("the Release workflow carries the app's dSYM from the build job's archive t
   const tag = publishSteps.findIndex((step) => step.includes("name: Tag"));
   const publishStep = publishSteps.findIndex((step) => step.includes("name: Publish"));
   assert.ok(download > 0 && publishGate > download && publishGate < tag && tag < publishStep, "publish checks the app's symbols after the download and before it tags");
-  assert.match(publishSteps[publishGate], /for file in "dist\/\$VERSION\/Ardia-\$VERSION-symbols\.tar\.xz" "dist\/\$VERSION\/Ardia-\$VERSION-uuids\.txt"; do\n\s+\[ -s "\$file" \] \|\| \{[^\n]*exit 1; \}/);
+  assert.match(publishSteps[publishGate], /for file in "dist\/\$VERSION\/Ardia-\$VERSION-symbols\.tar\.xz" "dist\/\$VERSION\/Ardia-\$VERSION-uuids\.txt"; do\n\s+\[ -f "\$file" \] && \[ -s "\$file" \] \|\| \{[^\n]*exit 1; \}/);
   assert.doesNotMatch(publishSteps[publishGate], /\n\s+if:/);
   assert.match(jobs.publish, /RELEASE_DIST="\$GITHUB_WORKSPACE\/dist\/\$VERSION"/);
 
