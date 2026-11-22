@@ -200,6 +200,12 @@ public actor SyncEngine {
     }))
   }
 
+  public func answerVault(id: String, allow: Bool, always: Bool) throws {
+    try checkLive()
+    try load()
+    try mutate("companionAnswerVault", VaultAnswerInput(id: id, allow: allow, always: always, at: now().millisecondsSince1970))
+  }
+
   @discardableResult
   public func addBookmark(url: String, title: String, profileSyncId: String) throws -> Bool {
     try checkLive()
@@ -391,6 +397,13 @@ private struct SendInput: Encodable {
   var u: String
   var t: String
   var to: String
+  var at: Double
+}
+
+private struct VaultAnswerInput: Encodable {
+  var id: String
+  var allow: Bool
+  var always: Bool
   var at: Double
 }
 

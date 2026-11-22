@@ -5,6 +5,7 @@ import { lastVisitOf, type BookmarkValue, type DeviceTabs, type DeviceValue, typ
 import { themeOf, type ViewTheme } from "./theme.ts";
 
 export type { ViewTheme, ViewThemeLook, ViewThemeStop, ViewThemeTexture } from "./theme.ts";
+import { vaultRequestsView, type ViewVaultRequest } from "./vault.ts";
 
 export const MAX_HISTORY_ITEMS = 2_000;
 
@@ -34,7 +35,7 @@ export type ViewProfile = {
 };
 export type ViewSearch = { engineId: string; customURL: string | null; customEngines: { id: string; name: string; keyword: string; url: string }[] };
 export type ViewLook = { interfaceStyle: "glass" | "classic" | null; appearance: "auto" | "light" | "dark" | null };
-export type View = { devices: ViewDevice[]; profiles: ViewProfile[]; search: ViewSearch | null; look: ViewLook | null };
+export type View = { devices: ViewDevice[]; profiles: ViewProfile[]; search: ViewSearch | null; look: ViewLook | null; vaultRequests: ViewVaultRequest[] };
 
 const str = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
 const optStr = (v: unknown) => (typeof v === "string" && v ? v : null);
@@ -327,9 +328,9 @@ function spaceOrder(app: ScopeState, me: string): string[] {
   return newest?.order ?? [];
 }
 
-export function buildView(scopes: Record<string, ScopeState>, me: string): View {
+export function buildView(scopes: Record<string, ScopeState>, me: string, answered: string[] = [], now = Date.now()): View {
   const app = scopes.app;
-  if (!app) return { devices: [], profiles: [], search: null, look: null };
+  if (!app) return { devices: [], profiles: [], search: null, look: null, vaultRequests: [] };
   const lastSeen = new Map<string, number>();
   for (const scope of Object.values(scopes)) {
     for (const [device, at] of Object.entries(scope.seen)) lastSeen.set(device, Math.max(at, lastSeen.get(device) ?? 0));
@@ -370,5 +371,5 @@ export function buildView(scopes: Record<string, ScopeState>, me: string): View 
   const rank = new Map(spaceOrder(app, me).map((id, i) => [id, i]));
   const placed = (p: ViewProfile) => rank.get(p.syncId) ?? rank.size;
   profileList.sort((a, z) => placed(a) - placed(z) || Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
-  return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app) };
+  return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app), vaultRequests: vaultRequestsView(app, answered, now) };
 }

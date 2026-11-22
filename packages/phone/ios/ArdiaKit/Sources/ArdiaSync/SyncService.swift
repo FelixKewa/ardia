@@ -494,6 +494,42 @@ public final class SyncService {
     return true
   }
 
+  public enum VaultAnswerOutcome: String, Sendable {
+    case sent
+    case gone
+    case failed
+  }
+
+  public func demoAskToSignIn() {
+    guard isDemo else { return }
+    let now = now()
+    let request = VaultApprovalRequest(id: UUID().uuidString.lowercased(), program: "node, unsigned", sites: ["https://github.com", "https://accounts.google.com"], why: "Deploy the docs site", profileName: "Personal", askedAt: now, expiresAt: now.addingTimeInterval(120), fromDeviceId: "demo-mac", fromDevice: "MacBook Pro")
+    snapshot.vaultRequests = (snapshot.vaultRequests ?? []) + [request]
+  }
+
+  public var vaultRequests: [VaultApprovalRequest] {
+    let now = now()
+    return (snapshot.vaultRequests ?? []).filter { $0.expiresAt > now }
+  }
+
+  public func answerVault(id: String, allow: Bool, always: Bool) async -> VaultAnswerOutcome {
+    if isDemo {
+      guard snapshot.vaultRequests?.contains(where: { $0.id == id }) == true else { return .gone }
+      snapshot.vaultRequests?.removeAll { $0.id == id }
+      return .sent
+    }
+    guard let engine else { return .failed }
+    do {
+      try await engine.answerVault(id: id, allow: allow, always: always)
+    } catch SyncError.refused {
+      return .gone
+    } catch {
+      return .failed
+    }
+    Task { await runCycle() }
+    return .sent
+  }
+
   @discardableResult
   public func addBookmark(url: URL, title: String, profileSyncId: String? = nil) async -> PinOutcome {
     let page = url.absoluteString

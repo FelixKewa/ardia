@@ -857,6 +857,7 @@ const { Clock } = __require("packages/sync/src/hlc.ts");
 const { restoreJournal } = __require("packages/sync/src/scope.ts");
 const { emptyScope } = __require("packages/sync/src/scopeState.ts");
                                                                   
+                                                             
 
                     
                         
@@ -882,6 +883,7 @@ const { emptyScope } = __require("packages/sync/src/scopeState.ts");
                                       
                                            
                                 
+                                     
   
 
 let companion                        = null;
@@ -919,6 +921,7 @@ function companionLoad(input                                                    
   state.removals ??= {};
   state.ghosts ??= [];
   state.sent ??= {};
+  state.vaultAnswers ??= [];
   for (const id of input.ghosts ?? []) if (id !== input.device && !state.ghosts.some((g) => g.id === id)) state.ghosts.push({ id, since: Date.now() });
   const clock = new Clock(input.device, state.clock);
   let restored = false;
@@ -957,7 +960,7 @@ function fingerprint(c                )         {
       const s = c.scopes[name] ;
       return [name, s.seq, s.journal?.length ?? 0, s.outbox.length, Object.keys(s.files).length, s.pending, Object.keys(s.damaged).length, s.unapplied.length, s.joined, JSON.stringify(s.vv), JSON.stringify(s.extra), JSON.stringify(s.seen)].join("|");
     });
-  return JSON.stringify([c.clock, scopes, c.sends, c.acks, c.bookmarks, c.floors, c.pulled, c.visited, c.due, c.removals, c.ghosts, c.sent]);
+  return JSON.stringify([c.clock, scopes, c.sends, c.acks, c.bookmarks, c.floors, c.pulled, c.visited, c.due, c.removals, c.ghosts, c.sent, c.vaultAnswers]);
 }
 
 function save(force = false)          {
@@ -986,6 +989,7 @@ function viewIsNew(json        )          {
 __define("packages/sync/src/companion/cycle.ts", function (exports, __require) {
   __export(exports, "runCompanionCycle", () => runCompanionCycle);
   __export(exports, "companionView", () => companionView);
+  __export(exports, "companionAnswerVault", () => companionAnswerVault);
   __export(exports, "companionSend", () => companionSend);
   __export(exports, "companionRemovalsDone", () => companionRemovalsDone);
   __export(exports, "companionAcknowledge", () => companionAcknowledge);
@@ -998,6 +1002,7 @@ const { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, historyAdapter, hist
 const { fromLegacyUrl } = __require("packages/sync/src/companion/legacy.ts");
 const { buildView, dataOwner, defaultProfileId, liveProfiles } = __require("packages/sync/src/companion/view.ts");
 const { host, loaded, save, viewIsNew } = __require("packages/sync/src/companion/state.ts");
+const { answerVaultRequest, vaultAnswersAdapter } = __require("packages/sync/src/companion/vault.ts");
 
                                                            
 
@@ -1093,7 +1098,13 @@ async function runCompanionCycle(input            )                       {
 
   c.ghosts = (c.ghosts ?? []).filter((g) => now() - g.since < GHOST_MS);
   const ghosts = c.ghosts.map((g) => g.id);
-  const app = await run(APP, [deviceAdapter(device, input.name, retiring, ghosts)], false);
+  const vault = vaultAnswersAdapter({
+    answers: () => (c.vaultAnswers ??= []),
+    drop: (ids) => {
+      c.vaultAnswers = (c.vaultAnswers ?? []).filter((a) => !ids.has(a.id));
+    },
+  });
+  const app = await run(APP, [deviceAdapter(device, input.name, retiring, ghosts), ...(retiring ? [] : [vault])], false);
   if (retiring) {
     for (const scope of Object.keys(c.scopes).filter((s) => s.startsWith("p:"))) await run(scope, [deviceTabsAdapter(device, input.name, [], true, ghosts)], true);
   } else {
@@ -1210,7 +1221,7 @@ async function runCompanionCycle(input            )                       {
     saved: save(published > 0 || changed > 0),
   };
   if (!retiring) {
-    const view = buildView(c.scopes, device);
+    const view = buildView(c.scopes, device, answeredIds(c), now());
     if (viewIsNew(JSON.stringify(view))) out.view = view;
   }
   return out;
@@ -1218,9 +1229,18 @@ async function runCompanionCycle(input            )                       {
 
 function companionView()       {
   const c = loaded();
-  const view = buildView(c.scopes, c.device);
+  const view = buildView(c.scopes, c.device, answeredIds(c));
   viewIsNew(JSON.stringify(view));
   return view;
+}
+
+const answeredIds = (c                ) => (c.vaultAnswers ?? []).map((a) => a.id);
+
+function companionAnswerVault(input                                                             ) {
+  const c = loaded();
+  const answer = answerVaultRequest(c.scopes[APP], (c.vaultAnswers ??= []), input, c.device);
+  if (!answer) return refused;
+  return { saved: save(true) };
 }
 
 const scopeFor = (profile        ) => profileScope(dataOwner(loaded().scopes[APP], profile));
@@ -1637,6 +1657,7 @@ const { lastVisitOf } = __require("packages/sync/src/companion/adapters.ts");
 const { themeOf } = __require("packages/sync/src/companion/theme.ts");
 
                                                                                             
+const { vaultRequestsView } = __require("packages/sync/src/companion/vault.ts");
 
 const MAX_HISTORY_ITEMS = 2_000;
 
@@ -1666,7 +1687,7 @@ const MAX_HISTORY_ITEMS = 2_000;
   
                                                                                                                                                      
                                                                                                                     
-                                                                                                                        
+                                                                                                                                                           
 
 const str = (v         , fallback = "") => (typeof v === "string" ? v : fallback);
 const optStr = (v         ) => (typeof v === "string" && v ? v : null);
@@ -1959,9 +1980,9 @@ function spaceOrder(app            , me        )           {
   return newest?.order ?? [];
 }
 
-function buildView(scopes                            , me        )       {
+function buildView(scopes                            , me        , answered           = [], now = Date.now())       {
   const app = scopes.app;
-  if (!app) return { devices: [], profiles: [], search: null, look: null };
+  if (!app) return { devices: [], profiles: [], search: null, look: null, vaultRequests: [] };
   const lastSeen = new Map                ();
   for (const scope of Object.values(scopes)) {
     for (const [device, at] of Object.entries(scope.seen)) lastSeen.set(device, Math.max(at, lastSeen.get(device) ?? 0));
@@ -2002,7 +2023,183 @@ function buildView(scopes                            , me        )       {
   const rank = new Map(spaceOrder(app, me).map((id, i) => [id, i]));
   const placed = (p             ) => rank.get(p.syncId) ?? rank.size;
   profileList.sort((a, z) => placed(a) - placed(z) || Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
-  return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app) };
+  return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app), vaultRequests: vaultRequestsView(app, answered, now) };
+}
+
+});
+__define("packages/sync/src/companion/vault.ts", function (exports, __require) {
+  __export(exports, "vaultAnswersAdapter", () => vaultAnswersAdapter);
+  __export(exports, "openVaultRequests", () => openVaultRequests);
+  __export(exports, "vaultRequestsView", () => vaultRequestsView);
+  __export(exports, "answerVaultRequest", () => answerVaultRequest);
+const { visible } = __require("packages/sync/src/scope.ts");
+                                                            
+const { VAULT_ANSWER, VAULT_PREFIX, VAULT_REQUEST, vaultAnswerFor, vaultAnswerOf, vaultRequestOf } = __require("packages/sync/src/vaultApproval.ts");
+
+                                                                                                                                                                                                       
+
+                                                                                                           
+
+function vaultAnswersAdapter(ctx                     )          {
+  return {
+    prefix: VAULT_PREFIX,
+    extract: (_base, _queued, now, _known, remote) => {
+      const values = new Map                 ();
+      const gone = new Set        ();
+      for (const answer of ctx.answers()) {
+        const asked = vaultRequestOf(`${VAULT_REQUEST}${answer.id}`, remote(`${VAULT_REQUEST}${answer.id}`));
+        if (!asked || answer.x <= now) gone.add(answer.id);
+        else values.set(`${VAULT_ANSWER}${answer.id}`, answer);
+      }
+      if (gone.size) ctx.drop(gone);
+      return {
+        values,
+        ignore: (k) => !values.has(k),
+        published: (keys) => ctx.drop(new Set([...keys].map((k) => k.slice(VAULT_ANSWER.length)))),
+      };
+    },
+    apply: () => true,
+  };
+}
+
+function openVaultRequests(app                        , answered                  , now        )                       {
+  if (!app) return [];
+  const done = new Set(answered);
+  for (const [k, v] of visible(app, VAULT_ANSWER)) if (vaultAnswerOf(k, v)) done.add(k.slice(VAULT_ANSWER.length));
+  const out                       = [];
+  for (const [k, v] of visible(app, VAULT_REQUEST)) {
+    const request = vaultRequestOf(k, v);
+    if (request && request.x > now && !done.has(request.id)) out.push(request);
+  }
+  return out.sort((a, z) => a.at - z.at || (a.id < z.id ? -1 : 1));
+}
+
+function vaultRequestsView(app                        , answered                  , now        )                     {
+  if (!app) return [];
+  const names = new Map                ();
+  for (const [k, v] of visible(app, "dev:")) {
+    const n = (v                          )?.n;
+    if (typeof n === "string") names.set(k.slice(4), n);
+  }
+  return openVaultRequests(app, answered, now).map((r) => ({ id: r.id, program: r.g, sites: [...r.s], why: r.w, profileName: r.pn, askedAt: r.at, expiresAt: r.x, fromDeviceId: r.m, fromDevice: names.get(r.m) ?? null }));
+}
+
+function answerVaultRequest(app                        , answers                     , input                                                             , me        )                           {
+  const request = openVaultRequests(app, answers.map((a) => a.id), input.at).find((r) => r.id === input.id);
+  if (!request) return null;
+  const answer = vaultAnswerFor(request, input.allow === true, input.always === true, me, input.at);
+  answers.push(answer);
+  return answer;
+}
+
+});
+__define("packages/sync/src/vaultApproval.ts", function (exports, __require) {
+  __export(exports, "VAULT_PREFIX", () => VAULT_PREFIX);
+  __export(exports, "VAULT_REQUEST", () => VAULT_REQUEST);
+  __export(exports, "VAULT_ANSWER", () => VAULT_ANSWER);
+  __export(exports, "VAULT_REQUEST_MAX_MS", () => VAULT_REQUEST_MAX_MS);
+  __export(exports, "vaultOrigin", () => vaultOrigin);
+  __export(exports, "vaultRequestOf", () => vaultRequestOf);
+  __export(exports, "vaultAnswerOf", () => vaultAnswerOf);
+  __export(exports, "vaultAnswerFits", () => vaultAnswerFits);
+  __export(exports, "vaultAnswerFor", () => vaultAnswerFor);
+  __export(exports, "vaultRequestsAdapter", () => vaultRequestsAdapter);
+                                               
+
+const VAULT_PREFIX = "vault:";
+const VAULT_REQUEST = "vault:q:";
+const VAULT_ANSWER = "vault:a:";
+const VAULT_REQUEST_MAX_MS = 10 * 60_000;
+
+                                                                                                                                                       
+                                                                                                                                                         
+
+const MAX_SITES = 32;
+const MAX_TEXT = 300;
+const ID = /^[0-9a-f-]{8,64}$/;
+
+const text = (v         , max = MAX_TEXT) => typeof v === "string" && v.length <= max;
+
+function vaultOrigin(site         )                {
+  if (typeof site !== "string" || site.length > 2048) return null;
+  try {
+    const url = new URL(site);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    return url.origin === site ? site : null;
+  } catch {
+    return null;
+  }
+}
+
+const sitesOk = (s         )                => Array.isArray(s) && s.length > 0 && s.length <= MAX_SITES && s.every((site) => vaultOrigin(site) !== null) && new Set(s).size === s.length;
+
+function vaultRequestOf(key        , v         )                            {
+  if (!key.startsWith(VAULT_REQUEST) || !v || typeof v !== "object") return null;
+  const r = v                           ;
+  const id = key.slice(VAULT_REQUEST.length);
+  if (r.id !== id || !ID.test(id) || !text(r.n, 128) || (r.n          ).length < 16 || !text(r.p, 128) || !text(r.pn) || !text(r.g) || !text(r.w) || !text(r.m, 128)) return null;
+  if (!sitesOk(r.s) || typeof r.x !== "number" || !Number.isFinite(r.x) || typeof r.at !== "number" || !Number.isFinite(r.at)) return null;
+  return r                      ;
+}
+
+function vaultAnswerOf(key        , v         )                           {
+  if (!key.startsWith(VAULT_ANSWER) || !v || typeof v !== "object") return null;
+  const r = v                           ;
+  const id = key.slice(VAULT_ANSWER.length);
+  if (r.id !== id || !ID.test(id) || !text(r.n, 128) || !text(r.p, 128) || !text(r.m, 128) || !text(r.by, 128) || !sitesOk(r.s)) return null;
+  if (typeof r.a !== "boolean" || typeof r.al !== "boolean" || typeof r.x !== "number" || typeof r.at !== "number") return null;
+  return r                     ;
+}
+
+const vaultAnswerFits = (request                    , answer                   ) =>
+  answer.id === request.id &&
+  answer.n === request.n &&
+  answer.p === request.p &&
+  answer.m === request.m &&
+  answer.x === request.x &&
+  answer.s.length === request.s.length &&
+  answer.s.every((site, i) => site === request.s[i]);
+
+function vaultAnswerFor(request                    , allow         , always         , by        , at        )                    {
+  return { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: request.m, a: allow, al: allow && always, by, at };
+}
+
+                         
+             
+                                   
+                                       
+                                              
+                                                                             
+  
+
+function vaultRequestsAdapter(asks           )          {
+  const liveById = () => new Map(asks.live().map((r) => [r.id, r]));
+  return {
+    prefix: VAULT_PREFIX,
+    extract: (base) => {
+      const live = liveById();
+      const values = new Map                 ([...live.values()].map((r) => [`${VAULT_REQUEST}${r.id}`, r]));
+      const ignore = (k        ) => {
+        const request = vaultRequestOf(k, base(k));
+        if (request) return request.m !== asks.me;
+        const answer = vaultAnswerOf(k, base(k));
+        if (answer) return answer.m !== asks.me || live.has(answer.id);
+        return true;
+      };
+      return { values, ignore };
+    },
+    apply: (visible, changed) => {
+      const live = liveById();
+      for (const key of changed) {
+        const answer = vaultAnswerOf(key, visible.get(key));
+        const request = answer && live.get(answer.id);
+        if (!answer || !request || !vaultAnswerFits(request, answer) || !asks.isPhone(answer.by) || asks.author(key) !== answer.by) continue;
+        live.delete(answer.id);
+        asks.answered(request, answer);
+      }
+      return true;
+    },
+  };
 }
 
 });

@@ -387,6 +387,32 @@ A tab sent to another device (the tab menu's "Send to <device>" on a Mac; the iP
   they are. A Mac before this build has no adapter for `send:`, so it keeps the records in its replica and snapshots
   untouched, and opens its own once it updates (tested).
 
+### Sign-in approvals
+
+A program on the Mac asking for a sign-in (`vault.taskStart`, #3429) can be approved on the owner's iPhone as well as on
+the Mac; the first answer wins and the other side closes.
+- **Records,** both in the app scope: `vault:q:<id>` from the Mac (`{id, n: nonce, p: profile, pn: its name, g: program,
+  s: https origins, w: reason, x: expiry, m: the Mac's device id, at}`) and `vault:a:<id>` from the phone (`{id, n, p, s,
+  x, m, a: allow, al: always, by: the phone's device id, at}`). Shapes and checks: `packages/sync/src/vaultApproval.ts`.
+- **Mac** (`apps/browser/src/state/sync/vaultApprovals.ts`): `askPhoneForVaultApproval({id, nonce, profile, program,
+  sites, why, expiresAt})` resolves `{allow, always, nonce}` or `null`. It is `null` at once when sync isn't running, no
+  phone has written in 14 days, or the ask is malformed (sites must be bare `https://` origins), and `null` at the expiry
+  (at most 10 minutes). While an ask is open the engine cycles every 2 s. An answer counts only if every bound field
+  (id, nonce, profile, sites in order, expiry, Mac) matches the open ask, its `by` is a phone device and the record's
+  author device is that phone; `always` is never true with `allow` false. Once settled, or on
+  `cancelPhoneVaultApproval(id)` when the Mac's own sheet answers first, the Mac deletes both records, which closes the
+  phone's sheet.
+- **iPhone** (`packages/sync/src/companion/vault.ts`): the view lists open requests (not expired, not answered, without
+  the nonce); `companionAnswerVault` writes the answer from the stored request. `ArdiaPhoneSync.answerVaultRequest`
+  asks for Face ID or the passcode (`LAContext`, `.deviceOwnerAuthentication`) before it writes an Allow, so the
+  JavaScript can't skip it. The sheet is `apps/phone/src/components/vault/VaultApprovalSheet.tsx`.
+- **Trust and speed.** The records ride the sealed folder, so only devices holding the recovery phrase can read or
+  write them; a device in the chain could still forge the phone's files, since devices don't sign their own. Delivery
+  is the folder's: the Mac publishes at once, then iCloud Drive carries the file and the phone reads it on its next
+  cycle (every 15 s in the foreground). No push: a phone in the background sees a request only when iOS runs its
+  background refresh, which is far too rare for a 10-minute ask, so there is no notification.
+- Android reads the records (the same `ardia-sync.js`) but has no sheet yet.
+
 ### Extensions
 
 What Chrome Sync does for extensions, through our folder (`packages/sync/src/extensions.ts`, the app's host in
