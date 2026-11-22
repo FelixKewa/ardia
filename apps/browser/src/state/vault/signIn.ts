@@ -35,6 +35,7 @@ const STATUS_CODES: Partial<Record<VaultSignIn["status"], VaultRefusal>> = {
   needs_passkey: "needs_passkey",
   cross_origin: "not_granted",
   cancelled: "task_expired",
+  busy: "busy",
   failed: "failed",
 };
 
@@ -46,11 +47,12 @@ const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
   needs_passkey: "That site signs in with a passkey, which only the person at the Mac can use.",
   cross_origin: "The sign-in page isn't on the saved login's site. For single sign-on, grant the identity provider's site, sign in there (it needs its own saved login), then reload the tab.",
   cancelled: "The task ended before the sign-in finished.",
+  busy: "Another sign-in is running for this site or profile; retry shortly.",
   failed: "The sign-in didn't finish.",
 };
 
 const TRANSFER_REFUSALS: Partial<Record<NonNullable<VaultSignIn["transfer"]>, [VaultRefusal, string]>> = {
-  conflict: ["conflict", "You signed in to this site yourself while the agent was signing in, so Ardia kept your session; nothing was changed."],
+  sent: ["failed", "The sign-in finished and its session was sent to the profile, but Ardia couldn't confirm it arrived, so the tab may not be signed in."],
   partial: ["failed", "The sign-in finished, but Ardia could move only part of the session to the profile, so the tab may not be signed in."],
   timed_out: ["failed", "The sign-in finished, but moving the session to the profile took too long, so the tab may not be signed in."],
 };
@@ -150,8 +152,7 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     const result = await vaultSignIn(task.engineProfile, signInUrl(origin, tabId), origin, username, attempt.id);
     checkpoint(attempt);
     noteVaultTransfer(result.transfer, result, consent);
-    noteVaultTiming("create", result.createMs, consent);
-    noteVaultTiming("scan", result.scanMs, consent);
+    for (const [kind, value] of [["profile", result.profileMs], ["seed", result.seedMs], ["load", result.loadMs], ["scan", result.scanMs]] as const) noteVaultTiming(kind, value, consent);
     noteVaultTiming("transfer", result.transferMs, consent);
     const code = STATUS_CODES[result.status];
     if (code) throw new VaultError(code, STATUS_MESSAGES[result.status] ?? "The sign-in didn't finish.");
@@ -159,6 +160,7 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     if (transfer) throw new VaultError(...transfer);
     if (tabId) driveTab(task, tabId);
     if (tabId && result.status === "signed_in" && result.transfer === "complete") void tabReloads.reload(tabId, () => stillAllowed(attempt)).catch(() => false);
+    if (result.status === "signed_in" && (result.conflicts ?? 0) > 0) throw new VaultError("conflict", "You changed this site's session in Ardia while the agent was signing in, so Ardia kept your changes and reloaded the tab; it may be signed in as you rather than as the saved login.");
     const ms = result.totalMs ?? result.appMs;
     noteVaultFill(auto, result.usedCode, consent);
     noteVaultTiming(auto ? "autofill" : "login", ms, consent);
@@ -173,9 +175,12 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
       readyMs: timing(result.readyMs),
       fillMs: timing(result.fillMs),
       totalMs: timing(result.totalMs),
-      createMs: timing(result.createMs),
+      profileMs: timing(result.profileMs),
+      seedMs: timing(result.seedMs),
+      loadMs: timing(result.loadMs),
       scanMs: timing(result.scanMs),
       transferMs: timing(result.transferMs),
+      conflicts: result.conflicts ?? 0,
       usedCode: result.usedCode,
       appMs: Date.now() - startedAt,
     };

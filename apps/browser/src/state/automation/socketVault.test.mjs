@@ -441,7 +441,7 @@ test("the iPhone's Allow grants the task and closes the Mac sheet only with the 
   }
 });
 
-test("the session's move into the profile decides the answer: a conflict or a partial move is an error, and only a complete move after signed_in reloads the tab", async () => {
+test("the session's move into the profile decides the answer: keys the person changed meanwhile are a conflict that still reloads, a partial or unconfirmed move is an error, and busy is its own code", async () => {
   const { tabReloads } = await import("../vault/signIn.ts");
   const real = tabReloads.reload;
   const reloaded = [];
@@ -449,30 +449,37 @@ test("the session's move into the profile decides the answer: a conflict or a pa
   try {
     const { tab } = await freshWindow("https://one.example/login");
     stub.controlSocket.peers[721] = NODE;
-    const { call, ok } = socketClient(721);
+    const { call } = socketClient(721);
     const { reply } = await approved(call("vault.taskStart", { sites: ["one.example"] }));
     const login = (result) => ((stub.vaultFake.signInResult = result), call("vault.login", { task: reply.result.task, site: "one.example", tab }));
 
-    const conflict = await login({ status: "signed_in", transfer: "conflict" });
+    const conflict = await login({ status: "signed_in", transfer: "complete", conflicts: 2 });
     assert.equal(conflict.error.code, "conflict");
-    assert.match(conflict.error.message, /signed in to this site yourself/);
+    assert.deepEqual(reloaded, [tab], "a conflict still reloads: the profile has a session either way");
     assert.equal((await login({ status: "signed_in", transfer: "partial" })).error.code, "failed");
+    assert.match((await login({ status: "signed_in", transfer: "sent" })).error.message, /couldn't confirm/);
     assert.equal((await login({ status: "signed_in", transfer: "timed_out" })).error.code, "failed");
-    assert.deepEqual(reloaded, [], "nothing reloads after a failed move");
+    const busy = await login({ status: "busy" });
+    assert.equal(busy.error.code, "busy");
+    assert.match(busy.error.message, /retry shortly/);
+    assert.equal(reloaded.length, 1, "nothing else reloaded");
 
     assert.equal((await login({ status: "submitted", transfer: "complete" })).result.status, "submitted");
-    assert.deepEqual(reloaded, [], "submitted alone doesn't reload");
-    const signedIn = await login({ status: "signed_in", transfer: "complete", createMs: 2, scanMs: 1, transferMs: 3, cookiesRemoved: 1, blockedRequests: 2 });
+    assert.equal(reloaded.length, 1, "submitted alone doesn't reload");
+    const signedIn = await login({ status: "signed_in", transfer: "complete", profileMs: 2, seedMs: 1, loadMs: 30, scanMs: 1, transferMs: 3, blockedRequests: 2 });
     assert.equal(signedIn.result.transfer, "complete");
-    assert.deepEqual(reloaded, [tab]);
+    assert.equal(signedIn.result.loadMs, 30);
+    assert.equal(signedIn.result.conflicts, 0);
+    assert.deepEqual(reloaded, [tab, tab]);
 
     assert.match((await login({ status: "cross_origin" })).error.message, /identity provider/);
     const counts = takeVaultCounts();
-    assert.equal(counts.vault_transfers_conflict, 1);
+    assert.equal(counts.vault_conflict_keys, 2);
     assert.equal(counts.vault_refusals_conflict, 1);
+    assert.equal(counts.vault_refusals_busy, 1);
+    assert.equal(counts.vault_transfers_sent, 1);
     assert.equal(counts.vault_blocked_requests, 2);
-    assert.ok(counts.vault_transfer_ms_count >= 1);
-    void ok;
+    assert.ok(counts.vault_load_ms_count >= 1);
   } finally {
     tabReloads.reload = real;
   }
