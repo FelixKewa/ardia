@@ -248,6 +248,15 @@
    ]
   },
   {
+   "id": "page-script-message-count:page_script.js",
+   "source": "page",
+   "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
+   "count": 34,
+   "checks": [
+    "packages/ardiacore/ios/page_script.js"
+   ]
+  },
+  {
    "id": "page-script-listener:DOMContentLoaded",
    "source": "page",
    "guard": "lifecycle; sends state that native checks"
@@ -386,7 +395,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 66,
+   "count": 67,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

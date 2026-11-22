@@ -1477,11 +1477,20 @@ test("D4: whatever URL a plugin sends through open, apply's open or group.create
       send("arranger", "apply", { ops: [{ op: "open", urls: [url], window: w }] }, run),
       send("arranger", "apply", { ops: [{ op: "group.create", urls: [url], window: w, name: "G" }] }, run),
     ]);
-    send("arranger", "open", { urls: ["https://control.example/open"] }, run);
-    send("arranger", "apply", { ops: [{ op: "open", urls: ["https://control.example/apply"], window: w }] }, run);
-    send("arranger", "apply", { ops: [{ op: "group.create", urls: ["https://control.example/group"], window: w, name: "G" }] }, run);
-    for (let i = 0; i < 10 && host.replies.length < asks.length + 3; i++) await settle();
-    assert.ok(host.replies.length >= asks.length + 3, `every request was answered (${host.replies.length} of ${asks.length + 3})`);
+    const controls = [
+      send("arranger", "open", { urls: ["https://control.example/open"] }, run),
+      send("arranger", "apply", { ops: [{ op: "open", urls: ["https://control.example/apply"], window: w }] }, run),
+      send("arranger", "apply", { ops: [{ op: "group.create", urls: ["https://control.example/group"], window: w, name: "G" }] }, run),
+    ];
+    const waiting = new Set([...asks, ...controls].map((a) => a.id));
+    const answered = () => {
+      for (const r of host.replies) waiting.delete(JSON.parse(r.line).id);
+      return waiting.size === 0;
+    };
+    for (let i = 0; i < 20 && !answered(); i++) await settle();
+    assert.deepEqual([...waiting], [], "every request, the three controls included, got its own reply");
+    const replyTo = (id) => host.replies.map((r) => JSON.parse(r.line)).find((r) => r.id === id);
+    for (const control of controls) assert.equal(replyTo(control.id)?.result?.ok, true, `control ${control.id}: ${JSON.stringify(replyTo(control.id))}`);
   } finally {
     sink.restore();
   }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { HOSTILE_STRINGS, embedded } from "../../../../../scripts/security/hostile-inputs.mjs";
 import { CHROMIUM_MISSING, launchChromium } from "../../../../../scripts/lib/test-chromium.mjs";
 import { HIDING_CLEANUP, OfflineError, pinnedUblock } from "../../../../../scripts/lib/ublock-pinned.mjs";
@@ -10,6 +10,7 @@ let unavailable = CHROMIUM_MISSING;
 if (!unavailable) {
   try {
     ublock = await pinnedUblock();
+    after(() => ublock.remove());
   } catch (error) {
     if (!(error instanceof OfflineError) || process.env.CI) throw error;
     unavailable = error.message;

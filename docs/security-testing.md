@@ -28,18 +28,36 @@ checksum mismatch, a broken archive or an import error fails everywhere, and in 
 
 ## What the table detects
 
-The guarantee is only as wide as these forms. An entry point written another way (a destructured `evaluate`, a
-listener added through a helper with a different name, a message kind built at run time) isn't found; give it a
-hand-kept row (`"detected": false`) and prefer one of these forms. `boundaries.test.mjs` proves each form with a fixture
-that must raise a missing row.
+The guarantee covers these forms and no others. Anything written another way isn't guaranteed to be found: give it a
+hand-kept row (`"detected": false`) or rewrite it in a detected form. `boundaries.test.mjs` has one fixture per form
+below, and each must raise a missing row or a changed count.
 
-| Surface | Forms |
-| --- | --- |
-| Chromium page messages | `send("kind"` or `post("kind"` in `page_script.js`, and `[kind isEqualToString:@"kind"]` in the `.mm` files that receive page messages. A kind is letters, digits, `_`, `-`, `.` and `:` |
-| Page script listeners | `addEventListener("event"`, with the name on the same line or the next, and `apply(alias, target, ["event"` where `alias` is any name the script binds to `EventTarget.prototype.addEventListener` (plus `listen` and `addListener`). Each script's total count of both forms is pinned, so a listener with a computed name still changes it |
-| WebKit page messages | `post(`/`send(` with a quoted kind in `WebKit*.swift` scripts, and `case "kind":` in `WebKitTab.pageMessage`, `WebKitTab+Site.swift` and `WebKitTab+FieldProviders.swift`; listener counts per script as above; every `userContentController(` handler |
-| Evaluated script | `.evaluate(`, `?.evaluate(`, `.evaluate?.(`, `.evaluate<…>(` with any generic, and `["evaluate"](`, counted per file in `apps/browser/src` |
-| Others | `ShellEvents.Channel` cases, exported sync adapters, `case "method":` in the plugin channel, `SOCKET_FAMILIES`, and spreads of the settings object outside the settings writer |
+**TypeScript in `apps/browser/src`**, parsed by `scripts/security/boundary-detectors.mjs` with the TypeScript compiler
+(so generics, optional chaining, casts and parentheses don't matter): calls to `evaluate` as a
+member (`web.evaluate(…)`, `web?.evaluate(…)`, `web.evaluate?.(…)`, `web["evaluate"](…)`), through `.call`/`.apply`, and
+through any alias the file binds: a variable set to `….evaluate`, a destructured `{ evaluate }` or `{ evaluate: run }`, or
+an object property set to an alias and destructured again. Counted per file.
+
+**`page_script.js`, parsed the same way:**
+- listeners: `addEventListener` called as a member, optionally, or through any alias the file binds to it (variable,
+  destructuring such as `const { addEventListener: listen } = EventTarget.prototype`, or an object property passed on and
+  destructured), called directly, with `.call`, or with `apply(alias, target, [name, …])`/`Reflect.apply`. A literal event
+  name gets its own row; every call, computed names included, counts toward the pinned total.
+- messages: calls to `send` or `post`, or an alias of them. A literal kind (any characters, string or template
+  literal) gets its own row; every call counts toward the pinned total.
+
+**Objective-C++ (`.mm` files that receive page messages), by pattern:** `[kind isEqualToString:@"…"]` with any
+characters in the kind.
+
+**Swift, by pattern** (WebKit's page scripts are JavaScript inside Swift strings, so they aren't parsed):
+`post(`/`send(` with a quoted kind, any characters, in `WebKit*.swift`; `case "…":` in `WebKitTab.pageMessage`,
+`WebKitTab+Site.swift` and `WebKitTab+FieldProviders.swift`; a per-script count of `addEventListener(` and of
+`apply(alias, …)` for the aliases a script binds to `EventTarget.prototype.addEventListener` by assignment (plus `listen`
+and `addListener`); every `userContentController(` handler. Destructured aliases and computed names in these scripts
+are not guaranteed.
+
+**Other tables, by pattern:** `ShellEvents.Channel` cases, exported sync adapters, `case "…":` in the plugin channel,
+`SOCKET_FAMILIES`, and spreads of the settings object outside the settings writer.
 
 ## Adding an entry point
 

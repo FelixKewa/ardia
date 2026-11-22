@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -70,37 +71,32 @@ async function verifiedZip() {
   return cached;
 }
 
-async function verifiedTree() {
-  const tree = join(UBLOCK_CACHE, UBLOCK_SHA256);
-  const done = join(tree, ".verified");
-  const zip = await verifiedZip();
-  if (existsSync(done) && readFileSync(done, "utf8") === UBLOCK_SHA256) return join(tree, "uBlock0.chromium");
-  const partial = `${tree}.${process.pid}.${randomUUID()}`;
+function unpackedFresh(zip) {
+  const root = mkdtempSync(join(tmpdir(), "ardia-ublock-"));
   try {
-    execFileSync("unzip", ["-q", zip, "-d", partial], { stdio: ["ignore", "ignore", "pipe"] });
-    for (const file of NEEDED) if (!existsSync(join(partial, "uBlock0.chromium", file))) throw new Error(`uBlock Origin ${UBLOCK_VERSION} has no ${file}`);
-    for (const [file, source] of Object.entries(HOST_MODULES)) writeFileSync(join(partial, "uBlock0.chromium", file), source);
-    writeFileSync(join(partial, ".verified"), UBLOCK_SHA256);
-    if (!existsSync(done)) {
-      rmSync(tree, { recursive: true, force: true });
-      try {
-        renameSync(partial, tree);
-      } catch (error) {
-        if (!existsSync(done)) throw error;
-      }
-    }
-  } finally {
-    rmSync(partial, { recursive: true, force: true });
+    execFileSync("unzip", ["-q", zip, "-d", root], { stdio: ["ignore", "ignore", "pipe"] });
+    const tree = join(root, "uBlock0.chromium");
+    for (const file of NEEDED) if (!existsSync(join(tree, file))) throw new Error(`uBlock Origin ${UBLOCK_VERSION} has no ${file}`);
+    for (const [file, source] of Object.entries(HOST_MODULES)) writeFileSync(join(tree, file), source);
+    return { root, tree };
+  } catch (error) {
+    rmSync(root, { recursive: true, force: true });
+    throw error;
   }
-  return join(tree, "uBlock0.chromium");
 }
 
 const quietTimer = () => ({ on() {}, onidle() {}, offon() {}, off() {}, ongoing: () => false });
 
 export async function pinnedUblock() {
-  const root = await verifiedTree();
+  const { root: unpacked, tree: root } = unpackedFresh(await verifiedZip());
   globalThis.vAPI ??= { defer: { create: quietTimer, once: () => Promise.resolve() }, webextFlavor: { env: ["chromium", "ublock", "native_css_has"] } };
+  const remove = () => rmSync(unpacked, { recursive: true, force: true });
   const load = (file) => import(pathToFileURL(join(root, file)).href);
-  const [sfp, { LineIterator }, cosmetic] = await Promise.all([load("js/static-filtering-parser.js"), load("js/text-utils.js"), load("js/cosmetic-filtering.js")]);
-  return { sfp, LineIterator, cosmetic: cosmetic.default };
+  try {
+    const [sfp, { LineIterator }, cosmetic] = await Promise.all([load("js/static-filtering-parser.js"), load("js/text-utils.js"), load("js/cosmetic-filtering.js")]);
+    return { sfp, LineIterator, cosmetic: cosmetic.default, remove };
+  } catch (error) {
+    remove();
+    throw error;
+  }
 }

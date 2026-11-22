@@ -4,9 +4,14 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import inventory from "./boundaries.json" with { type: "json" };
+import { evaluateCalls, listenerCalls as parsedListenerCalls, messageCalls } from "../../../scripts/security/boundary-detectors.mjs";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const readFromDisk = (path) => readFileSync(join(ROOT, path), "utf8");
+const onDisk = new Map();
+const readFromDisk = (path) => {
+  if (!onDisk.has(path)) onDisk.set(path, readFileSync(join(ROOT, path), "utf8"));
+  return onDisk.get(path);
+};
 const filesIn = (dir, pick) => readdirSync(join(ROOT, dir)).filter(pick).map((name) => `${dir}/${name}`);
 const walk = (dir, pick) =>
   readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -29,7 +34,7 @@ function bodyOf(text, signature) {
   return text.slice(start, end < 0 ? undefined : end);
 }
 
-const MESSAGE = String.raw`([A-Za-z][\w:.-]*)`;
+const MESSAGE = String.raw`([^"'\s]+)`;
 const SENT = new RegExp(String.raw`\b(?:send|post)\(\s*["']` + MESSAGE + `["']`, "g");
 const RECEIVED_NATIVE = new RegExp(String.raw`\[kind isEqualToString:@"` + MESSAGE + `"\]`, "g");
 const RECEIVED_SWIFT = new RegExp(String.raw`case "` + MESSAGE + `":`, "g");
@@ -53,18 +58,20 @@ function listenerPatterns(text) {
 
 const listenedEvents = (text) => matches(text, listenerPatterns(text).named);
 const listenerCalls = (text) => count(text, listenerPatterns(text).calls);
-const EVALUATE_CALLS = /\.evaluate\b(?:<[^()]*>)?(?:\?\.)?\(|\[\s*["']evaluate["']\s*\](?:\?\.)?\(/g;
 
 function detectedEntries(read = readFromDisk) {
   const entries = [];
   const add = (surface, key, extra = {}) => entries.push({ id: `${surface}:${key}`, ...extra });
 
   const pageScript = read(PAGE_SCRIPT);
+  const pageListeners = parsedListenerCalls(PAGE_SCRIPT, pageScript);
+  const pageMessages = messageCalls(PAGE_SCRIPT, pageScript);
   const pageMessageFiles = filesIn(IOS, (n) => n.endsWith(".mm")).filter((f) => /didReceivePageMessage:\(NSString \*\)kind|holdPageMessage:\(NSString \*\)kind/.test(read(f)));
   const nativeReceivers = pageMessageFiles.flatMap((f) => matches(read(f), RECEIVED_NATIVE));
-  for (const kind of unique([...matches(pageScript, SENT), ...nativeReceivers])) add("chromium-page-message", kind);
-  for (const event of unique(listenedEvents(pageScript))) add("page-script-listener", event);
-  add("page-script-listener-count", "page_script.js", { count: listenerCalls(pageScript) });
+  for (const kind of unique([...pageMessages.map((m) => m.name).filter(Boolean), ...nativeReceivers])) add("chromium-page-message", kind);
+  add("page-script-message-count", "page_script.js", { count: pageMessages.length });
+  for (const event of unique(pageListeners.map((l) => l.name).filter(Boolean))) add("page-script-listener", event);
+  add("page-script-listener-count", "page_script.js", { count: pageListeners.length });
 
   const webkitScripts = filesIn(IOS, (n) => /^WebKit.*\.swift$/.test(n));
   const webkitPosted = webkitScripts.flatMap((f) => matches(read(f), SENT)).filter((k) => !["close", "show", "showConsole", "toggleElementSelection"].includes(k));
@@ -82,7 +89,7 @@ function detectedEntries(read = readFromDisk) {
     if (/func userContentController\(/.test(read(f))) add("webkit-script-handler", relative("packages", f));
 
   for (const f of walk("apps/browser/src", (n) => /\.(ts|tsx)$/.test(n) && notTest(n))) {
-    const n = count(read(f), EVALUATE_CALLS);
+    const n = evaluateCalls(f, read(f));
     if (n) add("evaluate-result", f.slice("apps/browser/src/".length), { count: n });
   }
 
@@ -150,35 +157,74 @@ test("every place page, sync, plugin, socket or other-app data enters the browse
   assert.deepEqual(gone, [], "rows whose entry point is gone: remove them, or mark a hand-kept row detected: false");
 });
 
-const withAdded = (additions) => (path) => readFromDisk(path) + (additions[path] ? `\n${additions[path]}\n` : "");
+const withAdded = (additions) => (path) => readFromDisk(path) + (additions[path] ? `\n${/\.(?:m?js|tsx?)$/.test(path) ? ";\n" : ""}${additions[path]}\n` : "");
 
-const FORMS = [
-  { form: "an optional-chained evaluate on a file with no row", file: "apps/browser/src/state/site/contentBlocking.ts", code: 'void web.evaluate?.("1");', missing: "evaluate-result:state/site/contentBlocking.ts" },
-  { form: "an evaluate with a nested generic", file: "apps/browser/src/state/site/contentBlocking.ts", code: "void web?.evaluate<Array<Record<string, string>>>(code);", missing: "evaluate-result:state/site/contentBlocking.ts" },
-  { form: "an evaluate called by bracket name", file: "apps/browser/src/state/site/contentBlocking.ts", code: 'void web["evaluate"](code);', missing: "evaluate-result:state/site/contentBlocking.ts" },
-  { form: "one more optional-chained evaluate in a file with a row", file: "apps/browser/src/state/site/translate.ts", code: 'void webviews.get(tabId)?.evaluate?.("1");', changed: "evaluate-result:state/site/translate.ts" },
-  { form: "a listener through apply(listenOn, …), an alias of addEventListener", file: "packages/ardiacore/ios/page_script.js", code: 'apply(listenOn, session, ["fixturestatus", f]);', missing: "page-script-listener:fixturestatus" },
-  { form: "a listener whose event name is on the next line", file: "packages/ardiacore/ios/page_script.js", code: 'document.addEventListener(\n  "fixturemultiline",\n  f,\n);', missing: "page-script-listener:fixturemultiline" },
-  { form: "a listener through apply(listen, …)", file: "packages/ardiacore/ios/page_script.js", code: 'apply(listen, window, ["fixturechange", guard(() => {})]);', missing: "page-script-listener:fixturechange", changed: "page-script-listener-count:page_script.js" },
-  { form: "a hyphenated message the page script sends", file: "packages/ardiacore/ios/page_script.js", code: 'send("pick-done", {});', missing: "chromium-page-message:pick-done" },
-  { form: "a dotted message a native receiver takes", file: "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", code: '} else if ([kind isEqualToString:@"pick.done"]) {', missing: "chromium-page-message:pick.done" },
-  { form: "a hyphenated WebKit message", file: "packages/ardiacore/ios/WebKitTab+Site.swift", code: 'case "pick-done": break', missing: "webkit-page-message:pick-done" },
-  { form: "a single-quoted WebKit post", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: "post('fixtureKind', {})", missing: "webkit-page-message:fixtureKind" },
-  { form: "a hyphenated plugin method", file: "apps/browser/src/state/plugins/channelApi.ts", code: 'case "tabs.read-all":', missing: "plugin-method:tabs.read-all" },
-];
+const NO_ROW_TS = "apps/browser/src/state/site/contentBlocking.ts";
+const ROW_TS = "apps/browser/src/state/site/translate.ts";
+const NEW_EVALUATE = "evaluate-result:state/site/contentBlocking.ts";
 
-test("each call form the inventory enforces raises a missing row when it appears in new code", () => {
-  for (const { form, file, code, missing, changed } of FORMS) {
-    const found = unlisted(detectedEntries(withAdded({ [file]: code })));
-    if (missing) assert.ok(found.missing.includes(missing), `${form}: expected ${missing} to be reported, got ${JSON.stringify(found.missing)}`);
-    if (changed) assert.ok(found.changed.some((c) => c.startsWith(`${changed}:`)), `${form}: expected ${changed} to be reported as changed, got ${JSON.stringify(found.changed)}`);
-  }
-});
+const PROMISED_FORMS = {
+  "TypeScript (parsed): evaluate": [
+    { form: "a plain call", code: "void web.evaluate(code);" },
+    { form: "an optional-chained receiver", code: "void web?.evaluate(code);" },
+    { form: "an optional call", code: "void web.evaluate?.(code);" },
+    { form: "a function type in the generic", code: "void web.evaluate<() => void>(code);" },
+    { form: "a nested generic", code: "void web?.evaluate<Array<Record<string, string>>>(code);" },
+    { form: "computed access by name", code: 'void web["evaluate"](code);' },
+    { form: "a destructured binding", code: "const { evaluate } = web;\nvoid evaluate(code);" },
+    { form: "a renamed destructured binding", code: "const { evaluate: run } = web;\nvoid run(code);" },
+    { form: "an alias variable", code: "const ev = web.evaluate;\nvoid ev(code);" },
+    { form: "call and apply", code: "void web.evaluate.call(web, code);\nvoid web.evaluate.apply(web, [code]);" },
+    { form: "a cast callee", code: "void (web.evaluate as (c: string) => Promise<unknown>)(code);" },
+    { form: "an alias passed through an object and destructured", code: "const kit = { look: web.evaluate };\nconst { look } = kit;\nvoid look(code);" },
+  ].map((f) => ({ ...f, file: NO_ROW_TS, missing: NEW_EVALUATE })).concat([{ form: "one more call in a file with a row", file: ROW_TS, code: "void webviews.get(tabId)?.evaluate?.(code);", changed: "evaluate-result:state/site/translate.ts" }]),
+  "page_script.js (parsed): listeners": [
+    { form: "addEventListener", code: 'window.addEventListener("fixture-a", f);', missing: "page-script-listener:fixture-a" },
+    { form: "the event name on the next line", code: 'document.addEventListener(\n  "fixture-b",\n  f,\n);', missing: "page-script-listener:fixture-b" },
+    { form: "an optional call", code: 'window.addEventListener?.("fixture-c", f);', missing: "page-script-listener:fixture-c" },
+    { form: "apply through a variable alias", code: 'const listenOnFixture = window.EventTarget && EventTarget.prototype.addEventListener;\napply(listenOnFixture, window, ["fixture-d", f]);', missing: "page-script-listener:fixture-d" },
+    { form: "apply through a destructured alias", code: 'const { addEventListener: hearFixture } = EventTarget.prototype;\napply(hearFixture, window, ["fixture-e", f]);', missing: "page-script-listener:fixture-e" },
+    { form: "an alias's call", code: 'const { addEventListener: hearFixture } = EventTarget.prototype;\nhearFixture.call(window, "fixture-f", f);', missing: "page-script-listener:fixture-f" },
+    { form: "Reflect.apply", code: 'Reflect.apply(EventTarget.prototype.addEventListener, window, ["fixture-g", f]);', missing: "page-script-listener:fixture-g" },
+    { form: "an alias passed through an object and destructured", code: 'const kitFixture = { onFixture: EventTarget.prototype.addEventListener };\nconst { onFixture } = kitFixture;\napply(onFixture, document, ["fixture-h", f]);', missing: "page-script-listener:fixture-h" },
+    { form: "a computed event name", code: "window.addEventListener(fixtureType, f);", changed: "page-script-listener-count:page_script.js" },
+  ].map((f) => ({ ...f, file: PAGE_SCRIPT })),
+  "page_script.js (parsed): messages": [
+    { form: "send", code: 'send("fixtureKind", {});', missing: "chromium-page-message:fixtureKind" },
+    { form: "a kind beginning with a digit", code: 'send("2fa", {});', missing: "chromium-page-message:2fa" },
+    { form: "single quotes and a hyphen", code: "send('pick-done', {});", missing: "chromium-page-message:pick-done" },
+    { form: "a template literal", code: "send(`fixture.dotted`, {});", missing: "chromium-page-message:fixture.dotted" },
+    { form: "an alias of send", code: 'const sendFixture = send;\nsendFixture("aliasedKind", {});', missing: "chromium-page-message:aliasedKind" },
+    { form: "a computed kind", code: "send(fixtureKind, {});", changed: "page-script-message-count:page_script.js" },
+  ].map((f) => ({ ...f, file: PAGE_SCRIPT })),
+  "Objective-C++ receivers (pattern)": [
+    { form: "[kind isEqualToString:@\"…\"] with any characters", file: "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm", code: '} else if ([kind isEqualToString:@"2fa.pick-done"]) {', missing: "chromium-page-message:2fa.pick-done" },
+  ],
+  "Swift (pattern)": [
+    { form: 'a receiver case "…":', file: "packages/ardiacore/ios/WebKitTab+Site.swift", code: 'case "2fa-done": break', missing: "webkit-page-message:2fa-done" },
+    { form: "post or send with a quoted kind in a WebKit script", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: "post('9fixture', {})", missing: "webkit-page-message:9fixture" },
+    { form: "an addEventListener call in a WebKit script", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: 'document.addEventListener("fixture", f)', changed: "webkit-page-listener-count:WebKitPageScript.swift" },
+    { form: "apply through an alias a WebKit script assigns", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: 'const hearFixture = EventTarget.prototype.addEventListener; apply(hearFixture, document, ["fixture", f])', changed: "webkit-page-listener-count:WebKitPageScript.swift" },
+    { form: "apply through a listen alias in a WebKit script", file: "packages/ardiacore/ios/WebKitPageScript.swift", code: 'apply(listen, document, ["fixture", f])', changed: "webkit-page-listener-count:WebKitPageScript.swift" },
+  ],
+  "Other tables (pattern)": [
+    { form: 'a plugin method case "…":', file: "apps/browser/src/state/plugins/channelApi.ts", code: 'switch (method) { case "tabs.read-all": break; }', missing: "plugin-method:tabs.read-all" },
+  ],
+};
 
-const customEventsIn = (text) => listenedEvents(text).filter((event) => /[-:]|ardia/i.test(event) && !inventory.customEvents?.[event]);
+for (const [group, forms] of Object.entries(PROMISED_FORMS))
+  test(`${group}: each promised form raises a missing row or a changed count when it appears in new code`, () => {
+    for (const { form, file, code, missing, changed } of forms) {
+      const found = unlisted(detectedEntries(withAdded({ [file]: code })));
+      if (missing) assert.ok(found.missing.includes(missing), `${form}: expected ${missing} to be reported, got ${JSON.stringify(found.missing)}`);
+      if (changed) assert.ok(found.changed.some((c) => c.startsWith(`${changed}:`)), `${form}: expected ${changed} to be reported as changed, got ${JSON.stringify(found.changed)}`);
+    }
+  });
+
+const customEventsIn = (path, text) => (path.endsWith(".js") ? parsedListenerCalls(path, text).map((l) => l.name).filter(Boolean) : listenedEvents(text)).filter((event) => /[-:]|ardia/i.test(event) && !inventory.customEvents?.[event]);
 
 test("no page script listens for a DOM event a page can name itself", () => {
   const scripts = [PAGE_SCRIPT, ...filesIn(IOS, (n) => /^WebKit.*\.swift$/.test(n))];
-  for (const f of scripts) assert.deepEqual(customEventsIn(readFromDisk(f)), [], `${f}: a custom DOM event any page can dispatch needs a row in customEvents and a trusted-sender check`);
-  assert.deepEqual(customEventsIn('const listen = EventTarget.prototype.addEventListener; document.addEventListener("ardia-hide-element", f); apply(listen, document, ["ardia-pick", f]);'), ["ardia-hide-element", "ardia-pick"]);
+  for (const f of scripts) assert.deepEqual(customEventsIn(f, readFromDisk(f)), [], `${f}: a custom DOM event any page can dispatch needs a row in customEvents and a trusted-sender check`);
+  assert.deepEqual(customEventsIn("fixture.js", 'const { addEventListener: hear } = EventTarget.prototype; document.addEventListener("ardia-hide-element", f); apply(hear, document, ["ardia-pick", f]);'), ["ardia-hide-element", "ardia-pick"]);
 });
