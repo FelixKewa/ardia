@@ -10,6 +10,7 @@ import { presentSearch, dismissSearch } from "../state/search/store";
 import { currentTabs, useTabs } from "../state/tabs/store";
 import { usePageUi } from "../state/page/store";
 import { actionWords } from "../lib/sharedWords";
+import { OFF_STATUS, useSync, type SyncedProfile } from "../state/sync/store";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 const mockReaderRenders: { tabId: string; closing: boolean }[] = [];
@@ -280,6 +281,8 @@ test("Duo passes Reader through the regular browser's closing render, so the out
 
 test("Duo's toolbar and sidebar plates take the tab's private state, as the browsing bar's do", () => {
   useShape(OPEN, { name: "wide" });
+  const space: SyncedProfile = { syncId: "work", name: "Work", color: null, icon: null, isDefault: true, theme: null, deviceTabs: [], pinned: { tiles: [{ key: "k1", title: "Pin", url: "https://pin.example/", icon: null, folder: null }], sections: [] }, bookmarks: [], history: [], sendTargets: null };
+  act(() => useSync.setState((state) => ({ ...state, status: { ...OFF_STATUS, isEnabled: true, phase: "updated" }, view: { devices: [], profiles: [space], search: null, syncedAt: 1, selectedProfileId: "work", shownProfileId: "work", receivers: [] } as never })));
   const privates = [{ ...currentTabs().open[0]!, id: "private-0", isPrivate: true }];
   act(() => useTabs.setState((state) => ({ ...state, privates, selectedId: "private-0", incognito: true })));
   const root = redesigned();
@@ -290,7 +293,10 @@ test("Duo's toolbar and sidebar plates take the tab's private state, as the brow
   press(button(root, "Show Sidebar"));
   settle();
   expect(privatePlate("duoSidebarAddress")).toBe(true);
+  expect(root.root.findAll((node) => node.props.testID === "duoSidebarTile").length).toBeGreaterThan(0);
+  expect(privatePlate("duoSidebarTile")).toBe(true);
   unmount(root);
+  act(() => useSync.setState((state) => ({ ...state, status: OFF_STATUS, view: { devices: [], profiles: [], search: null, syncedAt: null, selectedProfileId: null, receivers: [] } })));
   act(() => useTabs.setState((state) => ({ ...state, privates: [], selectedId: state.open[0]!.id, incognito: false })));
   const regular = redesigned();
   expect(regular.root.findAll((node) => node.props.testID === "duoAddress" && node.props.incognito === true)).toHaveLength(0);

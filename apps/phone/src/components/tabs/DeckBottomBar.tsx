@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState, type ComponentProps, type RefObject } from "react";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
-import { actionWords } from "../../lib/sharedWords";
+import { actionWords, incognitoWords } from "../../lib/sharedWords";
 import { Pressable, StyleSheet, TextInput, View, type StyleProp, type TextInputInstance, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { floatingBarCenter } from "../../lib/deckGeometry";
 import { haptics } from "../../state/app/haptics";
-import { newIncognitoTab, newRegularTab, newTab, reopenLastClosed, switchDeckIncognito } from "../../state/browse/store";
+import { switchDeckIncognito } from "../../state/browse/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
-import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PressScale, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
+import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PressInPlace, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
-import { FadingGlyphs, GlassPlusButton, type ChromeFade } from "./ChromeButtons";
+import { FadingGlyphs, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
 import { besideStrip, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
 
 type Props = {
@@ -32,24 +31,6 @@ type Props = {
   onMenu?: (open: boolean) => void;
 } & ChromeFade;
 
-export function plusMenu(incognito: boolean, canReopen: boolean): MenuItem[] {
-  return [
-    ...(incognito ? [{ label: actionWords.newTab, onPress: newRegularTab }, { label: actionWords.newIncognitoTab, onPress: newTab }] : [{ label: actionWords.newIncognitoTab, onPress: newIncognitoTab }]),
-    ...(canReopen ? [{ label: "Reopen Closed Tab", onPress: reopenLastClosed }] : []),
-  ];
-}
-
-export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, frost, onMenu, ...fade }: { width: number; label: string; testID: string; dark: boolean; incognito?: boolean; place: ViewStyle; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void } & ChromeFade) {
-  const tabIncognito = useIncognito();
-  const canReopen = useCanReopen();
-  return (
-    <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={{ width, height: controlSize.bar }}>
-      {({ onLongPress }) => <GlassPlusButton width={width} label={label} testID={testID} dark={dark} incognito={incognito} {...fade} onPress={newTab} onLongPress={onLongPress ?? noop} />}
-    </MenuTrigger>
-  );
-}
-
-const noop = () => undefined;
 
 export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void } & ChromeFade) {
   const size = { width: controlSize.bar, height: controlSize.bar };
@@ -61,7 +42,7 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
       checked={incognito}
       onChange={switchIncognitoSide}
       onLongPress={onLongPress}
-      longPressLabel={onLongPress ? CLOSE_INCOGNITO_TABS : undefined}
+      longPressLabel={onLongPress ? incognitoWords.closeIncognitoTabs : undefined}
       onPressIn={haptics.barPress}
       visual={controlSize.bar}
     >
@@ -74,7 +55,6 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
   );
 }
 
-const CLOSE_INCOGNITO_TABS = "Close Incognito Tabs";
 
 const switchIncognitoSide = () => switchDeckIncognito();
 
@@ -169,7 +149,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
   const plusTop = strip ? (strip.ends ? strip.plus : strip.tabs) : 0;
   const plusPlace = strip ? { bottom: deckHeight - centerY - controlSize.bar / 2 - plusTop, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
   const switchPlace = strip ? plusPlace : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, left: span.left, width: tabsLayout.menuWidth };
-  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: CLOSE_INCOGNITO_TABS, destructive: true, onPress: onCloseIncognito }] : [];
+  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: incognitoWords.closeIncognitoTabs, destructive: true, onPress: onCloseIncognito }] : [];
   const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
   const incognitoSwitch = (
     <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} style={{ width: controlSize.bar, height: controlSize.bar }}>
@@ -210,11 +190,11 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
           <Animated.View testID="deckSearchGrow" collapsable={false} style={[styles.searchHit, styles.grows, grow]}>
             <SearchTabsField search={search} style={styles.searchHit} resting={!opened} incognito={incognito} contentStyle={fieldFade} {...fade} />
             <Animated.View testID="deckSearchCircle" collapsable={false} style={[styles.searchCircle, strip?.side === "left" ? styles.circleLeading : styles.circleTrailing, circleFade]} pointerEvents={opened ? "none" : "auto"} importantForAccessibility={opened ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={opened}>
-              <PressScale label="Search Tabs" onPress={() => search.input.current?.focus()} onPressIn={haptics.barPress} style={[styles.centered, styles.circleHit]}>
+              <PressInPlace label="Search Tabs" onPress={() => search.input.current?.focus()} onPressIn={haptics.barPress} style={[styles.centered, styles.circleHit]}>
                 <FadingGlyphs fade={glyphFade} pointerEvents="none" style={styles.centered}>
                   <SystemGlyph testID="deckSearchCircleGlyph" systemName="magnifyingglass" pointSize={18} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={roles.label} />
                 </FadingGlyphs>
-              </PressScale>
+              </PressInPlace>
             </Animated.View>
           </Animated.View>
         ) : (

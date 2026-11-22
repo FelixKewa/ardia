@@ -73,7 +73,7 @@ export function BottomBar({ order, roles, showsPlus, incognito = false, onTabs, 
               { backgroundColor: roles.chevronFill, borderColor: roles.controlEdge, borderRadius: capsule(browseLayout.chevronCircle) },
             ]}
           >
-            <Symbol name="chevronUp" size={16} color={roles.foregroundPrimary} />
+            <Symbol name="chevronUp" size={browseLayout.chevronGlyph} color={roles.foregroundPrimary} />
           </View>
         </PressInPlace>
       </View>

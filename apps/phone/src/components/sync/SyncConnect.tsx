@@ -1,5 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, BackHandler, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ActivityIndicator, BackHandler, Platform, StyleSheet, Text, TextInput, View, type ViewInstance } from "react-native";
 import { canPickSyncFolderFirst, checkPhrase, connectSync, syncConnectSession } from "../../state/sync/actions";
 import { IDLE_CONNECT, type ConnectState } from "../../state/sync/connectSession";
 import { haptics } from "../../state/app/haptics";
@@ -22,6 +22,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
   const [entering, setEntering] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scans] = useState(canScanCodes);
+  const scanCodeButton = useRef<ViewInstance>(null);
   const [connecting, setConnecting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ConnectResult["result"] | null>(null);
@@ -90,6 +91,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
           setEntering(true);
         }}
         onCancel={() => setScanning(false)}
+        returnFocusTo={() => scanCodeButton.current}
       />
     );
   }
@@ -124,7 +126,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                 </Animated.View>
               ) : (
                 <Animated.View key="ways" entering={STEP_IN} exiting={STEP_OUT} style={styles.ways}>
-                  {scans ? <ActionButton title={syncWords.scanCode} icon="qrcodeViewfinder" variant="filled" tone="accent" size="compact" stretch disabled={busy} onPress={() => setScanning(true)} /> : null}
+                  {scans ? <ActionButton title={syncWords.scanCode} icon="qrcodeViewfinder" variant="filled" tone="accent" size="compact" stretch disabled={busy} buttonRef={scanCodeButton} onPress={() => setScanning(true)} /> : null}
                   <ActionButton title={syncWords.enterRecoveryPhrase} icon="textCursor" variant="filled" tone={scans ? "neutral" : "accent"} size="compact" stretch disabled={busy} onPress={() => setEntering(true)} />
                 </Animated.View>
               )}
@@ -290,7 +292,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   digits: { fontVariant: ["tabular-nums"] },
   step: { flexDirection: "row", gap: space.m, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m },
-  badge: { width: spacesLayout.stepBadge, height: spacesLayout.stepBadge, borderRadius: capsule(spacesLayout.stepBadge), borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  badge: { width: spacesLayout.stepBadge, height: spacesLayout.stepBadge, borderRadius: capsule(spacesLayout.stepBadge), borderWidth: spacesLayout.stepBadgeEdge, alignItems: "center", justifyContent: "center" },
   stepBody: { flex: 1, gap: space.xs },
   stepActions: { gap: space.s, paddingTop: space.xs },
   added: { flexDirection: "row", alignItems: "center", gap: space.s },

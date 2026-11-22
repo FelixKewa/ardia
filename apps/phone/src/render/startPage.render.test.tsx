@@ -3,7 +3,7 @@ import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { StartScreen } from "../components/search/StartScreen";
 import { DeckBar } from "../components/tabs/DeckBar";
-import { AppIcon, ArdiaLogo, BarPlusGlyph, ChromeSurface, controlSize, DesignProvider, PressScale } from "../components/ui";
+import { AppIcon, ArdiaLogo, BarPlusGlyph, ChromeSurface, controlSize, DesignProvider, PressInPlace } from "../components/ui";
 import { redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import type { Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
@@ -117,13 +117,13 @@ test("the Start bar's circles and its wide plus take the bars' shared chrome sur
     expect(surface.props.shape).toBe(id === "startBarPlus" ? "capsule" : "circle");
     expect(StyleSheet.flatten(surface.props.style)).toMatchObject({ height: controlSize.bar });
   }
-  const plus = root.root.findAll((node) => node.type === PressScale && node.props.label === "New Tab")[0]!;
+  const plus = root.root.findAll((node) => node.type === PressInPlace && node.props.label === "New Tab")[0]!;
   expect(plus.findAll((node) => node.type === BarPlusGlyph)).toHaveLength(1);
-  expect(root.root.findAll((node) => node.type === PressScale && node.props.label === "Settings")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === PressInPlace && node.props.label === "Settings")).toHaveLength(1);
   unmount(root);
   act(() => useTabs.setState({ incognito: true }));
   const privately = start();
-  expect(privately.root.findAll((node) => node.type === PressScale && node.props.label === "New Incognito Tab")).toHaveLength(1);
+  expect(privately.root.findAll((node) => node.type === PressInPlace && node.props.label === "New Incognito Tab")).toHaveLength(1);
   expect(privately.root.findAll((node) => node.type === ChromeSurface && node.props.testID === "startBarPlus")[0]!.props.incognito).toBe(true);
   unmount(privately);
   act(() => useTabs.setState({ incognito: false }));

@@ -37,13 +37,14 @@ import { EmptyState } from "../settings/SettingsKit";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { actionWords, dismissWords } from "../../lib/sharedWords";
 import { listSheetWords } from "./listSheetWords";
-import { ConfirmSheet, Favicon, iconRoles, LoadingState, NoResultsState, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName, Tappable, FieldAccessory, slopToReach, smoothCorners } from "../ui";
+import { ConfirmSheet, Favicon, iconRoles, LoadingState, NoResultsState, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName, Tappable, FieldAccessory, controlSize, smoothCorners } from "../ui";
+import { libraryLayout } from "./listSheetTokens";
 
 const FOLDER = "folder:";
 const ROW_FAVICON = 20;
 const ROW_FAVICON_SCALE_CAP = 2;
 const DEVICE_GLYPH = 13;
-const SWITCHER_HEIGHT = 32;
+const SWITCHER_FILL_INSET = (controlSize.hitTarget - libraryLayout.drawnSwitcherHeight) / 2 - space.hair;
 
 const SECTION_SYMBOLS: Record<LibrarySection, SymbolName> = { history: "clockArrow", bookmarks: "star", downloads: "arrowDownCircle" };
 
@@ -183,7 +184,8 @@ export function LibraryView() {
 function Switcher({ section }: { section: LibrarySection }) {
   const theme = useTheme();
   return (
-    <View testID="librarySwitcher" accessibilityRole="tablist" style={[styles.switcher, { backgroundColor: theme.fieldFill }]}>
+    <View testID="librarySwitcher" accessibilityRole="tablist" style={styles.switcher}>
+      <View pointerEvents="none" style={[styles.switcherFill, { backgroundColor: theme.fieldFill }]} />
       {LIBRARY_SECTIONS.map((item) => {
         const selected = item === section;
         return (
@@ -194,11 +196,12 @@ function Switcher({ section }: { section: LibrarySection }) {
             role="tab"
             label={LIBRARY_NAMES[item]}
             selected={selected}
-            hitSlop={slopToReach(SWITCHER_HEIGHT * 1.5, SWITCHER_HEIGHT)}
             onPress={() => showLibrarySection(item)}
-            style={[styles.segment, selected ? { backgroundColor: theme.groupFill } : null]}
+            style={styles.segmentSlot}
           >
-            <Symbol name={SECTION_SYMBOLS[item]} size={17} color={selected ? theme.label : theme.secondaryLabel} />
+            <View testID={`librarySectionFace:${item}`} style={[styles.segment, selected ? { backgroundColor: theme.groupFill } : null]}>
+              <Symbol name={SECTION_SYMBOLS[item]} size={libraryLayout.drawnSectionGlyph} color={selected ? theme.label : theme.secondaryLabel} />
+            </View>
           </Tappable>
         );
       })}
@@ -459,8 +462,10 @@ const styles = StyleSheet.create({
   end: { alignItems: "flex-end" },
   title: { flexShrink: 1, textAlign: "center" },
   bold: { fontWeight: "600" },
-  switcher: { flexDirection: "row", alignSelf: "center", padding: space.hair, borderRadius: radius.field - space.xs, marginTop: space.xs },
-  segment: { minWidth: SWITCHER_HEIGHT * 1.5, height: SWITCHER_HEIGHT, alignItems: "center", justifyContent: "center", borderRadius: radius.field - space.xs - space.hair, ...smoothCorners },
+  switcher: { flexDirection: "row", alignSelf: "center", paddingHorizontal: space.hair, marginTop: space.xs - SWITCHER_FILL_INSET, marginBottom: -SWITCHER_FILL_INSET },
+  switcherFill: { position: "absolute", left: 0, right: 0, top: SWITCHER_FILL_INSET, bottom: SWITCHER_FILL_INSET, borderRadius: radius.field - space.xs, ...smoothCorners },
+  segmentSlot: { minWidth: libraryLayout.drawnSwitcherSegment, height: controlSize.hitTarget, alignItems: "center", justifyContent: "center" },
+  segment: { minWidth: libraryLayout.drawnSwitcherSegment, height: libraryLayout.drawnSwitcherHeight, alignItems: "center", justifyContent: "center", borderRadius: radius.field - space.xs - space.hair, ...smoothCorners },
   search: {
     flexDirection: "row",
     alignItems: "center",

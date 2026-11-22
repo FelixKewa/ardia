@@ -5,7 +5,7 @@ import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
-import { actionWords } from "../../lib/sharedWords";
+import { actionWords, blockingWords } from "../../lib/sharedWords";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import {
   canPrintPages,
@@ -276,7 +276,7 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
             <ToggleRow
               which="blockers"
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
-              title="Block Ads and Trackers"
+              title={blockingWords.blockAdsAndTrackers}
               value={model.blockersEnabled}
               enabled={model.isWebPage}
               detail={model.blockedCount}

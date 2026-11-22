@@ -66,8 +66,8 @@ export function FindBar({ tabId }: { tabId: string }) {
 function FindButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <Tappable kind="icon" label={label} disabled={!enabled} hitSlop={slopToReach(browseLayout.hitTarget - 4)} onPress={onPress} style={styles.button}>
-      <Symbol name={icon} size={18} color={enabled ? theme.label : theme.tertiaryLabel} />
+    <Tappable kind="icon" label={label} disabled={!enabled} hitSlop={slopToReach(browseLayout.findButton)} onPress={onPress} style={styles.button}>
+      <Symbol name={icon} size={browseLayout.findGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
     </Tappable>
   );
 }
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, paddingVertical: 0 },
   digits: { fontVariant: ["tabular-nums"] },
-  button: { width: browseLayout.hitTarget - 4, height: browseLayout.hitTarget - 4, alignItems: "center", justifyContent: "center" },
+  button: { width: browseLayout.findButton, height: browseLayout.findButton, alignItems: "center", justifyContent: "center" },
   done: { minHeight: browseLayout.hitTarget, justifyContent: "center", paddingHorizontal: space.s },
   bold: { fontWeight: "600" },
 });

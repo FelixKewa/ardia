@@ -2037,12 +2037,12 @@ Nothing here is done until it has been watched in the screens agent's own simula
 - Start page: the tray-up fade and 0.96 scale, and the Reduce Motion fade without the scale; the bar fading out with it.
 - Start page: the sideways space pager; the page dots' colour change.
 - Start page: a folder tile's menu, a tile's Copy Link and Share menu, the plus menu.
-- Start page: the tile press scale (instant, where main springs it with `Motion.press`); the glass of the tiles, bar and capsule; the light-mode veil in the drawn fallback; the bar glyph sizes (estimated from SF sizes 16 and 18).
+- Start page: the tile press, which dims in place with no scale (main springs a scale with `Motion.press`; the owner's motion rule keeps it plain); the glass of the tiles, bar and capsule; the light-mode veil in the drawn fallback; the bar glyph sizes (estimated from SF sizes 16 and 18).
 - Deck: the `···`, space and Incognito pill menus; the pill appearing and leaving (fade, 0.9 scale spring); the Archive capsule's entrance and exit, its interval picker, and the cards' 26 pt spring down and back, easing to zero as a card opens.
 - Spaces: the deck on a space switch (order reset, scroll to the second-last card, cards fading in, the archive card); the two-step card menu (Move to Space, then the space list); a moved card leaving and the gap closing; the swipe neighbours after a switch; the page changing to the new space's latest tab, or the start page for an empty space; the colour change; Switch to Tab on another space's tab (for a moment it may have no swipe neighbours until the sync event arrives).
 - Appearance: the page's push and pop, the swatch ring; switching Glass and Classic live on open surfaces (the native `Glass` must take a `surface` change at runtime); switching Light and Dark live across windows, sheets, the keyboard, the status bar and pages' `prefers-color-scheme`, and back to System; Match My Mac following a new synced look; Reduce Transparency switched on while open; Night Shade Automatic following the app's scheme.
 - Sheets with Remove animations on Android: Settings, Spaces, the archive and the small sheets come up and go at once, as Compose's do (the system scales Compose's durations to zero); with Reduce Motion on iPhone they still move on a 200 ms timing.
-- Page menu: the sheet opening and closing on its white or black fill and its drag; the capsules' press scale and glass; row press highlights (instant, where main fades them over 0.2 s); the title feedback crossfade; the print sheet after the menu has gone; the Send to Device menu's place; Site Settings opening as the menu slides away; the accessibility-size layout.
+- Page menu: the sheet opening and closing on its white or black fill and its drag; the tiles' in-place press dim (no scale) and glass; row press highlights (instant, where main fades them over 0.2 s); the title feedback crossfade; the print sheet after the menu has gone; the Send to Device menu's place; Site Settings opening as the menu slides away; the accessibility-size layout.
 - Tray field on the way out: from the first frame the tray leaves, its text shows as plain text with no caret (the native field is blurred and dropped), on both phones; check it doesn't jump or change size.
 - Page load motion moved to the UI thread: the page's loading line (now a scaleX from the left edge where it animated its width, and fed from the store without renders) and the settings switch's knob and colour (now Reanimated). Seen on the F4 (`/tmp/ardia-phone-shots/loadline-proof/`): with a page loading, slow UI-thread frames 286 to 202 and janky 10.85% to 10.35%, the deck open's worst stall 108 to 92 ms; the card open keeps a 100 ms stall in both builds (another cause, the hand-over). Still to see on iPhone: the search panel's lift no longer frozen (`screens-depart9`).
 - Deck: the bar rising above the keyboard and back; Search Tabs typing (the gap-close, the scroll to the last match, the keyboard hiding on a tap); the plus menu above the new bar; the header and bar fading with the deck's open and close; the glass on the new pieces and the grid glyph.
@@ -2128,9 +2128,9 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   the side insets.
 - Pager: the full screen width.
 - Search tray: the panel is the safe width less 8 each side, so it clears the island; radius `searchPanelRadius` (the
-  field inset plus half the field's height); 8 above the
-  keyboard; height `min(274 + 47.5·(fieldScale − 1), safeH + safeBottom − keyboard − 16)`, the keyboard term
-  usually winning in landscape.
+  field inset plus half the field's height); placement, height and the keyboard gap come from the same
+  `searchPanelPlace` and `searchPanelPreferredHeight` as on the phone (see the new-tab search panel entry), with the
+  height also capped by the room above the keyboard, which usually wins in landscape.
 - Deck: side padding `max(left, right)` for the header (+24), the Archive capsule (+24), the bottom bar (+24) and the grid (+16).
   Cards take the screen's aspect: `cardW = min(W·306/440, band/(H/W))`, with `bandTop = chromeBottom + 41`,
   `bandBottom = H − max(safeBottom, 20) − 43`, band at least 120; `focusLeading = W·66/440`,
@@ -2251,6 +2251,29 @@ look changes in one place:
 - Also shared: the browsing address face (`AddressFace`, used by the wide toolbar and sidebar too), the page's
   progress line (`PageProgressLine`), the icon roles (`lib/iconRoles.ts`, one glyph per meaning), the elevations
   (`shadowCss`) and a toast's action label, spoken and shown in place of a chevron.
+- Round 3 added:
+  - `PressInPlace`: the press for everything touched all day (bar buttons, the + controls, the page menu's tiles, tab
+    cards). It dims in place on contact and never scales (the old `PressScale` name is gone). The only things that
+    still scale under a finger are the start page logo's drag and the page and deck morphs.
+  - `PlusMenuButton` (`tabs/ChromeButtons.tsx`): one + control for Start and the deck, with the glyph, chrome
+    surface, press, haptic, long-press hint and the + menu; Start passes its wide pill width and menu anchor, the
+    deck its 48-point circle and fade inputs. The browsing bar's + keeps its own face for the swipe's pull glyphs.
+  - The glass `ActionButton` face (`variant="glass"`, `tone="overlay"`): the overlays' Search, Done and Browse share
+    the action's busy and disabled contract over a frosted plate.
+  - `primaryActionRoles` (`ui/tokens.ts`): the named hero, full and compact roles (height, corner, fill, ink, native
+    control size). `ActionButton`, `PrimaryButton` and the native Expo UI adapter all read them.
+  - The loading contract: drawn and native loading states share one role, busy state, default label (`listWords`)
+    and one announcement; Reader passes its own ink and label.
+  - `IncognitoLook` and `incognitoTheme`: one private accent (`PRIVATE_ACCENT`) for Start, the deck and the search
+    tray, never the profile's colour.
+  - Focus return: `useModalOverlay` takes `returnFocusTo` and gives focus back after the cover clears; Reader returns
+    it to the page menu button that opened it (`openPageMenuFrom`), the scanner to Scan Code, Voice to its mic (on
+    Material You to the search bar, since Compose draws the mic).
+  - `plateMaterial`: one rule for a plate's material (glass, frost or solid); the search panel and its native morph
+    both follow it, and a solid (Classic or Reduce Transparency) panel draws the bars' chrome edge on its face and in
+    its morph (`classicChrome`, passed across the bridge as `morphClassicChrome`).
+  - `incognitoWords` and `blockingWords` in `lib/sharedWords.ts`, with a test that fails when a shipping file writes
+    a shared word out as its own literal.
 
 ### Tester checklist for the next build
 
@@ -2397,11 +2420,23 @@ Not audited at all: Compose's `SyncSetupContent` internals inside onboarding.
     gone. Main draws SF `eyeglasses` at 17 semibold here.
   - **Under the keyboard:** the panel's card runs on behind the keyboard to 8 pt above the screen's bottom
     (`trayPanel` sits the keyboard's lift below the screen and the stage lifts it back); its rows still end 8 pt above
-    the keyboard. Editing a page's address keeps the shorter panel that floats above the keyboard.
+    the keyboard. Both a new search and editing a page's address use this Arc panel, at the fixed Arc height (the
+    field plus four rows), with the current page as the first row when editing its address: the owner's later
+    decision in #3118 (89c839bacf), which replaced the shorter panel that used to float above the keyboard when
+    editing an address.
+  - **Placement:** one rule in `searchPanelTokens.ts` (`searchPanelPlacement`, `searchPanelPlace`) picks one of three
+    modes. `underKeyboard` is the phone layout's Arc panel above: top corners only, the card running on under the
+    keyboard. `aboveKeyboard` is a card rounded on all four corners, inset from the sides and floating above the
+    keyboard, only as tall as its rows up to the Arc height; the half-open Duo's `split` layout uses it, and so does
+    the React Native fallback tray in any look other than the redesign. `commandBar` is the wide layout's command bar
+    under the card's top (open Duo).
+  - **Height:** derived, not fixed in points: `searchPanelHeight` is the field inset, the field, the gap above the
+    rows, four row pitches scaled with the text size, and the bottom inset; a floating panel takes the smaller of that
+    and the field block plus its rows' measured height (`searchPanelPreferredHeight`).
   - **Corners:** every search panel's corners are concentric with the field's capsule: the field inset plus half the
-    field's height (`searchPanelRadius` in `searchPanelTokens.ts`, 38 pt at the default text size, growing with the
-    field under Dynamic Type), passed to the native morph as `panelRadius` and used by the wide layout's command bar
-    too; they were 26, tighter than the field's own curve allowed.
+    field's height (`searchPanelRadius` in `searchPanelTokens.ts`, so it grows with the field under Dynamic Type),
+    passed to the native morph as `panelRadius` and used by the wide layout's command bar too; they were 26, tighter
+    than the field's own curve allowed.
   - **To watch:** `new_tab_search_opened` should hold its level after the release.
 
 - Settings, Archive, History and Bookmarks keep one neutral background, the system's grouped background, whatever

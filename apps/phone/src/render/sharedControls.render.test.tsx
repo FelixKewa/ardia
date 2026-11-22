@@ -2,9 +2,13 @@ import { createRef } from "react";
 import { Platform, PlatformColor, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { getAnimatedStyle } from "react-native-reanimated";
-import { ActionButton, EmptyState, FieldAccessory, LoadingLine, LoadingState, ModalOverlay, overlayInk, press, PressScale, Tappable, Toggle, ToggleIconButton, ToggleRow, useTheme, type Theme } from "../components/ui";
+import { ActionButton, EmptyState, FieldAccessory, LoadingLine, LoadingState, ModalOverlay, overlayInk, press, PressInPlace, Tappable, Toggle, ToggleIconButton, ToggleRow, useTheme, type Theme } from "../components/ui";
 import { renderSurface, unmount, updateSurface } from "../../test/render/harness";
 import { switchColors, SYSTEM_SWITCH_COLOR_NAMES } from "../components/ui/Toggle";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { PrimaryButton } from "../components/ui/PrimaryButton";
+import { actionRoleOf, primaryActionRoles } from "../components/ui/tokens";
 
 const mockMotion = { reduced: false };
 jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
@@ -74,6 +78,29 @@ test("a filled accent action draws the accent fill with on-accent ink", () => {
   expect(pressedStyleOf(button, false).borderCurve).toBe("continuous");
   const label = host(button.findAll((node) => node.type === Text)[0]);
   expect(flat(label.props.style).color).toBe(theme.onSpaceAccent);
+  unmount(root);
+});
+
+test("React Native actions take their height, corner and accent fill from the named primary action roles the native adapter reads", () => {
+  const root = renderSurface(
+    <>
+      <ThemeProbe />
+      <ActionButton title="Compact" onPress={() => undefined} size="compact" />
+      <ActionButton title="Full" onPress={() => undefined} />
+      <PrimaryButton title="Hero" onPress={() => undefined} />
+    </>,
+  );
+  for (const [title, role] of [["Compact", primaryActionRoles.compact], ["Full", primaryActionRoles.full], ["Hero", primaryActionRoles.hero]] as const) {
+    const face = pressedStyleOf(pressableNamed(root, title), false);
+    expect(face.minHeight).toBe(role.height);
+    expect(face.borderRadius).toBe(role.radius);
+    expect(face.backgroundColor).toBe(theme[role.fill]);
+  }
+  expect(actionRoleOf).toEqual({ hero: "hero", regular: "full", compact: "compact" });
+  for (const file of ["ActionButton.tsx", "PrimaryButton.tsx"]) {
+    const source = readFileSync(join(__dirname, "../components/ui", file), "utf8");
+    expect(source).not.toMatch(/actionLayout\.(height|radius)|settingsLayout\.primaryButton/);
+  }
   unmount(root);
 });
 
@@ -198,9 +225,9 @@ for (const reduced of [false, true]) {
   test(`a bar control answers the press in place with an immediate dim and never scales${reduced ? ", with Reduce Motion too" : ""}`, () => {
     mockMotion.reduced = reduced;
     const root = renderSurface(
-      <PressScale label="Tabs" onPress={() => undefined}>
+      <PressInPlace label="Tabs" onPress={() => undefined}>
         <View />
-      </PressScale>,
+      </PressInPlace>,
     );
     const control = pressableNamed(root, "Tabs");
     const down = flat(control.props.children({ pressed: true }).props.style);
@@ -215,9 +242,9 @@ for (const reduced of [false, true]) {
 
 test("a disabled bar control does not dim on contact", () => {
   const root = renderSurface(
-    <PressScale label="Back" disabled onPress={() => undefined}>
+    <PressInPlace label="Back" disabled onPress={() => undefined}>
       <View />
-    </PressScale>,
+    </PressInPlace>,
   );
   expect(flat(pressableNamed(root, "Back").props.children({ pressed: true }).props.style).opacity).toBeUndefined();
   unmount(root);

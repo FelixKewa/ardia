@@ -2,7 +2,7 @@ import { Children, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
-import { actionWords, destinationWords } from "../../lib/sharedWords";
+import { actionWords, blockingWords, destinationWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
   canSummarizePages,
@@ -94,7 +94,7 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
         {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
         {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
         {model.pageRows ? (
-          <ToggleRow which="blockers" icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title="Block Ads and Trackers" value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
+          <ToggleRow which="blockers" icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title={blockingWords.blockAdsAndTrackers} value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
         ) : null}
       </Group>
       <Group>

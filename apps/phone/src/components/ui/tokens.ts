@@ -1,5 +1,6 @@
 import { Platform, StyleSheet } from "react-native";
 import { FLOATING_BAR_PLACE } from "../../lib/deckGeometry";
+import { withAlpha } from "../../lib/color";
 import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES } from "../../lib/menuPlace";
 import { neutralFills } from "./paletteTokens";
 import { targetMinimum } from "./targetTokens";
@@ -39,8 +40,6 @@ const lightRoles = {
   disabled: "rgba(0,0,0,0.2)",
   accent: "#6395FC",
   formAccent: "#007AFF",
-  primaryAction: "#0F182C",
-  onPrimaryAction: "#FFFFFF",
   switchOn: "#34C759",
   trayShadow: "#000000",
   trayDim: "rgba(0,0,0,0.16)",
@@ -91,8 +90,6 @@ const darkRoles: ColorRoles = {
   disabled: "rgba(255,255,255,0.25)",
   accent: "#4A77D4",
   formAccent: "#0A84FF",
-  primaryAction: "#DCCBD8",
-  onPrimaryAction: "#000000",
   switchOn: "#30D158",
   trayShadow: "#000000",
   trayDim: "rgba(0,0,0,0.42)",
@@ -515,7 +512,6 @@ export const deckChromeLayout = {
   searchSpacing: 8,
   searchGlyph: 16.8,
   incognitoEyes: 30,
-  clearGlyph: 22.8,
   clearHit: 32,
   archiveCenter: 78.5,
   archiveHeight: 43,
@@ -637,6 +633,7 @@ export const spacesLayout = {
   dot: 9,
   buttonTop: 6,
   stepBadge: 26,
+  stepBadgeEdge: 1.5,
   stepTileRadius: 7,
   stepDividerInset: 56,
 } as const;
@@ -686,6 +683,8 @@ export const tabsLayout = {
   archiveButton: 44,
   archiveMoreGlyph: 20,
   receivedBadgeRadius: 6,
+  receivedBadgeInset: 10,
+  receivedBadgeGlyph: 12,
   archiveField: 40,
   archiveTile: 28,
 } as const;
@@ -752,6 +751,9 @@ export const browseLayout = {
   logoHeight: 108,
   plusCapsule: { width: 78, height: 40 },
   chevronCircle: 35,
+  chevronGlyph: 16,
+  findButton: 40,
+  findGlyph: 18,
   barCenterFromBottom: 44,
   barSideInset: 20,
   hitTarget: controlSize.hitTarget,
@@ -784,6 +786,15 @@ export const shadowCss = (level: ElevationLevel, dark: boolean) => cssShadowOf(e
 
 export const nativeShadowRadius = (level: ElevationLevel) => elevation[level].blur / 2;
 
+export const swipeDeleteLayout = { slop: 12, revealWidth: 88, glyph: 20 } as const;
+
+export const accentGlow = { y: 2, blur: 12, alpha: 0.35 } as const;
+
+export const accentGlowCss = (accent: string) => {
+  const glow = withAlpha(accent, accentGlow.alpha);
+  return cssShadowOf({ y: accentGlow.y, blur: accentGlow.blur, light: glow, dark: glow }, false);
+};
+
 const dynamicColor = (light: string, dark: string) => ({ dynamic: { light, dark } });
 
 export const nativeClassicChrome = {
@@ -793,8 +804,6 @@ export const nativeClassicChrome = {
   shadowY: elevation.control.y,
   shadow: dynamicColor(elevation.control.light, elevation.control.dark),
 } as const;
-
-export const nativeGlassChrome = { classicChrome: nativeClassicChrome } as const;
 
 export const overlayInk = { fill: ink.white, onFill: ink.black, glass: "rgba(255,255,255,0.18)", label: ink.white, edge: "rgba(255,255,255,0.55)" } as const;
 
@@ -827,3 +836,5 @@ export const primaryActionRoles = {
 } as const;
 
 export type PrimaryActionRole = keyof typeof primaryActionRoles;
+
+export const actionRoleOf = { hero: "hero", regular: "full", compact: "compact" } as const satisfies Record<ActionSize, PrimaryActionRole>;

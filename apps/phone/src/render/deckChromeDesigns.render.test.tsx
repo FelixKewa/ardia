@@ -4,7 +4,7 @@ import { act } from "react-test-renderer";
 import { DeckBar } from "../components/tabs/DeckBar";
 import { IncognitoChip } from "../components/tabs/DeckChrome";
 import { TabDeck } from "../components/tabs/TabDeck";
-import { BarPlusGlyph, ConfirmSheet, elevation, PressScale, shadowCss, ToggleIconButton, controlRadius, controlSize, DesignProvider, press, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsLayout } from "../components/ui";
+import { BarPlusGlyph, ConfirmSheet, elevation, PressInPlace, shadowCss, ToggleIconButton, controlRadius, controlSize, DesignProvider, press, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsLayout } from "../components/ui";
 import { IncognitoEyes } from "../components/ui/IncognitoEyes";
 import { PRIVATE_ACCENT } from "../components/ui/theme";
 import { DECK, DECK_ARC, deckGeometry, redesignedBarCenterFromBottom } from "../lib/deckGeometry";
@@ -293,7 +293,7 @@ test("the deck's Incognito switch is the search tray's toggled icon: it dims in 
   expect(barPress).toHaveBeenCalledTimes(1);
   const holdsGlass = (node: { findAll: (test: (inner: { props: { testID?: string } }) => boolean) => unknown[] }) => node.findAll((inner) => inner.props.testID === "deckBarIncognito").length > 0;
   expect(root.root.findAll((node) => node.type === ToggleIconButton && holdsGlass(node))).toHaveLength(1);
-  expect(root.root.findAll((node) => node.type === PressScale && holdsGlass(node))).toHaveLength(0);
+  expect(root.root.findAll((node) => node.type === PressInPlace && holdsGlass(node))).toHaveLength(0);
   expect(typeof toggle.props.onLongPress).toBe("function");
   const named = (toggle.props.accessibilityActions ?? []) as { name: string; label?: string }[];
   expect(named.some((action) => action.name === "Close Incognito Tabs" || action.label === "Close Incognito Tabs")).toBe(true);

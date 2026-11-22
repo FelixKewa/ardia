@@ -4,7 +4,7 @@ import { Pressable } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { withAlpha } from "../../lib/color";
 import { copy } from "../../lib/platformCopy";
-import { actionWords, destinationWords } from "../../lib/sharedWords";
+import { actionWords, blockingWords, destinationWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
   canSummarizePages,
@@ -144,7 +144,7 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
             <SwitchRow
               which="blockers"
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
-              title="Block Ads and Trackers"
+              title={blockingWords.blockAdsAndTrackers}
               value={model.blockersEnabled}
               enabled={model.isWebPage}
               supporting={model.blockedCount ? `${model.blockedCount} blocked` : null}

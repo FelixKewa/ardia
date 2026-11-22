@@ -22,7 +22,7 @@ import { confirmInSheet, MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger
 import { barAddress } from "../browsing/FloatingBar";
 import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
 import { DUO } from "./duoLayout";
-import { DuoAddressField } from "./DuoToolbar";
+import { DuoAddressField, useTabPrivate } from "./DuoToolbar";
 import { CLOSE_TAB } from "../tabs/tabCard";
 
 export type DuoSidebarVariant = "overlay" | "panel";
@@ -305,9 +305,10 @@ function SidebarTiles({ tiles, profileId, dark, onClose }: { tiles: PinnedTile[]
 function SidebarTile({ tile, dark, onOpen }: { tile: PinnedTile; dark: boolean; onOpen: (tab: { url: string; title: string; key: string }) => void }) {
   const folder = tile.folder?.length ? tile.folder : null;
   const label = remoteTitle(tile.title, tile.url);
+  const incognito = useTabPrivate(useSelectedTab());
   const face = (onPress: () => void) => (
     <Tappable kind="icon" label={label} hint={folder ? "Shows the folder’s tabs." : undefined} onPress={onPress} style={styles.tileSlot}>
-      <ChromeSurface testID="duoSidebarTile" shape="rounded" cornerRadius={startLayout.tileRadius} dark={dark} style={styles.tile}>
+      <ChromeSurface testID="duoSidebarTile" shape="rounded" cornerRadius={startLayout.tileRadius} incognito={incognito} dark={dark} style={styles.tile}>
         <View pointerEvents="none" style={folder ? styles.folderInk : null}>
           {folder ? <Symbol name="folderFill" size={startLayout.tileIcon * startLayout.folderIconShare} color={rolesFor(dark).formAccent} /> : <Favicon iconUrl={null} pageUrl={tile.url} size={startLayout.tileIcon} />}
         </View>

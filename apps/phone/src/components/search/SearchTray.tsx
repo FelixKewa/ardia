@@ -27,7 +27,7 @@ import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage, reportLaunchTray } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, stroke, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
+import { browseLayout, capsule, closingGate, departBezier, shadowCss, DeckLookBackdrop, Favicon, FieldAccessory, iconRoles, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, trayLandingDelayMs, space, stageMotion, barReturnMotion, slotAround, Symbol, SURFACES_FROST, tabsCurve, stroke, tabsInk, tabsLayout, Tappable, ToggleIconButton, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceMotion } from "../ui";
 import { plateMaterial, SEARCH_PANEL_FACE, useSolidChrome, usesGlass, type PlateMaterial } from "../ui/LookViews";
 import { actionWords } from "../../lib/sharedWords";
 import { panelRowLayout, panelTitleLines, SuggestionRow } from "./SuggestionRow";
@@ -40,7 +40,8 @@ import { commandBarMotion, commandPanelPlace, useCommandBar } from "../duo/Comma
 const LARGE_FONT_SCALE = 1.5;
 import { useTrayKeyboard } from "./useTrayKeyboard";
 import { useKeyboardTopFromBottom } from "./useKeyboardHeight";
-import { nativeClassicChrome } from "../ui/tokens";
+import { chromeInk, chromeLayout, nativeClassicChrome } from "../ui/tokens";
+import { incognitoTheme, type Theme } from "../ui/theme";
 import { searchFieldHeight, searchFieldInnerHeight, searchFieldRadius, searchPanel, searchPanelFieldCenter, searchPanelInk, searchPanelPlace, searchPanelPlacement, searchPanelPreferredHeight, searchPanelRadius, type SearchPanelCorners } from "./searchPanelTokens";
 import type { Point } from "../../lib/menuPlace";
 
@@ -68,11 +69,13 @@ const panelFill = (incognito: boolean, dark: boolean, solid: boolean) => {
 
 export const searchPanelMorphLook = (incognito: boolean, dark: boolean, material: PlateMaterial) => ({ usesGlass: material === "glass", panelTint: ink.clear, panelDark: incognito, classicPanel: panelFill(incognito, dark, material === "solid"), frosted: material === "frost", classicChrome: nativeClassicChrome });
 
+export const searchPanelSolidFace = (incognito: boolean, dark: boolean) => ({ backgroundColor: panelFill(incognito, dark, true), borderWidth: chromeLayout.edge, borderColor: (incognito || dark ? chromeInk.dark : chromeInk.light).edge });
+
 function SearchPanelFace({ incognito, dark, panelRadius, corners }: { incognito: boolean; dark: boolean; panelRadius: number; corners: SearchPanelCorners }) {
   const solid = plateMaterial(SEARCH_PANEL_FACE, useSolidChrome(), usesGlass()) === "solid";
   const fill = panelFill(incognito, dark, solid);
   const place = [StyleSheet.absoluteFill, panelCornerStyle(panelRadius, corners)];
-  if (solid) return <View testID="searchPanelFace" pointerEvents="none" style={[place, { backgroundColor: fill }]} />;
+  if (solid) return <View testID="searchPanelFace" pointerEvents="none" style={[place, searchPanelSolidFace(incognito, dark)]} />;
   return (
     <View testID="searchPanelFace" pointerEvents="none" style={[place, styles.clip]}>
       <LookFrost source={SURFACES_FROST} variant="thin" cornerRadius={0} fill={ink.clear} dark={incognito || dark} incognito={incognito} style={StyleSheet.absoluteFill} />
@@ -90,10 +93,12 @@ const TrayContentContext = createContext<(height: number) => void>(() => undefin
 
 const reportRowsHeight = (report: (height: number) => void, height: number) => report(Math.ceil(height));
 
+export const trayThemeFor = (base: Theme, incognito: boolean) => (incognito ? { ...incognitoTheme(base), surface: tabsInk.incognitoSheet } : base);
+
 function useTrayTheme() {
   const base = useTheme();
   const incognito = useIncognito();
-  return useMemo(() => (incognito ? { ...base, ...rolesFor(true), surface: tabsInk.incognitoSheet } : base), [base, incognito]);
+  return useMemo(() => trayThemeFor(base, incognito), [base, incognito]);
 }
 
 export function SearchTray() {

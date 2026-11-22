@@ -5,7 +5,7 @@ import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 import { useTheme, type Theme } from "./theme";
-import { actionLayout, capsule as capsuleRadius, ink, overlayInk, smoothCorners, type ActionSize } from "./tokens";
+import { actionLayout, actionRoleOf, capsule as capsuleRadius, ink, overlayInk, primaryActionRoles, smoothCorners, type ActionSize } from "./tokens";
 
 export type ActionVariant = "filled" | "outlined" | "plain" | "glass";
 
@@ -19,7 +19,7 @@ export function actionInk(theme: Pick<Theme, "spaceAccent" | "spaceAccentInk" | 
     if (variant === "filled") return { fill: overlayInk.fill, label: overlayInk.onFill, edge: ink.clear };
     return { fill: ink.clear, label: overlayInk.label, edge: variant === "outlined" ? overlayInk.edge : ink.clear };
   }
-  if (variant === "filled") return tone === "accent" ? { fill: theme.spaceAccent, label: theme.onSpaceAccent, edge: ink.clear } : { fill: theme.secondaryFill, label: theme.label, edge: ink.clear };
+  if (variant === "filled") return tone === "accent" ? { fill: theme[primaryActionRoles.full.fill], label: theme[primaryActionRoles.full.ink], edge: ink.clear } : { fill: theme.secondaryFill, label: theme.label, edge: ink.clear };
   const label = tone === "accent" ? theme.spaceAccentInk : theme.label;
   return { fill: ink.clear, label, edge: variant === "outlined" ? (tone === "accent" ? theme.spaceAccentInk : theme.separator) : ink.clear };
 }
@@ -44,10 +44,11 @@ export type ActionButtonProps = {
 export function ActionButton({ title, onPress, variant = "filled", tone = "accent", size = "regular", icon, busy = false, disabled = false, hint, stretch = false, capsule = false, frostSource, buttonRef, testID }: ActionButtonProps) {
   const theme = useTheme();
   const colors = actionInk(theme, variant, tone);
-  const cornerRadius = capsule ? capsuleRadius(actionLayout.height[size]) : actionLayout.radius[size];
+  const role = primaryActionRoles[actionRoleOf[size]];
+  const cornerRadius = capsule ? capsuleRadius(role.height) : role.radius;
   const frosted = variant === "glass" && frostSource !== undefined;
   const box = {
-    minHeight: actionLayout.height[size],
+    minHeight: role.height,
     borderRadius: cornerRadius,
     paddingHorizontal: actionLayout.sidePadding[size],
     backgroundColor: frosted ? ink.clear : colors.fill,

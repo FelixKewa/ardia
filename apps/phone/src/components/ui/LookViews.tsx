@@ -27,7 +27,7 @@ import { useReduceTransparency } from "./contrast";
 import { useProfileLook, useTheme } from "./theme";
 import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
-import { chromeInk, chromeLayout, controlRadius, nativeGlassChrome, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
+import { chromeInk, chromeLayout, controlRadius, nativeClassicChrome, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
 
@@ -270,7 +270,7 @@ export function ChromeSurface({
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
     return (
-      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...nativeGlassChrome} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
+      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} classicChrome={nativeClassicChrome} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
         {children}
       </Glass>
     );
@@ -309,7 +309,7 @@ export function LookGlass({
       source={frost.source}
       shape={shape}
       tint={frost.incognito ? undefined : lookGlassTint(look)}
-      {...nativeGlassChrome}
+      classicChrome={nativeClassicChrome}
       {...lookColors(look, frost.incognito ?? false, shade)}
       dark={shade}
       style={frost.style}

@@ -1,7 +1,8 @@
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { LibraryView } from "../components/library/LibraryView";
+import { controlSize } from "../components/ui/tokens";
 import * as browse from "../state/browse/store";
 import * as tabMenus from "../state/browse/tabMenus";
 import { downloads } from "../platform/downloads";
@@ -82,6 +83,12 @@ onAndroid("on Android the Library opens in the drawn sheet with its title, Done,
   const tabs = hosts(root.root, (props) => props.accessibilityRole === "tab" && typeof props.testID === "string" && (props.testID as string).startsWith("librarySection:"));
   expect(tabs.map((tab) => tab.props.accessibilityLabel)).toEqual(["History", "Bookmarks", "Downloads"]);
   expect(tabs[0]!.props.accessibilityState).toMatchObject({ selected: true });
+  for (const tab of tabs) {
+    const box = StyleSheet.flatten(typeof tab.props.style === "function" ? tab.props.style({ pressed: false }) : tab.props.style);
+    expect(box.height).toBeGreaterThanOrEqual(controlSize.hitTarget);
+    expect(box.minWidth).toBeGreaterThanOrEqual(controlSize.hitTarget);
+    expect(tab.props.hitSlop).toBeUndefined();
+  }
   expect(hosts(root.root, (props) => props.testID === "librarySearch")[0]!.props.placeholder).toBe("Search History");
   await act(async () => section(root, "downloads").props.onPress());
   expect(useLibrary.getState().section).toBe("downloads");

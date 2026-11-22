@@ -21,8 +21,6 @@ export function rolesFromScheme(s: MaterialScheme, dark: boolean): ColorRoles {
     disabled: withAlpha(s.onSurface, MATERIAL_STATE.disabledContent),
     accent: s.primary,
     formAccent: s.primary,
-    primaryAction: s.primary,
-    onPrimaryAction: s.onPrimary,
     switchOn: s.primary,
     trayShadow: "#000000",
     trayDim: withAlpha(s.scrim, MATERIAL_STATE.scrim),

@@ -11,7 +11,8 @@ import { countUsage } from "../../state/telemetry/telemetry";
 import { useHasTabs, useIncognito } from "../../state/tabs/hooks";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { chromeLayout, controlSize, space, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme, type SymbolName } from "../ui";
-import { StartCircleButton, StartPlusButton } from "./StartBarButtons";
+import { StartCircleButton } from "./StartBarButtons";
+import { PlusMenuButton } from "../tabs/ChromeButtons";
 import { StartMark, StartSpaces, startBarCenterY, type StartGeometry } from "./StartSpaces";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 import { barSpanCenter, besideStrip, DUO_BAR } from "../../lib/bottomBarSpan";
@@ -42,7 +43,7 @@ export function StartPage() {
   const leading = useStartLeading(incognito);
   const tabs = <StartCircleButton icon={leading.icon} label={leading.label} testID={leading.testID} dark={dark} incognito={incognito} onPress={leading.onPress} />;
   const plus = (
-    <StartPlusButton
+    <PlusMenuButton
       width={strip ? DUO_BAR.button : startLayout.barPlus.width}
       label={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
       testID="startBarPlus"

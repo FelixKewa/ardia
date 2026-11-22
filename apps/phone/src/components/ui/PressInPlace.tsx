@@ -47,6 +47,4 @@ export function PressInPlace({ label, hint, value, longPressLabel, actions, onPr
   );
 }
 
-export const PressScale = PressInPlace;
-
 const styles = StyleSheet.create({ grow: { flex: 1 } });

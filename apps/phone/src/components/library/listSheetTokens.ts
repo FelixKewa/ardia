@@ -23,6 +23,9 @@ export const libraryLayout = {
   deviceGlyph: 13,
   deviceGap: 4,
   switcherSegment: 40,
+  drawnSwitcherHeight: 32,
+  drawnSwitcherSegment: 48,
+  drawnSectionGlyph: 17,
 } as const;
 
 export const listRowIconSide = (fontScale: number) => listRowLayout.icon * Math.min(fontScale, listRowLayout.iconScaleCap);

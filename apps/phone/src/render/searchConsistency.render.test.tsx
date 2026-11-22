@@ -1,6 +1,7 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { SearchTray, searchPanelMorphLook } from "../components/search/SearchTray";
+import { SearchTray, searchPanelMorphLook, searchPanelSolidFace, trayThemeFor } from "../components/search/SearchTray";
+import { incognitoTheme, PRIVATE_ACCENT, type Theme } from "../components/ui/theme";
 import { searchFieldHeight, searchPanel, searchPanelPlace, searchPanelPlacement, searchPanelPreferredHeight, searchPanelRadius } from "../components/search/searchPanelTokens";
 import { browseLayout, DesignProvider, floatingPanelLayout, iconRoles, press, Symbol } from "../components/ui";
 import { nativeClassicChrome } from "../components/ui/tokens";
@@ -102,6 +103,25 @@ test("the search panel's face and its morph follow the one plate rule: the panel
   expect(searchPanelMorphLook(false, false, "solid")).toMatchObject({ usesGlass: false, frosted: false, classicPanel: searchPanel.light.solid });
   expect(searchPanelMorphLook(false, false, "glass")).toMatchObject({ usesGlass: true, frosted: false });
   expect(searchPanelMorphLook(false, true, "solid").classicChrome).toBe(nativeClassicChrome);
+});
+
+test("the Incognito tray takes the private accent from incognitoTheme, the same source as Start and the deck, never the profile's", () => {
+  const base = { accent: "#ff0000", formAccent: "#ff0000", spaceAccent: "#ff0000", spaceAccentInk: "#ff0000", surface: "#ffffff" } as unknown as Theme;
+  const tray = trayThemeFor(base, true);
+  expect(tray.accent).toBe(PRIVATE_ACCENT.spaceAccent);
+  expect(tray.spaceAccentInk).toBe(PRIVATE_ACCENT.spaceAccentInk);
+  expect({ ...tray, surface: undefined }).toEqual({ ...incognitoTheme(base), surface: undefined });
+  expect(trayThemeFor(base, false)).toBe(base);
+});
+
+test("in Classic the resting search panel draws the same chrome edge its native morph draws, like the bars", () => {
+  for (const [incognito, dark] of [[false, false], [false, true], [true, false]] as const) {
+    const face = searchPanelSolidFace(incognito, dark);
+    const morph = searchPanelMorphLook(incognito, dark, "solid");
+    expect(face.backgroundColor).toBe(morph.classicPanel);
+    expect(face.borderWidth).toBe(morph.classicChrome.edgeWidth);
+    expect(face.borderColor).toBe(incognito || dark ? morph.classicChrome.edge.dynamic.dark : morph.classicChrome.edge.dynamic.light);
+  }
 });
 
 test("one placement decides the panel's corners, card and keyboard gaps: the phone's panel runs on under the keyboard, a floating panel sits above it", () => {

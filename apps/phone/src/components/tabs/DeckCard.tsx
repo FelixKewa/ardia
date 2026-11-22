@@ -10,7 +10,7 @@ import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, elevation, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, shadowCss, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
+import { accentGlowCss, barHeight, elevation, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, shadowCss, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
 import { OPENING_COVER_ID } from "../../state/browse/store";
@@ -550,13 +550,12 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
 const COVER_NEAR_END_PX = 2;
 const HEADER_ROW_ROOM = 2000;
 const HEADER_TITLE_FONT = iPhoneOr<{ fontSize: number; lineHeight: number }>(font.footnote, font.caption);
-const RECEIVED_INSET = 10;
 
 export function ReceivedBadge() {
   const theme = useTheme();
   return (
-    <View style={[styles.badge, { backgroundColor: theme.spaceAccent, boxShadow: `0px 2px 12px ${theme.spaceAccent}59` }]}>
-      <Symbol name="laptop" size={12} color={theme.onSpaceAccent} />
+    <View style={[styles.badge, { backgroundColor: theme.spaceAccent, boxShadow: accentGlowCss(theme.spaceAccent) }]}>
+      <Symbol name="laptop" size={tabsLayout.receivedBadgeGlyph} color={theme.onSpaceAccent} />
       <Text style={[styles.badgeText, { color: theme.onSpaceAccent }]}>From Your Mac</Text>
     </View>
   );
@@ -581,8 +580,8 @@ const styles = StyleSheet.create({
   openingBand: { position: "absolute", left: 0 },
   badge: {
     position: "absolute",
-    top: RECEIVED_INSET,
-    left: RECEIVED_INSET,
+    top: tabsLayout.receivedBadgeInset,
+    left: tabsLayout.receivedBadgeInset,
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs,

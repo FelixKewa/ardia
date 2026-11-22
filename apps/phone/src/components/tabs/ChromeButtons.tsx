@@ -1,9 +1,12 @@
-import { StyleSheet, type ViewProps } from "react-native";
+import { StyleSheet, type ViewProps, type ViewStyle } from "react-native";
 import { haptics } from "../../state/app/haptics";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { newIncognitoTab, newRegularTab, newTab, reopenLastClosed } from "../../state/browse/store";
+import { menuOpenedHaptic } from "../../state/browse/tabMenus";
+import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { actionWords } from "../../lib/sharedWords";
-import { BarPlusGlyph, capsule, ChromeSurface, controlSize, iconRoles, PressScale, rolesFor, smoothCorners, startLayout, Symbol, SystemGlyph, type MenuItem, type SymbolName } from "../ui";
+import { BarPlusGlyph, capsule, ChromeSurface, controlSize, iconRoles, PressInPlace, rolesFor, smoothCorners, startLayout, Symbol, SystemGlyph, type MenuItem, type SymbolName } from "../ui";
+import { MenuTrigger } from "../ui/MenuTrigger";
 
 const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
   ellipsis: "ellipsis",
@@ -16,7 +19,9 @@ const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
 
 const CIRCLE_SYSTEM_GLYPH = 16;
 
-export function plusMenuItems(incognito: boolean, canReopen: boolean): MenuItem[] {
+type PlusMenuItem = { label: string; icon: SymbolName; onPress: () => void };
+
+export function plusMenuItems(incognito: boolean, canReopen: boolean): PlusMenuItem[] {
   return [
     ...(incognito
       ? [
@@ -27,6 +32,8 @@ export function plusMenuItems(incognito: boolean, canReopen: boolean): MenuItem[
     ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
   ];
 }
+
+export const plusMenu = (incognito: boolean, canReopen: boolean): MenuItem[] => plusMenuItems(incognito, canReopen).map(({ label, onPress }) => ({ label, onPress }));
 
 type Look = { dark: boolean; incognito?: boolean };
 
@@ -47,7 +54,7 @@ export function GlassCircleButton({ icon, label, testID, diameter = controlSize.
   const size = { width: diameter, height: diameter };
   const rounded = face.kind === "rounded";
   return (
-    <PressScale label={label} onPress={onPress} onPressIn={haptics.barPress} style={[styles.centered, size]}>
+    <PressInPlace label={label} onPress={onPress} onPressIn={haptics.barPress} style={[styles.centered, size]}>
       <ChromeSurface testID={testID} shape={rounded ? "rounded" : "circle"} cornerRadius={rounded ? face.corner : capsule(diameter)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size, rounded ? smoothCorners : null]}>
         <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           {CIRCLE_SYSTEM_NAMES[icon] ? (
@@ -57,22 +64,34 @@ export function GlassCircleButton({ icon, label, testID, diameter = controlSize.
           )}
         </FadingGlyphs>
       </ChromeSurface>
-    </PressScale>
+    </PressInPlace>
   );
 }
 
-export function GlassPlusButton({ width, label, testID, dark, incognito = false, glassShown, glassShownMs, glyphFade, onPress, onLongPress }: Look & ChromeFade & { width: number; label: string; testID: string; onPress: () => void; onLongPress: () => void }) {
+export const PLUS_HINT = "Touch and hold for more options.";
+
+export type PlusMenuButtonProps = Look & ChromeFade & { width: number; label: string; testID: string; place: ViewStyle; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void };
+
+export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, frost, onMenu, glassShown, glassShownMs, glyphFade }: PlusMenuButtonProps) {
+  const tabIncognito = useIncognito();
+  const canReopen = useCanReopen();
   const size = { width, height: controlSize.bar };
   return (
-    <PressScale label={label} hint="Touch and hold for more options." onPress={onPress} onLongPress={onLongPress} onPressIn={haptics.barPress} style={size}>
-      <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
-        <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
-          <BarPlusGlyph color={rolesFor(dark).label} />
-        </FadingGlyphs>
-      </ChromeSurface>
-    </PressScale>
+    <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
+      {({ onLongPress }) => (
+        <PressInPlace label={label} hint={PLUS_HINT} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} style={size}>
+          <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
+            <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
+              <BarPlusGlyph color={rolesFor(dark).label} />
+            </FadingGlyphs>
+          </ChromeSurface>
+        </PressInPlace>
+      )}
+    </MenuTrigger>
   );
 }
+
+const noop = () => undefined;
 
 const styles = StyleSheet.create({
   centered: { alignItems: "center", justifyContent: "center" },

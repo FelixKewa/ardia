@@ -65,6 +65,10 @@ export const connectionWords = {
   connecting: `Connecting${ELLIPSIS}`,
 } as const;
 
+export const incognitoWords = {
+  closeIncognitoTabs: "Close Incognito Tabs",
+} as const;
+
 export const blockingWords = {
   blockAdsAndTrackers: "Block Ads and Trackers",
 } as const;

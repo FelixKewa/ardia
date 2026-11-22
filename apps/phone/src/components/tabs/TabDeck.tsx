@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { DeckLookProbe } from "./DeckLookProbe";
-import { actionWords, destinationWords } from "../../lib/sharedWords";
+import { actionWords, destinationWords, incognitoWords } from "../../lib/sharedWords";
 import { IncognitoLook } from "../ui/theme";
 import { useDeckOwnsBar, useSheet, useSurface } from "../../state/browse/hooks";
 import { useHeldDeckOrder, useHeldRootSize, useHeldSearchOpen } from "../../state/browse/deckHold";
@@ -1027,9 +1027,9 @@ export const TabDeck = memo(function TabDeck() {
     });
   const confirmLeaveIncognito = () =>
     ask({
-      title: "Close Incognito Tabs?",
+      title: `${incognitoWords.closeIncognitoTabs}?`,
       message: "Their pages, cookies and history are cleared.",
-      action: "Close Incognito Tabs",
+      action: incognitoWords.closeIncognitoTabs,
       run: () => {
         haptics.press();
         leaveIncognito();
@@ -1090,7 +1090,7 @@ export const TabDeck = memo(function TabDeck() {
       ];
   if (count)
     plusItems.push("divider", {
-      label: incognito ? "Close Incognito Tabs" : "Close All Tabs",
+      label: incognito ? incognitoWords.closeIncognitoTabs : "Close All Tabs",
       icon: "xmark",
       destructive: true,
       onPress: incognito ? confirmLeaveIncognito : confirmCloseAll,
@@ -1302,7 +1302,7 @@ export const TabDeck = memo(function TabDeck() {
       ) : null}
       {menu === "chip" ? (
         <Menu
-          items={[{ label: "Close Incognito Tabs", icon: "xmark", destructive: true, onPress: confirmLeaveIncognito }]}
+          items={[{ label: incognitoWords.closeIncognitoTabs, icon: "xmark", destructive: true, onPress: confirmLeaveIncognito }]}
           place={{ top: g.safeTop + tabsLayout.chipHeight + tabsLayout.headerGap * 2, left: (width - tabsLayout.menuWidth) / 2, width: tabsLayout.menuWidth }}
           onDismiss={() => setMenu(null)}
         />

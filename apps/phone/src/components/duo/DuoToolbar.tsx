@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { useRef, type ReactNode, type Ref } from "react";
+import { StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { actionWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
@@ -9,9 +9,10 @@ import { editPageQuery, menuBack, menuForward, menuReload, menuStop, openPageMen
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { isSyncableUrl, type BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
-import { capsule, chromeInk, controlRadius, ChromeSurface, floatingBarLayout, iconRoles, isDarkColor, PressScale, rolesFor, smoothCorners, Symbol, Tappable, useTheme, type SymbolName } from "../ui";
+import { capsule, chromeInk, controlRadius, ChromeSurface, floatingBarLayout, iconRoles, isDarkColor, PressInPlace, rolesFor, smoothCorners, Symbol, Tappable, useTheme, type SymbolName } from "../ui";
 import { AddressFace } from "../browsing/AddressFace";
 import { barAddress } from "../browsing/FloatingBar";
+import { openPageMenuFrom } from "../browsing/pageMenuOpener";
 import { DUO } from "./duoLayout";
 
 type Props = { showsAddress: boolean; sidebarShown: boolean; sidebar?: SharedValue<number>; onToggleSidebar: () => void };
@@ -38,6 +39,7 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
   const loading = useNavigation(id, (n) => n?.isLoading ?? false);
   const dark = useToolbarDark(tab);
   const incognito = useTabPrivate(tab);
+  const menuButton = useRef<ViewInstance>(null);
   const capsuleStyle = useAnimatedStyle(() => ({ opacity: 1 - (sidebar?.value ?? (sidebarShown ? 1 : 0)) }), [sidebarShown]);
   return (
     <View testID="duoToolbar" style={styles.row} pointerEvents="box-none">
@@ -61,19 +63,19 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
         </>
       ) : null}
       <RoundButton icon={iconRoles.share} label={actionWords.share} dark={dark} incognito={incognito} enabled={tab !== null && isSyncableUrl(tab.url)} onPress={shareCurrentPage} />
-      <RoundButton icon={iconRoles.more} label="Page Menu" dark={dark} incognito={incognito} enabled={tab !== null} onPress={() => void openPageMenu()} />
+      <RoundButton buttonRef={menuButton} icon={iconRoles.more} label="Page Menu" dark={dark} incognito={incognito} enabled={tab !== null} onPress={() => openPageMenuFrom(() => menuButton.current, () => void openPageMenu())} />
     </View>
   );
 }
 
-function RoundButton({ icon, label, dark, incognito, enabled, onPress }: { icon: SymbolName; label: string; dark: boolean; incognito: boolean; enabled: boolean; onPress: () => void }) {
+function RoundButton({ icon, label, dark, incognito, enabled, onPress, buttonRef }: { icon: SymbolName; label: string; dark: boolean; incognito: boolean; enabled: boolean; onPress: () => void; buttonRef?: Ref<ViewInstance> }) {
   const roles = rolesFor(dark);
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
+    <PressInPlace ref={buttonRef} label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
       <ChromeSurface testID={`duoToolbar:${label}`} shape="rounded" cornerRadius={controlRadius(DUO.toolbarButton)} incognito={incognito} dark={dark} style={[styles.round, smoothCorners]}>
         <Symbol name={icon} size={DUO.toolbarGlyph} color={enabled ? roles.foregroundPrimary : roles.foregroundTertiary} />
       </ChromeSurface>
-    </PressScale>
+    </PressInPlace>
   );
 }
 
