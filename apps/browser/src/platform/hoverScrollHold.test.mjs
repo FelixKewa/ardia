@@ -299,6 +299,10 @@ int main(void) {
     row.inside = NO;
     step(clip, 11);
     printf("coastleave %d %d %d\n", entered, rowOut, row->_hasMouseOver);
+    step(clip, 12);
+    [row mouseExited:nil];
+    quiet();
+    printf("coastleavelater %d\n", rowOut);
 
     quiet();
     row.inside = YES;
@@ -487,6 +491,7 @@ test("a row entered while a list coasts is left on the very step that scrolls it
   const r = replayRun(t);
   if (!r) return;
   assert.deepEqual(r.coastleave, [1, 1, 0]);
+  assert.equal(r.coastleavelater[0], 1, "no second leave once the list goes quiet or AppKit's own exit arrives");
 });
 
 test("a hovered row that a scroll's first step carries away from a still pointer is left on that step", (t) => {
