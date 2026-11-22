@@ -43,9 +43,6 @@ final class PageView: ExpoView {
   private var scrollObservation: NSKeyValueObservation?
   private var contentSizeObservation: NSKeyValueObservation?
   private let sideMargins = UIView()
-  private let barEdge = UIView()
-  private let barEdgeElement = UIView()
-  private let barEdgeInteraction = UIScrollEdgeElementContainerInteraction()
   private var lastScroll: TimeInterval = 0
   private var madeGestures: PageGestures?
   private var madePinchWatcher: PagePinchWatcher?
@@ -54,6 +51,12 @@ final class PageView: ExpoView {
   private var registeredPageID: String?
 
   @MainActor private static let hosts = NSMapTable<NSString, PageView>.strongToWeakObjects()
+  static let hostedWebViewChanged = Notification.Name("ArdiaPageHostedWebViewChanged")
+
+  var hostedScrollView: UIScrollView? {
+    guard let hostedWebView, hostedWebView.superview === self else { return nil }
+    return hostedWebView.scrollView
+  }
 
   @MainActor
   static func host(of pageID: String) -> PageView? {
@@ -103,14 +106,6 @@ final class PageView: ExpoView {
     sideMargins.isUserInteractionEnabled = false
     sideMargins.isHidden = true
     addSubview(sideMargins)
-    barEdge.isUserInteractionEnabled = false
-    barEdge.isAccessibilityElement = false
-    barEdge.isHidden = true
-    barEdgeElement.isUserInteractionEnabled = false
-    barEdge.addSubview(barEdgeElement)
-    barEdgeInteraction.edge = .bottom
-    barEdge.addInteraction(barEdgeInteraction)
-    addSubview(barEdge)
   }
 
   @MainActor
@@ -157,6 +152,7 @@ final class PageView: ExpoView {
     PhoneHandoff.withdraw(self)
     if let hostedWebView, hostedWebView.superview === self { hostedWebView.removeFromSuperview() }
     hostedWebView = nil
+    NotificationCenter.default.post(name: Self.hostedWebViewChanged, object: self)
     page = nil
     failedID = nil
     sampled = nil
@@ -171,8 +167,8 @@ final class PageView: ExpoView {
     hostedWebView = webView
     scrollObservation = nil
     contentSizeObservation = nil
+    defer { NotificationCenter.default.post(name: Self.hostedWebViewChanged, object: self) }
     guard let webView else {
-      barEdgeInteraction.scrollView = nil
       gestures.attach(nil, page: nil)
       return
     }
@@ -180,9 +176,6 @@ final class PageView: ExpoView {
     webView.frame = webViewFrame
     webView.autoresizingMask = []
     addSubview(webView)
-    webView.scrollView.bottomEdgeEffect.style = .soft
-    barEdgeInteraction.scrollView = webView.scrollView
-    bringSubviewToFront(barEdge)
     if let summaryLayer { bringSubviewToFront(summaryLayer) }
     applyObscuredInsets()
     gestures.attach(webView, page: page)
@@ -298,7 +291,6 @@ final class PageView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     if let hostedWebView, hostedWebView.superview === self { hostedWebView.frame = webViewFrame }
-    placeBarEdge()
     if pinsSafeArea { applyObscuredInsets() }
     MainActor.assumeIsolated {
       if let presenter = summaryLayer?.presenter, presenter.bottomInset != summaryBottomInset { presenter.bottomInset = summaryBottomInset }
@@ -360,16 +352,6 @@ final class PageView: ExpoView {
     if sideMargins.backgroundColor != color { sideMargins.backgroundColor = color }
   }
 
-  private func placeBarEdge() {
-    let height = min(obscuredInsets.bottom, bounds.height)
-    let covers = height > 0 && hostedWebView?.superview === self
-    if barEdge.isHidden == covers { barEdge.isHidden = !covers }
-    guard covers else { return }
-    let frame = CGRect(x: 0, y: bounds.height - height, width: bounds.width, height: height)
-    if barEdge.frame != frame { barEdge.frame = frame }
-    if barEdgeElement.frame != barEdge.bounds { barEdgeElement.frame = barEdge.bounds }
-  }
-
   private func keepOffsetWithinContent() {
     guard let scrollView = hostedWebView?.scrollView, !scrollView.isDragging, !scrollView.isDecelerating, !scrollView.isZooming else { return }
     let insets = scrollView.adjustedContentInset
@@ -384,7 +366,6 @@ final class PageView: ExpoView {
     let frame = webViewFrame
     if hostedWebView.frame != frame { hostedWebView.frame = frame }
     paintSideMargins()
-    placeBarEdge()
     let insets = effectiveObscuredInsets
     if hostedWebView.obscuredContentInsets != insets { hostedWebView.obscuredContentInsets = insets }
     let scrollView = hostedWebView.scrollView

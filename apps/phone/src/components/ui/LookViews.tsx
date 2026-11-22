@@ -221,12 +221,14 @@ export function ChromeSurface({
   dark,
   shown,
   shownMs,
+  overPage,
   testID,
   style,
   children,
 }: {
   shape: GlassShape;
   cornerRadius: number;
+  overPage?: string;
   incognito?: boolean;
   barShadow?: boolean;
   interactive?: boolean;
@@ -244,7 +246,7 @@ export function ChromeSurface({
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
     return (
-      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
+      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} overPage={overPage} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
         {children}
       </Glass>
     );
