@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { chromium } from "playwright";
-const { pickerCall, trustedPickerCall, pickerCallFor, REFUSED_PICKER } = await import("./elementPicker.ts");
+const { pickerCall, trustedPickerCall, REFUSED_PICKER } = await import("./elementPicker.ts");
 const { acceptedPick, hidingFilter, savablePickedSelector } = await import("./hiddenElements.ts");
 
 function headlessShell() {
@@ -148,9 +148,7 @@ test("a pick is saved only when the browser saw the confirming input on the same
   assert.equal(acceptedPick(null, true, true), null);
 });
 
-test("only a page with the native pick check gets the hardened picker; elsewhere the picker text stays the one the Linux host pins", () => {
-  assert.equal(pickerCallFor({ armElementPick: () => Promise.resolve(1) }), trustedPickerCall);
-  assert.equal(pickerCallFor({}), pickerCall);
-  assert.equal(pickerCallFor(undefined), pickerCall);
+test("the hardened picker is a separate script; the shared one stays the text the Linux host pins", () => {
   assert.notEqual(trustedPickerCall("start", null), pickerCall("start", null));
+  assert.doesNotMatch(pickerCall("start", null), /isTrusted|prove|defineProperty/);
 });

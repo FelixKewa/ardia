@@ -10,7 +10,8 @@ import { webviews } from "../tabs/webviewHandles";
 import { togglePopover } from "../tabs/popoverDismiss";
 import { closeReader, readerState } from "../reader/reader";
 import { isSleeping } from "../tabs/sleepingTabs";
-import { pickerCallFor } from "./elementPicker";
+import { pickerCall as sharedPickerCall, trustedPickerCall } from "./elementPicker";
+import { NATIVE_PICK_CONFIRMATION } from "../../platform/pickConfirmation";
 import {
   noteElementHidden,
   noteElementPickerCancelled,
@@ -120,6 +121,8 @@ export function runHidingCommand(command: string, tabId: string): boolean {
   return true;
 }
 
+const pickerCall = NATIVE_PICK_CONFIRMATION ? trustedPickerCall : sharedPickerCall;
+
 export function acceptedPick(result: PickResult, confirmed: boolean, samePage: boolean): string | null {
   if (!result || result.refused || !confirmed || !samePage) return null;
   return typeof result.selector === "string" ? result.selector : null;
@@ -134,7 +137,7 @@ export async function startHidingElement(tabId: string, point: [number, number] 
   const web = webviews.get(tabId);
   if (!page || !web) return;
   if (picking.has(tabId)) {
-    void web.evaluate(pickerCallFor(web)("cancel"));
+    void web.evaluate(pickerCall("cancel"));
     return;
   }
   if (point) noteElementPickerFromContextMenu();
@@ -145,9 +148,9 @@ export async function startHidingElement(tabId: string, point: [number, number] 
   let confirmed = false;
   try {
     void web.focus();
-    const armed = web.armElementPick ? await web.armElementPick() : null;
-    result = await web.evaluate<PickResult>(pickerCallFor(web)("start", point));
-    confirmed = armed === null || (!!web.takeElementPick && (await web.takeElementPick(armed)));
+    const armed = NATIVE_PICK_CONFIRMATION && web.armElementPick ? await web.armElementPick() : null;
+    result = await web.evaluate<PickResult>(pickerCall("start", point));
+    confirmed = !NATIVE_PICK_CONFIRMATION || (armed !== null && !!web.takeElementPick && (await web.takeElementPick(armed)));
   } catch {
     result = null;
   } finally {
@@ -160,21 +163,21 @@ export async function startHidingElement(tabId: string, point: [number, number] 
   const offered = typeof result?.selector === "string" ? result.selector : null;
   const picked = acceptedPick(result, confirmed, samePage);
   if (offered && !picked) {
-    void web.evaluate(pickerCallFor(web)("unhide", [offered])).catch(() => {});
+    void web.evaluate(pickerCall("unhide", [offered])).catch(() => {});
     return void noteElementPickerCancelled(consent);
   }
   const savable = picked ? savablePickedSelector(picked) : null;
   const filter = savable ? hidingFilter(page.host, savable) : null;
   if (!filter) {
-    if (picked) void web.evaluate(pickerCallFor(web)("unhide", [picked]));
+    if (picked) void web.evaluate(pickerCall("unhide", [picked]));
     return void noteElementPickerCancelled(consent);
   }
   const selector = filter.slice(filter.indexOf("##") + 2);
   if (selector !== picked) {
     notePickedSelectorEscaped(consent);
     void web
-      .evaluate(pickerCallFor(web)("apply", [selector]))
-      .then(() => web.evaluate(pickerCallFor(web)("unhide", [picked])))
+      .evaluate(pickerCall("apply", [selector]))
+      .then(() => web.evaluate(pickerCall("unhide", [picked])))
       .catch(() => {});
   }
   noteElementHidden(page.inPrivateWindow, consent);
@@ -200,7 +203,7 @@ function unhideInOpenTabs(profile: string, elements: HiddenElement[]) {
     if (!host || engineProfile(s, tab.profileId) !== profile) continue;
     const selectors = elements.filter((e) => coversHost(e.host, host)).map((e) => e.selector);
     const web = webviews.get(tab.id);
-    if (selectors.length) void web?.evaluate(pickerCallFor(web)("unhide", selectors));
+    if (selectors.length) void web?.evaluate(pickerCall("unhide", selectors));
   }
 }
 
@@ -248,7 +251,7 @@ function applySessionHiding(s: BrowserState, session: Record<string, string[]>, 
   const filters = session[engineProfile(s, tab.profileId)] ?? [];
   const selectors = filters.map((f) => parseHidingFilter(f)).filter((e): e is HiddenElement => !!e && !!host && coversHost(e.host, host)).map((e) => e.selector);
   const web = webviews.get(tab.id);
-  if (selectors.length) void web?.evaluate(pickerCallFor(web)("apply", selectors));
+  if (selectors.length) void web?.evaluate(pickerCall("apply", selectors));
 }
 
 useBrowser.subscribeTo(["tabs"], (s, prev) => {

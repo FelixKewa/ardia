@@ -287,5 +287,3 @@ else {
   Promise.resolve(picker.${op}(...${JSON.stringify(args)})).then((v) => post("result", JSON.stringify(v)), () => post("result", "null"));
 }`;
 }
-
-export const pickerCallFor = (web: { armElementPick?: unknown } | undefined) => (typeof web?.armElementPick === "function" ? trustedPickerCall : pickerCall);
