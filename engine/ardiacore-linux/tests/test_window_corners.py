@@ -32,14 +32,14 @@ class WindowCornersTests(unittest.TestCase):
             self.assertEqual(result.stdout, 'ok\n')
 
     def test_the_engine_and_the_shell_name_the_same_tiling_desktops(self):
-        engine = re.findall(r'"([a-z0-9]+)"', CORE[CORE.index('kTilingDesktops[] = {'):CORE.index('};', CORE.index('kTilingDesktops[] = {'))])
+        engine = re.findall(r'"([^"]+)"', CORE[CORE.index('kTilingDesktops[] = {'):CORE.index('};', CORE.index('kTilingDesktops[] = {'))])
         shell = REPO / 'apps/linux/src/tilingDesktop.ts'
         if not shell.exists():
             self.skipTest('the shell has no tiling desktop list on this branch yet')
         text = shell.read_text()
         declaration = text[text.index('const TILING_DESKTOPS'):]
         listed = declaration[declaration.index('= [') + len('= ['):]
-        self.assertEqual(engine, re.findall(r'"([a-z0-9]+)"', listed[:listed.index(']')]))
+        self.assertEqual(engine, re.findall(r'"([^"]+)"', listed[:listed.index(']')]))
 
     def test_every_window_clips_its_native_views_to_the_frames_corners(self):
         round_corners = between(HOST, 'void ShellHostView::RoundWindowCorners() {', '\n}\n')
