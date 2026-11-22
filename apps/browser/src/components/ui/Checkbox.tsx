@@ -5,7 +5,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
 import { useTheme } from "./theme";
 import { capsule, lineHeight, opacity, radius, space, font as typeScale } from "./tokens";
-import { checkboxA11y, spaceActivates } from "./a11y";
+import { checkboxA11y, spaceActivates, tapActivates } from "./a11y";
 import { useLiveWhile, useClosing } from "./Closing";
 
 const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
@@ -63,6 +63,7 @@ export function Checkbox({ value, onChange, label, accessibilityLabel, disabled,
     onPressIn: pressMotion.onPressIn,
     onPressOut: pressMotion.onPressOut,
     onKeyDown: active ? live(spaceActivates(toggle)) : undefined,
+    onAccessibilityTap: active ? tapActivates(live(toggle)) : undefined,
     ...checkboxA11y(mixed && !value ? "mixed" : value, disabled, accessibilityLabel ?? label),
   };
   if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
