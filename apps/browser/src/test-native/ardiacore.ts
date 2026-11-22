@@ -109,8 +109,9 @@ export const vaultFake = {
   locked: false,
   listGate: null as Promise<void> | null,
   holdSignIns: false,
-  heldSignIns: new Map<string, (status?: string) => void>(),
+  heldSignIns: new Map<string, (status?: string, transfer?: string) => void>(),
   cancelledSignIns: [] as string[],
+  transferStarted: false,
   holdAuth: false,
   heldAuth: new Map<string, (granted: boolean) => void>(),
   cancelledAuth: [] as string[],
@@ -698,11 +699,11 @@ const fakeModules = {
     signIn: ({ profile, url, origin, username, attempt }) => {
       const code = vaultFake.codes.has(vaultCodeKey({ profile, origin, username }));
       vaultFake.signIns.push({ profile, url, origin, username, code });
-      const answer = (status?: string) => ({ readyMs: 4, fillMs: 3, totalMs: 9, transfer: "complete", ...vaultFake.signInResult, ...(status ? { status } : {}), usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 }) as CallResult<"vault.signIn">;
+      const answer = (status?: string, transfer?: string) => ({ readyMs: 4, fillMs: 3, totalMs: 9, transfer: "complete", ...vaultFake.signInResult, ...(status ? { status } : {}), ...(transfer ? { transfer } : {}), usedCode: code, codeMs: 0.01, prepareMs: 0.2, appMs: 9.5 }) as CallResult<"vault.signIn">;
       if (!vaultFake.holdSignIns) return answer();
-      return new Promise<CallResult<"vault.signIn">>((resolve) => vaultFake.heldSignIns.set(attempt, (status) => (vaultFake.heldSignIns.delete(attempt), resolve(answer(status)))));
+      return new Promise<CallResult<"vault.signIn">>((resolve) => vaultFake.heldSignIns.set(attempt, (status, transfer) => (vaultFake.heldSignIns.delete(attempt), resolve(answer(status, transfer)))));
     },
-    cancelSignIn: ({ attempt }) => (vaultFake.cancelledSignIns.push(attempt), vaultFake.heldSignIns.get(attempt)?.("cancelled"), true),
+    cancelSignIn: ({ attempt }) => (vaultFake.cancelledSignIns.push(attempt), vaultFake.transferStarted || vaultFake.heldSignIns.get(attempt)?.("cancelled", "none"), true),
     warm: () => true,
     saveSecret: (args) => (args.uri.startsWith("otpauth://totp/") ? (vaultFake.codes.set(vaultCodeKey(args), args.uri), { saved: true }) : { saved: false, reason: "unreadable" }),
     keepOfferedCode: ({ tab, token, origin, usernames }) => (vaultFake.kept.push({ tab, token, origin, usernames }), { opened: true, kept: true }),

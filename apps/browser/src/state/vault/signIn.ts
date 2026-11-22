@@ -15,8 +15,7 @@ import { recordVaultEvent } from "./activity";
 import { dropApprovals } from "./approval";
 import { programLabel } from "./programs";
 import { withDeadline } from "../../lib/deadline";
-import { learnRegistrableDomains } from "../engines/siteDataDomains";
-import { registrableDomain } from "../engines/siteDataMerge";
+import { blockers, heldLanes, holdLane, releaseLane, siteKeyFor, warmSiteKeys, type LaneHolder } from "./lanes";
 import { dropAllTasks, drivenTabs, driveTab, liveTaskCount, onTaskGone, taskDrivingTab, taskIsLive, undriveTab, type AutoFill, type GoneReason, type SignInAnswer, type SiteMemory, type VaultTask } from "./tasks";
 
 export { VaultError };
@@ -36,14 +35,19 @@ const REVOKED: Record<GoneReason | "tab", [VaultRefusal, string]> = {
 
 export const tabReloads = { reload: (tabId: string, mayAct: () => boolean) => withLivePage(tabId, (page) => page.reload(), mayAct) };
 
+export const vaultClock = { now: () => performance.now() };
+
 type StopReason = GoneReason | "tab" | "deadline" | "preempted";
 type Phase = "lookup" | "queue" | "engine";
 
 type Ticket = { id: string; task: VaultTask; origin: string; tabId: string | null; auto: boolean; phase: Phase; deadline: number; run: SignInRun | null; revoked: StopReason | null; error: VaultError | null; stop: Promise<never>; halt: (error: VaultError) => void };
 
-export type SignInRun = { id: string; origin: string; username: string; auto: boolean; waiters: Set<Ticket>; cancelled: boolean; finished: boolean; reloaded: Set<string>; outcome: Promise<RunOutcome> };
+export type SignInRun = LaneHolder & { id: string; task: VaultTask; origin: string; username: string; auto: boolean; waiters: Set<Ticket>; cancelled: boolean; settling: boolean; reloads: Map<string, Promise<boolean>>; outcome: Promise<RunOutcome>; drained: Promise<void>; release: () => void };
 
 const ANSWER_MS = 28_000;
+const DRAIN_MS = 30_000;
+const RELOAD_MS = 5_000;
+const AUTO_MEMORY = 64;
 
 const DEADLINES: Record<Phase, [VaultRefusal, string]> = {
   lookup: ["failed", "Ardia's password store didn't answer in time, so the sign-in didn't start."],
@@ -59,7 +63,8 @@ function openTicket(task: VaultTask, origin: string, tabId: string | null, auto:
   let halt: (error: VaultError) => void = () => undefined;
   const stop = new Promise<never>((_, reject) => (halt = reject));
   stop.catch(() => undefined);
-  const ticket: Ticket = { id: secureRandomHex(16), task, origin, tabId, auto, phase: "lookup", deadline: startedAt + ANSWER_MS, run: null, revoked: null, error: null, stop, halt };
+  const deadline = vaultClock.now() + ANSWER_MS - Math.max(0, Date.now() - startedAt);
+  const ticket: Ticket = { id: secureRandomHex(16), task, origin, tabId, auto, phase: "lookup", deadline, run: null, revoked: null, error: null, stop, halt };
   tickets.set(ticket.id, ticket);
   return ticket;
 }
@@ -77,10 +82,7 @@ function leaveRun(ticket: Ticket) {
   ticket.run = null;
   if (!run) return;
   run.waiters.delete(ticket);
-  if (!run.waiters.size && !run.finished && !run.cancelled) {
-    run.cancelled = true;
-    void cancelVaultSignIn(run.id).catch(() => false);
-  }
+  if (!run.waiters.size) cancelRun(run);
 }
 
 function stillAllowed(ticket: Ticket): boolean {
@@ -92,17 +94,19 @@ function stillAllowed(ticket: Ticket): boolean {
   return !ticket.revoked;
 }
 
+function eligible(ticket: Ticket): boolean {
+  if (stillAllowed(ticket) && vaultClock.now() >= ticket.deadline) revoke(ticket, "deadline");
+  return !ticket.revoked;
+}
+
 function checkpoint(ticket: Ticket) {
-  if (!stillAllowed(ticket)) throw ticket.error!;
+  if (!eligible(ticket)) throw ticket.error!;
 }
 
 async function within<T>(ticket: Ticket, phase: Phase, work: Promise<T>): Promise<T> {
-  checkpoint(ticket);
   ticket.phase = phase;
-  const left = ticket.deadline - Date.now();
-  if (left <= 0) revoke(ticket, "deadline");
   checkpoint(ticket);
-  const timer = setTimeout(() => revoke(ticket, "deadline"), left);
+  const timer = setTimeout(() => revoke(ticket, "deadline"), Math.max(0, ticket.deadline - vaultClock.now()));
   try {
     return await Promise.race([work, ticket.stop]);
   } finally {
@@ -146,16 +150,31 @@ function pickUsername(task: VaultTask, origin: string, account: string | null): 
   throw new VaultError("bad_request", `This site has ${names.length} saved logins; name one with account.`);
 }
 
+function remember(set: Set<string>, key: string) {
+  set.delete(key);
+  set.add(key);
+  while (set.size > AUTO_MEMORY) set.delete(set.values().next().value!);
+}
+
+type AutoContext = { state: AutoFill; document: string | null };
+
+function pickAutoUsername(task: VaultTask, origin: string, memory: SiteMemory, context: AutoContext, consent: ConsentToken | null): string {
+  if (memory.account !== null) return memory.account;
+  const names = task.logins.get(origin) ?? [];
+  if (names.length <= 1) return pickUsername(task, origin, null);
+  const key = context.document ?? "";
+  const seen = context.state.skipped.has(key);
+  remember(context.state.skipped, key);
+  if (seen) throw STEP_ASIDE;
+  noteVaultCoordination("skipped_several", consent);
+  recordVaultEvent({ time: Date.now(), kind: "skip", profile: task.profileId, site: origin, account: null, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), outcome: "several_logins", via: "auto", reason: task.why });
+  throw STEP_ASIDE;
+}
+
 function signInUrl(origin: string, tabId: string | null): string {
   const url = tabId ? currentTab(tabId)?.url : undefined;
   return url && originOfLogin(url).toLowerCase() === origin ? url : `${origin}/`;
 }
-
-const hostOf = (origin: string) => new URL(origin).hostname;
-
-export const siteKeyOf = (origin: string) => `${new URL(origin).protocol}//${registrableDomain(hostOf(origin))}`;
-
-export const warmSiteKeys = (origins: readonly string[]) => learnRegistrableDomains(origins.map(hostOf));
 
 function siteMemory(task: VaultTask, origin: string): SiteMemory {
   if (!task.sites.has(origin)) task.sites.set(origin, { account: null, manualPending: 0, manualEndedAt: 0 });
@@ -164,21 +183,37 @@ function siteMemory(task: VaultTask, origin: string): SiteMemory {
 
 const manualClaims = (memory: SiteMemory | undefined) => !!memory && (memory.manualPending > 0 || Date.now() - memory.manualEndedAt < MANUAL_QUIET_MS);
 
-function startRun(ticket: Ticket, key: string, username: string, auto: boolean, base: EventBase, consent: ConsentToken | null): SignInRun {
+const MOVED: ReadonlySet<string> = new Set(["complete", "partial", "sent"]);
+
+function settleRun(run: SignInRun, moved: boolean, record: () => RunOutcome): RunOutcome {
+  run.settling = true;
+  for (const waiter of [...run.waiters]) eligible(waiter);
+  if (run.waiters.size || moved) return record();
+  return { answer: null, error: new VaultError(...REVOKED.ended), drive: false, reload: false };
+}
+
+function startRun(ticket: Ticket, key: string | null, username: string, auto: boolean, base: EventBase, consent: ConsentToken | null): SignInRun {
   const { task, origin } = ticket;
-  const run: SignInRun = { id: secureRandomHex(16), origin, username, auto, waiters: new Set(), cancelled: false, finished: false, reloaded: new Set(), outcome: Promise.resolve({ answer: null, error: null, drive: false, reload: false }) };
-  const stopped = (): RunOutcome => ({ answer: null, error: new VaultError(...REVOKED.ended), drive: false, reload: false });
+  let drain: () => void = () => undefined;
+  const drained = new Promise<void>((resolve) => (drain = resolve));
+  const run: SignInRun = { id: secureRandomHex(16), profile: task.engineProfile, key, task, origin, username, auto, waiters: new Set(), cancelled: false, settling: false, reloads: new Map(), outcome: Promise.resolve({ answer: null, error: null, drive: false, reload: false }), drained, release: () => undefined };
+  const finish = () => (releaseLane(run), drain());
+  run.release = finish;
+  holdLane(run);
   run.outcome = vaultSignIn(task.engineProfile, signInUrl(origin, ticket.tabId), origin, username, run.id)
     .then(
-      (result) => (run.cancelled ? stopped() : judge(result, auto, username, base, consent)),
-      (error: unknown) => (run.cancelled ? stopped() : runRefusal(new VaultError("failed", error instanceof Error ? error.message : String(error)), username, base, consent)),
+      (result) => settleRun(run, MOVED.has(result.transfer ?? "none"), () => judge(result, auto, username, base, consent)),
+      (error: unknown) => settleRun(run, false, () => runRefusal(new VaultError("failed", error instanceof Error ? error.message : String(error)), username, base, consent)),
     )
-    .finally(() => {
-      run.finished = true;
-      if (task.lanes.get(key) === run) task.lanes.delete(key);
-    });
-  task.lanes.set(key, run);
+    .finally(finish);
   return run;
+}
+
+function cancelRun(run: SignInRun) {
+  if (run.cancelled || run.settling) return;
+  run.cancelled = true;
+  void cancelVaultSignIn(run.id).catch(() => false);
+  setTimeout(run.release, DRAIN_MS);
 }
 
 function joinRun(ticket: Ticket, run: SignInRun) {
@@ -188,29 +223,37 @@ function joinRun(ticket: Ticket, run: SignInRun) {
 
 async function claimRun(ticket: Ticket, username: string, auto: boolean, base: EventBase, consent: ConsentToken | null): Promise<SignInRun> {
   const { task, origin } = ticket;
-  const key = siteKeyOf(origin);
   for (;;) {
     checkpoint(ticket);
-    const current = task.lanes.get(key);
-    if (!current) {
+    const key = siteKeyFor(task, origin);
+    const ahead = blockers<SignInRun>(task.engineProfile, key);
+    const shared = ahead.find((run) => run.task === task && run.origin === origin && run.username === username && !run.cancelled && !run.settling);
+    if (shared) {
+      joinRun(ticket, shared);
+      if (!auto) noteVaultCoordination("joined", consent);
+      return shared;
+    }
+    if (!ahead.length) {
       const run = startRun(ticket, key, username, auto, base, consent);
       joinRun(ticket, run);
       return run;
     }
-    if (current.origin === origin && current.username === username && !current.cancelled) {
-      joinRun(ticket, current);
-      if (!auto) noteVaultCoordination("joined", consent);
-      return current;
-    }
     if (auto) throw STEP_ASIDE;
-    if ([...current.waiters].every((waiter) => waiter.auto)) for (const waiter of [...current.waiters]) revoke(waiter, "preempted");
-    await within(ticket, "queue", current.outcome);
+    for (const run of ahead) if (run.task === task && run.waiters.size && [...run.waiters].every((waiter) => waiter.auto)) for (const waiter of [...run.waiters]) revoke(waiter, "preempted");
+    await within(ticket, "queue", Promise.race(ahead.map((run) => run.drained)));
   }
 }
 
-type Request = { task: VaultTask; origin: string; account: string | null; tabId: string | null; why: string; auto: boolean; startedAt?: number; consent: ConsentToken | null };
+function reloadOnce(run: SignInRun, ticket: Ticket, tabId: string): Promise<boolean> {
+  const { task, origin } = ticket;
+  const mayAct = () => taskIsLive(task) && task.origins.has(origin) && currentTab(tabId)?.profileId === task.profileId;
+  if (!run.reloads.has(tabId)) run.reloads.set(tabId, tabReloads.reload(tabId, mayAct).catch(() => false));
+  return run.reloads.get(tabId)!;
+}
 
-export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now(), consent }: Request): Promise<SignInAnswer> {
+type Request = { task: VaultTask; origin: string; account: string | null; tabId: string | null; why: string; auto: boolean; startedAt?: number; consent: ConsentToken | null; autoContext?: AutoContext };
+
+export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now(), consent, autoContext }: Request): Promise<SignInAnswer> {
   const ticket = openTicket(task, origin, tabId, auto, startedAt);
   const base: EventBase = { profile: task.profileId, site: origin, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), via: auto ? "auto" : "login", reason: why };
   let username: string | null = account;
@@ -222,21 +265,18 @@ export async function signIn({ task, origin, account, tabId, why, auto, startedA
     checkpoint(ticket);
     memory = siteMemory(task, origin);
     if (!auto) memory.manualPending++;
-    await within(ticket, "lookup", Promise.all([cacheLogins(task), warmSiteKeys([origin])]));
-    username = pickUsername(task, origin, account);
+    await within(ticket, "lookup", Promise.all([cacheLogins(task), warmSiteKeys([origin]).catch(() => undefined)]));
+    if (auto && manualClaims(memory)) throw STEP_ASIDE;
+    username = auto && autoContext ? pickAutoUsername(task, origin, memory, autoContext, consent) : pickUsername(task, origin, account);
     if (!auto) memory.account = username;
-    if (auto && (memory.manualPending > 0 || Date.now() - memory.manualEndedAt < MANUAL_QUIET_MS)) throw STEP_ASIDE;
     const run = await claimRun(ticket, username, auto, base, consent);
     const outcome = await within(ticket, "engine", run.outcome);
     ticket.run = null;
     run.waiters.delete(ticket);
     if (outcome.drive && tabId) driveTab(task, tabId);
-    if (outcome.reload && tabId && !run.reloaded.has(tabId)) {
-      run.reloaded.add(tabId);
-      void tabReloads.reload(tabId, () => stillAllowed(ticket)).catch(() => false);
-    }
+    const reloaded = outcome.reload && tabId ? await withDeadline(reloadOnce(run, ticket, tabId), RELOAD_MS, false) : null;
     if (outcome.error) throw outcome.error;
-    return { ...outcome.answer!, appMs: Date.now() - startedAt };
+    return { ...outcome.answer!, reloaded, appMs: Date.now() - startedAt };
   } catch (error) {
     if (error === STEP_ASIDE) throw error;
     const refusal = error instanceof VaultError ? error : new VaultError("failed", error instanceof Error ? error.message : String(error));
@@ -261,16 +301,8 @@ function autoFill(task: VaultTask, tab: string, origin: string): AutoFill {
   return task.auto.get(key)!;
 }
 
-const AUTO_MEMORY = 64;
-
-function remember(set: Set<string>, key: string) {
-  set.delete(key);
-  set.add(key);
-  while (set.size > AUTO_MEMORY) set.delete(set.values().next().value!);
-}
-
 function revokeTab(tab: string) {
-  for (const ticket of tickets.values()) if (ticket.tabId === tab) revoke(ticket, "tab");
+  for (const ticket of [...tickets.values()]) if (ticket.tabId === tab) revoke(ticket, "tab");
 }
 
 let guarding = false;
@@ -308,18 +340,16 @@ export function watchVault() {
     if (!task || task.busyTabs.has(form.tab)) return;
     const state = autoFill(task, form.tab, origin);
     const document = form.document === undefined ? null : String(form.document);
-    if (state.stopped || (document !== null && state.documents.has(document))) return;
+    if (state.stopped) return;
+    if (document !== null && state.documents.has(document)) return void remember(state.documents, document);
     if (Date.now() - state.lastSuccess < AUTO_RETRY_MS) return;
     const consent = nativeConsent(form);
-    const memory = task.sites.get(origin);
-    if (manualClaims(memory)) return void noteVaultCoordination("held_for_login", consent);
-    if (task.lanes.has(siteKeyOf(origin))) return;
+    if (manualClaims(task.sites.get(origin))) return void noteVaultCoordination("held_for_login", consent);
+    if (blockers(task.engineProfile, siteKeyFor(task, origin)).length) return;
     task.busyTabs.add(form.tab);
-    void accountForAuto(task, origin, memory?.account ?? null, document, state, consent)
-      .then((account) => (account === undefined ? undefined : signIn({ task, origin, account, tabId: form.tab, why: task.why, auto: true, consent })))
+    void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true, consent, autoContext: { state, document } })
       .then(
-        (answer) => {
-          if (answer === undefined) return;
+        () => {
           state.failures = 0;
           state.lastSuccess = Date.now();
           if (document !== null) remember(state.documents, document);
@@ -334,17 +364,6 @@ export function watchVault() {
   });
 }
 
-async function accountForAuto(task: VaultTask, origin: string, remembered: string | null, document: string | null, state: AutoFill, consent: ConsentToken | null): Promise<string | null | undefined> {
-  if (remembered !== null) return remembered;
-  await withDeadline(cacheLogins(task), ANSWER_MS, undefined);
-  const names = task.logins.get(origin) ?? [];
-  if (names.length <= 1) return null;
-  const key = document ?? "";
-  if (state.skipped.has(key)) return undefined;
-  remember(state.skipped, key);
-  noteVaultCoordination("skipped_several", consent);
-  recordVaultEvent({ time: Date.now(), kind: "skip", profile: task.profileId, site: origin, account: null, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), outcome: "several_logins", via: "auto", reason: task.why });
-  return undefined;
-}
-
 export const liveAttempts = () => tickets.size;
+
+export const runningSignIns = (task: VaultTask) => heldLanes(task.engineProfile);

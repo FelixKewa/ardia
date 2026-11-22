@@ -13,6 +13,9 @@ const { dropTask } = await import("../vault/tasks.ts");
 const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 const { emitEvent } = await import("../../test-native/ardiacore.ts");
 setConsentPeriod(true, "socket-vault-test");
+const sitesModule = stub.ardiaCoreNativeModules.ArdiaSites;
+const nativeSites = sitesModule.call;
+sitesModule.call = (verb, profile, json) => (verb === "registrableDomains" ? Promise.resolve(JSON.stringify({ domains: JSON.parse(json).hosts.map((host) => host.split(".").slice(-2).join(".")) })) : nativeSites(verb, profile, json));
 
 const APP = { pid: 41, path: "/Applications/Agent.app/Contents/MacOS/Agent", name: "Agent", identifier: "com.example.agent", teamId: "TEAM123456", signer: "Developer ID Application: Example (TEAM123456)", signed: true, valid: true, adhoc: false, platform: false, lookupMs: 1 };
 const NODE = { pid: 42, path: "/opt/homebrew/bin/node", name: "node", signed: false, valid: true, adhoc: true, platform: false, lookupMs: 1 };
@@ -590,7 +593,7 @@ test("a site with several saved logins and none named skips auto-fill and logs i
   assert.ok(!log.some((e) => e.kind === "refusal" && e.outcome === "bad_request"));
 });
 
-const withoutAppMs = ({ appMs, ...rest }) => rest;
+const withoutAppMs = ({ appMs, reloaded, ...rest }) => rest;
 const formOn = (tab, origin) => (document) => emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin, hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
 const releaseAll = () => {
   for (const resolve of [...stub.vaultFake.heldSignIns.values()]) resolve();
@@ -870,6 +873,7 @@ test("sibling origins of one site take turns instead of meeting the engine's bus
 
 test("a site the task wasn't granted allocates no per-site state, and a tab the task stops driving drops its auto-fill memory", async () => {
   const { taskFor, undriveTab } = await import("../vault/tasks.ts");
+  const { runningSignIns } = await import("../vault/signIn.ts");
   const { tab } = await freshWindow("https://one.example/login");
   stub.controlSocket.peers[741] = NODE;
   const { call } = socketClient(741);
@@ -877,7 +881,8 @@ test("a site the task wasn't granted allocates no per-site state, and a tab the 
   const { task } = taskFor(reply.result.task, 741);
   for (const site of ["two.example", "three.example", "four.example"]) assert.equal((await call("vault.login", { task: reply.result.task, site })).error.code, "not_granted");
   assert.equal(task.sites.size, 0);
-  assert.equal(task.lanes.size, 0);
+  assert.equal(task.siteKeys.size, 0);
+  assert.equal(runningSignIns(task), 0);
   formOn(tab, "https://one.example")(80);
   await settle();
   assert.equal(task.auto.size, 1);

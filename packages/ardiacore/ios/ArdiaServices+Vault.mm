@@ -18,7 +18,11 @@
     if (settled) return;
     settled = YES;
     running = nil;
-    completion(cancelled ? @{@"status" : @"cancelled"} : (result ?: @{}));
+    if (!result) return completion(@{@"status" : @"cancelled", @"transfer" : @"none"});
+    if (!cancelled) return completion(result);
+    NSMutableDictionary *kept = [result mutableCopy];
+    kept[@"cancelRequested"] = @YES;
+    completion(kept);
   };
   ardia_host::WithProfile(profile, ^(ArdiaCoreProfile *loaded) {
     if (cancelled) return settle(nil);
@@ -46,9 +50,9 @@
                             }];
   });
   return ^{
-    if (settled) return;
+    if (settled || cancelled) return;
     cancelled = YES;
-    [running cancel];
+    if (running) return [running cancel];
     settle(nil);
   };
 }

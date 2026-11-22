@@ -1,5 +1,4 @@
 import type { Program } from "./programs";
-import type { SignInRun } from "./signIn";
 
 export type VaultTask = {
   id: string;
@@ -18,7 +17,7 @@ export type VaultTask = {
   auto: Map<string, AutoFill>;
   busyTabs: Set<string>;
   sites: Map<string, SiteMemory>;
-  lanes: Map<string, SignInRun>;
+  siteKeys: Map<string, string>;
 };
 
 export type SiteMemory = { account: string | null; manualPending: number; manualEndedAt: number };
@@ -53,9 +52,18 @@ export function siteOrigin(site: string, allowLocalHttp: boolean): string | null
   const host = match[2]!.toLowerCase().replace(/:443$/, scheme === "https" ? "" : ":443");
   const bare = host.replace(/:\d+$/, "");
   if (!/^[a-z0-9.\-[\]:]+$/.test(host) || bare.startsWith(".") || bare.endsWith(".") || !bare) return null;
-  if (scheme === "https") return `https://${host}`;
-  if (scheme === "http" && allowLocalHttp && LOCAL_HOST.test(bare)) return `http://${host}`;
+  if (scheme === "https") return canonicalOrigin(`https://${host}`);
+  if (scheme === "http" && allowLocalHttp && LOCAL_HOST.test(bare)) return canonicalOrigin(`http://${host}`);
   return null;
+}
+
+function canonicalOrigin(origin: string): string | null {
+  try {
+    const parsed = new URL(origin);
+    return parsed.hostname && parsed.origin !== "null" ? parsed.origin : null;
+  } catch {
+    return null;
+  }
 }
 
 export function addTask(task: VaultTask) {

@@ -9,7 +9,8 @@ import { clippedReason, recordVaultEvent, vaultLog } from "../vault/activity";
 import { alwaysAllowed, loadVaultAlways, setAlwaysAllowed, useVaultAlways } from "../vault/always";
 import { askApproval, dropApprovals } from "../vault/approval";
 import { mayAlwaysAllow, programKey, programLabel, programOf, signerLine, type Program } from "../vault/programs";
-import { cacheLogins, pluginRefusal, signIn, VaultError, warmSiteKeys, watchVault } from "../vault/signIn";
+import { cacheLogins, pluginRefusal, signIn, VaultError, watchVault } from "../vault/signIn";
+import { warmSiteKeys } from "../vault/lanes";
 import { addTask, DEFAULT_TTL_SECONDS, dropAllTasks, dropConnectionTasks, dropTask, MAX_SITES, MAX_TTL_SECONDS, siteOrigin, taskFor, tasksOf, type VaultTask } from "../vault/tasks";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { shownWindowId } from "./socketAsk";
@@ -61,6 +62,7 @@ async function taskStart(params: Record<string, unknown>, call: SocketCall) {
   const consent = consentToken();
   const profileId = profileArg(params.profile);
   const origins = originsOf(params.sites);
+  void warmSiteKeys(origins).catch(() => undefined);
   const why = clippedReason(params.why);
   const ttl = Math.min(MAX_TTL_SECONDS, (params.ttlSeconds as number | undefined) ?? DEFAULT_TTL_SECONDS);
   const tabs = ((params.tabs as string[] | undefined) ?? []).map((tab) => tabOf(tab));
@@ -104,12 +106,11 @@ async function taskStart(params: Record<string, unknown>, call: SocketCall) {
     auto: new Map(),
     busyTabs: new Set(),
     sites: new Map(),
-    lanes: new Map(),
+    siteKeys: new Map(),
   };
   for (const t of tabs) task.tabs.add(t.id);
   addTask(task);
   void cacheLogins(task).catch(() => undefined);
-  void warmSiteKeys(origins).catch(() => undefined);
   void warmVault().catch(() => false);
   noteVaultGrant(via, consent);
   recordVaultEvent({ time: startedAt, kind: "grant", profile: profileId, site: origins.join(" "), account: null, program: programLabel(program), signer: program.signer, task: task.id.slice(0, 8), outcome: "granted", via, reason: why });
@@ -187,7 +188,7 @@ export const VAULT_METHODS: MethodSpec[] = [
     description:
       "Sign in to a granted site with its saved login (and its verification code, if Ardia keeps one) in a page the agent can't reach, move the session into the profile, then reload the tab. status is signed_in when the engine is sure, or submitted when it isn't: evidence weak means the session moved and the tab is reloaded so the agent can check its page, none that nothing moved. reason names why the engine wasn't sure (interrupted) or why it stopped. The site must be the saved login's own: for single sign-on, sign in to the identity provider's site, then reload. Never returns the password, the code or any field value. Errors: not_granted, no_login, no_form, needs_passkey, needs_human, password_manager_plugin, task_expired, denied, locked, conflict, busy, failed, bad_request",
     params: obj({ task: id("The token vault.taskStart gave"), site: text("A site the task was granted"), tab: id("A tab to reload once signed in; it joins the tabs the task drives"), account: text("The username, when the site has several saved logins"), why: WHY }, ["task", "site"]),
-    result: "{status, transfer, evidence, reason, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}",
+    result: "{status, transfer, evidence, reason, reloaded, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}",
     run: login,
   },
   {

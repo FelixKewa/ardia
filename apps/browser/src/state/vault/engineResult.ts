@@ -93,6 +93,8 @@ export function judge(result: VaultSignIn, auto: boolean, username: string, base
   const code = STATUS_CODES[result.status];
   if (code) return refuse(new VaultError(code, engineMessage(result)));
   const transfer = TRANSFER_REFUSALS[result.transfer ?? "none"];
+  const conflicts = result.conflicts ?? 0;
+  if (transfer && conflicts > 0) return refuse(new VaultError(transfer[0], `${transfer[1]} You also changed ${conflicts === 1 ? "one of this site's session values" : `${conflicts} of this site's session values`} in Ardia meanwhile, and Ardia kept yours (conflicts: ${conflicts}).`));
   if (transfer) return refuse(new VaultError(...transfer));
   const reload = result.transfer === "complete" && (result.status === "signed_in" || (result.status === "submitted" && result.evidence === "weak"));
   if (result.status === "signed_in" && (result.conflicts ?? 0) > 0) return refuse(new VaultError("conflict", "You changed this site's session in Ardia while the agent was signing in, so Ardia kept your changes and reloaded the tab; it may be signed in as you rather than as the saved login."), true, reload);

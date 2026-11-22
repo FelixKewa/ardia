@@ -571,8 +571,8 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
 
 | Method | What it does |
 | --- | --- |
-| `vault.taskStart {sites, why?, ttlSeconds?, profile?, tabs?}` | Asks the person: Ardia's own sheet in the last focused window names the program, who signed it, the sites, the profile and the reason, then Touch ID (or the Mac's password) confirms. The iPhone can approve the same request (`askPhoneForVaultApproval`, Face ID there); the first answer wins. Returns `{task, sites, expiresAt, via, program}`: a 32-hex token that lives until `vault.taskEnd`, the timeout (`ttlSeconds`, 15 min by default, 2 h at most), or this connection closing. Only `https` sites (a test instance also takes `http://localhost`) |
-| `vault.login {task, site, tab?, account?, why?}` | Signs in to a granted site with its saved login, and its verification code when Ardia keeps one: the engine signs in inside an isolated in-memory partition the token DevTools connection can't reach (`-[ArdiaCoreProfile vaultSignInAtURL:origin:username:codeProvider:completion:]`), then moves the session (the cookies of the hosts its main frame went through, the origin's localStorage) into the profile, and Ardia reloads `tab` only after the move is `complete` with `signed_in`, or with `submitted` and `evidence: "weak"` so the agent can check its page. Returns `{status, transfer, evidence, reason, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}` (`decideMs`: from the submit to the engine's decision, made at the committed page's DOMContentLoaded; `refills`: how many times the engine filled again because the page replaced the form; `evidence`: how sure the engine is that the sign-in went through, `strong`, `weak` or `none`, and `null` when it doesn't say; `reason`: why it wasn't sure, as `interrupted`) (`signed_in` when the engine is sure; `submitted` when it isn't: with `weak` the session moved, with `none` nothing did). At most 4 sign-ins run at once in a profile and 1 per site; another task's answers `busy` at once, while the same task's take turns (see below). The page must be on the saved login's own site, or the engine answers at once with `not_granted`; for single sign-on, grant the identity provider's site (it needs its own saved login), sign in there, then reload the agent's tab so it finishes the round trip |
+| `vault.taskStart {sites, why?, ttlSeconds?, profile?, tabs?}` | Asks the person: Ardia's own sheet in the last focused window names the program, who signed it, the sites, the profile and the reason, then Touch ID (or the Mac's password) confirms. The iPhone can approve the same request (`askPhoneForVaultApproval`, Face ID there); the first answer wins. Returns `{task, sites, expiresAt, via, program}`: a 32-hex token that lives until `vault.taskEnd`, the timeout (`ttlSeconds`, 15 min by default, 2 h at most), or this connection closing. Only `https` sites (a test instance also takes `http://localhost`), each checked and made canonical (`URL.origin`) before the sheet shows; one that isn't valid is `bad_request` and nothing is granted |
+| `vault.login {task, site, tab?, account?, why?}` | Signs in to a granted site with its saved login, and its verification code when Ardia keeps one: the engine signs in inside an isolated in-memory partition the token DevTools connection can't reach (`-[ArdiaCoreProfile vaultSignInAtURL:origin:username:codeProvider:completion:]`), then moves the session (the cookies of the hosts its main frame went through, the origin's localStorage) into the profile, and Ardia reloads `tab` only after the move is `complete` with `signed_in`, or with `submitted` and `evidence: "weak"` so the agent can check its page. Returns `{status, transfer, evidence, reason, conflicts, refills, ms, readyMs, fillMs, decideMs, totalMs, profileMs, seedMs, loadMs, scanMs, transferMs, usedCode, appMs}` (`decideMs`: from the submit to the engine's decision, made at the committed page's DOMContentLoaded; `refills`: how many times the engine filled again because the page replaced the form; `reloaded`: whether `tab` reloaded after the move, `false` when Ardia couldn't reach the page, `null` without a tab or a move to reload for; `evidence`: how sure the engine is that the sign-in went through, `strong`, `weak` or `none`, and `null` when it doesn't say; `reason`: why it wasn't sure, as `interrupted`) (`signed_in` when the engine is sure; `submitted` when it isn't: with `weak` the session moved, with `none` nothing did). At most 4 sign-ins run at once in a profile and 1 per site; Ardia's own sign-ins in a profile take turns per site instead (see below). The page must be on the saved login's own site, or the engine answers at once with `not_granted`; for single sign-on, grant the identity provider's site (it needs its own saved login), sign in there, then reload the agent's tab so it finishes the round trip |
 | `vault.taskEnd {task}` | Ends a task early |
 | `vault.status` | The program Ardia sees on this connection, its live tasks and the sites always allowed for it |
 | `vault.log {limit?, since?, profile?}` | Grants, sign-ins, refusals and skipped auto-fills: time, profile, site, account, program, signer, task (its first 8 hex digits), outcome, how it was allowed. The agent's `why` is left out unless the person turns on **Show agents' reasons in ardia vault log** |
@@ -604,24 +604,30 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
   (or waits its turn, when another `vault.login` already shares it).
   When the site has several saved logins and the task never named one, it doesn't sign in on its own and logs a `skip`
   (`several_logins`) once per document instead of an error. A tab the task stops driving forgets its auto-fill state.
-- **One sign-in per site at a time.** A task's sign-ins take turns per site as the engine counts it (scheme and
-  registrable domain, so `a.example.com` waits for `b.example.com` instead of meeting the engine's `busy`). A second
-  `vault.login` for the same origin whose account resolves to the same saved login as the running one gets its answer;
-  any other waits its turn. Each caller is checked again when the answer arrives (task live, site still granted, its tab
-  still in the task's profile), so a joined call never inherits a success it no longer may use. Every call answers within
-  28 s of arriving (the engine's 25 s and a margin): the saved-login lookup, the wait for its turn and the sign-in itself
-  all count, and ending the task, closing the connection or locking the Mac answers every waiting call at once and stops
-  the engine's sign-in when nobody waits for it any more.
+- **One sign-in per site at a time.** Sign-ins in a profile take turns per site as the engine counts it (scheme and
+  registrable domain, so `a.example.com` waits for `b.example.com` instead of meeting the engine's `busy`). A task fixes
+  each site's key the first time the engine names it; while it hasn't, that sign-in takes turns with every other one in
+  the profile. A second `vault.login` from the same task for the same origin whose account resolves to the same saved
+  login as the running one gets its answer; any other waits its turn. Each caller is checked again when the answer
+  arrives (task live, site still granted, its tab still in the task's profile), so a joined call never inherits a success
+  it no longer may use. Every call answers within 28 s of arriving (the engine's 25 s and a margin), measured on a
+  monotonic clock and checked again when it starts or joins a sign-in and when it takes the answer: the saved-login
+  lookup, the wait for its turn and the sign-in itself all count. An auto-fill's 28 s start with the form event.
+- **Stopping a sign-in.** Ending the task, closing the connection or locking the Mac answers every waiting call at once,
+  and Ardia asks the engine to stop a sign-in nobody waits for any more. The site's turn stays taken until the engine
+  replies (at most 30 s), so the next sign-in for that site, from any task, never starts while the session may still be
+  moving into the profile. The engine's reply is kept as it is (with `cancelRequested`), and a sign-in that moved some
+  of its session is recorded even when nobody waited for it; one that moved nothing is not.
 - **Never stuck.** Each failure answers at once with a code: `not_granted`, `no_login`, `no_form`, `needs_passkey`,
   `needs_human` (the site still shows its sign-in page after the fill: a text-message code, a CAPTCHA; or nobody can see
   the sheet, in a background instance without its test answer), `password_manager_plugin` (a plugin keeps the profile's
   passwords; plugins stay write-only toward agents), `task_expired`, `denied`, `locked` (the screen is locked, so nobody
   can approve), `conflict` (the sign-in finished, but the person changed some of the site's session in the profile
-  meanwhile, so Ardia kept their values for those and still reloaded the tab), `busy` (another task's sign-in is running
-  for that site, the profile has 4 running, or the call's turn didn't come within its 28 s; try again shortly), `failed`
+  meanwhile, so Ardia kept their values for those and still reloaded the tab), `busy` (a sign-in Ardia didn't start is
+  running for that site, the profile has 4 running, or the call's turn didn't come within its 28 s; try again shortly), `failed`
   (the message names the engine's reason: `unreachable`, `field_missing`, `field_changed`, `steps`, `no_submit_control`
   when the page had no button or key that sends the form, or `interrupted`; also when only part of the session moved into
-  the profile, the move was sent but not confirmed, or it timed out). `needs_human` names `basic_auth` or `proxy_auth`
+  the profile (the message then also names any values the person changed meanwhile, as `conflicts: n`), the move was sent but not confirmed, or it timed out). `needs_human` names `basic_auth` or `proxy_auth`
   when the site or a proxy asks in the browser's own password dialog. `interrupted` can come with any status but
   `signed_in`, `submitted` included, where it's the answer's `reason`. Any other reason, or one Ardia doesn't know yet,
   is passed on as `(reason: …)` in the message. A site with several saved logins needs `account`; the error says how many, never which.
