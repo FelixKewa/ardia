@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, re, subprocess, sys, time
+import json, os, re, shlex, subprocess, sys, time
 
 try:
     payload = json.load(sys.stdin)
@@ -8,129 +8,306 @@ try:
 except Exception:
     sys.exit(0)
 
-G = r"(?:^|[;&|(`\n]\s*|\$\(\s*)(?:\w+=\S*\s+)*git\s+(?:-C\s+(?P<dir>\"[^\"]*\"|'[^']*'|\S+)\s+)?"
-rules = [
-    (G + r"checkout\b(?!\s+-b\b)", "git checkout"),
-    (G + r"restore\b(?![^;&|\n]*--staged)", "git restore (without --staged)"),
-    (G + r"stash\b", "git stash"),
-    (G + r"reset\b[^;&|\n]*--hard", "git reset --hard"),
-    (G + r"clean\b", "git clean"),
-    (G + r"switch\b", "git switch"),
-]
-WORD = re.compile(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'|[^\s;&|()`<>]+")
-ASSIGNMENT = re.compile(r"\w+=\S*$")
 HOME = os.path.expanduser("~")
+ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
+OPERATORS = ("&&", "||", ";;", ";", "|&", "|", "&", "\n")
+DIRECTORY_COMMANDS = ("cd", "pushd", "popd")
+SUCCESS_ONLY = "&&"
+FAILURE_ONLY = "||"
+NO_EFFECT = ("|", "|&", "&")
+ENDS_FAILURE_BRANCH = ("exit", "return")
 
 
-def unquote(word):
-    if len(word) >= 2 and word[0] == word[-1] and word[0] in "\"'":
-        word = word[1:-1]
-    return os.path.expanduser(os.path.expandvars(word))
+def tokenize(text):
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char in " \t\r":
+            index += 1
+            continue
+        if char == "\\" and text.startswith("\\\n", index):
+            index += 2
+            continue
+        if char == "#" and (index == 0 or text[index - 1] in " \t\n;&|("):
+            while index < length and text[index] != "\n":
+                index += 1
+            continue
+        if char == "(":
+            yield ("open", "(")
+            index += 1
+            continue
+        if char == ")":
+            yield ("close", ")")
+            index += 1
+            continue
+        operator = next((op for op in OPERATORS if text.startswith(op, index)), None)
+        if operator:
+            yield ("separator", operator)
+            index += len(operator)
+            continue
+        if char in "<>":
+            while index < length and text[index] in "<>&-0123456789":
+                index += 1
+            while index < length and text[index] in " \t":
+                index += 1
+            _, index, embedded = read_word(text, index)
+            for inner in embedded:
+                yield ("embedded", inner)
+            continue
+        raw, index, embedded = read_word(text, index)
+        for inner in embedded:
+            yield ("embedded", inner)
+        if raw in ("{", "}", "!"):
+            yield ("separator", raw)
+            continue
+        if raw:
+            yield ("word", raw)
+        else:
+            index += 1
 
 
-def joined(base, word):
-    return os.path.normpath(os.path.join(base, unquote(word)))
+def substitution_end(text, index):
+    depth = 1
+    index += 2
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == "'":
+            closing = text.find("'", index + 1)
+            index = length if closing == -1 else closing + 1
+            continue
+        if text.startswith("$(", index):
+            depth += 1
+            index += 2
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        index += 1
+    return length
+
+
+def backtick_end(text, index):
+    closing = text.find("`", index + 1)
+    return len(text) if closing == -1 else closing + 1
+
+
+def read_word(text, index):
+    start = index
+    length = len(text)
+    embedded = []
+    while index < length:
+        char = text[index]
+        if char in " \t\r\n;&|()<>":
+            break
+        if char == "\\":
+            index += 2
+            continue
+        if text.startswith("$(", index):
+            end = substitution_end(text, index)
+            embedded.append(text[index + 2 : end - 1])
+            index = end
+            continue
+        if char == "`":
+            end = backtick_end(text, index)
+            embedded.append(text[index + 1 : end - 1])
+            index = end
+            continue
+        if char == "'":
+            closing = text.find("'", index + 1)
+            index = length if closing == -1 else closing + 1
+            continue
+        if char == '"':
+            index += 1
+            while index < length and text[index] != '"':
+                if text[index] == "\\":
+                    index += 2
+                elif text.startswith("$(", index):
+                    end = substitution_end(text, index)
+                    embedded.append(text[index + 2 : end - 1])
+                    index = end
+                elif text[index] == "`":
+                    end = backtick_end(text, index)
+                    embedded.append(text[index + 1 : end - 1])
+                    index = end
+                else:
+                    index += 1
+            index += 1
+            continue
+        index += 1
+    return text[start:index], index, embedded
+
+
+def value_of(raw):
+    try:
+        parts = shlex.split(raw)
+    except ValueError:
+        parts = [raw]
+    return "".join(parts)
+
+
+def expanded(raw):
+    return os.path.expanduser(os.path.expandvars(value_of(raw)))
+
+
+def joined(base, raw):
+    return os.path.normpath(os.path.join(base, expanded(raw)))
 
 
 class Shell:
-    def __init__(self, directory):
+    def __init__(self, directory, previous=None, pushed=()):
         self.directory = directory
-        self.previous = directory
-        self.pushed = []
+        self.previous = previous or directory
+        self.pushed = list(pushed)
 
-    def snapshot(self):
-        return (self.directory, self.previous, list(self.pushed))
+    def copy(self):
+        return Shell(self.directory, self.previous, self.pushed)
 
-    def restore(self, snapshot):
-        self.directory, self.previous, self.pushed = snapshot[0], snapshot[1], list(snapshot[2])
+    def key(self):
+        return (self.directory, self.previous, tuple(self.pushed))
 
-    def move(self, target):
-        self.previous, self.directory = self.directory, target
+    def moved(self, target):
+        return Shell(target, self.directory, self.pushed)
 
     def run(self, name, argument):
         if name == "cd":
             if argument is None:
-                self.move(HOME)
-            elif argument == "-":
-                self.move(self.previous)
-            else:
-                self.move(joined(self.directory, argument))
-        elif name == "pushd":
+                return self.moved(HOME)
+            if value_of(argument) == "-":
+                return self.moved(self.previous)
+            return self.moved(joined(self.directory, argument))
+        if name == "pushd":
             if argument is None:
-                if self.pushed:
-                    top = self.pushed.pop()
-                    self.pushed.append(self.directory)
-                    self.move(top)
-            else:
-                self.pushed.append(self.directory)
-                self.move(joined(self.directory, argument))
-        elif name == "popd" and self.pushed:
-            self.move(self.pushed.pop())
+                if not self.pushed:
+                    return self.copy()
+                after = self.moved(self.pushed[-1])
+                after.pushed = self.pushed[:-1] + [self.directory]
+                return after
+            after = self.moved(joined(self.directory, argument))
+            after.pushed = self.pushed + [self.directory]
+            return after
+        if name == "popd" and self.pushed:
+            after = self.moved(self.pushed[-1])
+            after.pushed = self.pushed[:-1]
+            return after
+        return self.copy()
 
 
-def skip_quoted(text, index):
-    quote = text[index]
-    index += 1
-    while index < len(text) and text[index] != quote:
-        index += 2 if quote == '"' and text[index] == "\\" else 1
-    return index + 1
+def unique(shells):
+    seen = {}
+    for shell in shells:
+        seen.setdefault(shell.key(), shell)
+    return list(seen.values())
 
 
-def directory_at(position, git_dir=None):
-    shell = Shell(cwd)
-    scopes = []
-    at_command = True
-    index = 0
-    text = command[:position]
-    while index < len(text):
-        char = text[index]
-        if char in "'\"":
-            index = skip_quoted(text, index)
-            at_command = False
-        elif text.startswith("$(", index):
-            scopes.append(shell.snapshot())
+def git_parts(words):
+    git_dir = None
+    index = 1
+    while index < len(words):
+        word = value_of(words[index])
+        if word == "-C" and index + 1 < len(words):
+            git_dir = words[index + 1]
             index += 2
-            at_command = True
-        elif char == "(":
-            scopes.append(shell.snapshot())
+        elif word == "-c" and index + 1 < len(words):
+            index += 2
+        elif word.startswith("-"):
             index += 1
-            at_command = True
-        elif char == ")":
-            if scopes:
-                shell.restore(scopes.pop())
-            index += 1
-            at_command = False
-        elif char in ";&|\n{}":
-            index += 1
-            at_command = True
-        elif char.isspace():
-            index += 1
-        elif at_command:
-            word = WORD.match(text, index)
-            if not word:
-                index += 1
-                continue
-            index = word.end()
-            name = word.group(0)
-            if ASSIGNMENT.match(name):
-                continue
-            at_command = False
-            if name in ("cd", "pushd", "popd"):
-                while index < len(text) and text[index] in " \t":
-                    index += 1
-                argument = WORD.match(text, index) if name != "popd" else None
-                value = None
-                if argument and (argument.group(0) == "-" or not argument.group(0).startswith("-")):
-                    value = argument.group(0)
-                    index = argument.end()
-                shell.run(name, value)
         else:
-            word = WORD.match(text, index)
-            index = word.end() if word else index + 1
-    directory = shell.directory
-    if git_dir:
-        directory = joined(directory, git_dir)
-    return directory
+            break
+    if index >= len(words):
+        return git_dir, None, []
+    return git_dir, value_of(words[index]), [value_of(word) for word in words[index + 1 :]]
+
+
+def destructive(subcommand, args):
+    if subcommand == "checkout":
+        return None if args[:1] in (["-b"], ["-B"]) else "git checkout"
+    if subcommand == "restore":
+        return None if "--staged" in args and "--worktree" not in args and "-W" not in args else "git restore (without --staged)"
+    if subcommand == "stash":
+        return "git stash"
+    if subcommand == "reset":
+        return "git reset --hard" if "--hard" in args else None
+    if subcommand == "clean":
+        return "git clean"
+    if subcommand == "switch":
+        return "git switch"
+    return None
+
+
+def git_commands(text, start=None):
+    shells = [shell.copy() for shell in start] if start else [Shell(cwd)]
+    scopes = []
+    words = []
+    found = []
+    succeeded = None
+
+    def finish(terminator):
+        nonlocal shells, words, succeeded
+        current, words = words, []
+        while current and ASSIGNMENT.match(current[0]):
+            current = current[1:]
+        if not current:
+            return
+        name = value_of(current[0])
+        if succeeded is not None and name not in DIRECTORY_COMMANDS:
+            pending, succeeded = succeeded, None
+            if name in ENDS_FAILURE_BRANCH:
+                shells = pending
+                return
+            if name == "git":
+                record_git(current)
+            shells = unique(pending + shells)
+            return
+        if name in DIRECTORY_COMMANDS:
+            argument = None
+            if name != "popd":
+                rest = [word for word in current[1:] if not value_of(word).startswith("-") or value_of(word) == "-"]
+                argument = rest[0] if rest else None
+            moved = [shell.run(name, argument) for shell in shells]
+            if terminator == SUCCESS_ONLY:
+                shells = unique(moved)
+            elif terminator == FAILURE_ONLY:
+                succeeded = unique(moved)
+            elif terminator in NO_EFFECT:
+                shells = unique(shells)
+            else:
+                shells = unique(moved + shells)
+        elif name == "git":
+            record_git(current)
+
+    def record_git(current):
+        git_dir, subcommand, args = git_parts(current)
+        directories = [joined(shell.directory, git_dir) if git_dir else shell.directory for shell in shells]
+        found.append((subcommand, args, directories))
+
+    for kind, value in tokenize(text):
+        if kind == "word":
+            words.append(value)
+        elif kind == "embedded":
+            found.extend(git_commands(value, shells))
+        elif kind == "separator":
+            finish(value)
+        elif kind == "open":
+            finish(None)
+            if succeeded is not None:
+                shells, succeeded = unique(succeeded + shells), None
+            scopes.append([shell.copy() for shell in shells])
+        elif kind == "close":
+            finish(None)
+            if scopes:
+                shells = scopes.pop()
+    finish(None)
+    if succeeded is not None:
+        shells = unique(succeeded + shells)
+    return found
 
 
 def git_in(directory, *args, timeout=10):
@@ -168,26 +345,49 @@ def is_shared_checkout(directory, shared):
     return own is not None and own == shared
 
 
-try:
-    shared = shared_git_dir()
-except Exception:
-    shared = None
+FALLBACK_PATTERNS = [
+    (r"\bgit\b.*\bcheckout\b(?!\s+-[bB]\b)", "git checkout"),
+    (r"\bgit\b.*\brestore\b(?!.*--staged)", "git restore (without --staged)"),
+    (r"\bgit\b.*\bstash\b", "git stash"),
+    (r"\bgit\b.*\breset\b.*--hard", "git reset --hard"),
+    (r"\bgit\b.*\bclean\b", "git clean"),
+    (r"\bgit\b.*\bswitch\b", "git switch"),
+]
 
-for pattern, name in rules:
-    for match in re.finditer(pattern, command):
+
+def blocked_names():
+    try:
+        shared = shared_git_dir()
+    except Exception:
+        return []
+    if shared is None:
+        return []
+    try:
+        commands = git_commands(command)
+    except Exception:
+        return [name for pattern, name in FALLBACK_PATTERNS if re.search(pattern, command)]
+    names = []
+    for subcommand, args, directories in commands:
+        name = destructive(subcommand, args)
+        if not name:
+            continue
         try:
-            if shared is None or not is_shared_checkout(directory_at(match.start(), match.group("dir")), shared):
-                continue
+            if any(is_shared_checkout(directory, shared) for directory in directories):
+                names.append(name)
         except Exception:
-            pass
-        print(
-            f"Blocked: {name} in the shared checkout wipes other agents' uncommitted work. "
-            "Undo your own hunks by editing the file; read an old version with `git show <rev>:<path>`; "
-            "unstage with `git restore --staged <path>`. For branch work, use a git worktree or a scratch clone, "
-            "where this guard lets it through.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+            names.append(name)
+    return names
+
+
+for name in blocked_names()[:1]:
+    print(
+        f"Blocked: {name} in the shared checkout wipes other agents' uncommitted work. "
+        "Undo your own hunks by editing the file; read an old version with `git show <rev>:<path>`; "
+        "unstage with `git restore --staged <path>`. For branch work, use a git worktree or a scratch clone, "
+        "where this guard lets it through. A `cd` followed by `;` may fail and leave the command here: use `&&`.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 STALE_AFTER_SECONDS = 6 * 3600
 
@@ -205,9 +405,16 @@ def missing_upstream_age(directory):
         return None
 
 
-commit = re.search(G + r"commit\b", command)
+def commit_directories():
+    try:
+        return next((directories for subcommand, args, directories in git_commands(command) if subcommand == "commit"), None)
+    except Exception:
+        return None
+
+
+commit = commit_directories()
 if commit:
-    stale = missing_upstream_age(directory_at(commit.start(), commit.group("dir")))
+    stale = missing_upstream_age(commit[0])
     if stale and stale[1] > STALE_AFTER_SECONDS:
         count, age = stale
         print(

@@ -37,31 +37,42 @@ const committed = (days) => ({ event: "committed", committer: { date: ago(days) 
 
 function fakeGithub({ pulls = [], current = {}, timelines = {}, issues = {}, failOn = null } = {}) {
   const calls = [];
-  const timelineReads = {};
+  const reads = {};
+  const check = (name, params) => {
+    if (!failOn) return;
+    const error = failOn(name, params, calls.filter((call) => !READS.has(call.name)).length);
+    if (error) throw error;
+  };
+  const count = (key) => {
+    reads[key] = (reads[key] || 0) + 1;
+    return reads[key];
+  };
   const record = (name) => async (params) => {
     calls.push({ name, params });
-    if (failOn) {
-      const error = failOn(name, params, calls.filter((call) => !READS.has(call.name)).length);
-      if (error) throw error;
-    }
+    check(name, params);
     return { data: {} };
   };
   return {
     calls,
     paginate: async (method, params) => {
       calls.push({ name: method.endpointName, params });
+      check(method.endpointName, params);
       if (method.endpointName === "pulls.list") return pulls;
       const number = params.issue_number;
-      timelineReads[number] = (timelineReads[number] || 0) + 1;
       const timeline = timelines[number];
-      return typeof timeline === "function" ? timeline(timelineReads[number]) : timeline || [];
+      const read = count(`timeline${number}`);
+      return typeof timeline === "function" ? timeline(read) : timeline || [];
     },
     rest: {
       pulls: {
         list: Object.assign(async () => ({ data: pulls }), { endpointName: "pulls.list" }),
         get: async (params) => {
           calls.push({ name: "pulls.get", params });
-          return { data: current[params.pull_number] || pulls.find((item) => item.number === params.pull_number) };
+          check("pulls.get", params);
+          const live = current[params.pull_number];
+          const read = count(`pull${params.pull_number}`);
+          const data = typeof live === "function" ? live(read) : live;
+          return { data: data || pulls.find((item) => item.number === params.pull_number) };
         },
         update: record("pulls.update"),
       },
@@ -309,67 +320,149 @@ test("a rate limit stops the sweep cleanly with a summary instead of failing", a
   await assert.rejects(runWith(forbidden, "schedule"));
 });
 
+test("the live pull request is checked again right before it closes", async () => {
+  const listed = pr(2, "marked", { labels: ["needs-rebase", "stale"], updated: ago(9) });
+  const timelines = { 2: [commented(20, human("marked")), warned(9), labeled(9, "stale")] };
+  for (const [why, late] of [
+    ["keep-open", pr(2, "marked", { labels: ["needs-rebase", "stale", "keep-open"] })],
+    ["ready", pr(2, "marked", { labels: ["ready", "stale"] })],
+    ["label cleared by a comment", pr(2, "marked", { labels: ["needs-rebase"] })],
+  ]) {
+    const github = fakeGithub({ pulls: [listed], timelines, current: { 2: (read) => (read === 1 ? listed : late) } });
+    const report = await runWith(github, "schedule");
+    assert.deepEqual(report.close, [], why);
+    assert.deepEqual(report.changed, [2], why);
+    assert.equal(writes(github).some((call) => call.name === "pulls.update"), false, why);
+  }
+});
+
+test("a warning whose label never landed still gets the label before the close", async () => {
+  const unlabelled = pr(2, "marked", { labels: ["needs-rebase"], updated: ago(9) });
+  const github = fakeGithub({
+    pulls: [unlabelled],
+    timelines: { 2: [commented(20, human("marked")), warned(9)] },
+    current: { 2: (read) => (read === 1 ? unlabelled : pr(2, "marked", { labels: ["needs-rebase", "stale"] })) },
+  });
+  const report = await runWith(github, "schedule");
+  assert.deepEqual(report.close, [2]);
+  assert.deepEqual(
+    writes(github).map((call) => call.name),
+    ["issues.createLabel", "issues.addLabels", "issues.createComment", "pulls.update"],
+  );
+});
+
+test("a rate limit on a read stops the sweep cleanly too", async () => {
+  const limited = () => Object.assign(new Error("API rate limit exceeded"), { status: 403, response: { headers: { "x-ratelimit-remaining": "0" } } });
+  const pulls = [1, 2].map((number) => pr(number, `quiet${number}`, { labels: ["incomplete"] }));
+  for (const [where, failOn, pattern] of [
+    ["list", (name) => (name === "pulls.list" ? limited() : null), /listing pull requests/],
+    ["timeline", (name, params) => (name === "issues.listEventsForTimeline" && params.issue_number === 2 ? limited() : null), /#2/],
+    ["get", (name, params) => (name === "pulls.get" && params.pull_number === 1 ? Object.assign(new Error("slow down"), { status: 429 }) : null), /#1/],
+  ]) {
+    const core = fakeCore();
+    const report = await runWith(fakeGithub({ pulls, failOn }), "schedule", {}, { core });
+    assert.match(report.stopped, pattern, where);
+    assert.ok(core.lines.some((line) => /- stopped: rate limited/.test(line)), where);
+  }
+});
+
 test("a push or edit by a person clears the label at once; a bot's does not, nor on protected pull requests", async () => {
-  const github = fakeGithub();
   const pull = pr(1, "outsider", { labels: ["incomplete", "stale"] });
+  const kept = pr(2, "outsider", { labels: ["incomplete", "stale", "keep-open"] });
+  const github = fakeGithub({ current: { 1: pull, 2: kept } });
   assert.equal(await runWith(github, "pull_request_target", { pull_request: pull, sender: human("outsider") }), "unstale");
   assert.equal(await runWith(github, "pull_request_target", { pull_request: pull, sender: bot("github-actions[bot]") }), null);
-  const kept = pr(2, "outsider", { labels: ["incomplete", "stale", "keep-open"] });
   assert.equal(await runWith(github, "pull_request_target", { pull_request: kept, sender: human("outsider") }), null);
   assert.deepEqual(writes(github).map((call) => call.name), ["issues.removeLabel"]);
 });
 
 function closedPull(number, login, { merged_at = null, labels = ["incomplete", "stale"] } = {}) {
-  return { ...pr(number, login, { labels, state: "closed" }), pull_request: { merged_at } };
+  return { ...pr(number, login, { labels, state: "closed" }), merged_at, pull_request: { merged_at } };
+}
+
+function openIssue(number, labels) {
+  return { ...pr(number, "outsider", { labels }), pull_request: {} };
 }
 
 test("a comment on an open stale pull request clears the label unless it is protected", async () => {
-  const github = fakeGithub();
-  const issue = { ...pr(1, "outsider", { labels: ["incomplete", "stale"] }), pull_request: {} };
+  const issue = openIssue(1, ["incomplete", "stale"]);
+  const ready = openIssue(2, ["ready", "stale"]);
+  const github = fakeGithub({ current: { 1: issue, 2: ready } });
   assert.equal(await runWith(github, "issue_comment", { issue, comment: { user: human("someone") } }), "unstale");
   assert.equal(await runWith(github, "issue_comment", { issue, comment: { user: bot("coderabbitai[bot]") } }), null);
-  const ready = { ...pr(2, "outsider", { labels: ["ready", "stale"] }), pull_request: {} };
   assert.equal(await runWith(github, "issue_comment", { issue: ready, comment: { user: human("someone") } }), null);
   assert.deepEqual(writes(github).map((call) => call.name), ["issues.removeLabel"]);
 });
 
-test("the author's comment reopens a pull request the sweep closed, and only that", async () => {
+test("a comment handler reads the live pull request, not the webhook's copy", async () => {
   const github = fakeGithub({
+    current: {
+      1: pr(1, "outsider", { labels: ["incomplete", "stale", "keep-open"] }),
+      2: pr(2, "outsider", { labels: ["incomplete"] }),
+    },
+  });
+  assert.equal(await runWith(github, "issue_comment", { issue: openIssue(1, ["incomplete", "stale"]), comment: { user: human("someone") } }), null);
+  assert.equal(await runWith(github, "issue_comment", { issue: openIssue(2, ["incomplete", "stale"]), comment: { user: human("someone") } }), null);
+  assert.equal(
+    await runWith(github, "pull_request_target", { pull_request: pr(1, "outsider", { labels: ["incomplete", "stale"] }), sender: human("outsider") }),
+    null,
+  );
+  assert.deepEqual(writes(github), []);
+});
+
+const vouchNote = (days) => commented(days, ACTIONS_BOT, "Closed for @someone.");
+
+test("the author's comment reopens a pull request the sweep closed, and only that", async () => {
+  const closedPulls = Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((number) => [number, closedPull(number, "outsider")]));
+  const github = fakeGithub({
+    current: closedPulls,
     timelines: {
       1: [warned(15), closeNote(8), closed(8)],
       2: [warned(15), closeNote(8), closed(8), { event: "reopened", created_at: ago(6), actor: human("mantrakp04") }, closed(5, human("mantrakp04"))],
       4: [warned(15), closed(8)],
       5: [warned(15), closeNote(8), closed(3)],
+      6: [warned(15), closeNote(8), vouchNote(3), closed(3)],
+      7: [warned(15), closeNote(8), { event: "reopened", created_at: ago(6), actor: human("mantrakp04") }, closed(3)],
     },
   });
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(1, "outsider"), comment: { user: human("Outsider") } }), "reopen");
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(1, "outsider"), comment: { user: human("bystander") } }), null);
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(2, "outsider"), comment: { user: human("outsider") } }), null);
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(3, "outsider", { merged_at: ago(1) }), comment: { user: human("outsider") } }), null);
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(4, "outsider"), comment: { user: human("outsider") } }), null);
-  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(5, "outsider"), comment: { user: human("outsider") } }), null);
+  const comment = (number, login, options) => runWith(github, "issue_comment", { issue: closedPull(number, "outsider", options), comment: { user: human(login) } });
+  assert.equal(await comment(1, "Outsider"), "reopen");
+  assert.equal(await comment(1, "bystander"), null);
+  assert.equal(await comment(2, "outsider"), null);
+  assert.equal(await comment(3, "outsider", { merged_at: ago(1) }), null);
+  assert.equal(await comment(4, "outsider"), null);
+  assert.equal(await comment(5, "outsider"), "reopen");
+  assert.equal(await comment(6, "outsider"), null);
+  assert.equal(await comment(7, "outsider"), null);
   assert.deepEqual(
-    writes(github).map((call) => [call.name, call.params.state || call.params.name]),
-    [["pulls.update", "open"], ["issues.removeLabel", "stale"]],
+    writes(github).map((call) => [call.name, call.params.pull_number || call.params.issue_number, call.params.state || call.params.name]),
+    [["pulls.update", 1, "open"], ["issues.removeLabel", 1, "stale"], ["pulls.update", 5, "open"], ["issues.removeLabel", 5, "stale"]],
   );
 });
 
 test("a denounced author's pull request closed by Vouch is never reopened", async () => {
   const github = fakeGithub({
+    current: {
+      1: closedPull(1, "spammer", { labels: ["incomplete", "stale", "vouch:denounced"] }),
+      2: closedPull(2, "spammer"),
+      3: closedPull(3, "outsider", { labels: ["incomplete", "stale", "vouch:denounced"] }),
+    },
     timelines: {
       1: [warned(15), closeNote(1), closed(1)],
       2: [warned(15), closeNote(8), closed(8)],
+      3: [warned(15), closeNote(8), closed(8)],
     },
   });
   const labelled = closedPull(1, "spammer", { labels: ["incomplete", "stale", "vouch:denounced"] });
   assert.equal(await runWith(github, "issue_comment", { issue: labelled, comment: { user: human("spammer") } }), null);
-  const listedOnly = closedPull(2, "spammer");
-  assert.equal(await runWith(github, "issue_comment", { issue: listedOnly, comment: { user: human("spammer") } }), null);
+  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(2, "spammer"), comment: { user: human("spammer") } }), null);
+  assert.equal(await runWith(github, "issue_comment", { issue: closedPull(3, "outsider"), comment: { user: human("outsider") } }), null);
   assert.deepEqual(writes(github), []);
 });
 
 test("a pull request that can't reopen gets one line asking for a new one", async () => {
   const github = fakeGithub({
+    current: { 1: closedPull(1, "outsider") },
     timelines: { 1: [warned(15), closeNote(8), closed(8)] },
     failOn: (name, params) => (name === "pulls.update" && params.state === "open" ? Object.assign(new Error("branch gone"), { status: 422 }) : null),
   });

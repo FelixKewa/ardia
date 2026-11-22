@@ -208,14 +208,25 @@ function createSession({ github, context, core, team, vouched, now, pace, limit 
   };
 }
 
+function asRateLimited(error) {
+  return isRateLimit(error) ? new RateLimited(error.message || "rate limited") : error;
+}
+
+async function read(request) {
+  try {
+    return await request();
+  } catch (error) {
+    throw asRateLimited(error);
+  }
+}
+
 async function write(session, request) {
   if (session.wrote) await session.pace();
   session.wrote = true;
   try {
     return await request();
   } catch (error) {
-    if (isRateLimit(error)) throw new RateLimited(error.message || "rate limited");
-    throw error;
+    throw asRateLimited(error);
   }
 }
 
@@ -225,6 +236,12 @@ async function ensureLabel(session) {
   session.labelReady = true;
 }
 
+async function addStale(session, pr) {
+  if (labelNames(pr).includes(STALE)) return;
+  await ensureLabel(session);
+  await write(session, () => session.github.rest.issues.addLabels({ ...session.repo, issue_number: pr.number, labels: [STALE] }));
+}
+
 function removeStale(session, number) {
   return write(session, () =>
     session.github.rest.issues.removeLabel({ ...session.repo, issue_number: number, name: STALE }).catch(ignoreStatus(404)),
@@ -232,11 +249,17 @@ function removeStale(session, number) {
 }
 
 function timelineOf(session, number) {
-  return session.github.paginate(session.github.rest.issues.listEventsForTimeline, {
-    ...session.repo,
-    issue_number: number,
-    per_page: 100,
-  });
+  return read(() =>
+    session.github.paginate(session.github.rest.issues.listEventsForTimeline, {
+      ...session.repo,
+      issue_number: number,
+      per_page: 100,
+    }),
+  );
+}
+
+async function livePull(session, number) {
+  return (await read(() => session.github.rest.pulls.get({ ...session.repo, pull_number: number }))).data;
 }
 
 async function act(session, pr, events, decision) {
@@ -245,18 +268,22 @@ async function act(session, pr, events, decision) {
   if (decision.action === "nudge") {
     await ensureLabel(session);
     await write(session, () => github.rest.issues.createComment({ ...repo, issue_number, body: nudgeBody(pr) }));
-    if (!labelNames(pr).includes(STALE)) {
-      await write(session, () => github.rest.issues.addLabels({ ...repo, issue_number, labels: [STALE] }));
-    }
-  } else if (decision.action === "close") {
+    await addStale(session, pr);
+    return "done";
+  }
+  if (decision.action === "close") {
+    await addStale(session, pr);
     const closeNoted = botMarkerTimes(events, CLOSED_MARKER).some((time) => time >= decision.warned);
     if (!closeNoted) {
       await write(session, () => github.rest.issues.createComment({ ...repo, issue_number, body: closeBody(pr) }));
     }
+    const live = await livePull(session, issue_number);
+    if (!isEligible(live, session.team) || !labelNames(live).includes(STALE)) return "held";
     await write(session, () => github.rest.pulls.update({ ...repo, pull_number: issue_number, state: "closed" }));
-  } else if (decision.action === "unstale") {
-    await removeStale(session, issue_number);
+    return "done";
   }
+  if (decision.action === "unstale") await removeStale(session, issue_number);
+  return "done";
 }
 
 function mayWaitWithoutTimeline(pr, now) {
@@ -272,16 +299,16 @@ async function planFor(session, pr, now) {
   return { events, decision: decide({ pr, events, now, team: session.team }) };
 }
 
-async function sweep(session, dryRun) {
+async function sweepPulls(session, dryRun, report) {
   const { github, repo, core } = session;
   const now = session.now();
-  const report = { nudge: [], close: [], unstale: [], deferred: [], changed: [], stopped: null };
-  const pulls = await github.paginate(github.rest.pulls.list, { ...repo, state: "open", per_page: 100 });
+  const pulls = await read(() => github.paginate(github.rest.pulls.list, { ...repo, state: "open", per_page: 100 }));
   let handled = 0;
   for (const listed of pulls) {
     if (isProtected(listed, session.team)) continue;
     if (!labelNames(listed).includes(STALE) && !isEligible(listed, session.team)) continue;
     if (mayWaitWithoutTimeline(listed, now)) continue;
+    report.at = listed.number;
     const planned = await planFor(session, listed, now);
     if (!ACTIONS.includes(planned.decision.action)) continue;
     if (handled >= session.limit) {
@@ -292,7 +319,7 @@ async function sweep(session, dryRun) {
     let pr = listed;
     let { events, decision } = planned;
     if (!dryRun) {
-      pr = (await github.rest.pulls.get({ ...repo, pull_number: listed.number })).data;
+      pr = await livePull(session, listed.number);
       ({ events, decision } = await planFor(session, pr, session.now()));
       if (decision.action !== planned.decision.action) {
         core.info(`#${pr.number} changed during the sweep: ${planned.decision.action} is now ${decision.action}`);
@@ -300,18 +327,31 @@ async function sweep(session, dryRun) {
         if (!ACTIONS.includes(decision.action)) continue;
       }
     }
-    report[decision.action].push(pr.number);
     core.info(`${dryRun ? "Would" : "Will"} ${decision.action} #${pr.number}`);
-    if (dryRun) continue;
-    try {
-      await act(session, pr, events, decision);
-    } catch (error) {
-      if (!(error instanceof RateLimited)) throw error;
-      report.stopped = `rate limited at #${pr.number}: ${error.message}`;
-      core.warning(`Stopping the sweep, ${report.stopped}`);
-      break;
+    if (dryRun) {
+      report[decision.action].push(pr.number);
+      continue;
     }
+    if ((await act(session, pr, events, decision)) === "held") {
+      core.info(`#${pr.number} became protected or active before it closed; left open`);
+      report.changed.push(pr.number);
+      continue;
+    }
+    report[decision.action].push(pr.number);
   }
+}
+
+async function sweep(session, dryRun) {
+  const { core } = session;
+  const report = { nudge: [], close: [], unstale: [], deferred: [], changed: [], stopped: null, at: null };
+  try {
+    await sweepPulls(session, dryRun, report);
+  } catch (error) {
+    if (!(error instanceof RateLimited)) throw error;
+    report.stopped = `rate limited${report.at === null ? " listing pull requests" : ` at #${report.at}`}: ${error.message}`;
+    core.warning(`Stopping the sweep, ${report.stopped}`);
+  }
+  delete report.at;
   const lines = ["nudge", "close", "unstale", "deferred", "changed"].map(
     (key) => `- ${key}: ${report[key].length ? report[key].map((n) => `#${n}`).join(", ") : "none"}`,
   );
@@ -322,20 +362,41 @@ async function sweep(session, dryRun) {
   return report;
 }
 
+async function clearIfStillStale(session, number) {
+  const live = await livePull(session, number);
+  if (!live || live.state !== "open" || isProtected(live, session.team) || !labelNames(live).includes(STALE)) return null;
+  await removeStale(session, number);
+  return "unstale";
+}
+
 async function onPullUpdate(session) {
   const pr = session.context.payload.pull_request;
   if (!pr || pr.state !== "open" || isBot(session.context.payload.sender)) return null;
   if (isProtected(pr, session.team) || !labelNames(pr).includes(STALE)) return null;
-  await removeStale(session, pr.number);
-  return "unstale";
+  return clearIfStillStale(session, pr.number);
+}
+
+function isWorkflowBot(actor) {
+  return sameLogin((actor || {}).login, WORKFLOW_BOT);
 }
 
 function closedBySweep(events) {
   const closes = events.filter((event) => event.event === "closed");
   const last = closes[closes.length - 1];
-  if (!last || !sameLogin((eventActor(last) || {}).login, WORKFLOW_BOT)) return false;
+  if (!last || !isWorkflowBot(eventActor(last))) return false;
   const closedAt = eventTime(last);
-  return botMarkerTimes(events, CLOSED_MARKER).some((time) => Math.abs(closedAt - time) <= MARKER_WINDOW_MS);
+  const noted = latestTime(botMarkerTimes(events, CLOSED_MARKER).filter((time) => time <= closedAt + MARKER_WINDOW_MS));
+  if (noted === null) return false;
+  const between = events.filter((event) => {
+    const time = eventTime(event);
+    return event !== last && time > noted && time <= closedAt;
+  });
+  return !between.some((event) => {
+    if (event.event === "reopened" || event.event === "closed") return true;
+    if (event.event !== "commented" || !isWorkflowBot(eventActor(event))) return false;
+    const body = String(event.body || "");
+    return !body.includes(CLOSED_MARKER) && !body.includes(WARNED_MARKER);
+  });
 }
 
 async function onComment(session) {
@@ -343,14 +404,13 @@ async function onComment(session) {
   const { issue, comment } = context.payload;
   if (!issue || !issue.pull_request || !comment || isBot(comment.user)) return null;
   if (isProtected(issue, session.team) || !labelNames(issue).includes(STALE)) return null;
-  if (issue.state === "open") {
-    await removeStale(session, issue.number);
-    return "unstale";
-  }
+  if (issue.state === "open") return clearIfStillStale(session, issue.number);
   if (issue.pull_request.merged_at) return null;
   if (!issue.user || !sameLogin(comment.user.login, issue.user.login)) return null;
   if (vouch.listStatus(session.vouched, issue.user.login) === "denounced") return null;
   if (!closedBySweep(await timelineOf(session, issue.number))) return null;
+  const live = await livePull(session, issue.number);
+  if (!live || live.state !== "closed" || live.merged_at || isProtected(live, session.team)) return null;
   try {
     await write(session, () => github.rest.pulls.update({ ...repo, pull_number: issue.number, state: "open" }));
   } catch (error) {

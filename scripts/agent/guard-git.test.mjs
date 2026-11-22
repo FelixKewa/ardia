@@ -104,6 +104,44 @@ test("pushd, popd and cd - follow the directory stack", () => {
   assert.equal(verdict(`cd ${shared} && cd - && git stash`, clone), "allowed");
 });
 
+test("quoted text that only shows a git command is not a git command", () => {
+  for (const command of [
+    'echo "git checkout -- x"',
+    "echo 'git switch main'",
+    'printf "%s\\n" "run git stash, then git reset --hard"',
+    'gh pr comment 1 --body "please git clean -fd first"',
+    "git log --grep='git reset --hard'",
+    'git commit -m "undo with git checkout -- file"',
+  ]) {
+    assert.equal(verdict(command), "allowed", command);
+  }
+});
+
+test("command substitutions are commands, quoted or not", () => {
+  assert.equal(verdict('echo "$(git stash)"'), "blocked");
+  assert.equal(verdict("x=$(git switch main)"), "blocked");
+  assert.equal(verdict("echo `git clean -fd`"), "blocked");
+  assert.equal(verdict('echo "`git reset --hard`"'), "blocked");
+  assert.equal(verdict(`echo "$(cd ${worktree} && git switch main)"`), "allowed");
+  assert.equal(verdict(`cd ${worktree} && echo "$(git stash)"`), "allowed");
+  assert.equal(verdict(`echo "$(cd ${worktree})" && git stash`), "blocked");
+});
+
+test("a cd that may fail keeps the old directory in play", () => {
+  assert.equal(verdict(`cd ${worktree}; git switch main`), "blocked");
+  assert.equal(verdict(`cd ${worktree}\ngit switch main`), "blocked");
+  assert.equal(verdict(`cd ${worktree} || git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} && git switch main`), "allowed");
+  assert.equal(verdict(`cd ${shared}; git stash`, clone), "blocked");
+  assert.equal(verdict(`cd ${root}/missing; git stash`, clone), "allowed");
+  assert.equal(verdict(`cd ${worktree} | cat && git stash`), "blocked");
+  assert.equal(verdict(`cd ${worktree} || exit 1; git switch main`), "allowed");
+  assert.equal(verdict(`cd ${worktree} || return; git switch main`), "allowed");
+  assert.equal(verdict(`cd ${worktree} || echo failed; git switch main`), "blocked");
+  assert.equal(verdict(`cd ${clone} || git stash`, worktree), "allowed");
+  assert.equal(verdict(`pushd ${worktree}; git stash`), "blocked");
+});
+
 test("a fresh clone made in the same command may switch at once", () => {
   const fresh = join(root, "fresh");
   assert.equal(verdict(`git clone --depth 1 x ${fresh} && cd ${fresh} && git switch -c topic`), "allowed");
