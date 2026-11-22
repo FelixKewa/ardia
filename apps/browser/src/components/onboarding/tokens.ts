@@ -106,8 +106,6 @@ export function onboardingColorsOf(theme: Theme): OnboardingColors {
 
 export const trafficLights = ["#FF5F57", "#FEBC2E", "#28C840"] as const;
 
-export const receiptStamp = "#2F9E5B";
-
 export const anonCard = {
   width: 300,
   height: 430,
@@ -121,12 +119,10 @@ export const anonCard = {
   perspective: 900,
   swing: ["-14deg", "0deg", "14deg"],
   lift: ["-6deg", "0deg", "6deg"],
-  stampTilt: "-8deg",
   offOpacity: 0.55,
   foil: ["#E1E1FE", "#FD02F5"],
   sheen: "#FFFFFF33",
   panel: { dark: "#121214EB", light: "#FFFFFFEB" },
-  stamp: receiptStamp,
 } as const;
 
 export const tourRing = "#FFFFFFB3";
@@ -189,8 +185,6 @@ const ONBOARDING_TYPE = perLook(
       stepSubtitle: { ...font.body, lineHeight: proseLineHeight.body },
       postcardHello: { ...display.title, fontWeight: "300", fontStyle: "italic" },
       galleryCaption: { ...font.tiny, lineHeight: lineHeight.tiny, fontWeight: "500" },
-      receiptSmall: { ...font.badge, letterSpacing: tracking.caps },
-      receiptStamp: { ...font.tiny, fontWeight: "700", letterSpacing: tracking.wide },
       coachCount: { ...font.tiny, fontWeight: "600", letterSpacing: tracking.caps },
       coachTitle: { ...font.title, fontWeight: "600" },
     }) as const,
@@ -204,8 +198,6 @@ export const onboardingType = {
   get bodyCompact() { return font.small; },
   get postcardHello() { return ONBOARDING_TYPE().postcardHello; },
   get galleryCaption() { return ONBOARDING_TYPE().galleryCaption; },
-  get receiptSmall() { return ONBOARDING_TYPE().receiptSmall; },
-  get receiptStamp() { return ONBOARDING_TYPE().receiptStamp; },
   get coachCount() { return ONBOARDING_TYPE().coachCount; },
   get coachTitle() { return ONBOARDING_TYPE().coachTitle; },
 } as const;

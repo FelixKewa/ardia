@@ -8,7 +8,7 @@ import { parseColor } from "../../lib/color";
 import { upcomingInstallId, useTelemetry } from "../../state/telemetry/client";
 import { anonIdentity } from "./anonIdentity";
 import { useOnboardingColors } from "./Parts";
-import { anonCard, onboardingType } from "./tokens";
+import { anonCard } from "./tokens";
 
 const SHARED = "Crash reports, error types, feature counts, speed and memory, daily opens";
 const SHARED_OFF = "Only how many days Ardia opens";
@@ -67,27 +67,6 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Stamp() {
-  const theme = useTheme();
-  return (
-    <View
-      style={{
-        paddingHorizontal: space.s,
-        paddingVertical: space.xs,
-        borderWidth: 1.5,
-        borderRadius: radius.hair,
-        borderColor: anonCard.stamp,
-        backgroundColor: theme.dark ? anonCard.panel.dark : anonCard.panel.light,
-        transform: [{ rotate: anonCard.stampTilt }],
-      }}
-    >
-      <Text color={anonCard.stamp} style={[onboardingType.receiptStamp, monoFace()]}>
-        VERIFIED ANON
-      </Text>
-    </View>
-  );
-}
-
 export function AnonCard({ on }: { on: boolean }) {
   const theme = useTheme();
   const colors = useOnboardingColors();
@@ -130,11 +109,6 @@ export function AnonCard({ on }: { on: boolean }) {
           <View style={{ height: anonCard.artHeight, borderRadius: radius.control, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
             <ThemeSwatch colors={foil} angle={30} grain={0.5} style={StyleSheet.absoluteFill} />
             <Text style={{ fontSize: anonCard.artGlyph, lineHeight: anonCard.artGlyph * 1.2 }}>{me.art}</Text>
-            {on ? (
-              <View style={{ position: "absolute", right: space.m, bottom: space.m }}>
-                <Stamp />
-              </View>
-            ) : null}
           </View>
           <View style={{ gap: space.xs }}>
             <Text size="large" weight="semibold" color={colors.title} lines={1}>
