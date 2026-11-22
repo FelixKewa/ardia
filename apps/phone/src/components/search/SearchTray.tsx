@@ -1,5 +1,6 @@
 import { createContext, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
+import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { countRender } from "../../state/app/interactionPerf";
 import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import { SheetScrollContext, SheetScrollView, sheetPullTranslation, type SheetScroll } from "../ui/Sheet";
@@ -394,7 +395,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   return (
     <DepartContext.Provider value={beginDeparture}>
     <View testID="trayRoot" style={StyleSheet.absoluteFill} pointerEvents={closing ? "none" : "box-none"} collapsable={false} importantForAccessibility={closing ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={closing}>
-      {fabricLagsAnimations && !closing ? <FabricCatchUp motion={trayMotionNow} /> : null}
+      {closing ? null : <FabricCatchUp motion={trayMotionNow} testID="trayFabricCatchUp" />}
       <Animated.View testID="trayDim" style={[StyleSheet.absoluteFill, dimStyle]}>
         <Pressable
           accessibilityLabel="Close Search"
@@ -467,30 +468,6 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   );
 }
 
-const FABRIC_CATCH_UP_MS = 120;
-const fabricLagsAnimations = Platform.OS === "android";
-
-function FabricCatchUp({ motion }: { motion: () => number }) {
-  const [commits, commit] = useState(0);
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const moved = useCallback(() => {
-    if (pending.current) clearTimeout(pending.current);
-    pending.current = setTimeout(() => {
-      pending.current = null;
-      commit((count) => count + 1);
-    }, FABRIC_CATCH_UP_MS);
-  }, []);
-  useEffect(
-    () => () => {
-      if (pending.current) clearTimeout(pending.current);
-    },
-    [],
-  );
-  useAnimatedReaction(motion, (now, was) => {
-    if (was !== null && now !== was) runOnJS(moved)();
-  });
-  return <View key={commits} testID="trayFabricCatchUp" pointerEvents="none" style={styles.fabricCatchUp} />;
-}
 
 let knownLift = 0;
 let knownFieldHeight = 0;
@@ -1344,7 +1321,6 @@ function ScrubbedRows({ rows, typed, budget, onRefine, onMenu, onContentHeight }
 }
 
 const styles = StyleSheet.create({
-  fabricCatchUp: { position: "absolute", width: 0, height: 0 },
   sheet: {
     position: "absolute",
     elevation: trayShadow.elevation,

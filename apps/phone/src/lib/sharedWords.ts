@@ -19,6 +19,7 @@ export const actionWords = {
   open: "Open",
   setUp: "Set Up",
   showTabs: "Show Tabs",
+  update: "Update",
   openSettings: "Open Settings",
   color: "Color",
 } as const;

@@ -12,6 +12,7 @@ import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PressInPlace, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
+import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
@@ -145,6 +146,10 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
     rise.value = withTiming(-lift, { duration: deckChromeMotion.keyboard, easing: tabsCurve.easeOut });
   }, [lift]);
   const riseStyle = useAnimatedStyle(() => ({ transform: [{ translateY: rise.value }] }));
+  const riseNow = () => {
+    "worklet";
+    return rise.value;
+  };
   const { span, strip } = layout;
   const plusTop = strip ? (strip.ends ? strip.plus : strip.tabs) : 0;
   const plusPlace = strip ? { bottom: deckHeight - centerY - controlSize.bar / 2 - plusTop, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
@@ -184,6 +189,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
   }, []);
   return (
     <Animated.View pointerEvents="box-none" style={[styles.place, rest, riseStyle]}>
+      {shown ? <FabricCatchUp motion={riseNow} testID="deckBarFabricCatchUp" /> : null}
       <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingLeft: span.left, paddingRight: span.right }]}>
         {strip?.ends ? null : incognitoSwitch}
         {ends ? (

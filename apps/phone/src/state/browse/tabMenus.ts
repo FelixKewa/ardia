@@ -15,7 +15,7 @@ import { openPage, openTab, reopenArchived } from "./store";
 export type RowAction = { label: string; icon: "eyes" | "squareOnSquare" | typeof iconRoles.copyLink | typeof iconRoles.share | typeof iconRoles.copyText; run: () => void };
 
 function openSwitchingMode(url: string, origin: "search" | "typed") {
-  setIncognito(!useTabs.getState().incognito);
+  if (!setIncognito(!useTabs.getState().incognito)) return;
   openPage(url, origin);
 }
 
