@@ -71,6 +71,7 @@ export const emitEvent = <E extends EventName>(name: E, data: EventData<E>) => {
 
 export const chromeWindowList: ChromeWindowState[] = [];
 export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
+export const commitReports: boolean[] = [];
 export const loadedEngineProfiles = new Set<string>([""]);
 export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle"> & { closing?: () => void }>();
 export const profilesLoadedCall = { known: true };
@@ -455,6 +456,7 @@ const fakeModules = {
       stripCommand: async ({ id, command }) => (await tabStripHost().command(command, id), null),
       strips: () => tabStripHost().snapshot(),
       lastTabPolicy: () => ({ closesWindow: true }),
+      reportCommits: ({ on }) => (commitReports.push(on), null),
     },
     {
       prepareTransfer: () => {},
