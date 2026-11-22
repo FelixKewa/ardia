@@ -128,7 +128,8 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
   const colors = tabSwitcherColors(useTheme().dark);
   const themeColor = useTabLive(tabId, (live) => live.themeColor);
   const picture = useSyncExternalStore(onPicturesChanged, () => lastPicture(tabId));
-  const source = useMemo(() => picture && { uri: `data:image/jpeg;base64,${picture.data}` }, [picture]);
+  const pictureData = picture?.data;
+  const source = useMemo(() => (pictureData ? { uri: `data:image/jpeg;base64,${pictureData}` } : null), [pictureData]);
   const [decoded, setDecoded] = useState<object | null>(null);
   const lateNoted = useRef(false);
   const late = visible && !!source && decoded !== source;

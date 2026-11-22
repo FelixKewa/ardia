@@ -1,5 +1,5 @@
 import { readDocument, writeDocument } from "../../platform/documents";
-import { chromeCtrlTabMru } from "../../platform/profiles";
+import { chromeCtrlTabMru, onProfileLoaded } from "../../platform/profiles";
 import { isFields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -53,13 +53,15 @@ async function look(consent: ConsentToken | null) {
   if (looking || unsupported) return;
   looking = true;
   try {
+    const choiceBefore = ctrlTabChoice();
     const now = await chromeCtrlTabMru();
     if (!now) {
       unsupported = true;
       return;
     }
     const seen = readSeen();
-    const preset = presetFollowingChrome(seen, now, ctrlTabChoice());
+    const choice = ctrlTabChoice();
+    const preset = choice === choiceBefore ? presetFollowingChrome(seen, now, choice) : null;
     if (preset && setCtrlTab(preset)) noteCtrlTabFollowedChrome(preset, consent);
     const merged = { ...seen, ...now };
     if (Object.entries(now).some(([profile, mru]) => seen[profile] !== mru)) saveSeen(merged);
@@ -86,10 +88,13 @@ export function followChromeCtrlTab() {
     clearTimeout(lookAfterLeaving);
     if (!shown) lookAfterLeaving = setTimeout(() => void look(consent), LOOK_AFTER_LEAVING_MS);
   };
+  let launched = false;
   setTimeout(() => {
+    launched = true;
     void look(consent);
     shown = showsChromeSettings(useBrowser.getState());
   }, FIRST_LOOK_MS);
+  onProfileLoaded(() => void (launched && look(consent)));
   useBrowser.subscribeTo(["tabs", "windows"], (s, prev) => {
     if (s.tabs !== prev.tabs || s.windows !== prev.windows) watch(showsChromeSettings(s));
   });
