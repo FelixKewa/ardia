@@ -16,6 +16,7 @@ import { OptionCard } from "./OptionCard";
 import { confirmAnswer, confirmDefaultBrowserAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
 import { probeOnboardingSystem, type OnboardingSystem } from "../../state/onboarding/systemProbe";
 import { ChoiceList, type ChoiceOption } from "./ChoiceList";
+import { onboardingMotion } from "./tokens";
 import { useOnboardingColors } from "./Parts";
 import { useScreen } from "./Screen";
 import { useSection, useSharedMockFocus } from "./sectionContext";
@@ -36,6 +37,8 @@ export function HomeStep() {
   return sub === 0 ? <DefaultBrowserQuestion /> : <LinksQuestion />;
 }
 
+let applying = false;
+
 function DefaultBrowserQuestion() {
   const extras = useOnboarding((s) => s.extras);
   const redo = useOnboarding((s) => s.redo);
@@ -52,8 +55,9 @@ function DefaultBrowserQuestion() {
   }, []);
 
   const apply = async () => {
-    if (!system) return;
-    setBusy(true);
+    if (!system || applying) return;
+    applying = true;
+    const slow = setTimeout(() => setBusy(true), onboardingMotion.busyLabelDelay);
     const picked: string[] = [];
     try {
       if (!system.isDefault && (setDefault || trial) && (await setAsDefaultBrowser())) {
@@ -63,6 +67,8 @@ function DefaultBrowserQuestion() {
       if (login !== system.loginEnabled) await setLaunchAtLogin(login).catch(() => {});
       if (dock && system.dockAvailable && !system.inDock) await addToDock();
     } finally {
+      clearTimeout(slow);
+      applying = false;
       setBusy(false);
       confirmDefaultBrowserAnswer(picked);
     }

@@ -161,6 +161,7 @@ export const onboardingFlow = {
 export const onboardingButton = { height: 36, primaryPad: space.xxl, secondaryPad: space.xl, pressScale: 0.98, circlePressScale: 0.96, disabledOpacity: 0.4 } as const;
 
 export const onboardingMotion = {
+  busyLabelDelay: 300,
   overlayIn: duration.slow,
   overlayOut: duration.long,
   checkMark: duration.base,
