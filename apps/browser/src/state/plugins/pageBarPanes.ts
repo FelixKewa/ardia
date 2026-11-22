@@ -19,8 +19,10 @@ export type PaneLayoutFacts = Pick<PageBarPane, "tabId" | "visible" | "lingering
 const countedDocuments = new Map<string, string>();
 
 function countShown(bars: PageBars) {
+  const tabs = useBrowser.getState().tabs;
+  for (const tabId of countedDocuments.keys()) if (!Object.hasOwn(tabs, tabId) && !Object.hasOwn(bars, tabId)) countedDocuments.delete(tabId);
   for (const [tabId, match] of Object.entries(bars)) {
-    const key = match.at > 0 ? `${match.at}|${match.plugin}` : `${match.url}|${match.plugin}`;
+    const key = `${match.at}|${match.plugin}`;
     if (countedDocuments.get(tabId) === key) continue;
     countedDocuments.set(tabId, key);
     notePageBarShown(match.official);

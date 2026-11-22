@@ -9,7 +9,12 @@ const lifecycle = await import("./lifecycle.ts");
 const { pageBarFor, pageBarPaneEligible } = await import("./pageBar.ts");
 const { notePageDocument, forgetPageDocument, endPageDocument, usePageDocuments, confirmedDocument } = await import("./pageBarDocuments.ts");
 const { setSiteSwitch, siteSwitchValue, siteSwitchRows } = await import("./siteSwitches.ts");
-const { noteTypedAddress, typedAddressCount } = await import("./typedAddresses.ts");
+const { navigateTyped, noteTypedOpen, typedAddressCount } = await import("./typedAddresses.ts");
+const noteTypedAddress = (tabId, url, now) => navigateTyped(tabId, url, () => useBrowser.getState().navigate(tabId, url), now);
+const realTabs = (names) => {
+  const windowId = useBrowser.getState().createWindow({ url: "https://example.com/" });
+  return Object.fromEntries(names.map((name) => [name, useBrowser.getState().newTab(windowId, { url: "https://example.com/" })]));
+};
 const { openFromBar } = await import("../omnibox/openFromBar.ts");
 const { setOpeningGate } = await import("../tabs/openingGate.ts");
 const { hostActionTarget } = await import("./hostActions.ts");
@@ -110,37 +115,38 @@ test("a new document shows its bar after 300 ms committed; a same-document chang
 
 test("typing a local address turns the switch on only with the toggle row on, only for that origin, and never over an explicit off", async () => {
   await enable();
+  const T = realTabs(["a", "b", "c", "d", "e", "h"]);
   takePageBarCounts();
   const origin = "http://localhost:18318";
-  noteTypedAddress("a", `${origin}/management.html`);
-  notePageDocument("a", `${origin}/management.html`, `${origin}/management.html`, Date.now(), false, R);
+  noteTypedAddress(T.a, `${origin}/management.html`);
+  notePageDocument(T.a, `${origin}/management.html`, `${origin}/management.html`, Date.now(), false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", origin), undefined, "the row is off by default");
   lifecycle.setPluginValue("developer-mode", "localAddresses", true);
-  noteTypedAddress("a", `${origin}/management.html`);
-  notePageDocument("a", `${origin}/management.html`, `${origin}/management.html`, Date.now() + 1, false, R);
+  noteTypedAddress(T.a, `${origin}/management.html`);
+  notePageDocument(T.a, `${origin}/management.html`, `${origin}/management.html`, Date.now() + 1, false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", origin), true);
   assert.equal(takePageBarCounts().plugin_site_switch_auto_on_typed, 1);
   setSiteSwitch("developer-mode", "on", `${origin}/`, false, consentToken());
-  noteTypedAddress("a", `${origin}/`);
-  notePageDocument("a", `${origin}/`, `${origin}/`, Date.now() + 2, false, R);
+  noteTypedAddress(T.a, `${origin}/`);
+  notePageDocument(T.a, `${origin}/`, `${origin}/`, Date.now() + 2, false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", origin), false, "an explicit off wins");
   const callback = "http://127.0.0.1:18455/callback?code=1";
-  notePageDocument("b", callback, callback, Date.now(), false, R);
+  notePageDocument(T.b, callback, callback, Date.now(), false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://127.0.0.1:18455"), undefined, "a redirect or link to a local address turns nothing on");
-  noteTypedAddress("c", "http://192.168.1.20:18318/");
-  notePageDocument("c", callback, callback, Date.now(), false, R);
+  noteTypedAddress(T.c, "http://192.168.1.20:18318/");
+  notePageDocument(T.c, callback, callback, Date.now(), false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://127.0.0.1:18455"), undefined, "a typed LAN address that redirects to a local callback turns nothing on");
-  noteTypedAddress("d", "http://localhost:5173/");
-  notePageDocument("d", "http://localhost:5173/", "http://localhost:5173/", Date.now(), true, R);
+  noteTypedAddress(T.d, "http://localhost:5173/");
+  notePageDocument(T.d, "http://localhost:5173/", "http://localhost:5173/", Date.now(), true, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:5173"), undefined, "never in a private window");
-  noteTypedAddress("e", "http://localhost:5174/");
-  notePageDocument("e", "http://localhost:9999/", "http://localhost:9999/", Date.now(), false, R);
-  notePageDocument("e", "http://localhost:5174/", "http://localhost:5174/", Date.now() + 5, false, R);
+  noteTypedAddress(T.e, "http://localhost:5174/");
+  notePageDocument(T.e, "http://localhost:9999/", "http://localhost:9999/", Date.now(), false, R);
+  notePageDocument(T.e, "http://localhost:5174/", "http://localhost:5174/", Date.now() + 5, false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:5174"), undefined, "the intent is spent on the next document, whatever it is");
-  noteTypedAddress("h", "http://LOCALHOST:5180");
-  notePageDocument("h", "http://localhost:5180/", "http://localhost:5180/", Date.now(), false, R);
+  noteTypedAddress(T.h, "http://LOCALHOST:5180");
+  notePageDocument(T.h, "http://localhost:5180/", "http://localhost:5180/", Date.now(), false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:5180"), true, "a bare typed origin matches the committed document with its trailing slash");
-  for (const id of ["a", "b", "c", "d", "e", "h"]) forgetPageDocument(id, R);
+  for (const id of [T.a, T.b, T.c, T.d, T.e, T.h]) forgetPageDocument(id, R);
 });
 
 test("site switch values live beside the record, keyed by origin, and stay out of the helper's values", async () => {
@@ -211,28 +217,29 @@ test("a host action runs only for the tab whose bar shows it", async () => {
 
 test("review fixes: stale commits, same-document moves, missing reports and another view's cleanup", async () => {
   await enable();
+  const T = realTabs(["f", "g", "h"]);
   lifecycle.setPluginValue("developer-mode", "localAddresses", true);
   const url = "http://localhost:7001/";
   const origin = "http://localhost:7001";
-  noteTypedAddress("f", url);
-  notePageDocument("f", "http://localhost:7001/old", "http://localhost:7001/old", Date.now() - 10_000, false, R);
-  notePageDocument("f", url, url, Date.now(), false, R);
+  noteTypedAddress(T.f, url);
+  notePageDocument(T.f, "http://localhost:7001/old", "http://localhost:7001/old", Date.now() - 10_000, false, R);
+  notePageDocument(T.f, url, url, Date.now(), false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", origin), true, "an older commit reported late leaves the newer intent alone");
   const fragment = "http://localhost:7002/a";
-  notePageDocument("g", fragment, fragment, Date.now() - 5000, false, R);
-  noteTypedAddress("g", `${fragment}#x`);
-  notePageDocument("g", `${fragment}#x`, `${fragment}#x`, usePageDocuments.getState().g.at, false, R);
-  notePageDocument("g", fragment, fragment, Date.now(), false, R);
+  notePageDocument(T.g, fragment, fragment, Date.now() - 5000, false, R);
+  noteTypedAddress(T.g, `${fragment}#x`);
+  notePageDocument(T.g, `${fragment}#x`, `${fragment}#x`, usePageDocuments.getState()[T.g].at, false, R);
+  notePageDocument(T.g, fragment, fragment, Date.now(), false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:7002"), undefined, "a typed fragment change spends nothing later");
   setSiteSwitch("developer-mode", "on", LOCAL, true, consentToken());
-  settledDoc("h", LOCAL);
-  notePageDocument("h", LOCAL, LOCAL, usePageDocuments.getState().h.at, false, R);
+  settledDoc(T.h, LOCAL);
+  notePageDocument(T.h, LOCAL, LOCAL, usePageDocuments.getState()[T.h].at, false, R);
   const other = {};
-  forgetPageDocument("h", other);
-  assert.ok(confirmedDocument(usePageDocuments.getState(), "h"), "a departing view can't erase what its replacement reported");
-  notePageDocument("h", LOCAL, undefined, undefined, false, R);
-  assert.equal(usePageDocuments.getState().h, undefined, "a report without commit data clears the document");
-  for (const id of ["f", "g", "h"]) forgetPageDocument(id, R);
+  forgetPageDocument(T.h, other);
+  assert.ok(confirmedDocument(usePageDocuments.getState(), T.h), "a departing view can't erase what its replacement reported");
+  notePageDocument(T.h, LOCAL, undefined, undefined, false, R);
+  assert.equal(usePageDocuments.getState()[T.h], undefined, "a report without commit data clears the document");
+  for (const id of [T.f, T.g, T.h]) forgetPageDocument(id, R);
 });
 
 test("a same-document change on a shown bar counts no second show", () => {
@@ -321,15 +328,16 @@ test("typed intents: none without a page-bar plugin, none for a navigation a gat
   setOpeningGate(() => ({ cancel: true }));
   openFromBar("http://localhost:4100/", tabId, "current");
   setOpeningGate(null);
-  assert.equal(typedAddressCount(), 0, "a cancelled navigation leaves no intent");
   notePageDocument(tabId, "http://localhost:4100/", "http://localhost:4100/", Date.now() + 10, false, R);
   assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:4100"), undefined);
   const t0 = Date.now();
-  noteTypedAddress("old", "http://localhost:4200/", t0);
-  noteTypedAddress("new", "http://localhost:4300/", t0 + 21_000);
+  const T = realTabs(["old", "new", "closing"]);
+  noteTypedAddress(T.old, "http://localhost:4200/", t0);
+  noteTypedAddress(T.new, "http://localhost:4300/", t0 + 21_000);
   assert.equal(typedAddressCount(), 1, "an expired intent goes when the next one is noted");
-  forgetPageDocument("new", R);
-  assert.equal(typedAddressCount(), 0, "a closed tab's intent goes with it");
+  useBrowser.getState().closeTab(T.new);
+  noteTypedAddress(T.closing, "http://localhost:4301/", t0 + 21_000);
+  assert.equal(typedAddressCount(), 1, "a closed tab's intent goes when the next one is noted");
   forgetPageDocument(tabId, R);
 });
 
@@ -349,4 +357,45 @@ test("the Extensions menu runs only on the document it opened on", async () => {
   assert.equal(hostActionTarget("extensions", windowId, tabId), true);
   withdrawPageBars(windowId);
   forgetPageDocument(tabId, R);
+});
+
+test("round 2: an allowed async gate keeps the typed intent, a cancelled one never turns the switch on, and a replaced view keeps it", async () => {
+  await enable();
+  lifecycle.setPluginValue("developer-mode", "localAddresses", true);
+  const windowId = useBrowser.getState().createWindow({ url: "https://example.com/" });
+  const tabId = useBrowser.getState().windows[windowId].tabIds[0];
+  const commit = (url, at) => notePageDocument(tabId, url, url, at, false, R);
+  setOpeningGate(() => Promise.resolve(null));
+  openFromBar("http://localhost:4400/", tabId, "current");
+  setOpeningGate(null);
+  await wait(5);
+  const other = {};
+  forgetPageDocument(tabId, other);
+  commit("http://localhost:4400/", Date.now() + 10);
+  assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:4400"), true, "allowed after the gate answered");
+  setOpeningGate(() => ({ cancel: true }));
+  openFromBar("http://localhost:4500/", tabId, "current");
+  setOpeningGate(null);
+  useBrowser.getState().navigate(tabId, "http://localhost:4500/", { userInitiated: false });
+  commit("http://localhost:4500/", Date.now() + 20);
+  assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:4500"), undefined, "a later navigation nobody typed turns nothing on");
+  const opened = useBrowser.getState().newTab(windowId, { url: "http://localhost:4600/" });
+  noteTypedOpen(opened, "http://localhost:4600/");
+  notePageDocument(opened, "http://localhost:4600/", "http://localhost:4600/", Date.now() + 30, false, R);
+  assert.equal(siteSwitchValue(P(), "developer-mode", "on", "http://localhost:4600"), true, "a typed address opened in a new tab");
+  forgetPageDocument(tabId, R);
+  forgetPageDocument(opened, R);
+});
+
+test("round 2: an ended page's old report can't bring its document back", async () => {
+  await enable();
+  setSiteSwitch("developer-mode", "on", LOCAL, true, consentToken());
+  const at = Date.now() - 5000;
+  settledDoc("ended", LOCAL, at);
+  endPageDocument("ended", R);
+  settledDoc("ended", LOCAL, at);
+  assert.equal(pageBarFor(state(), pane("ended")), null, "the same commit reported again stays ended");
+  settledDoc("ended", LOCAL, at + 1);
+  assert.ok(pageBarFor(state(), pane("ended")), "a new commit shows it again");
+  forgetPageDocument("ended", R);
 });

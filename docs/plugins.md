@@ -844,8 +844,10 @@ asks: automation's event feed and page bars each ask as their own reader (`repor
 last one stops, so one stopping never turns them off under the other; a call native refused is sent again on the next
 change. The tracker keeps each tab's last report, so pages already open show their bar as soon as a page-bar plugin
 turns on, and on the Mac pages already open report again when reports turn on. A page that crashes or is discarded
-forgets its document until it commits a new one. A typed local address is kept as an intent only while a page-bar
-plugin is on and only for a navigation that actually started, for at most 20 s, and it goes with the tab.
+forgets its document until it commits a new one, and its old report can't bring it back. A typed local address is
+kept as an intent only while a page-bar plugin is on, for at most 20 s, and is spent only by the navigation it started:
+the tab's next user-started navigation to that address (a `tab.opening` hook may hold it and let it through unchanged;
+one that cancels or redirects it leaves nothing to spend), or the new tab it opened. It goes with the tab.
 
 
 ### The channel

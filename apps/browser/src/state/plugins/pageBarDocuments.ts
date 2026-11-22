@@ -15,6 +15,7 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const reporters = new Map<string, DocumentReporter>();
 type Report = { shownUrl: string; committedUrl: string | undefined; committedAt: number | undefined; privatePage: boolean };
 const reports = new Map<string, Report>();
+const ended = new Map<string, number>();
 
 function cancelTimer(tabId: string) {
   const timer = timers.get(tabId);
@@ -57,6 +58,10 @@ export function replayPageDocuments(now = Date.now()) {
 }
 
 function trackDocument(tabId: string, shownUrl: string, committedUrl: string | undefined, committedAt: number | undefined, privatePage: boolean, now: number) {
+  if (ended.has(tabId)) {
+    if (typeof committedAt !== "number" || committedAt <= ended.get(tabId)!) return drop(tabId);
+    ended.delete(tabId);
+  }
   if (committedUrl === undefined) return drop(tabId);
   const before = Object.hasOwn(usePageDocuments.getState(), tabId) ? usePageDocuments.getState()[tabId] : undefined;
   const at = typeof committedAt === "number" && committedAt > 0 ? committedAt : 0;
@@ -86,12 +91,15 @@ export function forgetPageDocument(tabId: string, reporter: DocumentReporter) {
   if (reporters.has(tabId) && reporters.get(tabId) !== reporter) return;
   reporters.delete(tabId);
   reports.delete(tabId);
-  dropTypedAddress(tabId);
+  ended.delete(tabId);
   drop(tabId);
 }
 
 export function endPageDocument(tabId: string, reporter: DocumentReporter) {
   if (reporters.has(tabId) && reporters.get(tabId) !== reporter) return;
+  const doc = Object.hasOwn(usePageDocuments.getState(), tabId) ? usePageDocuments.getState()[tabId] : undefined;
+  const last = reports.get(tabId)?.committedAt;
+  ended.set(tabId, Math.max(doc?.at ?? 0, typeof last === "number" ? last : 0));
   reports.delete(tabId);
   dropTypedAddress(tabId);
   drop(tabId);
