@@ -2527,6 +2527,38 @@ try {
     });
   });
 
+  await check("extension-popup-peek-tab", async () => {
+    return withPopupExtension({}, async (id) => {
+      const source = await freshTab(`${base}/b?under-peek-popup`);
+      const peek = await evalApp(`return ac.store.getState().openPeek(${JSON.stringify(source)}, ${JSON.stringify(`${base}/b?peek-popup`)})`);
+      try {
+        await until("the Peek page", () => evalApp(`return !!ac.webviews.get(${JSON.stringify(peek)}) && !ac.tabLive.liveOf(${JSON.stringify(peek)})?.isLoading ? true : null`), 15000);
+        const before = await mainStrip();
+        const selected = before?.tabs.find((tab) => tab.active)?.key;
+        if (selected !== source) throw new Error(`Chrome selected ${selected}, not the Peek's source ${source}`);
+        const opened = await evalApp(`const ext = Object.values(ac.extensions.useExtensions.getState().lists).flat().find((x) => x.id === "${id}");
+          return ac.extensions.activateExtension(${JSON.stringify(mainWindow)}, ext, { x: 100, y: 40, width: 20, height: 20 }, undefined, ${JSON.stringify(peek)}).then(() => !!ac.extensions.useExtensions.getState().popup)`);
+        if (!opened) throw new Error("no popup in the app");
+        const popup = await until("the popup page", () => pageTarget(`${id}/popup.html`), 10000);
+        const seen = JSON.parse((await cdp(popup, "Runtime.evaluate", {
+          expression: `chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => JSON.stringify(tabs.map((tab) => ({ id: tab.id, url: tab.url, active: tab.active }))))`,
+          awaitPromise: true,
+          returnByValue: true,
+        })).result.value);
+        if (seen.length !== 1 || seen[0].url !== `${base}/b?peek-popup` || !seen[0].active)
+          throw new Error(`the popup's active tab over a Peek: ${JSON.stringify(seen)}`);
+        const after = await mainStrip();
+        if (after?.tabs.find((tab) => tab.active)?.key !== source) throw new Error("opening the popup promoted the Peek into a selected tab");
+        await evalApp(`ac.extensions.closeExtensionPopup(); return true`);
+        await until("the popup page gone", async () => !(await pageTarget(`${id}/popup.html`)), 8000);
+        return { activeTab: seen[0].url, selectedTab: source };
+      } finally {
+        await evalApp(`const s = ac.store.getState(); s.closePeek(${JSON.stringify(source)}); return true`).catch(() => null);
+        await closeTab(source).catch(() => null);
+      }
+    });
+  });
+
   await check("extension-windows-hidden", async () => {
     const appWindows = async () => (await engine("windows.list")).map((w) => w.window);
     const before = new Set([...onScreenWindows(), ...(await appWindows())]);

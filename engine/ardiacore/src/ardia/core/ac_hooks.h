@@ -172,6 +172,9 @@ extern std::optional<bool> (*g_ardia_open_action_popup)(
     ShowPopupCallback& callback,
     std::string* error);
 
+extern content::WebContents* (*g_ardia_extension_popup_tab)(
+    content::WebContents* popup);
+
 extern void (*g_ardia_devtools_dock_changed)(BrowserWindowInterface* browser,
                                              content::WebContents* inspected,
                                              content::WebContents* devtools);

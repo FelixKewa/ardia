@@ -50,9 +50,10 @@ The switch shipped in 0.2.22; this was the list it shipped against, kept for the
    history (`internal-pages-not-history`). A hidden test instance that crashes writes `<data dir>/crashes/crash-<pid>.txt`
    and exits without macOS's crash report, dialog or focus change (`crash-guard`); a data dir it can't use stops it
    with a message, not an abort; Cocoa's `-Key value` arguments stay off Chrome's command line (`launch-cocoa-args`).
-   The extension batch is done too: B9, an action's popup is Chrome's own extension view bound to the window it was
-   clicked in, so its current window and active tab are that window's (`extension-popup-window`; Dark Reader shows
-   the page's site again); B10/B11, the host's hidden windows are no extension's and never shown by Chrome, so the
+   The extension batch is done too: B9, an action's popup is Chrome's own extension view bound to the window and
+   visible page it was clicked over, so its current window and active tab are that window's even over a Peek
+   (`extension-popup-window`, `extension-popup-peek-tab`; Dark Reader shows the page's site again); B10/B11, the
+   host's hidden windows are no extension's and never shown by Chrome, so the
    "added" bubble anchors to the app's window and an extension's tabs land there (`extension-windows-hidden`); B12,
    an extension install's .crx is no download (`extension-download-hidden`); B8, the blocked count counts the
    rules' blocks and redirects to stand-ins (`content-blocked-count`); B7, no Reading mode in the page menu
@@ -137,7 +138,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | preload-pages | `setPreloadPages`/`getPreloadPages` write and read back Chrome's preload pages state |
 | extensions, extension-surfaces | Unpacked inspect, install, list, disable, uninstall, reload; action state and side panel URL for a tab; the extension's declarativeNetRequest blocks counted on the page (`onContentBlocked`) |
 | chrome-windows-create | `chrome.windows.create` from an extension → the tab lands in the app's window as a live tab (`tab:<id>`), also on a fresh instance showing only the New Tab page (through the extensions module's `onTabs` with an `adoptId`) |
-| extension-popup-window | An action's popup (`extensionHost="popup"`) sees the window it was clicked in as its current window and the page under it as its active tab; it's in no strip and makes no window; Esc in it closes it |
+| extension-popup-window, extension-popup-peek-tab | An action's popup (`extensionHost="popup"`) sees the window it was clicked in as its current window and the page under it as its active tab, including a Peek over a different selected tab; it's in no strip and makes no window; Esc in it closes it |
 | extension-windows-hidden | `chrome.windows.getAll` lists only the app's windows; an extension's tab on install and its options page land in the app's window; no window the app didn't show comes on screen |
 | extension-download-hidden | A .crx from the Web Store's update URL (`--apps-gallery-update-url`) is no download in the app, and doesn't open the popover |
 | content-blocked-count | An extension's rules on a page: a blocked image and a script redirected to its stand-in count 2 |

@@ -66,8 +66,12 @@ class HostedView : public extensions::ExtensionView,
  public:
   HostedView(std::unique_ptr<extensions::ExtensionViewHost> host,
              Browser* browser,
-             ExtensionViewKind kind)
-      : host_(std::move(host)), browser_(browser), kind_(kind) {
+             ExtensionViewKind kind,
+             base::WeakPtr<content::WebContents> source)
+      : host_(std::move(host)),
+        browser_(browser),
+        kind_(kind),
+        source_(std::move(source)) {
     host_->set_view(this);
     Observe(host_->host_contents());
     host_->SetCloseHandler(
@@ -90,6 +94,7 @@ class HostedView : public extensions::ExtensionView,
   ExtensionViewKind kind() const { return kind_; }
   const std::string& extension_id() const { return host_->extension_id(); }
   const gfx::Size& preferred_size() const { return preferred_size_; }
+  content::WebContents* source() const { return source_.get(); }
 
   void set_shown_callback(ShowPopupCallback callback) {
     FailShown();
@@ -220,6 +225,7 @@ class HostedView : public extensions::ExtensionView,
   std::unique_ptr<extensions::ExtensionViewHost> host_;
   raw_ptr<Browser> browser_;
   const ExtensionViewKind kind_;
+  base::WeakPtr<content::WebContents> source_;
   gfx::Size preferred_size_;
   ShowPopupCallback shown_callback_;
   bool destroy_scheduled_ = false;
@@ -273,6 +279,40 @@ class PendingPopup : public BrowserCollectionObserver {
 std::unique_ptr<PendingPopup>& Pending() {
   static base::NoDestructor<std::unique_ptr<PendingPopup>> pending;
   return *pending;
+}
+
+using PopupSourceKey = std::pair<int, std::string>;
+
+std::map<PopupSourceKey, base::WeakPtr<content::WebContents>>& PopupSources() {
+  static base::NoDestructor<
+      std::map<PopupSourceKey, base::WeakPtr<content::WebContents>>>
+      sources;
+  return *sources;
+}
+
+PopupSourceKey SourceKey(const BrowserWindowInterface* browser,
+                         const std::string& extension_id) {
+  return {browser->GetSessionID().id(), extension_id};
+}
+
+base::WeakPtr<content::WebContents> TakePopupSource(
+    const BrowserWindowInterface* browser,
+    const std::string& extension_id) {
+  auto& sources = PopupSources();
+  auto it = sources.find(SourceKey(browser, extension_id));
+  if (it == sources.end()) {
+    return nullptr;
+  }
+  base::WeakPtr<content::WebContents> source = std::move(it->second);
+  sources.erase(it);
+  return source;
+}
+
+content::WebContents* PopupSourceFor(content::WebContents* popup) {
+  auto it = Views().find(popup);
+  return it != Views().end() && it->second->kind() == ExtensionViewKind::kPopup
+             ? it->second->source()
+             : nullptr;
 }
 
 void FailPending(const char* why) {
@@ -330,8 +370,10 @@ std::optional<bool> OpenActionPopup(BrowserWindowInterface& browser,
     return false;
   }
   FailPending("another openPopup came first");
+  RememberExtensionPopupSource(&browser, extension.id(), tab->GetContents());
   Pending() = std::make_unique<PendingPopup>(&browser, extension.id(), std::move(callback));
   if (!HostExtensionActionPopup(tab->GetContents(), extension.id())) {
+    TakePopupSource(&browser, extension.id());
     LOG(WARNING) << "[ardiacore] action.openPopup for " << extension.id()
                  << ": the host doesn't show popups for extensions";
     if (Pending()) {
@@ -360,6 +402,10 @@ content::WebContents* OpenExtensionView(Browser* browser,
                      !extensions::util::IsIncognitoEnabled(extension->id(), profile))) {
     return nullptr;
   }
+  base::WeakPtr<content::WebContents> source =
+      kind == ExtensionViewKind::kPopup
+          ? TakePopupSource(browser, extension->id())
+          : nullptr;
   std::unique_ptr<extensions::ExtensionViewHost> host =
       kind == ExtensionViewKind::kPopup
           ? extensions::ExtensionViewHostFactory::CreatePopupHost(*extension, url, browser)
@@ -368,7 +414,8 @@ content::WebContents* OpenExtensionView(Browser* browser,
   if (!host) {
     return nullptr;
   }
-  auto view = std::make_unique<HostedView>(std::move(host), browser, kind);
+  auto view =
+      std::make_unique<HostedView>(std::move(host), browser, kind, source);
   HostedView* hosted = view.get();
   content::WebContents* contents = hosted->contents();
   Views()[contents] = std::move(view);
@@ -386,6 +433,15 @@ content::WebContents* OpenExtensionView(Browser* browser,
   }
   hosted->Start();
   return contents;
+}
+
+void RememberExtensionPopupSource(BrowserWindowInterface* browser,
+                                  const std::string& extension_id,
+                                  content::WebContents* source) {
+  if (!browser || !source) {
+    return;
+  }
+  PopupSources()[SourceKey(browser, extension_id)] = source->GetWeakPtr();
 }
 
 bool CloseExtensionView(content::WebContents* contents) {
@@ -409,10 +465,12 @@ gfx::Size ExtensionPopupPreferredSize(content::WebContents* contents) {
 
 void InstallActionPopupHook() {
   g_ardia_open_action_popup = &OpenActionPopup;
+  g_ardia_extension_popup_tab = &PopupSourceFor;
 }
 
 void CloseAllExtensionViews() {
   FailPending("the engine is shutting down");
+  PopupSources().clear();
   std::vector<std::unique_ptr<HostedView>> views;
   for (auto& [contents, view] : Views()) {
     views.push_back(std::move(view));

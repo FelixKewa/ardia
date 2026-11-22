@@ -8,6 +8,7 @@
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
+#include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_action.h"
 #include "extensions/browser/extension_action_manager.h"
@@ -19,6 +20,7 @@
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 #import "ardia/core/ardiacore_api_internal.h"
+#include "ardia/core/ac_extension_view.h"
 #import "ardia/core/ardiacore_internal.h"
 #import "ardia/core/ardiacore_tab_internal.h"
 
@@ -65,6 +67,9 @@ NSString* PngDataURL(const gfx::Image& image) {
   }
   switch (runner->RunAction(extension, true)) {
     case extensions::ExtensionAction::ShowAction::kShowPopup:
+      ardiacore::RememberExtensionPopupSource(
+          GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(_contents),
+          extension->id(), _contents);
       return @"popup";
     case extensions::ExtensionAction::ShowAction::kToggleSidePanel:
       return @"sidePanel";
