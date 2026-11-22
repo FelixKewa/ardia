@@ -118,9 +118,25 @@ test("only a full hover check and a scroll's first step move the anchor, so ever
 });
 
 test("a long hold is counted in the consent period it began in, taken under one lock, and never while sharing is off", () => {
-  const note = method("+ (void)ardia_noteHoverHeld");
-  assert.ok(note.indexOf("@synchronized") < note.indexOf("ArdiaHoverHeldSince = CACurrentMediaTime()"), "the hold's start and its epoch are set under the same lock");
-  assert.match(note, /ArdiaHoverHeldEpoch = ArdiaHoverConsentEpoch/);
+  const locked = (text) => {
+    const start = text.indexOf("@synchronized(ArdiaHoverHoldLock()) {");
+    assert.notEqual(start, -1, "no synchronized block");
+    let depth = 0;
+    for (let i = text.indexOf("{", start); i < text.length; i++) {
+      if (text[i] === "{") depth++;
+      if (text[i] === "}" && --depth === 0) return text.slice(start, i + 1);
+    }
+    return "";
+  };
+  const note = locked(method("+ (void)ardia_noteHoverHeld"));
+  assert.match(note, /ArdiaHoverHeldSince = CACurrentMediaTime\(\);/, "the hold's start is set under the lock");
+  assert.match(note, /ArdiaHoverHeldEpoch = ArdiaHoverConsentEpoch;/, "the hold's epoch is set under the same lock");
+  const end = locked(method("+ (void)ardia_endHoverHold"));
+  assert.match(end, /epoch = ArdiaHoverHeldEpoch;/);
+  assert.match(end, /ArdiaHoverHeldSince = 0;/);
+  const take = locked(method("+ (NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *)ardia_takeHoverCounts"));
+  assert.match(take, /\[ArdiaHoverCounts copy\]/, "the counts are copied under the lock");
+  assert.match(take, /ArdiaHoverCounts = nil;/, "and reset under it");
   assert.match(method("+ (void)ardia_endHoverHold"), /ardia_countHover:@"holds" epoch:epoch/);
   assert.match(method("+ (void)ardia_countHover:(NSString *)kind epoch:(NSString *)epoch"), /if \(epoch\.length == 0\) \{\n    return;/);
 });
@@ -190,6 +206,7 @@ typedef void (^RCTDirectEventBlock)(NSDictionary *);
   BOOL _ardiaEnterWaiting;
   BOOL _ardiaClipCounted;
   __weak NSWindow *_ardiaHoverWindow;
+  NSString *_ardiaEnterEpoch;
   NSTrackingArea *_trackingArea;
 }
 @property (copy) RCTDirectEventBlock onMouseEnter;
@@ -346,7 +363,24 @@ int main(void) {
     row.inside = NO;
     quiet();
 
+    [RCTView ardia_setConsentEpoch:@""];
+    [RCTView ardia_takeHoverCounts];
+    step(clip, 140);
+    row.inside = NO;
+    [row mouseEntered:nil];
     [RCTView ardia_setConsentEpoch:@"active"];
+    now += 1;
+    move(3);
+    int clippedAfterSharingOn = [[RCTView ardia_takeHoverCounts][@"active"][@"clipped"] intValue];
+    [row mouseExited:nil];
+    quiet();
+    row.inside = NO;
+    [row mouseEntered:nil];
+    int clippedWhileSharing = [[RCTView ardia_takeHoverCounts][@"active"][@"clipped"] intValue];
+    [row mouseExited:nil];
+    printf("enterepoch %d %d\n", clippedAfterSharingOn, clippedWhileSharing);
+    quiet();
+
     [RCTView ardia_takeHoverCounts];
     for (int x = 60; x < 90; x++) step(clipB, x);
     quiet();
@@ -475,6 +509,12 @@ test("a hovered view moved to another window is left there first and entered onc
   const r = replayRun(t);
   if (!r) return;
   assert.deepEqual(r.windowmove, [1, 1, 1, 1]);
+});
+
+test("a clipped enter is counted in the consent period its enter began in", (t) => {
+  const r = replayRun(t);
+  if (!r) return;
+  assert.deepEqual(r.enterepoch, [0, 1], "an enter that began while sharing was off is never counted after sharing turns on");
 });
 
 test("a hold is timed only while a hover change waits, and nothing is counted while sharing is off", (t) => {

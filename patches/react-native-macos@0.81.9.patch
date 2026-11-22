@@ -2175,10 +2175,10 @@ index 152e76da136756ebc962ece4cc84e84df7cfce0e..4e38bf09796d31dfc63cf79a081e40ea
   * Hide subviews if they are outside the view bounds.
   * This is an optimisation used predominantly with RKScrollViews
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe8379c36747e 100644
+index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..b70abaf968bd529cf317461b0a5ade937e40131d 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
-@@ -136,13 +136,155 @@ static NSString *RCTRecursiveAccessibilityLabel(RCTUIView *view) // [macOS]
+@@ -136,13 +136,156 @@ static NSString *RCTRecursiveAccessibilityLabel(RCTUIView *view) // [macOS]
    return str;
  }
  
@@ -2323,6 +2323,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
 +  BOOL _ardiaEnterWaiting; // [Ardia: AppKit entered it while a scroll held hover or over a clipped part Ardia]
 +  BOOL _ardiaClipCounted; // [Ardia]
 +  __weak NSWindow *_ardiaHoverWindow; // [Ardia]
++  NSString *_ardiaEnterEpoch; // [Ardia]
    BOOL _mouseDownCanMoveWindow;
 +  // [Ardia: the clip view whose bounds changes this view observes, if any (viewDidMoveToWindow). Ardia]
 +  __weak NSClipView *_observedClipView;
@@ -2334,7 +2335,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
  #endif // macOS]
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsNameMap;
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsLabelMap;
-@@ -245,6 +387,14 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -245,6 +388,14 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
    // be outside the bounds of `view` (e.g., if -clipsToBounds is NO).
    RCTPlatformView *hitSubview = nil; // [macOS]
    BOOL isPointInside = [self pointInside:point withEvent:event];
@@ -2349,7 +2350,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
    BOOL needsHitSubview = !(_pointerEvents == RCTPointerEventsNone || _pointerEvents == RCTPointerEventsBoxOnly);
    if (needsHitSubview && (![self clipsToBounds] || isPointInside)) {
      // Take z-index into account when calculating the touch target.
-@@ -784,58 +934,109 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -784,58 +935,109 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
    // scroll event occurs either due to trackpad/gesture based scrolling or a scrollwheel event
    // both of which would not cause the mouseExited to be invoked.
  
@@ -2492,7 +2493,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
      }
    }
  }
-@@ -943,28 +1144,63 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -943,28 +1145,63 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
  
  - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
  {
@@ -2556,7 +2557,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
  }
  
  - (void)layoutSubviews
-@@ -1196,12 +1432,42 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1196,12 +1433,42 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
    // be rendered as a stretchable image, we'll need to re-render.
    // TODO: detect up-front if re-rendering is necessary
    CGSize oldSize = self.bounds.size;
@@ -2599,7 +2600,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
  - (void)displayLayer:(CALayer *)layer
  {
    if (CGSizeEqualToSize(layer.bounds.size, CGSizeZero)) {
-@@ -1248,17 +1514,8 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1248,17 +1515,8 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
    RCTUIColor *backgroundColor = _backgroundColor;
  #endif // macOS]
  
@@ -2619,7 +2620,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
  
    if (useIOSBorderRendering) {
      layer.cornerRadius = cornerRadii.topLeftHorizontal;
-@@ -1293,9 +1550,10 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1293,9 +1551,10 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
    layer.contents = (id)image.CGImage;
    layer.contentsScale = image.scale;
  #else // [macOS
@@ -2631,7 +2632,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
  #endif // macOS]
    layer.needsDisplayOnBoundsChange = YES;
    layer.magnificationFilter = kCAFilterNearest;
-@@ -1514,6 +1772,20 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1514,6 +1773,20 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
  	return [self focusable] || [super acceptsFirstResponder];
  }
  
@@ -2652,7 +2653,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
  - (void)updateTrackingAreas
  {
    BOOL hasMouseHoverEvent = self.onMouseEnter || self.onMouseLeave;
-@@ -1522,32 +1794,589 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1522,32 +1795,590 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
    if (!wouldRecreateIdenticalTrackingArea) {
      if (_trackingArea) {
        [self removeTrackingArea:_trackingArea];
@@ -3173,7 +3174,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
 +  if (![RCTView ardia_pointer:screen isInside:self]) {
 +    if (!_ardiaClipCounted) {
 +      _ardiaClipCounted = YES;
-+      [RCTView ardia_countHover:@"clipped" epoch:[RCTView ardia_consentEpoch]];
++      [RCTView ardia_countHover:@"clipped" epoch:_ardiaEnterEpoch];
 +    }
 +    [self ardia_waitForEnter];
 +    return;
@@ -3223,6 +3224,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
 +
 +- (void)mouseEntered:(NSEvent *)event
 +{
++  _ardiaEnterEpoch = [RCTView ardia_consentEpoch]; // [Ardia]
 +  if ([self ardia_holdHoverForScroll]) { // [Ardia]
 +    [self ardia_waitForEnter];
 +    return;
@@ -3246,7 +3248,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
    [self sendMouseEventWithBlock:self.onMouseLeave
                     locationInfo:[self locationInfoFromEvent:event]
                    modifierFlags:event.modifierFlags
-@@ -1768,7 +2597,7 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1768,7 +2599,7 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];
@@ -3255,7 +3257,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..415a118ab83ba32970690798bdffe837
      [_eventDispatcher sendEvent:keyboardEvent];
      objc_setAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
    }
-@@ -1794,3 +2623,19 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1794,3 +2625,19 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
  #endif // macOS]
  
  @end
