@@ -1,4 +1,4 @@
-import { countFor, type ConsentToken } from "./consentPeriod";
+import { consentOrNow, countFor, type ConsentToken } from "./consentPeriod";
 
 const counts = { asked: 0, allowed: 0, denied: 0, expired: 0, cancelled: 0, unreachable: 0, refused: 0, unenrolled: 0, bad_signature: 0, trusted: 0, answerMsTotal: 0, answerMsMost: 0 };
 
@@ -19,16 +19,12 @@ const FIELD: Record<PhoneApprovalOutcome, string> = {
 
 export function notePhoneApproval(outcome: PhoneApprovalOutcome, consent: ConsentToken | null | undefined, answeredInMs?: number) {
   const ms = answeredInMs !== undefined && Number.isFinite(answeredInMs) ? Math.max(0, Math.round(answeredInMs)) : null;
-  countFor(
-    consent,
-    () => {
-      counts[outcome] += 1;
-      if (ms === null) return;
-      counts.answerMsTotal += ms;
-      counts.answerMsMost = Math.max(counts.answerMsMost, ms);
-    },
-    ms === null ? { [FIELD[outcome]]: 1 } : { [FIELD[outcome]]: 1, vault_phone_answer_ms_total: ms, vault_phone_answer_ms_max: ms },
-  );
+  countFor(consentOrNow(consent), () => {
+    counts[outcome] += 1;
+    if (ms === null) return;
+    counts.answerMsTotal += ms;
+    counts.answerMsMost = Math.max(counts.answerMsMost, ms);
+  });
 }
 
 export function takeVaultPhoneApprovalCounts() {

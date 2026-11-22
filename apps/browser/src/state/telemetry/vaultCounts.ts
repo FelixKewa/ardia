@@ -1,5 +1,5 @@
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 import { percentile } from "./transport";
 
 export const VAULT_REFUSALS = ["not_granted", "no_login", "no_form", "needs_passkey", "needs_human", "password_manager_plugin", "task_expired", "denied", "locked", "conflict", "busy", "failed", "bad_request"] as const;
@@ -19,7 +19,7 @@ const COUNTS = ["vault_fills", "vault_autofills", "vault_tasks", "vault_codes_fi
 let counts: Record<string, number> = {};
 let samples: Record<VaultTiming, number[]> = { login: [], autofill: [], unlock: [], sheet: [], ready: [], fill: [], decide: [], profile: [], seed: [], load: [], scan: [], transfer: [] };
 
-const bump = (field: string, consent?: ConsentToken | null) => countFor(consent, () => void (counts[field] = (counts[field] ?? 0) + 1), { [field]: 1 });
+const bump = (field: string, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + 1));
 
 export const noteVaultFill = (auto: boolean, usedCode: boolean, consent?: ConsentToken | null) => {
   bump(auto ? "vault_autofills" : "vault_fills", consent);
@@ -32,7 +32,7 @@ export function noteVaultTransfer(outcome: VaultTransferOutcome | undefined, sum
   const add = (field: string, n: number | undefined) => {
     if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return;
     const amount = Math.min(Math.round(n), 10_000);
-    countFor(consent, () => void (counts[field] = (counts[field] ?? 0) + amount), { [field]: amount });
+    countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + amount));
   };
   add("vault_conflict_keys", sums.conflicts);
   add("vault_transfer_failures", sums.transferFailed);
@@ -44,7 +44,7 @@ export const noteVaultAlwaysAdded = (consent?: ConsentToken | null) => bump("vau
 
 export function noteVaultTiming(kind: VaultTiming, ms: number | undefined, consent?: ConsentToken | null) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return;
-  countFor(consent, () => void (samples[kind].length < MAX_SAMPLES && samples[kind].push(Math.round(ms * 10) / 10)), {});
+  countFor(consentOrNow(consent), () => void (samples[kind].length < MAX_SAMPLES && samples[kind].push(Math.round(ms * 10) / 10)));
 }
 
 export function takeVaultCounts(): Record<string, number> {

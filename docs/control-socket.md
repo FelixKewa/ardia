@@ -605,7 +605,7 @@ code or a field value; it asks Ardia to sign in for it, and Ardia does it in the
   passwords; plugins stay write-only toward agents), `task_expired`, `denied`, `locked` (the screen is locked, so nobody
   can approve), `conflict` (the sign-in finished, but the person changed some of the site's session in the profile
   meanwhile, so Ardia kept their values for those and still reloaded the tab), `busy` (another sign-in is running for
-  that site or the profile has 4 running; retry shortly), `failed` (the message names the engine's reason: `unreachable`,
+  that site or the profile has 4 running; try again shortly), `failed` (the message names the engine's reason: `unreachable`,
   `field_missing`, `field_changed` or `steps`; also when only part of the session moved into the profile, the move was
   sent but not confirmed, or it timed out). A site with several saved logins needs `account`; the error says how many, never which.
 - **Verification codes.** Ardia keeps TOTP secrets in its own vault store (`Ardia Vault/vault.sealed` in the data folder,

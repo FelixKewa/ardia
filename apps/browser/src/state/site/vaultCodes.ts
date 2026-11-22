@@ -11,11 +11,11 @@ export const vaultStoreState = () => vaultState();
 
 const loginOrigin = (origin: string) => originOfLogin(origin).toLowerCase();
 
-export async function saveVerificationSecret(profile: string, origin: string, username: string, otpauthUri: string): Promise<boolean> {
+export async function saveVerificationSecret(profile: string, origin: string, username: string, otpauthUri: string, consent?: ConsentToken | null): Promise<boolean> {
   const site = loginOrigin(origin);
   if (!site || !username) return false;
   const saved = (await saveVaultSecret(profile, site, username, otpauthUri)).saved;
-  if (saved) noteVaultCodeKept();
+  if (saved) noteVaultCodeKept(consent);
   return saved;
 }
 

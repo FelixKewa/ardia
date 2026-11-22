@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWindowId } from "../../state/browser/hooks";
-import { answerApproval, noteApprovalShown, useVaultApproval, type ApprovalRequest } from "../../state/vault/approval";
+import { answerApproval, markApprovalShown, useVaultApproval, type ApprovalRequest } from "../../state/vault/approval";
 import { programLabel, signerLine } from "../../state/vault/programs";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Symbol, Text } from "../ui";
 import { useTheme } from "../ui/theme";
@@ -18,7 +18,7 @@ const hostOf = (origin: string) => origin.replace(/^https?:\/\//, "");
 function VaultApprovalSheet({ request, checking }: { request: ApprovalRequest; checking: boolean }) {
   const theme = useTheme();
   const [always, setAlways] = useState(false);
-  useEffect(() => noteApprovalShown(request.id), [request.id]);
+  useEffect(() => markApprovalShown(request.id), [request.id]);
   const name = programLabel(request.program);
   const deny = () => answerApproval(request.id, "deny");
   return (

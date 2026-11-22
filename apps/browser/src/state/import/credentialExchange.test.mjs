@@ -38,6 +38,7 @@ test("passwords and codes land in the profile, duplicates once, sites without a 
       noSite: 1,
       unsupported: 3,
     }),
+    null,
   );
   assert.deepEqual(
     [...logins().values()].map((l) => [l.url, l.username]).sort(),
@@ -61,8 +62,8 @@ test("passwords and codes land in the profile, duplicates once, sites without a 
 
 test("a login already saved with another password counts as already saved, not as a failure", async () => {
   stub.passwordStores.set(stub.current.device, new Map());
-  await saveExchangedCredentials("", exchange({ logins: [{ url: "https://a.example.test", username: "u", password: "old" }] }));
-  const again = await saveExchangedCredentials("", exchange({ logins: [{ url: "https://a.example.test", username: "u", password: "new" }] }));
+  await saveExchangedCredentials("", exchange({ logins: [{ url: "https://a.example.test", username: "u", password: "old" }] }), null);
+  const again = await saveExchangedCredentials("", exchange({ logins: [{ url: "https://a.example.test", username: "u", password: "new" }] }), null);
   assert.equal(again.saved, 0);
   assert.equal(again.existing, 1);
   assert.equal(again.failed, 0);
@@ -73,7 +74,7 @@ test("1,000 logins save in parallel without the JS side costing more than a few 
   stub.passwordStores.set(stub.current.device, new Map());
   const rows = Array.from({ length: 1000 }, (_, n) => ({ url: `https://site${n}.example.test/login`, username: `user${n}`, password: `pw-${n}` }));
   const started = performance.now();
-  const result = await saveExchangedCredentials("", exchange({ logins: rows }));
+  const result = await saveExchangedCredentials("", exchange({ logins: rows }), null);
   const ms = performance.now() - started;
   assert.equal(result.saved, 1000);
   assert.equal(logins().size, 1000);
@@ -92,7 +93,7 @@ test("the engine's batch save takes every row in one call per 500 when it exists
   };
   try {
     const rows = Array.from({ length: 1200 }, (_, n) => ({ url: `https://batch${n}.example.test`, username: "u", password: "p" }));
-    const result = await saveExchangedCredentials("", exchange({ logins: rows }));
+    const result = await saveExchangedCredentials("", exchange({ logins: rows }), null);
     assert.deepEqual(batches, [500, 500, 200]);
     assert.equal(result.saved, 1197);
     assert.equal(result.existing, 3);
@@ -118,7 +119,7 @@ test("an engine without the batch call falls back to one save each instead of fa
   };
   try {
     const rows = Array.from({ length: 30 }, (_, n) => ({ url: `https://fallback${n}.example.test`, username: "u", password: "p" }));
-    const result = await saveExchangedCredentials("", exchange({ logins: rows }));
+    const result = await saveExchangedCredentials("", exchange({ logins: rows }), null);
     assert.equal(result.saved, 30);
     assert.equal(result.failed, 0);
     assert.equal(logins().size, 30);

@@ -2048,6 +2048,76 @@ function buildView(scopes                            , me        , answered     
 }
 
 });
+__define("packages/sync/src/companion/theme.ts", function (exports, __require) {
+  __export(exports, "themeOf", () => themeOf);
+                                                   
+
+                                                                                                            
+                                                                    
+                                                                                                                                                         
+                                                                                                                                                            
+
+function hex(n         ) {
+  const v = typeof n === "number" && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+  return Math.round(v * 255).toString(16).padStart(2, "0").toUpperCase();
+}
+
+function colorsOf(look         )                  {
+  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
+  const out           = [];
+  for (const stop of (look                        ).stops.slice(0, 16)) {
+    if (out.length >= 3) break;
+    const c = (stop                                              )?.color;
+    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
+    const alpha = typeof c.a === "number" && Number.isFinite(c.a) ? Math.min(1, Math.max(0, c.a)) : 1;
+    out.push(`#${hex(c.r)}${hex(c.g)}${hex(c.b)}${alpha < 1 ? hex(alpha) : ""}`);
+  }
+  return out.length ? out : null;
+}
+
+const TEXTURES                              = ["grain", "sand", "denim", "tweed"];
+const DEFAULT_ANGLE = 135;
+const unit = (v         , fallback        ) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
+const degrees = (v         ) => (typeof v === "number" && Number.isFinite(v) ? ((v % 360) + 360) % 360 : null);
+
+function themeLookOf(look         , angle         )                       {
+  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
+  const t = look                           ;
+  const stops                  = [];
+  for (const raw of (t.stops             ).slice(0, 16)) {
+    if (stops.length >= 3) break;
+    const s = raw                                  ;
+    const c = s?.color                                       ;
+    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
+    stops.push({ color: { r: c.r          , g: c.g          , b: c.b          , a: unit(c.a, 1) }, x: unit(s .x, 0.5), y: unit(s .y, 0.5) });
+  }
+  if (!stops.length) return null;
+  return {
+    stops,
+    intensity: unit(t.intensity, 0.6),
+    grain: unit(t.grain, 0),
+    texture: TEXTURES.includes(t.texture                    ) ? (t.texture                    ) : "grain",
+    translucency: unit(t.translucency, 1),
+    angle: degrees(angle) ?? degrees(t.angle) ?? DEFAULT_ANGLE,
+  };
+}
+
+function themeOf(app            , syncId        , profileTheme         )                   {
+  const record = app.records[`pth:${syncId}`]?.v                                              ;
+  const theme = record ? (record.preset === true ? null : record.t) : profileTheme;
+  const colors = colorsOf(theme);
+  if (!colors) return null;
+  const angles = (record ? app.records[`pth:${syncId}:angle`]?.v : null)                                              ;
+  const t = theme                           ;
+  const look = themeLookOf(theme, angles?.a);
+  if (!look) return null;
+  const lightAngle = degrees(angles?.a) ?? degrees(t.angle);
+  const dark = themeLookOf(t.dark, angles?.d ?? (t.dark                                       )?.angle ?? lightAngle);
+  const mode = t.mode === "light" || t.mode === "dark" ? t.mode : "auto";
+  return { colors, darkColors: colorsOf(t.dark), mode, look, dark };
+}
+
+});
 __define("packages/sync/src/companion/vault.ts", function (exports, __require) {
   __export(exports, "vaultAnswersAdapter", () => vaultAnswersAdapter);
   __export(exports, "openVaultRequests", () => openVaultRequests);
@@ -2319,76 +2389,6 @@ function vaultRequestsAdapter(asks           )          {
       return true;
     },
   };
-}
-
-});
-__define("packages/sync/src/companion/theme.ts", function (exports, __require) {
-  __export(exports, "themeOf", () => themeOf);
-                                                   
-
-                                                                                                            
-                                                                    
-                                                                                                                                                         
-                                                                                                                                                            
-
-function hex(n         ) {
-  const v = typeof n === "number" && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
-  return Math.round(v * 255).toString(16).padStart(2, "0").toUpperCase();
-}
-
-function colorsOf(look         )                  {
-  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
-  const out           = [];
-  for (const stop of (look                        ).stops.slice(0, 16)) {
-    if (out.length >= 3) break;
-    const c = (stop                                              )?.color;
-    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
-    const alpha = typeof c.a === "number" && Number.isFinite(c.a) ? Math.min(1, Math.max(0, c.a)) : 1;
-    out.push(`#${hex(c.r)}${hex(c.g)}${hex(c.b)}${alpha < 1 ? hex(alpha) : ""}`);
-  }
-  return out.length ? out : null;
-}
-
-const TEXTURES                              = ["grain", "sand", "denim", "tweed"];
-const DEFAULT_ANGLE = 135;
-const unit = (v         , fallback        ) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
-const degrees = (v         ) => (typeof v === "number" && Number.isFinite(v) ? ((v % 360) + 360) % 360 : null);
-
-function themeLookOf(look         , angle         )                       {
-  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
-  const t = look                           ;
-  const stops                  = [];
-  for (const raw of (t.stops             ).slice(0, 16)) {
-    if (stops.length >= 3) break;
-    const s = raw                                  ;
-    const c = s?.color                                       ;
-    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
-    stops.push({ color: { r: c.r          , g: c.g          , b: c.b          , a: unit(c.a, 1) }, x: unit(s .x, 0.5), y: unit(s .y, 0.5) });
-  }
-  if (!stops.length) return null;
-  return {
-    stops,
-    intensity: unit(t.intensity, 0.6),
-    grain: unit(t.grain, 0),
-    texture: TEXTURES.includes(t.texture                    ) ? (t.texture                    ) : "grain",
-    translucency: unit(t.translucency, 1),
-    angle: degrees(angle) ?? degrees(t.angle) ?? DEFAULT_ANGLE,
-  };
-}
-
-function themeOf(app            , syncId        , profileTheme         )                   {
-  const record = app.records[`pth:${syncId}`]?.v                                              ;
-  const theme = record ? (record.preset === true ? null : record.t) : profileTheme;
-  const colors = colorsOf(theme);
-  if (!colors) return null;
-  const angles = (record ? app.records[`pth:${syncId}:angle`]?.v : null)                                              ;
-  const t = theme                           ;
-  const look = themeLookOf(theme, angles?.a);
-  if (!look) return null;
-  const lightAngle = degrees(angles?.a) ?? degrees(t.angle);
-  const dark = themeLookOf(t.dark, angles?.d ?? (t.dark                                       )?.angle ?? lightAngle);
-  const mode = t.mode === "light" || t.mode === "dark" ? t.mode : "auto";
-  return { colors, darkColors: colorsOf(t.dark), mode, look, dark };
 }
 
 });

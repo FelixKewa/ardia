@@ -56,7 +56,7 @@ function settle(entry: Waiting, settled: Settled) {
   entry.resolve(settled);
 }
 
-export function noteApprovalShown(id: string) {
+export function markApprovalShown(id: string) {
   const entry = entryOf(id);
   if (!entry || entry.shownAt !== null) return;
   entry.shownAt = Date.now();
@@ -111,7 +111,7 @@ export async function askApproval(input: Omit<ApprovalRequest, "id" | "askedAt" 
     waiting.push(entry);
     showNext();
     entry.timers.push(setTimeout(() => settle(entry, { allow: false, why: "expired" }), request.expiresAt - askedAt));
-    if (backgroundInstance) entry.timers.push(setTimeout(() => entry.shownAt === null && noteApprovalShown(request.id), SEAM_FALLBACK_MS));
+    if (backgroundInstance) entry.timers.push(setTimeout(() => entry.shownAt === null && markApprovalShown(request.id), SEAM_FALLBACK_MS));
   });
   void phoneApprovals.ask({ id: request.id, nonce: entry.nonce, profile: request.profileId, program: programLabel(request.program), sites: request.sites, why: request.why, alwaysOffered: request.mayAlways, expiresAt: request.expiresAt }, consent)
     .then((phone) => phoneAnswered(request.id, phone))

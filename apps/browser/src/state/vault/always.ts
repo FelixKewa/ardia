@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { setVaultAlways, vaultAlwaysGrants, vaultState, type VaultAlwaysGrant } from "../../platform/vault";
 import { noteVaultTiming } from "../telemetry/vaultCounts";
-import { consentToken } from "../telemetry/client";
+import type { ConsentToken } from "../telemetry/client";
 import { orWarn } from "../../lib/fallback";
 import { mayAlwaysAllow, programKey, type Program } from "./programs";
 
@@ -17,8 +17,7 @@ function publish(grants: VaultAlwaysGrant[]) {
   useVaultAlways.setState({ grants, loaded: true });
 }
 
-export function loadVaultAlways(): Promise<void> {
-  const consent = consentToken();
+export function loadVaultAlways(consent: ConsentToken | null): Promise<void> {
   loading ??= vaultAlwaysGrants()
     .then(publish, (error: unknown) => {
       orWarn(undefined)(error);

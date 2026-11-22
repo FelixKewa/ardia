@@ -7,7 +7,8 @@ import { withLivePage } from "../tabs/livePage";
 import { cancelVaultSignIn, onLoginFormSeen, vaultSignIn, type VaultSignIn } from "../../platform/vault";
 import { onAppEvent } from "../../platform/app";
 import { secureRandomHex } from "../../platform/secureRandom";
-import { consentToken } from "../telemetry/client";
+import type { ConsentToken } from "../telemetry/client";
+import { nativeConsent } from "../telemetry/nativeConsent";
 import { noteVaultFailure, noteVaultFill, noteVaultRefusal, noteVaultTiming, noteVaultTransfer, type VaultRefusal } from "../telemetry/vaultCounts";
 import { recordVaultEvent } from "./activity";
 import { dropApprovals } from "./approval";
@@ -47,7 +48,7 @@ const STATUS_MESSAGES: Partial<Record<VaultSignIn["status"], string>> = {
   needs_passkey: "That site signs in with a passkey, which only the person at the Mac can use.",
   cross_origin: "The sign-in page isn't on the saved login's site. For single sign-on, grant the identity provider's site, sign in there (it needs its own saved login), then reload the tab.",
   cancelled: "The task ended before the sign-in finished.",
-  busy: "Another sign-in is running for this site or profile; retry shortly.",
+  busy: "Another sign-in is running for this site or profile; try again shortly.",
   failed: "The sign-in didn't finish.",
 };
 
@@ -141,10 +142,9 @@ function signInUrl(origin: string, tabId: string | null): string {
   return url && originOfLogin(url).toLowerCase() === origin ? url : `${origin}/`;
 }
 
-type Request = { task: VaultTask; origin: string; account: string | null; tabId: string | null; why: string; auto: boolean; startedAt?: number };
+type Request = { task: VaultTask; origin: string; account: string | null; tabId: string | null; why: string; auto: boolean; startedAt?: number; consent: ConsentToken | null };
 
-export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now() }: Request) {
-  const consent = consentToken();
+export async function signIn({ task, origin, account, tabId, why, auto, startedAt = Date.now(), consent }: Request) {
   const attempt: Attempt = { id: secureRandomHex(16), task, origin, tabId, revoked: null };
   attempts.set(attempt.id, attempt);
   const base = { profile: task.profileId, site: origin, program: programLabel(task.program), signer: task.program.signer, task: task.id.slice(0, 8), via: auto ? "auto" : "login", reason: why };
@@ -253,7 +253,7 @@ export function watchVault() {
     if (state.stopped || (document !== null && state.documents.has(document))) return;
     if (Date.now() - state.lastSuccess < AUTO_RETRY_MS) return;
     task.busyTabs.add(form.tab);
-    void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true })
+    void signIn({ task, origin, account: null, tabId: form.tab, why: task.why, auto: true, consent: nativeConsent(form) })
       .then(
         () => {
           state.failures = 0;

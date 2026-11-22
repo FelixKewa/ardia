@@ -18,7 +18,7 @@
   }];
   id document = form[@"document"];
   if ([document isKindOfClass:NSString.class] || [document isKindOfClass:NSNumber.class]) payload[@"document"] = document;
-  [ArdiaEvents emit:@"vault.loginFormSeen" data:payload];
+  [ArdiaEvents emit:@"vault.loginFormSeen" data:[[ArdiaConsentStamp begin] onto:payload]];
 }
 
 @end

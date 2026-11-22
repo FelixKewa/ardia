@@ -153,9 +153,9 @@ test("a sign-in form in a tab the task drives fills on Chrome's event, once", as
   const { call } = socketClient(707);
   await approved(call("vault.taskStart", { sites: ["one.example"], tabs: [tab] }));
   const before = stub.vaultFake.signIns.length;
-  emitEvent("vault.loginFormSeen", { tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, at: 1 });
-  emitEvent("vault.loginFormSeen", { tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, at: 2 });
-  emitEvent("vault.loginFormSeen", { tab, origin: "https://elsewhere.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, at: 3 });
+  emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, at: 1 });
+  emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, at: 2 });
+  emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin: "https://elsewhere.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, at: 3 });
   await settle();
   assert.equal(stub.vaultFake.signIns.length, before + 1);
   assert.equal(stub.vaultFake.signIns.at(-1).url, "https://one.example/login");
@@ -296,7 +296,7 @@ test("the reload after an automatic sign-in doesn't sign in again, even though i
   const { call } = socketClient(722);
   await approved(call("vault.taskStart", { sites: ["one.example"], tabs: [tab] }));
   const before = stub.vaultFake.signIns.length;
-  const form = (document) => emitEvent("vault.loginFormSeen", { tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
+  const form = (document) => emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
   form(40);
   await settle();
   form(41);
@@ -309,7 +309,7 @@ test("auto-fill runs once per tab at a time, never repeats a signed-in document,
   stub.controlSocket.peers[716] = NODE;
   const { call } = socketClient(716);
   await approved(call("vault.taskStart", { sites: ["one.example"], tabs: [tab] }));
-  const form = (document) => emitEvent("vault.loginFormSeen", { tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
+  const form = (document) => emitEvent("vault.loginFormSeen", { epoch: "socket-vault-test", tab, origin: "https://one.example", hasUsername: true, hasPassword: true, hasOneTimeCode: false, mainFrame: true, document, at: 1 });
   const before = stub.vaultFake.signIns.length;
   stub.vaultFake.holdSignIns = true;
   form(1);
@@ -461,7 +461,7 @@ test("the session's move into the profile decides the answer: keys the person ch
     assert.equal((await login({ status: "signed_in", transfer: "timed_out" })).error.code, "failed");
     const busy = await login({ status: "busy" });
     assert.equal(busy.error.code, "busy");
-    assert.match(busy.error.message, /retry shortly/);
+    assert.match(busy.error.message, /try again shortly/);
     assert.equal(reloaded.length, 1, "nothing else reloaded");
 
     assert.equal((await login({ status: "submitted", transfer: "complete" })).result.status, "submitted");

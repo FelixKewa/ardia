@@ -3,7 +3,7 @@ import { isTestInstance } from "../../platform/launchConfig";
 import { secureRandomHex } from "../../platform/secureRandom";
 import { screenLocked, warmVault } from "../../platform/vault";
 import { engineProfile } from "../browser/model";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { noteVaultAlwaysAdded, noteVaultGrant, noteVaultRefusal, noteVaultTiming, type VaultRefusal } from "../telemetry/vaultCounts";
 import { clippedReason, recordVaultEvent, vaultLog } from "../vault/activity";
 import { alwaysAllowed, loadVaultAlways, setAlwaysAllowed, useVaultAlways } from "../vault/always";
@@ -40,8 +40,8 @@ export function vaultControlStopped() {
 
 const programRow = (program: Program) => ({ name: programLabel(program), kind: program.kind, signer: program.signer, teamId: program.teamId, identifier: program.identifier, path: program.path, alwaysAllowed: mayAlwaysAllow(program) });
 
-function refuse(code: VaultRefusal, message: string, event: { profile: string; site: string | null; program: Program; task: string | null; via: string; reason: string }): never {
-  noteVaultRefusal(code, consentToken());
+function refuse(code: VaultRefusal, message: string, event: { profile: string; site: string | null; program: Program; task: string | null; via: string; reason: string }, consent: ConsentToken | null): never {
+  noteVaultRefusal(code, consent);
   recordVaultEvent({ time: Date.now(), kind: "refusal", profile: event.profile, site: event.site, account: null, program: programLabel(event.program), signer: event.program.signer, task: event.task, outcome: code, via: event.via, reason: event.reason });
   throw new OpError(code, message);
 }
@@ -69,17 +69,17 @@ async function taskStart(params: Record<string, unknown>, call: SocketCall) {
   const program = await programFor(call.connection);
   const base = { profile: profileId, site: origins.join(" "), program, task: null, via: "task", reason: why };
   const plugin = pluginRefusal(profileId);
-  if (plugin) refuse(plugin.code, plugin.message, base);
-  await loadVaultAlways();
+  if (plugin) refuse(plugin.code, plugin.message, base, consent);
+  await loadVaultAlways(consent);
   call.stillServing();
   let via: "sheet" | "phone" | "always" = "always";
   let sheetMs: number | null = null;
   if (!origins.every((origin) => alwaysAllowed(profileId, origin, program))) {
-    if (await screenLocked().catch(() => false)) refuse("locked", "The Mac's screen is locked, so nobody can approve the sign-in.", base);
+    if (await screenLocked().catch(() => false)) refuse("locked", "The Mac's screen is locked, so nobody can approve the sign-in.", base, consent);
     const windowId = shownWindowId();
-    if (!windowId) refuse("needs_human", "Ardia has no window where it can ask the person to approve the sign-in.", base);
+    if (!windowId) refuse("needs_human", "Ardia has no window where it can ask the person to approve the sign-in.", base, consent);
     const outcome = await askApproval({ windowId, connection: call.connection, profileId, profileName: now().profiles[profileId]?.name ?? "", program, sites: origins, why }, call.serving, consent);
-    if (!outcome.allow) refuse(outcome.code, outcome.message, base);
+    if (!outcome.allow) refuse(outcome.code, outcome.message, base, consent);
     via = outcome.via;
     sheetMs = outcome.sheetMs;
     noteVaultTiming("sheet", outcome.sheetMs ?? undefined, consent);
@@ -130,6 +130,7 @@ function taskEnd(params: Record<string, unknown>, call: SocketCall) {
 
 async function login(params: Record<string, unknown>, call: SocketCall) {
   const startedAt = Date.now();
+  const consent = consentToken();
   const task = liveTask(params, call);
   const origin = siteOrigin(params.site as string, isTestInstance());
   if (!origin) throw new OpError("bad_request", "site isn't an https site.");
@@ -137,7 +138,7 @@ async function login(params: Record<string, unknown>, call: SocketCall) {
   if (tab && tab.profileId !== task.profileId) throw new OpError("bad_request", "That tab is in another profile than the task.");
   const why = params.why === undefined ? task.why : clippedReason(params.why);
   try {
-    return await signIn({ task, origin, account: (params.account as string | undefined) ?? null, tabId: tab?.id ?? null, why, auto: false, startedAt });
+    return await signIn({ task, origin, account: (params.account as string | undefined) ?? null, tabId: tab?.id ?? null, why, auto: false, startedAt, consent });
   } catch (error) {
     if (error instanceof VaultError) throw new OpError(error.code, error.message);
     throw error;
@@ -145,8 +146,9 @@ async function login(params: Record<string, unknown>, call: SocketCall) {
 }
 
 async function status(_params: Record<string, unknown>, call: SocketCall) {
+  const consent = consentToken();
   const program = await programFor(call.connection);
-  await loadVaultAlways();
+  await loadVaultAlways(consent);
   const key = programKey(program);
   return {
     program: { ...programRow(program), description: signerLine(program) },

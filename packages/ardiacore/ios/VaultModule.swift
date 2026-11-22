@@ -30,12 +30,13 @@ public class VaultModule: Module {
   private static func elapsed(since start: UInt64) -> Double { Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000 }
 
   static func keep(token: String, uri: String, profile: String, done: @escaping (Bool) -> Void) {
+    let stamp = ArdiaConsentStamp.begin()
     guard let pending = pendingKeeps.removeValue(forKey: token), let code = VerificationCode(otpauth: uri) else { return done(false) }
     let username = pending.usernames.first { $0.caseInsensitiveCompare(code.account) == .orderedSame } ?? (pending.usernames.count == 1 ? pending.usernames[0] : code.account)
     guard !username.isEmpty else { return done(false) }
     onVault({ store.saveCode(code, profile: profile, origin: pending.origin, username: username) }) { saved in
       done(saved)
-      if saved { ArdiaEvents.emit("vault.codeKept", data: ["profile": profile, "origin": pending.origin, "username": username]) }
+      if saved { ArdiaEvents.emit("vault.codeKept", data: stamp.onto(["profile": profile, "origin": pending.origin, "username": username])) }
     }
   }
 

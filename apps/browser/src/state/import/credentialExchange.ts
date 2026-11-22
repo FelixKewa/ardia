@@ -15,7 +15,7 @@ import { originOfLogin } from "../site/savedPasswords";
 import { useBrowser } from "../browser/store";
 import { engineProfile, plural } from "../browser/model";
 import { openImport } from "../settings/settingsWindows";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { noteCredentialExchangeFailure, noteCredentialExchangeImport } from "../telemetry/credentialExchangeCounts";
 import { emptyCounts } from "./apply";
 import { enterImportAt, finishImport, importNow, importSignal, importWindowOpen, NO_EXTENSIONS, patchImport, whenImportWindowOpen, type ImportStep } from "./flow";
@@ -77,10 +77,10 @@ async function savePasswords(profile: string, logins: Login[]) {
   return counts;
 }
 
-async function saveCodes(profile: string, codes: { origin: string; username: string; otpAuth: string }[]) {
+async function saveCodes(profile: string, codes: { origin: string; username: string; otpAuth: string }[], consent: ConsentToken | null) {
   const counts = { saved: 0, failed: 0 };
   await inParallel(codes, PARALLEL_SAVES, async (code) => {
-    const saved = await saveVerificationSecret(profile, code.origin, code.username, code.otpAuth).catch(() => false);
+    const saved = await saveVerificationSecret(profile, code.origin, code.username, code.otpAuth, consent).catch(() => false);
     if (saved) counts.saved++;
     else counts.failed++;
   });
@@ -105,8 +105,7 @@ function withOrigins<T extends { url: string; username: string }>(rows: T[]) {
   return { kept, noSite };
 }
 
-export async function saveExchangedCredentials(profile: string, data: ExchangedCredentials): Promise<ExchangeResult> {
-  const consent = consentToken();
+export async function saveExchangedCredentials(profile: string, data: ExchangedCredentials, consent: ConsentToken | null): Promise<ExchangeResult> {
   const started = Date.now();
   const logins = withOrigins(data.logins);
   const codes = withOrigins(data.codes);
@@ -115,7 +114,7 @@ export async function saveExchangedCredentials(profile: string, data: ExchangedC
       profile,
       logins.kept.map(({ origin, username, password }) => ({ origin, username, password })),
     ),
-    saveCodes(profile, codes.kept),
+    saveCodes(profile, codes.kept, consent),
   ]);
   const noSite = data.noSite + logins.noSite + codes.noSite;
   noteCredentialExchangeImport(
@@ -184,18 +183,17 @@ export async function askPasswordManager() {
 
 let receiving = false;
 
-async function receiveExchanges() {
+async function receiveExchanges(consent: ConsentToken | null) {
   if (receiving) return;
   receiving = true;
   try {
-    while (credentialExchangeStatus().pending > 0) await receiveOne();
+    while (credentialExchangeStatus().pending > 0) await receiveOne(consent);
   } finally {
     receiving = false;
   }
 }
 
-async function receiveOne() {
-  const consent = consentToken();
+async function receiveOne(consent: ConsentToken | null) {
   showStep({ name: "exchange", phase: "importing", exporter: null, error: null });
   await whenImportWindowOpen(WINDOW_DEADLINE_MS);
   let data: ExchangedCredentials | null;
@@ -211,7 +209,7 @@ async function receiveOne() {
   patchImport({ step: { name: "exchange", phase: "importing", exporter: data.exporter, error: null } });
   const signal = importSignal();
   try {
-    const result = await saveExchangedCredentials(engineProfile(useBrowser.getState(), importNow().target), data);
+    const result = await saveExchangedCredentials(engineProfile(useBrowser.getState(), importNow().target), data, consent);
     useLastExchange.setState({ result });
     finishImport(signal, { counts: { ...emptyCounts(), passwords: result.saved }, failures: [], notes: exchangeResultLines(result), extensions: NO_EXTENSIONS });
   } catch {
@@ -222,6 +220,6 @@ async function receiveOne() {
 
 export function startCredentialExchange() {
   if (!credentialExchangeStatus().supported) return;
-  onCredentialExchange(() => void receiveExchanges());
-  void receiveExchanges();
+  onCredentialExchange(() => void receiveExchanges(consentToken()));
+  void receiveExchanges(consentToken());
 }
