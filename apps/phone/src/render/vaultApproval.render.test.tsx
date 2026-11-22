@@ -9,7 +9,7 @@ import { renderSurface, unmount } from "../../test/render/harness";
 const onIos = Platform.OS === "ios" ? test : test.skip;
 
 const NOW = Date.UTC(2026, 10, 22, 12);
-const request = { id: "0f0e0d0c-0b0a-4908-8706-050403020100", program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", askedAt: NOW - 2_000, expiresAt: NOW + 90_000, fromDeviceId: "mac", fromDevice: "MacBook Pro" };
+const request = { id: "0f0e0d0c-0b0a-4908-8706-050403020100", program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", alwaysOffered: true, askedAt: NOW - 2_000, expiresAt: NOW + 90_000, fromDeviceId: "mac", fromDevice: "MacBook Pro" };
 
 const within = (node: ReactTestInstance, has: (props: Record<string, unknown>) => boolean) => node.findAll((inner) => typeof inner.type === "string" && has(inner.props));
 const texts = (node: ReactTestInstance) => within(node, (props) => typeof props.text === "string" || typeof props.title === "string" || typeof props.label === "string").map((inner) => (inner.props.text ?? inner.props.title ?? inner.props.label) as string);
@@ -73,5 +73,18 @@ onIos("the sheet closes by itself when the request expires or the Mac answers fi
   expect(presented(root)).toBe(true);
   act(() => useSync.setState({ view: { ...EMPTY_VIEW, vaultRequests: [] } }));
   expect(presented(root)).toBe(false);
+  unmount(root);
+});
+
+onIos("a program the Mac won't let you always allow (the ardia command, an interpreter, an unsigned one) gets no Always Allow, and Allow never asks for it", async () => {
+  jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const answer = jest.spyOn(sync, "answerVaultRequest").mockResolvedValue("sent");
+  useSync.setState({ view: { ...EMPTY_VIEW, vaultRequests: [{ ...request, alwaysOffered: false }] } });
+  const root = renderSurface(<VaultApprovalSheet />);
+  expect(within(root.root, (props) => typeof props.onIsOnChange === "function")).toEqual([]);
+  expect(texts(root.root).some((text) => text.startsWith("Always Allow"))).toBe(false);
+  expect(texts(root.root).some((text) => text.startsWith("Ends in"))).toBe(true);
+  await press(button(root.root, "Allow with Face ID"));
+  expect(answer).toHaveBeenCalledWith(request.id, true, false);
   unmount(root);
 });

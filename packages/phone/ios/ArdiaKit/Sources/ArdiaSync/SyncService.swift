@@ -503,7 +503,7 @@ public final class SyncService {
   public func demoAskToSignIn() {
     guard isDemo else { return }
     let now = now()
-    let request = VaultApprovalRequest(id: UUID().uuidString.lowercased(), program: "node, unsigned", sites: ["https://github.com", "https://accounts.google.com"], why: "Deploy the docs site", profileName: "Personal", askedAt: now, expiresAt: now.addingTimeInterval(120), fromDeviceId: "demo-mac", fromDevice: "MacBook Pro")
+    let request = VaultApprovalRequest(id: UUID().uuidString.lowercased(), program: "node, unsigned", sites: ["https://github.com", "https://accounts.google.com"], why: "Deploy the docs site", profileName: "Personal", alwaysOffered: false, askedAt: now, expiresAt: now.addingTimeInterval(120), fromDeviceId: "demo-mac", fromDevice: "MacBook Pro")
     snapshot.vaultRequests = (snapshot.vaultRequests ?? []) + [request]
   }
 

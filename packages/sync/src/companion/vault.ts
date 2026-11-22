@@ -2,7 +2,7 @@ import { visible } from "../scope.ts";
 import type { Adapter, ScopeState } from "../scopeState.ts";
 import { VAULT_ANSWER, VAULT_PREFIX, VAULT_REQUEST, vaultAnswerFor, vaultAnswerOf, vaultRequestOf, type VaultAnswerRecord, type VaultRequestRecord } from "../vaultApproval.ts";
 
-export type ViewVaultRequest = { id: string; program: string; sites: string[]; why: string; profileName: string; askedAt: number; expiresAt: number; fromDeviceId: string; fromDevice: string | null };
+export type ViewVaultRequest = { id: string; program: string; sites: string[]; why: string; profileName: string; alwaysOffered: boolean; askedAt: number; expiresAt: number; fromDeviceId: string; fromDevice: string | null };
 
 export type VaultAnswersContext = { answers: () => VaultAnswerRecord[]; drop: (ids: Set<string>) => void };
 
@@ -47,7 +47,7 @@ export function vaultRequestsView(app: ScopeState | undefined, answered: Iterabl
     const n = (v as { n?: unknown } | null)?.n;
     if (typeof n === "string") names.set(k.slice(4), n);
   }
-  return openVaultRequests(app, answered, now).map((r) => ({ id: r.id, program: r.g, sites: [...r.s], why: r.w, profileName: r.pn, askedAt: r.at, expiresAt: r.x, fromDeviceId: r.m, fromDevice: names.get(r.m) ?? null }));
+  return openVaultRequests(app, answered, now).map((r) => ({ id: r.id, program: r.g, sites: [...r.s], why: r.w, profileName: r.pn, alwaysOffered: r.ao, askedAt: r.at, expiresAt: r.x, fromDeviceId: r.m, fromDevice: names.get(r.m) ?? null }));
 }
 
 export function answerVaultRequest(app: ScopeState | undefined, answers: VaultAnswerRecord[], input: { id: string; allow: boolean; always: boolean; at: number }, me: string): VaultAnswerRecord | null {

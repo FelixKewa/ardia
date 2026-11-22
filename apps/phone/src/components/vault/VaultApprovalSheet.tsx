@@ -72,7 +72,7 @@ function VaultApproval({ request, now, onDone }: { request: VaultRequest; now: n
     if (busy) return;
     setBusy(allow ? "allow" : "deny");
     setProblem(null);
-    const result = await sync.answerVaultRequest(request.id, allow, allow && always);
+    const result = await sync.answerVaultRequest(request.id, allow, allow && always && request.alwaysOffered);
     setBusy(null);
     if (result === "sent") {
       countUsage(allow ? "vault_requests_allowed" : "vault_requests_denied");
@@ -88,6 +88,7 @@ function VaultApproval({ request, now, onDone }: { request: VaultRequest; now: n
     }
   };
   const ends = `Ends in ${timeLeft(request.expiresAt - now)}. The program never sees your passwords; Ardia fills them in on your Mac.`;
+  const footer = <Text>{problem ?? ends}</Text>;
   return (
     <Group modifiers={[presentationDetents(["large"]), presentationDragIndicator("visible"), interactiveDismissDisabled(busy !== null)]}>
       <NavigationStack>
@@ -101,19 +102,21 @@ function VaultApproval({ request, now, onDone }: { request: VaultRequest; now: n
               </VStack>
             </HStack>
           </Section>
-          <Section title={request.sites.length === 1 ? "Site" : "Sites"}>
+          <Section title={request.sites.length === 1 ? "Site" : "Sites"} footer={!request.why && !request.alwaysOffered ? footer : undefined}>
             {request.sites.map((site) => (
               <Label key={site} title={siteName(site)} systemImage="lock.fill" />
             ))}
           </Section>
           {request.why ? (
-            <Section title="Reason Given">
+            <Section title="Reason Given" footer={request.alwaysOffered ? undefined : footer}>
               <Text>{request.why}</Text>
             </Section>
           ) : null}
-          <Section footer={<Text>{problem ?? ends}</Text>}>
-            <Toggle isOn={always} onIsOnChange={setAlways} label={`Always Allow ${request.program} on ${request.sites.length === 1 ? "This Site" : "These Sites"}`} modifiers={[disabled(busy !== null)]} />
-          </Section>
+          {request.alwaysOffered ? (
+            <Section footer={footer}>
+              <Toggle isOn={always} onIsOnChange={setAlways} label={`Always Allow ${request.program} on ${request.sites.length === 1 ? "This Site" : "These Sites"}`} modifiers={[disabled(busy !== null)]} />
+            </Section>
+          ) : null}
           <Section modifiers={[listRowBackground("clear"), listRowInsets(BUTTON_ROW), listRowSeparator("hidden")]}>
             <Button onPress={() => void answer(true)} modifiers={[buttonStyle("borderedProminent"), ROUNDED, controlSize("large"), tint(PLUM), disabled(busy !== null)]}>
               {busy === "allow" ? <ProgressView modifiers={[frame({ maxWidth: FILL })]} /> : <Label title="Allow with Face ID" systemImage="faceid" modifiers={[frame({ maxWidth: FILL })]} />}

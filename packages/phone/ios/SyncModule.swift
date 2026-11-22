@@ -147,7 +147,7 @@ public final class SyncModule: Module {
         if allow {
           guard await Self.ownerConfirms(request) else { return "cancelled" }
         }
-        return await sync.answerVault(id: id, allow: allow, always: always).rawValue
+        return await sync.answerVault(id: id, allow: allow, always: always && request.alwaysOffered == true).rawValue
       }
     }
 

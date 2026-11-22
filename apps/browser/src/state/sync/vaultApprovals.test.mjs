@@ -63,7 +63,7 @@ async function setUp({ phoneSeenDaysAgo = 0 } = {}) {
   return { mac, phone, phoneAnswers, cycles: () => cycles };
 }
 
-const ask = (overrides = {}) => ({ id: nextId(), nonce: NONCE, profile: "profile-1", program: "node, unsigned", sites: ["https://github.com"], why: "deploy", expiresAt: Date.now() + 60_000, ...overrides });
+const ask = (overrides = {}) => ({ id: nextId(), nonce: NONCE, profile: "profile-1", program: "node, unsigned", sites: ["https://github.com"], why: "deploy", alwaysOffered: true, expiresAt: Date.now() + 60_000, ...overrides });
 
 test("with no phone in reach, or sync not running, the answer is null at once, and that's counted", async () => {
   takeVaultPhoneApprovalCounts();
@@ -123,5 +123,21 @@ test("an ask resolves null at its expiry, and malformed asks are refused at once
   assert.equal(await askPhoneForVaultApproval(ask({ expiresAt: Date.now() - 1 })), null);
   const counts = takeVaultPhoneApprovalCounts();
   assert.deepEqual([counts.vault_phone_expired, counts.vault_phone_refused], [1, 5]);
+  connectVaultApprovals(null);
+});
+
+test("an ask that doesn't offer Always Allow says so to the phone, and an answer claiming Always is not taken", async () => {
+  const { mac, phone, phoneAnswers } = await setUp();
+  const request = ask({ alwaysOffered: false });
+  const answer = askPhoneForVaultApproval(request);
+  await mac.sync();
+  await phone.sync();
+  assert.equal(vaultRequestOf(`${VAULT_REQUEST}${request.id}`, visible(phone.state, VAULT_REQUEST).get(`${VAULT_REQUEST}${request.id}`)).ao, false);
+  await phoneAnswers(true, true, { al: true });
+  await mac.sync();
+  assert.equal(vaultApprovalsAsking(), true);
+  await phoneAnswers(true, true);
+  await mac.sync();
+  assert.deepEqual(await answer, { allow: true, always: false, nonce: NONCE });
   connectVaultApprovals(null);
 });

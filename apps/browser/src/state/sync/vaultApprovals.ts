@@ -5,7 +5,7 @@ import type { ConsentToken } from "../telemetry/consentPeriod";
 import { notePhoneApproval } from "../telemetry/vaultPhoneApprovalCounts";
 import { scheduleSync, syncWritesOpen, useSync } from "./engine";
 
-export type VaultApprovalAsk = { id: string; nonce: string; profile: string; program: string; sites: string[]; why?: string; expiresAt: number };
+export type VaultApprovalAsk = { id: string; nonce: string; profile: string; program: string; sites: string[]; why?: string; alwaysOffered: boolean; expiresAt: number };
 export type VaultApprovalAnswer = { allow: boolean; always: boolean; nonce: string };
 
 export type VaultApprovalChannel = {
@@ -89,6 +89,7 @@ export function askPhoneForVaultApproval(ask: VaultApprovalAsk): Promise<VaultAp
     w: String(ask.why ?? "").slice(0, MAX_TEXT),
     x: expiresAt,
     m: me,
+    ao: ask.alwaysOffered === true,
     at: now,
   };
   return new Promise((settle) => {

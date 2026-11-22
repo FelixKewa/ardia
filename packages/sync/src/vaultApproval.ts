@@ -5,7 +5,7 @@ export const VAULT_REQUEST = "vault:q:";
 export const VAULT_ANSWER = "vault:a:";
 export const VAULT_REQUEST_MAX_MS = 10 * 60_000;
 
-export type VaultRequestRecord = { id: string; n: string; p: string; pn: string; g: string; s: string[]; w: string; x: number; m: string; at: number };
+export type VaultRequestRecord = { id: string; n: string; p: string; pn: string; g: string; s: string[]; w: string; x: number; m: string; ao: boolean; at: number };
 export type VaultAnswerRecord = { id: string; n: string; p: string; s: string[]; x: number; m: string; a: boolean; al: boolean; by: string; at: number };
 
 const MAX_SITES = 32;
@@ -32,7 +32,7 @@ export function vaultRequestOf(key: string, v: unknown): VaultRequestRecord | nu
   const r = v as Record<string, unknown>;
   const id = key.slice(VAULT_REQUEST.length);
   if (r.id !== id || !ID.test(id) || !text(r.n, 128) || (r.n as string).length < 16 || !text(r.p, 128) || !text(r.pn) || !text(r.g) || !text(r.w) || !text(r.m, 128)) return null;
-  if (!sitesOk(r.s) || typeof r.x !== "number" || !Number.isFinite(r.x) || typeof r.at !== "number" || !Number.isFinite(r.at)) return null;
+  if (!sitesOk(r.s) || typeof r.ao !== "boolean" || typeof r.x !== "number" || !Number.isFinite(r.x) || typeof r.at !== "number" || !Number.isFinite(r.at)) return null;
   return r as VaultRequestRecord;
 }
 
@@ -51,11 +51,12 @@ export const vaultAnswerFits = (request: VaultRequestRecord, answer: VaultAnswer
   answer.p === request.p &&
   answer.m === request.m &&
   answer.x === request.x &&
+  (!answer.al || request.ao) &&
   answer.s.length === request.s.length &&
   answer.s.every((site, i) => site === request.s[i]);
 
 export function vaultAnswerFor(request: VaultRequestRecord, allow: boolean, always: boolean, by: string, at: number): VaultAnswerRecord {
-  return { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: request.m, a: allow, al: allow && always, by, at };
+  return { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: request.m, a: allow, al: allow && always && request.ao, by, at };
 }
 
 export type VaultAsks = {

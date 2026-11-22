@@ -2036,7 +2036,7 @@ const { visible } = __require("packages/sync/src/scope.ts");
                                                             
 const { VAULT_ANSWER, VAULT_PREFIX, VAULT_REQUEST, vaultAnswerFor, vaultAnswerOf, vaultRequestOf } = __require("packages/sync/src/vaultApproval.ts");
 
-                                                                                                                                                                                                       
+                                                                                                                                                                                                                               
 
                                                                                                            
 
@@ -2081,7 +2081,7 @@ function vaultRequestsView(app                        , answered                
     const n = (v                          )?.n;
     if (typeof n === "string") names.set(k.slice(4), n);
   }
-  return openVaultRequests(app, answered, now).map((r) => ({ id: r.id, program: r.g, sites: [...r.s], why: r.w, profileName: r.pn, askedAt: r.at, expiresAt: r.x, fromDeviceId: r.m, fromDevice: names.get(r.m) ?? null }));
+  return openVaultRequests(app, answered, now).map((r) => ({ id: r.id, program: r.g, sites: [...r.s], why: r.w, profileName: r.pn, alwaysOffered: r.ao, askedAt: r.at, expiresAt: r.x, fromDeviceId: r.m, fromDevice: names.get(r.m) ?? null }));
 }
 
 function answerVaultRequest(app                        , answers                     , input                                                             , me        )                           {
@@ -2111,7 +2111,7 @@ const VAULT_REQUEST = "vault:q:";
 const VAULT_ANSWER = "vault:a:";
 const VAULT_REQUEST_MAX_MS = 10 * 60_000;
 
-                                                                                                                                                       
+                                                                                                                                                                    
                                                                                                                                                          
 
 const MAX_SITES = 32;
@@ -2138,7 +2138,7 @@ function vaultRequestOf(key        , v         )                            {
   const r = v                           ;
   const id = key.slice(VAULT_REQUEST.length);
   if (r.id !== id || !ID.test(id) || !text(r.n, 128) || (r.n          ).length < 16 || !text(r.p, 128) || !text(r.pn) || !text(r.g) || !text(r.w) || !text(r.m, 128)) return null;
-  if (!sitesOk(r.s) || typeof r.x !== "number" || !Number.isFinite(r.x) || typeof r.at !== "number" || !Number.isFinite(r.at)) return null;
+  if (!sitesOk(r.s) || typeof r.ao !== "boolean" || typeof r.x !== "number" || !Number.isFinite(r.x) || typeof r.at !== "number" || !Number.isFinite(r.at)) return null;
   return r                      ;
 }
 
@@ -2157,11 +2157,12 @@ const vaultAnswerFits = (request                    , answer                   )
   answer.p === request.p &&
   answer.m === request.m &&
   answer.x === request.x &&
+  (!answer.al || request.ao) &&
   answer.s.length === request.s.length &&
   answer.s.every((site, i) => site === request.s[i]);
 
 function vaultAnswerFor(request                    , allow         , always         , by        , at        )                    {
-  return { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: request.m, a: allow, al: allow && always, by, at };
+  return { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: request.m, a: allow, al: allow && always && request.ao, by, at };
 }
 
                          

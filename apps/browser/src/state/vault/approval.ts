@@ -80,7 +80,7 @@ export async function askApproval(input: Omit<ApprovalRequest, "id" | "askedAt" 
     if (backgroundInstance) entry.timers.push(setTimeout(() => entry.shownAt === null && noteApprovalShown(request.id), SEAM_FALLBACK_MS));
   });
   const nonce = secureRandomHex(32);
-  void askPhoneForVaultApproval({ id: request.id, nonce, profile: request.profileId, program: programLabel(request.program), sites: request.sites, why: request.why, expiresAt: request.expiresAt })
+  void askPhoneForVaultApproval({ id: request.id, nonce, profile: request.profileId, program: programLabel(request.program), sites: request.sites, why: request.why, alwaysOffered: request.mayAlways, expiresAt: request.expiresAt })
     .then((phone) => phone && phone.nonce === nonce && settleRequest(request.id, { answer: phone.allow ? (phone.always && request.mayAlways ? "always" : "allow") : "deny", via: "phone" }))
     .catch(orWarn(undefined));
   const result = await answered;

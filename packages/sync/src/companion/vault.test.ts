@@ -53,7 +53,7 @@ class Mac {
     this.store.set(`dev:${id}`, { n: id === MAC ? "MacBook Pro" : "Mac mini" });
   }
   ask(overrides: Partial<VaultRequestRecord> = {}) {
-    const request: VaultRequestRecord = { id: ID, n: NONCE, p: "profile-local-1", pn: "Personal", g: "node, unsigned", s: ["https://github.com", "https://accounts.example"], w: "deploy the docs", x: this.folder.now + 120_000, m: this.id, at: this.folder.now, ...overrides };
+    const request: VaultRequestRecord = { id: ID, n: NONCE, p: "profile-local-1", pn: "Personal", g: "node, unsigned", s: ["https://github.com", "https://accounts.example"], w: "deploy the docs", x: this.folder.now + 120_000, m: this.id, ao: true, at: this.folder.now, ...overrides };
     this.live.push(request);
     return request;
   }
@@ -150,7 +150,7 @@ test("a Mac's request reaches the phone, Allow comes back bound to its nonce, an
   const request = mac.ask();
   await mac.sync();
   const shown = await phone.requests();
-  assert.deepEqual(shown, [{ id: ID, program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", askedAt: request.at, expiresAt: request.x, fromDeviceId: MAC, fromDevice: "MacBook Pro" }]);
+  assert.deepEqual(shown, [{ id: ID, program: "node, unsigned", sites: ["https://github.com", "https://accounts.example"], why: "deploy the docs", profileName: "Personal", alwaysOffered: true, askedAt: request.at, expiresAt: request.x, fromDeviceId: MAC, fromDevice: "MacBook Pro" }]);
   assert.ok(!JSON.stringify(shown).includes(NONCE));
   assert.deepEqual(phone.answer(true, true), { saved: true });
   assert.deepEqual(phone.answer(false, false), { saved: false, refused: true });
@@ -233,4 +233,24 @@ test("a request whose sites aren't plain https origins is dropped on the phone",
   mac.ask({ s: ["http://plain.example"] });
   await mac.sync();
   assert.deepEqual(await phone.requests(), []);
+});
+
+test("where the Mac doesn't offer Always Allow, the phone is told so, its Always never goes out, and the Mac refuses an answer that claims it", async () => {
+  const { folder, mac, phone } = await paired();
+  const request = mac.ask({ ao: false });
+  await mac.sync();
+  assert.equal((await phone.requests())[0]!.alwaysOffered, false);
+  phone.answer(true, true);
+  await phone.cycle();
+  await mac.sync();
+  assert.deepEqual(mac.answers.map((a) => [a.answer.a, a.answer.al]), [[true, false]]);
+  const taken: boolean[] = [];
+  const adapter = vaultRequestsAdapter({ me: MAC, live: () => [request], isPhone: (d) => d === PHONE, author: () => PHONE, answered: (_r, answer) => void taken.push(answer.al) });
+  const key = `${VAULT_ANSWER}${request.id}`;
+  const claim = (al: boolean) => adapter.apply(new Map([[key, { id: request.id, n: request.n, p: request.p, s: [...request.s], x: request.x, m: MAC, a: true, al, by: PHONE, at: folder.now }]]), new Set([key]), () => undefined, {} as never);
+  claim(true);
+  assert.deepEqual(taken, []);
+  claim(false);
+  assert.deepEqual(taken, [false]);
+  assert.equal(request.ao, false);
 });

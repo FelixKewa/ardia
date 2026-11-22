@@ -32,17 +32,19 @@ public struct VaultApprovalRequest: Codable, Equatable, Hashable, Identifiable, 
   public var sites: [String]
   public var why: String
   public var profileName: String
+  public var alwaysOffered: Bool?
   public var askedAt: Date
   public var expiresAt: Date
   public var fromDeviceId: String
   public var fromDevice: String?
 
-  public init(id: String, program: String, sites: [String], why: String, profileName: String, askedAt: Date, expiresAt: Date, fromDeviceId: String, fromDevice: String?) {
+  public init(id: String, program: String, sites: [String], why: String, profileName: String, alwaysOffered: Bool, askedAt: Date, expiresAt: Date, fromDeviceId: String, fromDevice: String?) {
     self.id = id
     self.program = program
     self.sites = sites
     self.why = why
     self.profileName = profileName
+    self.alwaysOffered = alwaysOffered
     self.askedAt = askedAt
     self.expiresAt = expiresAt
     self.fromDeviceId = fromDeviceId

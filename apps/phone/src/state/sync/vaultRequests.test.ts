@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { askedBy, nextVaultRequest, sheetLatencyMs, siteName, timeLeft, type VaultRequest } from "./vaultRequests.ts";
 
-const request = (id: string, expiresAt: number, fromDevice: string | null = "MacBook Pro"): VaultRequest => ({ id, program: "node, unsigned", sites: ["https://github.com"], why: "", profileName: "Personal", askedAt: 1_000, expiresAt, fromDeviceId: "mac", fromDevice });
+const request = (id: string, expiresAt: number, fromDevice: string | null = "MacBook Pro"): VaultRequest => ({ id, program: "node, unsigned", sites: ["https://github.com"], why: "", profileName: "Personal", alwaysOffered: false, askedAt: 1_000, expiresAt, fromDeviceId: "mac", fromDevice });
 
 test("the sheet shows the oldest request that hasn't expired or been set aside", () => {
   const requests = [request("a", 500), request("b", 5_000), request("c", 9_000)];

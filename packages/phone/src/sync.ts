@@ -73,7 +73,7 @@ export type SyncedProfile = {
 
 export type SyncedSearch = { engineId: string; customURL: string | null; customEngines: { id: string; name: string; keyword: string; url: string }[] };
 
-export type VaultApprovalRequest = { id: string; program: string; sites: string[]; why: string; profileName: string; askedAt: number; expiresAt: number; fromDeviceId: string; fromDevice: string | null };
+export type VaultApprovalRequest = { id: string; program: string; sites: string[]; why: string; profileName: string; alwaysOffered: boolean; askedAt: number; expiresAt: number; fromDeviceId: string; fromDevice: string | null };
 
 export type VaultAnswerResult = "sent" | "gone" | "failed" | "cancelled" | "unsupported";
 

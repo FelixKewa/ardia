@@ -140,6 +140,7 @@ enum SyncPayloads {
       "sites": request.sites,
       "why": request.why,
       "profileName": request.profileName,
+      "alwaysOffered": request.alwaysOffered == true,
       "askedAt": milliseconds(request.askedAt),
       "expiresAt": milliseconds(request.expiresAt),
       "fromDeviceId": request.fromDeviceId,
