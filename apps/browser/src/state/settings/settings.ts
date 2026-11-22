@@ -31,6 +31,7 @@ import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
+import { keptSettingsPatch } from "./settingsPatch";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -274,19 +275,18 @@ function validateCustomEngine(settings: Settings, input: EngineInput, ignoreId?:
   return validateEngine(input, searchEngines(settings), ignoreId);
 }
 
-function withPageFrameDependencies(settings: Settings, patch: Partial<Settings>): Partial<Settings> {
+function settledPatch(settings: Settings, raw: Partial<Settings>): Partial<Settings> {
+  const patch = keptSettingsPatch(raw, SETTING_SPECS);
   const next = { ...settings, ...patch };
-  if (next.pageFrameZeroInFullScreen && !next.pageFrameZeroWhenTabsHidden && !("pageFrameZeroWhenTabsHidden" in patch)) {
-    return { ...patch, pageFrameZeroWhenTabsHidden: true };
-  }
-  return patch;
+  const zeroWhenTabsHidden = next.pageFrameZeroInFullScreen && !next.pageFrameZeroWhenTabsHidden && !("pageFrameZeroWhenTabsHidden" in patch);
+  return zeroWhenTabsHidden ? { ...patch, pageFrameZeroWhenTabsHidden: true } : patch;
 }
 
 export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>, { inferring = false } = {}): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
+  patch = settledPatch(s.settings, patch);
   if (patch.autoHideTabs !== undefined && patch.autoHideTabs !== s.settings.autoHideTabs) noteAutoHideTabsChosen();
   if (patch.minimalismMode !== undefined && patch.minimalismMode !== s.settings.minimalismMode) noteMinimalismToggled(patch.minimalismMode);
-  patch = withPageFrameDependencies(s.settings, patch);
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
   const left = inferring ? [...new Set([...inferred, ...Object.keys(patch)])] : inferred.filter((k) => !(k in patch));
@@ -363,7 +363,7 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
   updateSettings(patch, { fromSync = false, inferred = false } = {}) {
     set((s) => {
       const windows = windowsFollowingAutoHideTabs(s, patch);
-      if (fromSync) return { settings: { ...s.settings, ...withPageFrameDependencies(s.settings, patch) }, ...windows };
+      if (fromSync) return { settings: { ...s.settings, ...settledPatch(s.settings, patch) }, ...windows };
       return { ...choose(s, withLinkKeysApart(s.settings, patch), { inferring: inferred }), ...windows };
     });
   },
