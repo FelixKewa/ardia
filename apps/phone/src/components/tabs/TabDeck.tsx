@@ -606,7 +606,7 @@ export const TabDeck = memo(function TabDeck() {
   const open = (index: number, tappedAt?: number) => {
     beginInteraction("card open", INTERACTION_WINDOW_MS.cardOpen);
     const id = order[index];
-    if (!id || phase.kind !== "settled" || dragIndex.value === index || openingId.current !== null) return;
+    if (!id || phase.kind !== "settled" || dragIndex.value === index || openingId.current !== null || useBrowse.getState().surface !== "deck") return;
     markTiming("card tap", tappedAt);
     runOnUI(markNextUiFrame)("card motion");
     if (searchChrome) Keyboard.dismiss();

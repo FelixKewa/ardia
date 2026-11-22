@@ -1113,7 +1113,9 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
   (`hurryDeckPull`, caught by the pull blocker over the page) hurries the landing on a 0.07 s spring that carries
   on from the landing's own speed, so nothing jumps, and the tapped card opens as the deck takes over. The waiting
   deck publishes its cards' resting places with its target (`DeckHit`), and the tap picks the card whose resting
-  place is under the finger (`deckCardAt`); a tap anywhere else is left alone. A landing token makes the hurried
+  place is under the finger (`deckCardAt`, which measures a pile card from its centred, scaled frame); a tap
+  anywhere else is left alone. In Grid the waiting grid publishes no tile places yet, so a tap there waits for the
+  grid to take over. A landing token makes the hurried
   landing's first spring, cancelled by the second, do nothing when it ends. Reanimated treats a spring to the same
   value as the same animation and keeps its constants, so the hurry aims a millionth past the card. Scrolling
   while the deck lands isn't taken: the scroll gesture lives in the deck, under the page, and handing a live pan

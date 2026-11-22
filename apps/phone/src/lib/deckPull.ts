@@ -70,7 +70,7 @@ export function deckCardAt(hit: DeckHit, x: number, y: number): string | null {
   for (let index = ids.length - 1; index >= 0; index--) {
     const relative = index - scroll;
     const scale = deckPileScale(g, relative);
-    const left = deckLeading(g, relative);
+    const left = deckLeading(g, relative) + (g.cardWidth * (1 - scale)) / 2;
     const half = (g.cardHeight * scale) / 2;
     if (x >= left && x <= left + g.cardWidth * scale && y >= g.cardCenterY - half && y <= g.cardCenterY + half) return ids[index] ?? null;
   }

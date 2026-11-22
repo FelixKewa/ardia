@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECK, deckGeometry, deckLeading } from "./deckGeometry.ts";
+import { DECK, deckGeometry, deckLeading, deckPileScale } from "./deckGeometry.ts";
 import { DECK_PULL, deckCardAt, pullBarGlyphs, pullBarShift, pullClearsBar, pullLands, pullPagePose, pullRise, pullShrink, pullSpeed, pullTarget, pullTuck, stackPullTarget } from "./deckPull.ts";
 
 const g = deckGeometry(440, 956, 62, 34, 0, "ios", "redesigned", 48, 55);
@@ -139,4 +139,11 @@ test("a tap on the deck while it lands finds the card at the tap's place where t
   assert.equal(deckCardAt(hit, front + g.cardWidth / 2, g.cardCenterY - g.cardHeight), null);
   assert.equal(deckCardAt(hit, front + g.cardWidth / 2, g.cardCenterY + g.cardHeight), null);
   assert.equal(deckCardAt({ ids: [], scroll: 0, g }, front + 10, g.cardCenterY), null);
+  const arc = deckGeometry(440, 956, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  const scale = deckPileScale(arc, -1);
+  assert.ok(scale < 1);
+  const edge = deckLeading(arc, -1) + (arc.cardWidth * (1 - scale)) / 2;
+  const arcHit = { ids, scroll: 7, g: arc };
+  assert.equal(deckCardAt(arcHit, edge + 2, arc.cardCenterY), "t6");
+  assert.notEqual(deckCardAt(arcHit, edge - 2, arc.cardCenterY), "t6");
 });

@@ -683,6 +683,23 @@ test("two card taps that land before React commits open only the first: its grow
   expect(frames * 16).toBeLessThan(DECK_PULL.growLostMs);
 });
 
+test("in Grid, two tile taps before React commits open only the first, though a Grid open is immediate and sets no grow", () => {
+  withTabs(3);
+  act(() => deckGrid.setDeckGrid(true));
+  browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
+  const root = renderSurface(<Surfaces />);
+  mounted.push(root);
+  const grid = root.root.findAll((node) => (node.type as { name?: string })?.name === "TabGrid")[0]!;
+  const [first, second] = currentTabs().open;
+  act(() => {
+    grid.props.onOpen(first!.id);
+    grid.props.onOpen(second!.id);
+  });
+  for (let at = 0; at < 10; at++) frame();
+  expect(surface()).toBe("browsing");
+  expect(currentTabs().selectedId).toBe(first!.id);
+});
+
 test("a fast flick lands without overshooting the card, even with the finger's tracking spring still moving when it is let go", () => {
   const root = app();
   const id = currentTabs().selectedId!;
