@@ -1145,7 +1145,10 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
   the page was quiet. Copying it once the landing had started (the draw runs on the main thread, 20 to 60 ms on the
   F4, so it could not go before the first frame) dropped the moving page for one frame on the F4 when the page had
   a video playing, showing the tucked card behind it: 5 in 45 landings with GitHub Explore in front, against none
-  in 30 without the copy and none on main. A capture is skipped when the page reports its picture still current
+  in 30 without the copy and none on main. No other copy of the page in front (a load's settle timer, the leaving
+  picture, the quiet-page copy) runs while a pull or a card's growth is in flight, on either phone: on Android it
+  would drop the moving page, and on iPhone the synchronous copy stalls a landing frame; the settle timer retries
+  once the pull is over. A capture is skipped when the page reports its picture still current
   (`snapshotIsCurrent`). A second request for the tabs while a landing is in flight is ignored; one whose landing
   never reported back stops being in flight after 1.5 s, so a lost callback can't leave the Tabs button dead.
   The live page and its picture agree to the point because the page

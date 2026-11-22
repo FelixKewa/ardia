@@ -372,6 +372,41 @@ test("on Android neither a Tabs tap nor a swipe copies the page while it moves, 
   if (Platform.OS === "android") expect(snapped).not.toHaveBeenCalled();
 });
 
+test("a picture timer already waiting when a Tabs tap or a swipe starts copies nothing while the page moves; on iPhone only the press copy runs", async () => {
+  const id = currentTabs().selectedId!;
+  const loaded = (isLoading: boolean) => act(() => browse.pageStateChanged(id, { url: "https://site0.example/", title: "Site 0", isLoading, isLive: true, canGoBack: false, canGoForward: false } as never));
+  loaded(false);
+  act(() => updateTabById(id, { snapshotFileName: "file:///snapshots/before-load.jpg" }));
+  jest.spyOn(browse, "keepFrontPictureCurrent").mockImplementation(() => undefined);
+  const snapped = jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: "file:///snapshots/after-load.jpg", width: 600, height: 1333 }) as never);
+  const root = app();
+  act(() => jest.advanceTimersByTime(1600));
+  await promisesSettled();
+  const button = root.root.findAll((node) => node.props.accessibilityLabel === "Tabs" && typeof node.props.onPress === "function")[0]!;
+  const settleThenMove = async (move: () => void) => {
+    loaded(true);
+    loaded(false);
+    act(() => jest.advanceTimersByTime(600));
+    await promisesSettled();
+    snapped.mockClear();
+    move();
+    await promisesSettled();
+    const atPress = snapped.mock.calls.length;
+    expect(atPress).toBe(Platform.OS === "android" ? 0 : 1);
+    for (let at = 0; at < 240 && surface() !== "deck"; at++) {
+      frame();
+      await promisesSettled();
+    }
+    expect(surface()).toBe("deck");
+    expect(snapped.mock.calls.length).toBe(atPress);
+  };
+  await settleThenMove(() => act(() => void button.props.onPress()));
+  act(() => browse.openTab(id));
+  for (let at = 0; at < 100; at++) frame();
+  await promisesSettled();
+  await settleThenMove(() => swipe([{ dy: -22 }, { dy: -150 }]));
+});
+
 onIos("on iPhone the handover never waits for the fresh picture of the page: the capture starts with the pull, the deck takes over the frame after the landing, the page is gone with it, and the leaving card keeps its earlier picture under the fresh one until that has loaded", async () => {
   const EARLIER = "file:///snapshots/pulled-earlier.jpg";
   const FRESH = "file:///snapshots/pulled-fresh.jpg";

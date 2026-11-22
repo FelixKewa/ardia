@@ -430,7 +430,7 @@ export function keepFrontPictureCurrent() {
 
 function latchDeckCapture(id: string, covered: boolean, pageTop: number | null, afterMotion: boolean) {
   deckCapture = null;
-  if (!coverIsCapturable(loading.get(id) === false, covered) || !snapshotAllowed(id) || pictureIsCurrent(id)) return;
+  if (!coverIsCapturable(loading.get(id) === false, covered) || !frontPageShown(id) || pictureIsCurrent(id)) return;
   if (pullCounts(id)) countUsage("deck_pictures_at_press");
   const latched: DeckCapture = { id, pageTop, done: null };
   deckCapture = latched;
@@ -840,9 +840,14 @@ function snapshotLanded(id: string, uri: string, generation: number) {
   } else rewriteTab(id);
 }
 
-function snapshotAllowed(id: string) {
+function frontPageShown(id: string) {
   if (currentTabs().selectedId !== id) return true;
   return useBrowse.getState().surface === "browsing" && !pageCovered();
+}
+
+function snapshotAllowed(id: string) {
+  if (currentTabs().selectedId !== id) return true;
+  return frontPageShown(id) && !deckPullInFlight() && deckPullGrowing() === null;
 }
 
 function scheduleSnapshot(id: string, tries = SNAPSHOT_RETRIES) {
