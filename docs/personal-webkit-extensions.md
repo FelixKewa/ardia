@@ -66,12 +66,27 @@ WebKit documents the generated-background-page UTF-8 fix in
 Prepare a local copy before choosing Load Folder:
 
 ```bash
-node scripts/personal/prepare-webkit-extension.mjs /path/to/extracted-firefox-package /path/to/new-prepared-folder
+node scripts/personal/prepare-webkit-extension.mjs --kimchi-dictionary /path/to/extracted-firefox-package /path/to/new-prepared-folder
 ```
 
-The preparation command adds only a UTF-8 marker to non-ASCII `background.scripts` files that lack one.
-It preserves manifest and resource bytes, refuses an existing destination or symbolic links, and does not
-download or redistribute the extension. Normal inspection and fingerprint approval apply to the prepared copy.
+Without the optional `--kimchi-dictionary` flag, the preparation command adds only a UTF-8 marker to non-ASCII
+`background.scripts` files that lack one. The flag also adapts the reviewed Kimchi Reader 0.21.7 dictionary
+decoder. It requires the exact original content-script SHA-256 and its declared manifest entry, and refuses
+unfamiliar versions, changed scripts, or an already adapted script before creating the destination.
+
+The tested WebKit extension world rejects the dictionary's `Blob.stream()` chunks with
+`TypeError: Invalid type should be ArrayBuffer`. WebKit's
+[decompressor checks the chunk against its ArrayBuffer realm](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/Modules/compression/DecompressionStream.js).
+The adaptation inserts a local stream transform that copies each Uint8Array chunk into a local ArrayBuffer
+before decompression. It applies only to Kimchi's dictionary helper, including entry, pair, translated-language,
+idiom and proverb resources. It preserves subarray offsets and content, and malformed gzip still rejects.
+It changes no global API, background frequency updater, capture feature, host grant, or manifest permission.
+
+Preparation leaves the original folder untouched, refuses an existing destination or symbolic links, and does
+not download or redistribute the extension. Normal inspection and fingerprint approval apply to the prepared
+copy. For an existing installation, keep the existing source-folder path when replacing its prepared contents
+after backing them up; then use Review access, select the required grants, approve the changed package, and
+reload the page. Using the same source path preserves the extension identity and its stored data.
 
 Allow the requested storage/script permissions and the requested hosts needed for the selected site and
 Kimchi Reader account page. Keep unsupported capture APIs off. Audio/image mining and Netflix subtitle parsing
@@ -91,6 +106,9 @@ active-tab queries, script execution, disable/re-enable, restart persistence and
 It also checks that invalid update grants preserve the previous working extension, and that extension icons
 are bounded PNGs, survive restart, and are removed when the extension is disabled.
 The content-script fixture uses a Korean filename to cover the macOS filename-normalization boundary.
+Dictionary preparation tests cover multi-chunk Korean JSON, typed-array offsets, corrupt gzip, strict package
+guards and unchanged originals. A standalone nonpersistent WKWebExtension probe reproduced the original
+ArrayBuffer rejection in an isolated content-script world and verified the local chunk-copy correction.
 
 ```bash
 METRO_PORT=8097 node scripts/personal/webkit-smoke.mjs /absolute/path/to/Debug/Ardia.app

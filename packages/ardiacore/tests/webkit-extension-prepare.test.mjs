@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
-import { prepareWebKitExtension } from "../../../scripts/personal/prepare-webkit-extension.mjs";
+import { gzipSync } from "node:zlib";
+import { adaptKimchiDictionarySource, prepareWebKitExtension } from "../../../scripts/personal/prepare-webkit-extension.mjs";
+
+const dictionaryHelper = "async function decode(e){let t=(await e.blob()).stream().pipeThrough(new DecompressionStream(`gzip`));return await(await new Response(t).blob()).text()}";
+const adaptedDecoder = () => new Function(`return (${adaptKimchiDictionarySource(dictionaryHelper)})`)();
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ardia-extension-preparation-"));
@@ -67,4 +71,57 @@ test("background traversal and invalid UTF-8 fail before creating an output fold
   fs.writeFileSync(path.join(source, "background/index.js"), Buffer.from([0xff]));
   assert.throws(() => prepareWebKitExtension(source, output), /encoded data/);
   assert.equal(fs.existsSync(output), false);
+});
+
+test("dictionary adaptation decodes Korean gzip JSON from offset views and multiple chunks", async () => {
+  const expected = JSON.stringify({ word: "한글", definitions: ["한국어", "글자"], extra: "가나다라".repeat(50) });
+  const gzip = gzipSync(expected);
+  const stream = new ReadableStream({ start(controller) {
+    for (let offset = 0; offset < gzip.length; offset += 7) {
+      const end = Math.min(gzip.length, offset + 7);
+      const backing = new Uint8Array(end - offset + 8).fill(255);
+      backing.set(gzip.subarray(offset, end), 3);
+      controller.enqueue(backing.subarray(3, 3 + end - offset));
+    }
+    controller.close();
+  } });
+  const result = await adaptedDecoder()({ blob: async () => ({ stream: () => stream }) });
+  assert.equal(result, expected);
+  assert.deepEqual(JSON.parse(result).definitions, ["한국어", "글자"]);
+});
+
+test("dictionary adaptation preserves malformed gzip rejection", async () => {
+  const corrupted = Buffer.from(gzipSync('{"word":"한글"}'));
+  corrupted[corrupted.length - 8] ^= 255;
+  await assert.rejects(adaptedDecoder()(new Response(corrupted)));
+});
+
+test("dictionary adaptation refuses missing and repeated decoder expressions", () => {
+  assert.throws(() => adaptKimchiDictionarySource("async function decode(){}"), /exactly once/);
+  assert.throws(() => adaptKimchiDictionarySource(dictionaryHelper + dictionaryHelper), /exactly once/);
+});
+
+test("dictionary opt-in rejects unfamiliar versions scripts and hashes without changing the source or creating output", (t) => {
+  const { source, output } = fixture(t);
+  const manifestPath = path.join(source, "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath));
+  manifest.name = "Kimchi Reader";
+  manifest.version = "0.21.8";
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiDictionary: true }), /0\.21\.7/);
+  assert.equal(fs.existsSync(output), false);
+  manifest.version = "0.21.7";
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiDictionary: true }), /not declared/);
+  assert.equal(fs.existsSync(output), false);
+  manifest.content_scripts = [{ matches: ["https://example.com/*"], js: ["contentScripts/index.global.js"] }];
+  fs.mkdirSync(path.join(source, "contentScripts"));
+  fs.writeFileSync(path.join(source, "contentScripts/index.global.js"), dictionaryHelper);
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  const beforeManifest = fs.readFileSync(manifestPath);
+  const beforeScript = fs.readFileSync(path.join(source, "contentScripts/index.global.js"));
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiDictionary: true }), /differs from the reviewed original/);
+  assert.equal(fs.existsSync(output), false);
+  assert.deepEqual(fs.readFileSync(manifestPath), beforeManifest);
+  assert.deepEqual(fs.readFileSync(path.join(source, "contentScripts/index.global.js")), beforeScript);
 });

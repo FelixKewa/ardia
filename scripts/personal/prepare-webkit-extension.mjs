@@ -1,10 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const utf8Mark = Buffer.from([0xef, 0xbb, 0xbf]);
 const maxBytes = 512 * 1024 * 1024;
 const maxFiles = 50000;
+const kimchiContentScript = "contentScripts/index.global.js";
+const kimchiContentHash = "891ea6e2a765ed997fd6348aa0cd02a7a38469fe4e305bbca561a1df073716f6";
+
+export function adaptKimchiDictionarySource(source) {
+  const original = "(await e.blob()).stream().pipeThrough(new DecompressionStream(`gzip`))";
+  const replacement = "(await e.blob()).stream().pipeThrough(new TransformStream({transform(chunk,controller){controller.enqueue(new Uint8Array(chunk).buffer)}})).pipeThrough(new DecompressionStream(`gzip`))";
+  if (source.split(original).length !== 2) throw new Error("The known Kimchi dictionary decoder was not found exactly once.");
+  return source.replace(original, replacement);
+}
+
+function prepareKimchiDictionary(manifest, files) {
+  if (manifest.name !== "Kimchi Reader" || manifest.version !== "0.21.7") throw new Error("Dictionary compatibility supports only the reviewed Kimchi Reader 0.21.7 package.");
+  if (!manifest.content_scripts?.some((script) => Array.isArray(script.js) && script.js.includes(kimchiContentScript))) throw new Error("The expected Kimchi content script is not declared.");
+  const data = files.get(kimchiContentScript);
+  if (!data || createHash("sha256").update(data).digest("hex") !== kimchiContentHash) throw new Error("The Kimchi content script differs from the reviewed original. Use an unchanged official package.");
+  files.set(kimchiContentScript, Buffer.from(adaptKimchiDictionarySource(new TextDecoder("utf-8", { fatal: true }).decode(data))));
+}
 
 function inside(root, candidate) {
   return candidate.startsWith(root + path.sep);
@@ -46,7 +64,7 @@ function readPackage(root) {
   return files;
 }
 
-export function prepareWebKitExtension(source, output) {
+export function prepareWebKitExtension(source, output, { kimchiDictionary = false } = {}) {
   if (!source || !output) throw new Error("Provide the extracted extension folder and a new output folder.");
   if (!fs.lstatSync(source).isDirectory()) throw new Error("Choose a regular extension folder.");
   const root = fs.realpathSync(source);
@@ -62,6 +80,7 @@ export function prepareWebKitExtension(source, output) {
   if (!Array.isArray(scripts) || !scripts.length || manifest.background.page || manifest.background.service_worker) {
     throw new Error("Use the extracted Firefox package with background scripts.");
   }
+  if (kimchiDictionary) prepareKimchiDictionary(manifest, files);
   const preparedScripts = [];
   for (const script of new Set(scripts)) {
     if (typeof script !== "string" || !script || path.isAbsolute(script) || /[\\?#\0]/.test(script)) throw new Error("The manifest contains an unsupported background script path.");
@@ -86,17 +105,20 @@ export function prepareWebKitExtension(source, output) {
     fs.rmSync(destination, { recursive: true, force: true });
     throw error;
   }
-  return { directory: destination, preparedScripts };
+  return { directory: destination, preparedScripts, dictionaryStreams: kimchiDictionary };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  if (process.argv.length !== 4) {
-    console.error("Usage: node scripts/personal/prepare-webkit-extension.mjs <extracted-firefox-folder> <new-output-folder>");
+  const args = process.argv.slice(2);
+  const kimchiDictionary = args[0] === "--kimchi-dictionary";
+  if (kimchiDictionary) args.shift();
+  if (args.length !== 2) {
+    console.error("Usage: node scripts/personal/prepare-webkit-extension.mjs [--kimchi-dictionary] <extracted-firefox-folder> <new-output-folder>");
     process.exitCode = 1;
   } else {
     try {
-      const result = prepareWebKitExtension(process.argv[2], process.argv[3]);
-      console.log(`Prepared ${result.preparedScripts.length} background script(s) in ${result.directory}. The original folder is unchanged. Inspect and approve this new folder in Ardia before loading it.`);
+      const result = prepareWebKitExtension(args[0], args[1], { kimchiDictionary });
+      console.log(`Prepared ${result.preparedScripts.length} background script(s)${result.dictionaryStreams ? " and Kimchi dictionary stream compatibility" : ""} in ${result.directory}. The original folder is unchanged. Inspect and approve this new folder in Ardia before loading it.`);
     } catch (error) {
       console.error(error.message);
       process.exitCode = 1;
