@@ -19,7 +19,7 @@ const manifest = {
   permissions: ["storage", "scripting", "tabs"],
   host_permissions: ["http://127.0.0.1/*"],
   background: { scripts: ["background.js"], persistent: false },
-  content_scripts: [{ matches: ["http://127.0.0.1/*"], js: ["content.js"], run_at: "document_start" }],
+  content_scripts: [{ matches: ["http://127.0.0.1/*"], js: ["한글.js"], run_at: "document_start" }],
 };
 writeFileSync(join(extension, "icon.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP438DwHwAGgAJ/EEwb4QAAAABJRU5ErkJggg==", "base64"));
 writeFileSync(join(extension, "manifest.json"), JSON.stringify(manifest));
@@ -47,7 +47,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   return true;
 });
 `);
-writeFileSync(join(extension, "content.js"), `
+writeFileSync(join(extension, "한글.js"), `
 document.addEventListener("DOMContentLoaded", () => {
   chrome.runtime.sendMessage({ kind: "fixture" }).then(reply => {
     document.documentElement.dataset.extensionFixture = JSON.stringify(reply);

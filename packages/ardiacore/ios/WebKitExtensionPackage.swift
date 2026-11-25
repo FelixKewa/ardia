@@ -51,6 +51,9 @@ enum WebKitExtensionPackage {
     let source: URL
     let directory: URL
     let fingerprint: String
+    let legacyFingerprint: String
+
+    func matches(_ approved: String) -> Bool { fingerprint == approved || legacyFingerprint == approved }
   }
 
   static func failure(_ message: String) -> WebKitExtensionFailure { WebKitExtensionFailure(message: message) }
@@ -71,7 +74,7 @@ enum WebKitExtensionPackage {
     guard let entries = manager.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]) else {
       throw failure("The extension folder could not be read.")
     }
-    var names: [String] = []
+    var names: [String: String] = [:]
     var size = 0
     for case let file as URL in entries {
       let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey])
@@ -79,28 +82,37 @@ enum WebKitExtensionPackage {
       if values.isDirectory == true { continue }
       guard values.isRegularFile == true, file.path.hasPrefix(root.path + "/") else { throw failure("The extension contains an unsupported file.") }
       size += values.fileSize ?? maxBytes
-      names.append(String(file.path.dropFirst(root.path.count + 1)))
+      let name = String(file.path.dropFirst(root.path.count + 1))
+      let canonical = name.precomposedStringWithCanonicalMapping
+      guard names[canonical] == nil else { throw failure("The extension contains equivalent resource paths.") }
+      names[canonical] = name
       guard names.count <= maxFiles, size <= maxBytes else { throw failure("The extension exceeds the package size limit.") }
     }
-    guard names.contains("manifest.json") else { throw failure("The selected folder has no manifest.json.") }
+    guard names["manifest.json"] != nil else { throw failure("The selected folder has no manifest.json.") }
     try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     do {
       var digest = SHA256()
+      var legacyDigest = SHA256()
       var copied = 0
-      for name in names.sorted() {
+      for canonical in names.keys.sorted() {
+        guard let name = names[canonical] else { throw failure("The extension contains an invalid resource path.") }
         let original = root.appendingPathComponent(name)
         let values = try original.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true else { throw failure("The extension changed while it was being inspected.") }
         let data = try readFile(name, root: root, limit: min(maxBytes - copied, name == "manifest.json" ? 1024 * 1024 : maxBytes))
         copied += data.count
         guard copied <= maxBytes, name != "manifest.json" || data.count <= 1024 * 1024 else { throw failure("The extension exceeds the package size limit.") }
-        digest.update(data: Data("\(name.utf8.count):\(name):\(data.count):".utf8))
+        digest.update(data: Data("\(canonical.utf8.count):\(canonical):\(data.count):".utf8))
         digest.update(data: data)
+        legacyDigest.update(data: Data("\(name.utf8.count):\(name):\(data.count):".utf8))
+        legacyDigest.update(data: data)
         let target = directory.appendingPathComponent(name)
         try manager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard !manager.fileExists(atPath: target.path) else { throw failure("The extension contains colliding resource paths.") }
         try data.write(to: target, options: .atomic)
       }
-      return Snapshot(source: root, directory: directory, fingerprint: digest.finalize().map { String(format: "%02x", $0) }.joined())
+      return Snapshot(source: root, directory: directory, fingerprint: digest.finalize().map { String(format: "%02x", $0) }.joined(),
+        legacyFingerprint: legacyDigest.finalize().map { String(format: "%02x", $0) }.joined())
     } catch {
       try? manager.removeItem(at: directory)
       throw error

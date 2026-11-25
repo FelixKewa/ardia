@@ -60,8 +60,8 @@ as your everyday browser. The temporary profile may be cleared by macOS.
 WebKit extensions: Settings > Profiles > Extensions > WebKit Extensions.
 Load a trusted, unpacked extension folder and choose its allowed APIs/sites.
 Reload the page, then click the extension's own toolbar icon.
-Hover over the address bar if its buttons are hidden. The puzzle menu
-provides management and overflow when there is limited toolbar space.
+Hover over the address bar if its buttons are hidden. Use the puzzle
+menu or right-click an extension icon for management and overflow.
 TEXT
 archive="$output/Ardia-WebKit-preview-arm64.zip"
 ditto -c -k --sequesterRsrc --keepParent "$preview" "$archive"

@@ -118,7 +118,7 @@ final class WebKitExtensionHost: NSObject {
             defer { self.remainingRestores -= 1; if self.remainingRestores == 0 { self.finishRestore() } }
             guard self.valid, self.records[record.id]?.enabled == true else { return }
             do {
-              guard try checked.get().fingerprint == record.fingerprint else { throw WebKitExtensionPackage.failure("The installed extension changed. Inspect and load it again.") }
+              guard try checked.get().matches(record.fingerprint) else { throw WebKitExtensionPackage.failure("The installed extension changed. Inspect and load it again.") }
               let resource = try await WKWebExtension(resourceBaseURL: source)
               guard self.valid, self.records[record.id]?.enabled == true else { return }
               try self.activate(resource, record: record)
@@ -164,7 +164,7 @@ final class WebKitExtensionHost: NSObject {
         for (package, expected) in checks {
           let check = FileManager.default.temporaryDirectory.appendingPathComponent("ardia-extension-verify-" + UUID().uuidString)
           defer { try? FileManager.default.removeItem(at: check) }
-          guard try WebKitExtensionPackage.snapshot(package.path, into: check).fingerprint == expected else {
+          guard try WebKitExtensionPackage.snapshot(package.path, into: check).matches(expected) else {
             throw WebKitExtensionPackage.failure("The installed extension package changed. Restore its reviewed package before updating.")
           }
         }

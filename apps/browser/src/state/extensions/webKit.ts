@@ -224,10 +224,12 @@ export const useWebKitToolbarMode = (windowId: string, tabId?: string) => useBro
 
 export function webKitToolbarLayout(list: WebKitExtension[], limit: number, button: number) {
   const active = list.filter((extension) => extension.enabled && extension.loaded);
-  const slots = limit === Infinity ? active.length : Math.max(0, Math.floor(Number.isFinite(limit) ? limit : 1) - 1);
-  const visible = active.slice(0, slots);
+  const capacity = limit === Infinity ? active.length + 1 : Math.max(1, Math.floor(Number.isFinite(limit) ? limit : 1));
+  const manage = capacity > active.length || (capacity > 1 && active.length > capacity);
+  const visible = active.slice(0, capacity - (manage ? 1 : 0));
   const overflow = active.slice(visible.length);
-  return { visible, overflow, width: (visible.length + 1) * button + visible.length * TOOLBAR_TRAILING.itemGap };
+  const count = visible.length + (manage ? 1 : 0);
+  return { visible, overflow, manage, width: count * button + Math.max(0, count - 1) * TOOLBAR_TRAILING.itemGap };
 }
 
 export function useWebKitToolbarLayout(windowId: string, limit: number, button: number, tabId?: string) {
@@ -290,12 +292,12 @@ export async function activateWebKitExtension(windowId: string, tabId: string, i
   } catch (error) { if (target.current()) fail(target.profile, error); }
 }
 
-export async function openWebKitExtensionMenu(windowId: string, tabId: string, limit = 1) {
+export async function openWebKitExtensionMenu(windowId: string, tabId: string, limit?: number) {
   const target = toolbarActionTarget(windowId, tabId);
   if (!target) return;
   const result = await refreshWebKitExtensions(target.tab.profileId);
   if (!target.current() || !result) return;
-  const { overflow } = webKitToolbarLayout(result.extensions, limit, 0);
+  const overflow = limit === undefined ? result.extensions.filter((extension) => extension.enabled && extension.loaded) : webKitToolbarLayout(result.extensions, limit, 0).overflow;
   try {
     const choice = await showMenu([
       ...overflow.map((extension, index) => ({ id: `extension:${index}`, title: extension.name, enabled: target.ready })),

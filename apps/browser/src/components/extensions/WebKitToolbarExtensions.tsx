@@ -16,7 +16,7 @@ export function WebKitToolbarExtensions({ windowId, tabId, palette, top, right, 
 }) {
   useWebKitToolbarRefresh(windowId, tabId);
   const button = useToolbarRowContext().extensionButton;
-  const { visible, overflow, width } = useWebKitToolbarLayout(windowId, limit, button, tabId);
+  const { visible, overflow, manage, width } = useWebKitToolbarLayout(windowId, limit, button, tabId);
   const ready = usePages((s) => typeof s.ready[tabId] === "number" && s.ready[tabId]! > 0);
   return (
     <View style={{ position: "absolute", top, right, width, flexDirection: "row", gap: TOOLBAR_TRAILING.itemGap }}>
@@ -24,12 +24,12 @@ export function WebKitToolbarExtensions({ windowId, tabId, palette, top, right, 
         <Button key={extension.id} variant="icon" toolbar look="extension" image={extension.icon} icon="puzzlepiece.extension" palette={palette} tooltip={extension.name} disabled={!ready} onPress={() => {
           onActivate?.();
           void activateWebKitExtension(windowId, tabId, extension.id, extension.fingerprint);
-        }} />
+        }} onContextMenu={() => void openWebKitExtensionMenu(windowId, tabId)} />
       ))}
-      <Button variant="icon" toolbar look="extension" icon="puzzlepiece.extension" palette={palette} tooltip={overflow.length ? "More WebKit Extensions" : "Manage WebKit Extensions"} onPress={() => {
+      {manage ? <Button variant="icon" toolbar look="extension" icon="puzzlepiece.extension" palette={palette} tooltip={overflow.length ? "More WebKit Extensions" : "Manage WebKit Extensions"} onPress={() => {
         onActivate?.();
         void openWebKitExtensionMenu(windowId, tabId, limit);
-      }} />
+      }} /> : null}
     </View>
   );
 }

@@ -67,6 +67,35 @@ struct ExtensionPackageTests {
     #expect(throws: (any Error).self) { try WebKitExtensionPackage.snapshot(folder.path, into: root.appendingPathComponent("directory-link")) }
   }
 
+  @Test func `Korean filenames retain their fingerprint through filesystem normalization and repeated snapshots`() throws {
+    let root = try temporary()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let composed = try source(root)
+    let decomposedRoot = root.appendingPathComponent("decomposed-root")
+    try FileManager.default.createDirectory(at: decomposedRoot, withIntermediateDirectories: true)
+    let decomposed = try source(decomposedRoot)
+    let name = "가.0.json.gz"
+    let data = Data("synthetic dictionary entry".utf8)
+    for (folder, filename) in [(composed, name), (decomposed, name.decomposedStringWithCanonicalMapping)] {
+      let descriptor = open(folder.path + "/" + filename, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+      try #require(descriptor >= 0)
+      defer { close(descriptor) }
+      let written = data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in Darwin.write(descriptor, bytes.baseAddress, bytes.count) }
+      #expect(written == data.count)
+      let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+      #expect(names.contains { $0.utf8.elementsEqual(filename.utf8) })
+    }
+    let first = try WebKitExtensionPackage.snapshot(composed.path, into: root.appendingPathComponent("first"))
+    let equivalent = try WebKitExtensionPackage.snapshot(decomposed.path, into: root.appendingPathComponent("equivalent"))
+    let repeated = try WebKitExtensionPackage.snapshot(first.directory.path, into: root.appendingPathComponent("repeated"))
+    #expect(first.fingerprint == equivalent.fingerprint)
+    #expect(first.fingerprint == repeated.fingerprint)
+    #expect(first.legacyFingerprint != equivalent.legacyFingerprint)
+    #expect(equivalent.matches(equivalent.legacyFingerprint))
+    #expect(!equivalent.matches(String(repeating: "0", count: 64)))
+    #expect(try Data(contentsOf: repeated.directory.appendingPathComponent(name)) == data)
+  }
+
   @Test func `special files and oversized manifests fail without opening unbounded streams`() throws {
     let root = try temporary()
     defer { try? FileManager.default.removeItem(at: root) }

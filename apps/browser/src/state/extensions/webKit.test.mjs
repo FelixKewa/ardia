@@ -332,7 +332,7 @@ test("a post-mutation fresh list wins over an older in-flight response", async (
   assert.deepEqual(E().lists[""], [disabled]);
 });
 
-test("toolbar layout preserves native order, hides inactive rows and reserves the management slot", () => {
+test("toolbar layout preserves native order, hides inactive rows and uses management space only when available", () => {
   const entries = ["one", "two", "three"].map((id) => ({ ...record(), id, icon: "data:image/png;base64,AQ==" }));
   const list = [entries[0], { ...record(), id: "disabled", enabled: false }, entries[1], { ...record(), id: "unloaded", loaded: false }, entries[2]];
   const narrow = actions.webKitToolbarLayout(list, 2, 28);
@@ -342,22 +342,45 @@ test("toolbar layout preserves native order, hides inactive rows and reserves th
   const full = actions.webKitToolbarLayout(list, Infinity, 22);
   assert.deepEqual(full.visible, entries);
   assert.equal(full.width, 94);
-  assert.deepEqual(actions.webKitToolbarLayout(list, 1, 28).visible, []);
+  const oneSlot = actions.webKitToolbarLayout(list, 1, 28);
+  assert.deepEqual(oneSlot.visible, [entries[0]]);
+  assert.deepEqual(oneSlot.overflow, entries.slice(1));
+  assert.equal(oneSlot.manage, false);
+  assert.equal(oneSlot.width, 28);
+  const single = actions.webKitToolbarLayout([entries[0]], 1, 28);
+  assert.deepEqual(single.visible, [entries[0]]);
+  assert.equal(single.manage, false);
+  assert.equal(single.width, 28);
+  const exactFit = actions.webKitToolbarLayout(entries.slice(0, 2), 2, 28);
+  assert.deepEqual(exactFit.visible, entries.slice(0, 2));
+  assert.equal(exactFit.manage, false);
+  assert.equal(exactFit.width, 58);
   assert.equal(actions.webKitToolbarLayout([], Infinity, 28).width, 28);
 });
 
 test("overflow offers only hidden loaded rows and refuses a version replaced while the menu is open", async () => {
   const { windowId, tabId } = setup();
-  rows = [record(), { ...record(), id: "other", name: "Other" }];
+  rows = [record(), { ...record(), id: "other", name: "Other" }, { ...record(), id: "third", name: "Third" }];
   const pending = deferred();
   menu = () => pending.promise;
   const opening = actions.openWebKitExtensionMenu(windowId, tabId, 2);
   await flush();
-  assert.deepEqual(calls.find((call) => call.verb === "menu").items.filter((item) => item.id?.startsWith("extension:")).map((item) => item.title), ["Other"]);
+  assert.deepEqual(calls.find((call) => call.verb === "menu").items.filter((item) => item.id?.startsWith("extension:")).map((item) => item.title), ["Other", "Third"]);
   actions.useWebKitExtensions.setState({ lists: { "": [record(), { ...rows[1], fingerprint: "b".repeat(64) }] } });
   pending.resolve("extension:0");
   await opening;
   assert.equal(calls.some((call) => call.verb === "extensionShow"), false);
+});
+
+test("an icon's context menu keeps all extensions and management accessible in a one-slot sidebar", async () => {
+  const { windowId, tabId } = setup();
+  rows = [record(), { ...record(), id: "other", name: "Other" }];
+  menu = async () => null;
+  assert.equal(actions.webKitToolbarLayout(rows, 1, 28).manage, false);
+  await actions.openWebKitExtensionMenu(windowId, tabId);
+  const items = calls.find((call) => call.verb === "menu").items;
+  assert.deepEqual(items.filter((item) => item.id?.startsWith("extension:")).map((item) => item.title), ["Kimchi", "Other"]);
+  assert.equal(items.at(-1).id, "manage");
 });
 
 test("toolbar restore refresh retries until loaded, then stops, and cleanup cancels pending retries", async (t) => {

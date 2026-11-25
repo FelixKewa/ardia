@@ -13,8 +13,9 @@ Selected grants are validated and applied before the background starts. Unsuppor
 compatibility notices do not imply that every extension feature works.
 
 On a regular WebKit tab, loaded extensions appear directly in the toolbar with their own icons. Clicking one
-opens its action against that tab. The puzzle menu remains available for management and overflow when space is
-limited. Toolbar visibility follows the same address-bar hover preference as Chromium extensions. Private
+opens its action against that tab. Direct icons take priority in narrow toolbars. The puzzle menu appears when
+space allows; right-clicking an icon also opens extension management and overflow. Toolbar visibility follows
+the same address-bar hover preference as Chromium extensions. Private
 WebKit tabs have no extension host. Disable turns off an extension, while keeping its
 stored data. Reload already open pages after loading, disabling, or changing permissions because scripts
 previously injected into a page can remain until navigation.
@@ -29,6 +30,13 @@ same profile. Screen/audio capture, Chromium offscreen documents and unrestricte
 Inspection copies and hashes the package. Loading verifies the approved fingerprint against a new snapshot,
 rejects symbolic links and unsafe paths, and executes the managed copy. Changing the source folder after
 inspection requires a new approval. Invalid grant choices do not replace a working extension.
+
+Package hashes normalize filenames to Unicode NFC before sorting and hashing. macOS can copy a Korean name
+using its equivalent decomposed spelling without changing file contents; that must not invalidate approval on
+restart. Canonically duplicate paths are rejected, and every file's bytes remain part of the hash.
+Restoring an existing package also accepts its exact prior raw-filename hash; new approvals use the canonical
+hash. The actual Kimchi Reader managed copy now reproduces its original approved hash without changing files,
+grants, account data, or saved metadata.
 
 Each regular profile has its own controller, website data store, saved grant records and stable extension
 identifiers. The controller namespace also includes the application's data directory, so scratch tests do not
@@ -82,6 +90,7 @@ profile separation, document-start injection, background startup with approved s
 active-tab queries, script execution, disable/re-enable, restart persistence and approved package updates.
 It also checks that invalid update grants preserve the previous working extension, and that extension icons
 are bounded PNGs, survive restart, and are removed when the extension is disabled.
+The content-script fixture uses a Korean filename to cover the macOS filename-normalization boundary.
 
 ```bash
 METRO_PORT=8097 node scripts/personal/webkit-smoke.mjs /absolute/path/to/Debug/Ardia.app
