@@ -31,6 +31,8 @@ import {
   type Anchor,
 } from "../../state/extensions/actions";
 import { dropIndex, makeRoomShift, toolbarOrder, type ToolbarDrag } from "../../state/extensions/toolbarOrder";
+import { useWebKitToolbarMode } from "../../state/extensions/webKit";
+import { WebKitToolbarExtensions } from "./WebKitToolbarExtensions";
 
 const BUTTON = 28;
 const GLYPH = 14;
@@ -57,7 +59,10 @@ export const extensionsFitting = (room: number) => Math.max(1, Math.floor((room 
 export function useToolbarExtensionsWidth(windowId: string, limit = Infinity): number {
   const { pinned, overflow, casting } = useToolbarExtensions(windowId, limit);
   const button = useToolbarRowContext().extensionButton;
+  const mode = useWebKitToolbarMode(windowId);
   const count = pinned.length + (overflow ? 1 : 0) + (casting ? 1 : 0);
+  if (mode === "webkit") return button;
+  if (mode === "hidden") return 0;
   return count ? count * (button + GAP) - GAP : 0;
 }
 
@@ -72,6 +77,9 @@ type ToolbarExtensionsProps = {
 };
 
 export const ToolbarExtensions = memo(function ToolbarExtensions(props: ToolbarExtensionsProps) {
+  const mode = useWebKitToolbarMode(props.windowId, props.tabId);
+  if (mode === "webkit") return <WebKitToolbarExtensions {...props} />;
+  if (mode === "hidden") return null;
   return <TabToolbarExtensions key={`${props.windowId}|${props.tabId}`} {...props} />;
 });
 

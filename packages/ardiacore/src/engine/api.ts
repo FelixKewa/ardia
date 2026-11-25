@@ -19,7 +19,7 @@ import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemP
 import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
 import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
 import type {
-  CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
+  CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount, WebKitExtension, WebKitExtensionInspection, WebKitExtensionList,
 } from "../webkit";
 import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
 
@@ -209,6 +209,12 @@ export type EngineCalls = {
   "webView.takeFirstPaintHolds": [{}, { held: number; painted: number; loaded: number; pressed: number; timedOut: number; heldMs: number }];
 
   "webKit.removeDownloadStaging": [{ path: string }, boolean];
+  "webKit.extensionInspect": [{ path: string }, WebKitExtensionInspection];
+  "webKit.extensionList": [Profile, WebKitExtensionList];
+  "webKit.extensionLoad": [Profile & { path: string; fingerprint: string; permissions: string[]; origins: string[] }, WebKitExtension];
+  "webKit.extensionGrant": [Profile & { id: string; permissions: string[]; origins: string[] }, WebKitExtension];
+  "webKit.extensionShow": [Profile & { id: string; tabId: string }, { shown: boolean }];
+  "webKit.extensionUnload": [Profile & { id: string }, WebKitExtension];
   "webKit.endPrivateSession": [{ session: string }, null];
   "webKit.cookieStoreKey": [Profile, string];
   "webKit.importCookies": [Profile & { storeKey: string; cookies: PageCookie[] }, number];

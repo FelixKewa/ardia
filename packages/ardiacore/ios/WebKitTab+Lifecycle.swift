@@ -219,6 +219,46 @@ extension WebKitTab {
   private static let processKey = "_webProcessIdentifier"
   private static let waitBeforeAskingAgain = 15.0
 
+  func begin() {
+    guard !closed else { return }
+    if let key = transferKey {
+      var handedOver: WebKitWebView?
+      if WebKitHub.shared.transfers.isPrepared(key), let previous = WebKitHub.shared.transfers.liveTab(key), previous !== self,
+        previous.profile == profile, let view = previous.webView, WebKitExtensions.shared.accepts(view, profile: profile) {
+        handedOver = previous.relinquish()
+      }
+      let parked = WebKitHub.shared.transfers.claimParked(key) as? WebKitWebView
+      WebKitHub.shared.transfers.noteLive(self, key: key)
+      if let view = handedOver ?? parked {
+        if let parked, parked !== view { WebKitHub.close(parked) }
+        if attach(view) {
+          emitEverything()
+          return
+        }
+        WebKitHub.close(view)
+      }
+    }
+    if let id = adoptId, id.hasPrefix("webkit:"), let offered = WebKitHub.shared.transfers.claimOffered(id) as? WebKitWebView {
+      if attach(offered) {
+        emitEverything()
+        return
+      }
+      WebKitHub.close(offered)
+      adoptId = nil
+    }
+    if let id = adoptId, WebKitHeldPopup.closedBeforeAdoption(id) {
+      let created = makeView()
+      guard attach(created) else { WebKitHub.close(created); return }
+      emit("ready", [:])
+      emit("windowClose")
+      return
+    }
+    let created = makeView()
+    guard attach(created) else { WebKitHub.close(created); return }
+    emit("ready", [:])
+    if let url = initialURL, !url.isEmpty { startFirstPage(url, in: created) }
+  }
+
   func makeView() -> WebKitWebView {
     let view = WebKitWebView(frame: bounds, configuration: WebKitHub.shared.configuration(profile: profile))
     WebKitTabHistory.stamp(view, profile: profile)
@@ -226,9 +266,12 @@ extension WebKitTab {
   }
 
   func startFirstPage(_ url: String, in view: WebKitWebView) {
-    if skipsNavigationDownload(url) { return }
-    if restoreSavedHistory(url, in: view) { return }
-    loadWhenBlockerReady(url, in: view)
+    WebKitExtensions.shared.whenReady(profile: profile) { [weak self, weak view] in
+      guard let self, let view, !self.closed, self.webView === view else { return }
+      if self.skipsNavigationDownload(url) { return }
+      if self.restoreSavedHistory(url, in: view) { return }
+      self.loadWhenBlockerReady(url, in: view)
+    }
   }
 
   private func restoreSavedHistory(_ url: String, in view: WebKitWebView) -> Bool {
@@ -278,7 +321,7 @@ extension WebKitTab {
     let page = WebKitTabHistory.isCurrent(found.generation, profile: profile) ? found : WebKitDiscardedPage(state: nil, url: found.url, generation: nil)
     life.discarded = nil
     let view = makeView()
-    attach(view)
+    guard attach(view) else { WebKitHub.close(view); return false }
     emit("ready", [:])
     ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "discardWake"]))
     if let state = page.state, url == nil {

@@ -29,3 +29,27 @@ test("WebKit page counts from native reach the hourly counts once the app starts
   assert.equal(counts.webkit_context_menus, 1);
   assert.equal(counts.webkit_certificate_interstitials, 1);
 });
+
+test("extension counts exclude disabled sharing and callbacks from an earlier consent period", () => {
+  const events = {
+    extensionLoad: "webkit_extension_loads",
+    extensionLoadFailure: "webkit_extension_load_failures",
+    extensionGrant: "webkit_extension_grants",
+    extensionAction: "webkit_extension_actions",
+    extensionUnload: "webkit_extension_unloads",
+  };
+  client.setSharing(true, "settings");
+  startWebKitCounts();
+  const stale = client.consentEpoch();
+  client.setSharing(false, "settings");
+  for (const name of Object.keys(events)) counted(name);
+  const excluded = takeEngineSwitchCounts();
+  for (const field of Object.values(events)) assert.equal(excluded[field], 0);
+  client.setSharing(true, "settings");
+  for (const name of Object.keys(events)) {
+    channel.emit("webKit", { name: "webKit.counted", data: { name, epoch: stale } });
+    counted(name);
+  }
+  const counts = takeEngineSwitchCounts();
+  for (const field of Object.values(events)) assert.equal(counts[field], 1);
+});

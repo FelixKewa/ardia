@@ -1,6 +1,10 @@
 # Personal Mac baseline
 
-The `Personal Mac baseline` workflow builds the unchanged Ardia `v0.2.48` application at commit
+This records the initial baseline workflow at commit `430a97c7`. The current workflow builds the
+[WebKit preview](personal-webkit-extensions.md), including the personal branch's changes. To reproduce the
+baseline, check out that commit in an existing checkout before running its script.
+
+The initial `Personal Mac baseline` workflow builds the unchanged Ardia `v0.2.48` application at commit
 `6b1bcbaca49e766a3be05c6e7c52d57a69c0bd0d`. Only this document, the personal workflow, and its build script may
 differ from that baseline. It runs on pushes to `codex/webkit-kimchi` in `FelixKewa/ardia`, or by manually dispatching
 that branch. Its job refuses every other repository and branch.

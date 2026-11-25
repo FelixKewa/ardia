@@ -13,6 +13,25 @@ public class WebKitModule: Module {
     PageViewDefinition.of(WebKitTabView.self)
   }
   static let calls = CallTable(domain: "webKit", handlers: [
+    "extensionInspect": { args, reply in
+      WebKitExtensions.shared.inspect(path: try args.text("path")) { extensionReply($0, reply) }
+    },
+    "extensionList": { args, reply in
+      let profile = try extensionProfile(args)
+      reply.ok(["available": WebKitExtensions.shared.available, "extensions": WebKitExtensions.shared.list(profile: profile)])
+    },
+    "extensionLoad": { args, reply in
+      WebKitExtensions.shared.load(profile: try extensionProfile(args), path: try args.text("path"), fingerprint: try args.text("fingerprint"), permissions: try args.strings("permissions"), origins: try args.strings("origins")) { extensionReply($0, reply) }
+    },
+    "extensionGrant": { args, reply in
+      WebKitExtensions.shared.grant(profile: try extensionProfile(args), id: try args.text("id"), permissions: try args.strings("permissions"), origins: try args.strings("origins")) { extensionReply($0, reply) }
+    },
+    "extensionShow": { args, reply in
+      WebKitExtensions.shared.show(profile: try extensionProfile(args), id: try args.text("id"), tabId: try args.text("tabId")) { extensionReply($0, reply) }
+    },
+    "extensionUnload": { args, reply in
+      WebKitExtensions.shared.unload(profile: try extensionProfile(args), id: try args.text("id")) { extensionReply($0, reply) }
+    },
     "removeDownloadStaging": { args, reply in
       reply.ok(WebKitDownloads.removeStaging(try args.text("path")))
     },
@@ -62,6 +81,18 @@ public class WebKitModule: Module {
     "passkeyAccess": { _, reply in reply.ok(WebKitPasskeys.access()) },
     "requestPasskeyAccess": { _, reply in WebKitPasskeys.requestAccess { reply.ok($0) } },
   ].merging(LaunchConfig.shared.testInstance ? testInstanceCalls : [:]) { call, _ in call })
+
+  private static func extensionProfile(_ args: CallArgs) throws -> String {
+    guard !WebKitStores.isPrivate(args.profile) else { throw BadCallArgs(message: "WebKit extensions are unavailable in private profiles") }
+    return args.profile
+  }
+
+  private static func extensionReply(_ result: Result<[String: Any], Error>, _ reply: CallReply) {
+    switch result {
+    case .success(let value): reply.ok(value)
+    case .failure(let error): reply.fail("ERR_WEBKIT_EXTENSION", error.localizedDescription)
+    }
+  }
 
   private static let testInstanceCalls: [String: CallHandler] = [
     "devStoreExists": { args, reply in WebKitHub.shared.storeExists(args.profile) { reply.ok($0) } },

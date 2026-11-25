@@ -74,9 +74,10 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     })();
     """
 
-  func configuration(profile: String) -> WKWebViewConfiguration {
+  func configuration(profile: String, extensions: Bool = true) -> WKWebViewConfiguration {
     let config = WKWebViewConfiguration()
     config.websiteDataStore = stores.dataStore(for: profile)
+    if extensions { WebKitExtensions.shared.configure(config, profile: profile) }
     let controller = WKUserContentController()
     controller.addUserScript(WKUserScript(source: WebKitPageScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: Self.world))
     controller.add(self, contentWorld: Self.world, name: "ardia")
@@ -119,6 +120,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
   }
 
   static func close(_ webView: WKWebView) {
+    WebKitExtensions.shared.closed(webView)
     WebKitHeldPopup.cancel(webView)
     WebKitHub.shared.transfers.unregister(webView)
     webView.navigationDelegate = nil
@@ -136,7 +138,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
   }
 
   func resumeHost(for profile: String) -> WKWebView {
-    stores.resumeHost(for: profile) { configuration(profile: profile) }
+    stores.resumeHost(for: profile) { configuration(profile: profile, extensions: false) }
   }
 
   private func closeViews(using store: WKWebsiteDataStore, id: WebKitStores.StoreID) {
@@ -190,6 +192,13 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
 
   func deleteProfileData(_ profile: String, completion: @escaping (Bool) -> Void) {
     guard !WebKitStores.isPrivate(profile) else { return completion(true) }
+    WebKitExtensions.shared.forget(profile: profile) { [weak self] removed in
+      guard let self else { return completion(false) }
+      self.deleteWebsiteProfileData(profile) { completion($0 && removed) }
+    }
+  }
+
+  private func deleteWebsiteProfileData(_ profile: String, completion: @escaping (Bool) -> Void) {
     let identifier = WebKitStores.storeIdentifier(profile)
     let removed = stores.forgetProfile(profile)
     WebKitTabHistory.forget(profile: profile)

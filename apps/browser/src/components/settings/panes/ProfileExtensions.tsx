@@ -25,6 +25,8 @@ import { prompt, showMenu } from "../../../state/app/system";
 import { perLook } from "../../ui/tokens";
 import { useProfile } from "../../../state/browser/hooks";
 import { ProfileSubPage } from "./ProfileSubPage";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { WebKitExtensionsSection } from "./WebKitExtensions";
 
 type SiteAccess = "allSites" | "specificSites" | "onClick";
 const SITE_ACCESS: { value: SiteAccess; title: string }[] = [
@@ -91,6 +93,7 @@ export function ExtensionsSection({ profileId }: { profileId: string }) {
           <Button title="Open Web Store" onPress={() => openWebStoreFor(profile, profileId)} />
         </Row>
       </Group>
+      {PLATFORM_FEATURES.webKit ? <WebKitExtensionsSection profileId={profileId} /> : null}
     </>
   );
 }

@@ -72,6 +72,8 @@ const TOP = [
   ["channel", ["general.updateChannel"]],
   ["sync", ["general.sync"]],
   ["extensions", ["profiles.extensions"]],
+  ["webkit extensions", ["profiles.webKitExtensions"]],
+  ["load folder", ["profiles.webKitExtensions"]],
   ["font", ["advanced.chromeSettings"]],
   ["default zoom", ["advanced.chromeSettings"]],
   ["chrome settings", ["advanced.chromeSettings"]],

@@ -1,4 +1,9 @@
 export type WebKitCount =
+  | "extensionLoad"
+  | "extensionLoadFailure"
+  | "extensionGrant"
+  | "extensionAction"
+  | "extensionUnload"
   | "autofillFill"
   | "autofillSaveOffer"
   | "autofillSave"
@@ -56,6 +61,11 @@ export type WebKitCount =
   | "downloadSkipped";
 
 export const WEBKIT_COUNTS = {
+  extensionLoad: "webKitExtensionLoads",
+  extensionLoadFailure: "webKitExtensionLoadFailures",
+  extensionGrant: "webKitExtensionGrants",
+  extensionAction: "webKitExtensionActions",
+  extensionUnload: "webKitExtensionUnloads",
   autofillFill: "webKitAutofillFills",
   autofillSaveOffer: "webKitAutofillSaveOffers",
   autofillSave: "webKitAutofillSaves",

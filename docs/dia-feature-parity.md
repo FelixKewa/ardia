@@ -17,6 +17,12 @@ Legend: **✅** done · **🧪** built, but the deciding test needs the user pre
 **❌** missing · **⛔** blocked by something outside our control (named in the Gap) · **⏸** deferred (AI), on purpose ·
 **—** not applicable
 
+## Personal fork additions
+
+| Feature | Status | Evidence and remaining checks |
+| --- | --- | --- |
+| WebKit extension host, macOS 15.4+ | 🧪 | Personal branch only, 2026-11-26: inspected package approval, explicit APIs and exact HTTPS hosts, profile isolation, native popup actions and persistent storage. Synthetic hidden runtime tests pass messaging, scripting, tab identity, disable/re-enable, restart and package updates. Actual Kimchi Reader popup, sign-in and Netflix parsing require compatibility verification. Watch consent-gated `webkit_extension_load_failures` and `webkit_extension_actions`; no extension identities or page data are collected. See [personal WebKit preview](personal-webkit-extensions.md). |
+
 ## Summary
 
 **307 feature rows** (§1–§25, recounted from the tables on 2026-09-26):

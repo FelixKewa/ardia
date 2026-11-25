@@ -13,8 +13,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var initialURL: String?
   var adoptId: String?
   var transferKey: String?
-  var visible = true { didSet { updateHidden(); wakeIfShown(was: oldValue); updateSight(); noteShownChanged(); showNextDialog(); if !visible { WebKitHub.shared.logins.closeDropdowns(for: self) } } }
-  var selected = true { didSet { noteShownChanged() } }
+  var visible = true { didSet { updateHidden(); wakeIfShown(was: oldValue); updateSight(); noteShownChanged(); showNextDialog(); if !visible { WebKitHub.shared.logins.closeDropdowns(for: self) }; WebKitExtensions.shared.changed(self) } }
+  var selected = true { didSet { noteShownChanged(); WebKitExtensions.shared.changed(self) } }
   var wasShown = true
   var autoPictureInPicture = false { didSet { autoPictureInPictureInputsChanged() } }
   var pageBackgroundColor: NSColor? { didSet { if let color = pageBackgroundColor { webView?.underPageBackgroundColor = color } } }
@@ -65,6 +65,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     if window != nil { followInterfaceScale() }
     watchSight()
     showNextDialog()
+    WebKitExtensions.shared.changed(self)
   }
 
   func emit(_ name: String, _ payload: [String: Any] = [:]) {
@@ -77,38 +78,9 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     begin()
   }
 
-  private func begin() {
-    guard !closed else { return }
-    if let key = transferKey {
-      let handedOver = WebKitHub.shared.transfers.isPrepared(key) ? WebKitHub.shared.transfers.liveTab(key).flatMap { $0 === self ? nil : $0.relinquish() } : nil
-      let parked = WebKitHub.shared.transfers.claimParked(key) as? WebKitWebView
-      WebKitHub.shared.transfers.noteLive(self, key: key)
-      if let view = handedOver ?? parked {
-        if let parked, parked !== view { WebKitHub.close(parked) }
-        attach(view)
-        emitEverything()
-        return
-      }
-    }
-    if let id = adoptId, id.hasPrefix("webkit:"), let offered = WebKitHub.shared.transfers.claimOffered(id) as? WebKitWebView {
-      attach(offered)
-      emitEverything()
-      return
-    }
-    if let id = adoptId, WebKitHeldPopup.closedBeforeAdoption(id) {
-      attach(makeView())
-      emit("ready", [:])
-      emit("windowClose")
-      return
-    }
-    let created = makeView()
-    attach(created)
-    emit("ready", [:])
-    if let url = initialURL, !url.isEmpty { startFirstPage(url, in: created) }
-  }
-
   func relinquish() -> WebKitWebView? {
     guard !closed, let view = webView else { return nil }
+    WebKitExtensions.shared.detach(self)
     closed = true
     observations = []
     cancelDialogs()
@@ -125,7 +97,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     return view
   }
 
-  private func emitEverything() {
+  func emitEverything() {
     emit("ready", [:])
     queueNavigation()
     emit("progress", ["progress": webView?.estimatedProgress ?? 0])
@@ -133,7 +105,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     emitZoom()
   }
 
-  func attach(_ view: WebKitWebView) {
+  func attach(_ view: WebKitWebView) -> Bool {
+    guard WebKitExtensions.shared.accepts(view, profile: profile) else { return false }
     webView = view
     WebKitTabHistory.stamp(view, profile: profile)
     defer { WebKitHeldPopup.release(view, to: self) }
@@ -156,6 +129,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     WebKitHub.shared.permissions.reconcileCapture(view, profile: profile)
     pushFieldProvider()
     updateSight()
+    WebKitExtensions.shared.attach(self)
+    return true
   }
 
   private func observe(_ view: WebKitWebView) {
@@ -178,6 +153,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func dropViewForDiscard() -> WebKitWebView? {
     guard let view = webView else { return nil }
+    WebKitExtensions.shared.detach(self)
     observations = []
     webView = nil
     stopListening(to: view)
@@ -190,6 +166,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func close() {
     guard !closed else { return }
+    WebKitExtensions.shared.detach(self)
     lifecycleEnded()
     closed = true
     observations = []
@@ -223,6 +200,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   private func emitNavigation() {
     guard let view = webView else { return }
+    WebKitExtensions.shared.changed(self)
     let reported = showingError ? nil : view.reportedTheme
     let theme = reported?.color ?? view.themeColor.flatMap(Self.hex)
     var navigation: [String: Any] = [

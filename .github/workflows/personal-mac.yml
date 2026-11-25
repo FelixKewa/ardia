@@ -1,4 +1,4 @@
-name: Personal Mac baseline
+name: Personal Mac preview
 
 on:
   push:
@@ -14,14 +14,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  baseline:
+  preview:
     if: github.repository == 'FelixKewa/ardia' && github.ref == 'refs/heads/codex/webkit-kimchi'
     runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Prepare logs
         run: |
-          PERSONAL_BUILD_DIR="$RUNNER_TEMP/ardia-personal-baseline"
+          PERSONAL_BUILD_DIR="$RUNNER_TEMP/ardia-personal-preview"
           echo "PERSONAL_BUILD_DIR=$PERSONAL_BUILD_DIR" >> "$GITHUB_ENV"
           mkdir -p "$PERSONAL_BUILD_DIR/logs"
           printf 'Repository: %s\nCommit: %s\nRun: %s\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_RUN_ID" > "$PERSONAL_BUILD_DIR/logs/run.txt"
@@ -34,13 +34,13 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Build standalone baseline
-        run: bash scripts/personal/build-baseline.sh "$PERSONAL_BUILD_DIR"
+      - name: Build standalone preview
+        run: bash scripts/personal/build-preview.sh "$PERSONAL_BUILD_DIR"
       - name: Upload app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: ardia-v0.2.48-baseline-macos-arm64-${{ github.run_number }}
-          path: ${{ runner.temp }}/ardia-personal-baseline/Ardia-0.2.48-baseline-arm64.zip
+          name: ardia-webkit-preview-macos-arm64-${{ github.run_number }}
+          path: ${{ runner.temp }}/ardia-personal-preview/Ardia-WebKit-preview-arm64.zip
           compression-level: 0
           if-no-files-found: error
           retention-days: 7
@@ -48,10 +48,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: ardia-baseline-logs-${{ github.run_number }}
+          name: ardia-preview-logs-${{ github.run_number }}
           path: |
-            ${{ runner.temp }}/ardia-personal-baseline/logs/
-            ${{ runner.temp }}/ardia-personal-baseline/archive/*.log
-            ${{ runner.temp }}/ardia-personal-baseline/derived/Logs/Build/
+            ${{ runner.temp }}/ardia-personal-preview/logs/
+            ${{ runner.temp }}/ardia-personal-preview/archive/*.log
+            ${{ runner.temp }}/ardia-personal-preview/derived/Logs/Build/
           if-no-files-found: warn
           retention-days: 14

@@ -163,6 +163,17 @@ export const profileRows = {
       },
     },
     {
+      section: "WebKit Extensions",
+      rows: {
+        webKitExtensions: {
+          title: "Load WebKit extension",
+          description: "Choose a trusted extension folder for this profile, then review its permissions and exact HTTPS hosts before loading.",
+          keywords: ["webkit extensions", "load folder", "unpacked", "extension permissions", "host access", "disable extension", "kimchi"],
+          shown: () => PLATFORM_FEATURES.webKit,
+        },
+      },
+    },
+    {
       section: "Data",
       rows: {
         exportBookmarks: {

@@ -2,6 +2,28 @@ import type { SiteSettingType } from "./siteSettings";
 
 export type PageEngine = "chromium" | "webkit";
 
+export type WebKitExtensionInspection = {
+  name: string;
+  version: string;
+  path: string;
+  fingerprint: string;
+  requestedPermissions: string[];
+  requestedOrigins: string[];
+  supportedPermissions: string[];
+  errors: string[];
+};
+
+export type WebKitExtension = Omit<WebKitExtensionInspection, "supportedPermissions"> & {
+  id: string;
+  loaded: boolean;
+  enabled: boolean;
+  grantedPermissions: string[];
+  grantedOrigins: string[];
+  reloadRequired: boolean;
+};
+
+export type WebKitExtensionList = { available: boolean; extensions: WebKitExtension[] };
+
 export type PageCookie = {
   name: string;
   value: string;
@@ -46,6 +68,11 @@ export const NO_PASSKEY_ACCESS: PasskeyAccess = { entitled: false, status: "enti
 export const WEBKIT_SITE_SETTINGS: readonly SiteSettingType[] = ["camera", "microphone", "location", "notifications", "popups", "javascript", "images", "cookies", "autoplay", "clipboard"];
 
 export type WebKitCount =
+  | "extensionLoad"
+  | "extensionLoadFailure"
+  | "extensionGrant"
+  | "extensionAction"
+  | "extensionUnload"
   | "autofillAddressFill"
   | "autofillCardFill"
   | "autofillCardReauthRefused"
