@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { gzipSync } from "node:zlib";
-import { adaptKimchiDictionarySource, adaptKimchiNetflixSeekSource, adaptKimchiNetflixSeekHelper, prepareWebKitExtension } from "../../../scripts/personal/prepare-webkit-extension.mjs";
+import { adaptKimchiDictionarySource, adaptKimchiNetflixSeekSource, adaptKimchiNetflixSeekHelper, adaptKimchiWebKitMiningSource, prepareWebKitExtension } from "../../../scripts/personal/prepare-webkit-extension.mjs";
 
 const dictionaryHelper = "async function decode(e){let t=(await e.blob()).stream().pipeThrough(new DecompressionStream(`gzip`));return await(await new Response(t).blob()).text()}";
 const adaptedDecoder = () => new Function(`return (${adaptKimchiDictionarySource(dictionaryHelper)})`)();
@@ -128,6 +128,8 @@ test("dictionary opt-in rejects unfamiliar versions scripts and hashes without c
   assert.deepEqual(fs.readFileSync(path.join(source, "contentScripts/index.global.js")), beforeScript);
   assert.throws(() => prepareWebKitExtension(source, output, { kimchiNetflixSeek: true }), /differs from the reviewed original/);
   assert.throws(() => prepareWebKitExtension(source, output, { kimchiDictionary: true, kimchiNetflixSeek: true }), /differs from the reviewed original/);
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiWebKitMining: true }), /differs from the reviewed original/);
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiDictionary: true, kimchiNetflixSeek: true, kimchiWebKitMining: true }), /differs from the reviewed original/);
   assert.equal(fs.existsSync(output), false);
 });
 
@@ -190,4 +192,122 @@ test("Netflix seek adaptation composes with dictionary correction and refuses am
   assert.throws(() => adaptKimchiNetflixSeekSource(netflixSeekMethod + netflixSeekMethod), /exactly once/);
   assert.throws(() => adaptKimchiNetflixSeekHelper("(()=>{})()"), /exactly once/);
   assert.throws(() => adaptKimchiNetflixSeekHelper(netflixSeekHelper + netflixSeekHelper), /exactly once/);
+});
+
+const miningFixture = `async function prepare(){let d=await Z.lazyAsyncGet(),f=d.dict.mining.captureAudioWhenPossible,p=d.dict.mining.captureScreenshotWhenPossible;Ru.set(!1),zu.set(!1);if(f||p)capture();return {sentence:"한국어 문장",definition:"Synthetic definition",image:null,getAudio:null}}
+function openContext(){n()&&!R(l)&&N(l,t.context?t.context.getContext():Promise.resolve(null),!0)}`;
+
+function miningHarness({ platform = "netflix", scheme = "webkit-extension", audio = true, screenshot = true } = {}) {
+  const preferences = { dict: { mining: { captureAudioWhenPossible: audio, captureScreenshotWhenPossible: screenshot } } };
+  const calls = { capture: 0, reset: 0, browser: 0 };
+  const state = { open: true, pending: { value: null }, dirty: { value: false }, uploading: { value: false }, provider: null };
+  const context = vm.createContext({
+    Z: { lazyAsyncGet: async () => preferences }, ph: { getPlatform: () => platform },
+    chrome: { runtime: { getURL() { calls.browser++; return `${scheme}://fixture/`; } } },
+    Ru: { set() { calls.reset++; } }, zu: { set() { calls.reset++; } }, capture() { calls.capture++; },
+    n: () => state.open, R: (value) => value.value, N: (cell, value) => { cell.value = value; },
+    l: state.pending, u: state.dirty, d: state.uploading, t: { context: { getContext: () => state.provider() } },
+  });
+  vm.runInContext(adaptKimchiWebKitMiningSource(miningFixture), context);
+  return { prepare: context.prepare, openContext: context.openContext, preferences, calls, state };
+}
+
+test("WebKit Netflix requested media fails before capture or hidden UI setup with explicit text-only guidance", async () => {
+  for (const [audio, screenshot] of [[true, true], [true, false], [false, true]]) {
+    const fixture = miningHarness({ audio, screenshot });
+    const before = structuredClone(fixture.preferences);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await assert.rejects(fixture.prepare(), (error) => {
+        assert.equal(error.code, "ardia-webkit-mining-media-unavailable");
+        assert.match(error.message, /unavailable/);
+        assert.match(error.message, /Capture screenshot when possible/);
+        assert.match(error.message, /Capture audio when possible/);
+        assert.match(error.message, /text-only/);
+        return true;
+      });
+    }
+    assert.equal(fixture.calls.capture, 0);
+    assert.equal(fixture.calls.reset, 0);
+    assert.deepEqual(fixture.preferences, before);
+  }
+});
+
+test("explicit text-only mining avoids browser APIs and leaves other browsers and platforms unchanged", async () => {
+  const textOnly = miningHarness({ audio: false, screenshot: false });
+  const context = await textOnly.prepare();
+  assert.equal(context.sentence, "한국어 문장");
+  assert.equal(context.definition, "Synthetic definition");
+  assert.equal(context.image, null);
+  assert.equal(context.getAudio, null);
+  assert.deepEqual(textOnly.calls, { capture: 0, reset: 2, browser: 0 });
+  for (const options of [{ scheme: "moz-extension" }, { scheme: "chrome-extension" }, { platform: "youtube" }, { platform: "viki" }]) {
+    const fixture = miningHarness(options);
+    assert.equal((await fixture.prepare()).sentence, "한국어 문장");
+    assert.equal(fixture.calls.capture, 1);
+  }
+});
+
+test("mining capability error recovers dismissal after a dirty prior card and permits explicit text-only retry", async () => {
+  const fixture = miningHarness();
+  fixture.state.provider = () => ({ sentence: "Prior card" });
+  fixture.openContext();
+  assert.equal((await fixture.state.pending.value).sentence, "Prior card");
+  fixture.state.dirty.value = true;
+  fixture.state.uploading.value = true;
+  fixture.state.open = false;
+  fixture.state.pending.value = null;
+  fixture.state.open = true;
+  fixture.state.provider = fixture.prepare;
+  fixture.openContext();
+  await assert.rejects(fixture.state.pending.value, { code: "ardia-webkit-mining-media-unavailable" });
+  assert.equal(fixture.state.dirty.value, false);
+  assert.equal(fixture.state.uploading.value, false);
+  fixture.state.open = false;
+  fixture.state.pending.value = null;
+  fixture.preferences.dict.mining.captureAudioWhenPossible = false;
+  fixture.preferences.dict.mining.captureScreenshotWhenPossible = false;
+  fixture.state.open = true;
+  fixture.openContext();
+  assert.equal((await fixture.state.pending.value).sentence, "한국어 문장");
+  assert.equal(fixture.calls.capture, 0);
+});
+
+test("late or generic mining errors cannot clear a newer card's transient state", async () => {
+  const fixture = miningHarness();
+  let rejectOld;
+  fixture.state.provider = () => new Promise((_, reject) => { rejectOld = reject; });
+  fixture.openContext();
+  const old = fixture.state.pending.value;
+  const oldResult = assert.rejects(old, { code: "ardia-webkit-mining-media-unavailable" });
+  fixture.state.open = false;
+  fixture.state.pending.value = null;
+  fixture.state.open = true;
+  fixture.state.provider = () => ({ sentence: "New card" });
+  fixture.openContext();
+  const current = fixture.state.pending.value;
+  await current;
+  fixture.state.dirty.value = true;
+  fixture.state.uploading.value = true;
+  rejectOld(Object.assign(new Error("Old request"), { code: "ardia-webkit-mining-media-unavailable" }));
+  await oldResult;
+  assert.equal(fixture.state.pending.value, current);
+  assert.equal(fixture.state.dirty.value, true);
+  assert.equal(fixture.state.uploading.value, true);
+  fixture.state.pending.value = null;
+  fixture.state.provider = () => Promise.reject(new Error("Generic failure"));
+  fixture.openContext();
+  await assert.rejects(fixture.state.pending.value, /Generic failure/);
+  assert.equal(fixture.state.dirty.value, true);
+  assert.equal(fixture.state.uploading.value, true);
+});
+
+test("mining preparation composes with dictionary and seeking and rejects missing or ambiguous boundaries", () => {
+  const combined = dictionaryHelper + `\nconst player={${netflixSeekMethod}};\n` + miningFixture;
+  assert.equal(
+    adaptKimchiWebKitMiningSource(adaptKimchiNetflixSeekSource(adaptKimchiDictionarySource(combined))),
+    adaptKimchiDictionarySource(adaptKimchiNetflixSeekSource(adaptKimchiWebKitMiningSource(combined))),
+  );
+  assert.throws(() => adaptKimchiWebKitMiningSource("async function prepare(){}"), /exactly once/);
+  assert.throws(() => adaptKimchiWebKitMiningSource(miningFixture + miningFixture), /exactly once/);
+  assert.throws(() => adaptKimchiWebKitMiningSource(miningFixture.split("function openContext")[0]), /exactly once/);
 });

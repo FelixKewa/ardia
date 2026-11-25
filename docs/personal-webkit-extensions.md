@@ -23,7 +23,9 @@ previously injected into a page can remain until navigation.
 Approved API permissions are `activeTab`, `scripting`, `storage`, `unlimitedStorage`, `contextMenus`, and `tabs`.
 Host grants are exact HTTPS hosts, including all paths; WebKit's match patterns do not isolate ports. A broad
 manifest request can be narrowed to explicitly entered hosts. The `tabs` API can expose tab metadata in the
-same profile. Screen/audio capture, Chromium offscreen documents and unrestricted host grants are not enabled.
+same profile. Chromium `tabCapture`, offscreen documents, screen/audio recording and unrestricted host grants
+are not enabled. WebKit has a public visible-tab snapshot API; this preview does not add an alternative
+Netflix image/audio mining implementation.
 
 ## Package and data handling
 
@@ -66,10 +68,10 @@ WebKit documents the generated-background-page UTF-8 fix in
 Prepare a local copy before choosing Load Folder:
 
 ```bash
-node scripts/personal/prepare-webkit-extension.mjs --kimchi-dictionary --kimchi-netflix-seek /path/to/original-extracted-firefox-package /path/to/new-prepared-folder
+node scripts/personal/prepare-webkit-extension.mjs --kimchi-dictionary --kimchi-netflix-seek --kimchi-webkit-mining /path/to/original-extracted-firefox-package /path/to/new-prepared-folder
 ```
 
-Without either optional compatibility flag, the preparation command adds only a UTF-8 marker to non-ASCII
+Without any optional compatibility flags, the preparation command adds only a UTF-8 marker to non-ASCII
 `background.scripts` files that lack one. `--kimchi-dictionary` also adapts the reviewed Kimchi Reader 0.21.7 dictionary
 decoder. It requires the exact original content-script SHA-256 and its declared manifest entry, and refuses
 unfamiliar versions, changed scripts, or an already adapted script before creating the destination.
@@ -90,8 +92,22 @@ attribute before calling Netflix's existing player API. Zero is valid; missing, 
 nonfinite values are ignored. Scripts execute in insertion order and are removed on load or error, so rapid
 next/previous/repeat requests keep their separate target times. WebKit's URL masking stays enabled.
 The option requires the exact original content-script and seek-helper hashes and their manifest declarations.
-Generate from the original official folder with both flags to retain the dictionary correction; a previously
+Generate from the original official folder with all required flags to retain earlier corrections; a previously
 adapted content script is refused as input. Existing shortcut bindings and cue selection are preserved.
+
+`--kimchi-webkit-mining` makes unsupported Netflix media requests explicit before Kimchi hides its mining
+dialog or starts capture. With either capture preference enabled, the existing context-error dialog explains
+that image/audio mining is unavailable in this preview. For text-only cards, the user can turn off **Capture
+screenshot when possible** and **Capture audio when possible** under Kimchi Reader settings → **Capture during
+Mining**, then retry. The command does not change those preferences, silently remove requested attachments,
+save a card, or enable capture. The existing pause when opening mining remains. Chrome/Firefox behavior and
+other sites are unchanged.
+
+The error stays dismissible after a previously edited card closes. Recovery clears only the obsolete
+dialog's transient dirty/uploading flags for this identified compatibility error; a late rejection cannot
+change a newer card. Text-only context and submission follow the existing path, including account checks and
+server error reporting. The option requires the same reviewed original content-script hash as the other
+Kimchi adaptations.
 
 Preparation leaves the original folder untouched, refuses an existing destination or symbolic links, and does
 not download or redistribute the extension. Normal inspection and fingerprint approval apply to the prepared
@@ -123,6 +139,15 @@ ArrayBuffer rejection in an isolated content-script world and verified the local
 The seek probe exercises the real injected helper with a synthetic Netflix player: original query targets become
 nonfinite under page-visible URL masking, while distinct, repeated and zero millisecond attributes reach the
 player correctly. Invalid targets do not invoke the player, and rapid requests preserve insertion order.
+Mining tests use inert upload responses and synthetic text/media only. A nonpersistent windowless WebKit
+extension verified the actual content/background message path, Korean FormData fields, optional synthetic
+Blob bytes, and server/network/timeout error reporting without any real account request. The original Netflix
+capture path emitted an early unhandled rejection when unsupported APIs failed; deliberately stalled replies
+also reproduced a hidden modal that kept the page inert. The guard avoids entering that path.
+The actual mining error component, modal and Svelte runtime rendered the new guidance in WebKit; repeated
+Escape dismissal, a dirty prior card, text-only retry and stale rejection isolation passed. No screenshots,
+recording, protected media or account data were used. The reported live-tab crash still needs console evidence
+to identify its exact cause; these checks do not establish real authenticated card saving or media mining.
 
 ```bash
 METRO_PORT=8097 node scripts/personal/webkit-smoke.mjs /absolute/path/to/Debug/Ardia.app

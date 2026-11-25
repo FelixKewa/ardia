@@ -35,7 +35,17 @@ export function adaptKimchiNetflixSeekHelper(source) {
   return replaceOnce(result, 'player.seek(parseFloat(params.get("t")) * 1000);', "player.seek(timeMs);", "Netflix seek target");
 }
 
-function prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek }) {
+export function adaptKimchiWebKitMiningSource(source) {
+  const original = "p=d.dict.mining.captureScreenshotWhenPossible;Ru.set(!1),zu.set(!1);";
+  const message = "Screenshot and audio mining on Netflix are unavailable in this WebKit preview. For text-only cards, turn off 'Capture screenshot when possible' and 'Capture audio when possible' under Kimchi Reader settings > Capture during Mining, then retry.";
+  const replacement = `p=d.dict.mining.captureScreenshotWhenPossible;if((f||p)&&ph.getPlatform()===\`netflix\`&&chrome.runtime.getURL(\`\`).startsWith(\`webkit-extension://\`))throw Object.assign(new Error(${JSON.stringify(message)}),{code:\`ardia-webkit-mining-media-unavailable\`});Ru.set(!1),zu.set(!1);`;
+  const guarded = replaceOnce(source, original, replacement, "mining capture preparation");
+  const context = "n()&&!R(l)&&N(l,t.context?t.context.getContext():Promise.resolve(null),!0)";
+  const recoverable = "n()&&!R(l)&&N(l,(()=>{let e=Promise.resolve(t.context?t.context.getContext():null).catch(t=>{if(n()&&R(l)===e&&t?.code===`ardia-webkit-mining-media-unavailable`){N(u,!1),N(d,!1)}throw t});return e})(),!0)";
+  return replaceOnce(guarded, context, recoverable, "mining context error dismissal");
+}
+
+function prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek, kimchiWebKitMining }) {
   if (manifest.name !== "Kimchi Reader" || manifest.version !== "0.21.7") throw new Error("Compatibility preparation supports only the reviewed Kimchi Reader 0.21.7 package.");
   if (!manifest.content_scripts?.some((script) => Array.isArray(script.js) && script.js.includes(kimchiContentScript))) throw new Error("The expected Kimchi content script is not declared.");
   const data = files.get(kimchiContentScript);
@@ -49,6 +59,7 @@ function prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek })
     source = adaptKimchiNetflixSeekSource(source);
     files.set(kimchiSeekScript, Buffer.from(adaptKimchiNetflixSeekHelper(new TextDecoder("utf-8", { fatal: true }).decode(helper))));
   }
+  if (kimchiWebKitMining) source = adaptKimchiWebKitMiningSource(source);
   files.set(kimchiContentScript, Buffer.from(source));
 }
 
@@ -92,7 +103,7 @@ function readPackage(root) {
   return files;
 }
 
-export function prepareWebKitExtension(source, output, { kimchiDictionary = false, kimchiNetflixSeek = false } = {}) {
+export function prepareWebKitExtension(source, output, { kimchiDictionary = false, kimchiNetflixSeek = false, kimchiWebKitMining = false } = {}) {
   if (!source || !output) throw new Error("Provide the extracted extension folder and a new output folder.");
   if (!fs.lstatSync(source).isDirectory()) throw new Error("Choose a regular extension folder.");
   const root = fs.realpathSync(source);
@@ -108,7 +119,7 @@ export function prepareWebKitExtension(source, output, { kimchiDictionary = fals
   if (!Array.isArray(scripts) || !scripts.length || manifest.background.page || manifest.background.service_worker) {
     throw new Error("Use the extracted Firefox package with background scripts.");
   }
-  if (kimchiDictionary || kimchiNetflixSeek) prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek });
+  if (kimchiDictionary || kimchiNetflixSeek || kimchiWebKitMining) prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek, kimchiWebKitMining });
   const preparedScripts = [];
   for (const script of new Set(scripts)) {
     if (typeof script !== "string" || !script || path.isAbsolute(script) || /[\\?#\0]/.test(script)) throw new Error("The manifest contains an unsupported background script path.");
@@ -133,21 +144,21 @@ export function prepareWebKitExtension(source, output, { kimchiDictionary = fals
     fs.rmSync(destination, { recursive: true, force: true });
     throw error;
   }
-  return { directory: destination, preparedScripts, dictionaryStreams: kimchiDictionary, netflixSeek: kimchiNetflixSeek };
+  return { directory: destination, preparedScripts, dictionaryStreams: kimchiDictionary, netflixSeek: kimchiNetflixSeek, webkitMining: kimchiWebKitMining };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const args = process.argv.slice(2);
-  const options = { kimchiDictionary: false, kimchiNetflixSeek: false };
-  const flags = { "--kimchi-dictionary": "kimchiDictionary", "--kimchi-netflix-seek": "kimchiNetflixSeek" };
+  const options = { kimchiDictionary: false, kimchiNetflixSeek: false, kimchiWebKitMining: false };
+  const flags = { "--kimchi-dictionary": "kimchiDictionary", "--kimchi-netflix-seek": "kimchiNetflixSeek", "--kimchi-webkit-mining": "kimchiWebKitMining" };
   while (Object.hasOwn(flags, args[0])) options[flags[args.shift()]] = true;
   if (args.length !== 2) {
-    console.error("Usage: node scripts/personal/prepare-webkit-extension.mjs [--kimchi-dictionary] [--kimchi-netflix-seek] <extracted-firefox-folder> <new-output-folder>");
+    console.error("Usage: node scripts/personal/prepare-webkit-extension.mjs [--kimchi-dictionary] [--kimchi-netflix-seek] [--kimchi-webkit-mining] <extracted-firefox-folder> <new-output-folder>");
     process.exitCode = 1;
   } else {
     try {
       const result = prepareWebKitExtension(args[0], args[1], options);
-      console.log(`Prepared ${result.preparedScripts.length} background script(s)${result.dictionaryStreams ? ", Kimchi dictionary stream compatibility" : ""}${result.netflixSeek ? ", Netflix subtitle seeking" : ""} in ${result.directory}. The original folder is unchanged. Inspect and approve this new folder in Ardia before loading it.`);
+      console.log(`Prepared ${result.preparedScripts.length} background script(s)${result.dictionaryStreams ? ", Kimchi dictionary stream compatibility" : ""}${result.netflixSeek ? ", Netflix subtitle seeking" : ""}${result.webkitMining ? ", explicit WebKit mining capture guidance" : ""} in ${result.directory}. The original folder is unchanged. Inspect and approve this new folder in Ardia before loading it.`);
     } catch (error) {
       console.error(error.message);
       process.exitCode = 1;
