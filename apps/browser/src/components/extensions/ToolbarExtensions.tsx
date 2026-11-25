@@ -31,7 +31,7 @@ import {
   type Anchor,
 } from "../../state/extensions/actions";
 import { dropIndex, makeRoomShift, toolbarOrder, type ToolbarDrag } from "../../state/extensions/toolbarOrder";
-import { useWebKitToolbarMode } from "../../state/extensions/webKit";
+import { useWebKitToolbarLayout, useWebKitToolbarMode } from "../../state/extensions/webKit";
 import { WebKitToolbarExtensions } from "./WebKitToolbarExtensions";
 
 const BUTTON = 28;
@@ -60,8 +60,9 @@ export function useToolbarExtensionsWidth(windowId: string, limit = Infinity): n
   const { pinned, overflow, casting } = useToolbarExtensions(windowId, limit);
   const button = useToolbarRowContext().extensionButton;
   const mode = useWebKitToolbarMode(windowId);
+  const webKit = useWebKitToolbarLayout(windowId, limit, button);
   const count = pinned.length + (overflow ? 1 : 0) + (casting ? 1 : 0);
-  if (mode === "webkit") return button;
+  if (mode === "webkit") return webKit.width;
   if (mode === "hidden") return 0;
   return count ? count * (button + GAP) - GAP : 0;
 }

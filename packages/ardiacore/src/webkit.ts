@@ -15,6 +15,7 @@ export type WebKitExtensionInspection = {
 
 export type WebKitExtension = Omit<WebKitExtensionInspection, "supportedPermissions"> & {
   id: string;
+  icon?: string;
   loaded: boolean;
   enabled: boolean;
   grantedPermissions: string[];

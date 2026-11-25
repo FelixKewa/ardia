@@ -1,10 +1,12 @@
 import { create } from "zustand";
+import { useEffect } from "react";
 import { chooseExtensionFolder } from "../../platform/extensions";
 import { confirm } from "../../platform/dialogs";
 import { showMenu } from "../../platform/menus";
-import { inspectWebKitExtension, listWebKitExtensions, loadWebKitExtension, showWebKitExtension, unloadWebKitExtension, type WebKitExtension, type WebKitExtensionInspection } from "../../platform/webKitExtensions";
+import { inspectWebKitExtension, listWebKitExtensions, loadWebKitExtension, showWebKitExtension, unloadWebKitExtension, type WebKitExtension, type WebKitExtensionInspection, type WebKitExtensionList } from "../../platform/webKitExtensions";
 import { errorText } from "../../lib/errors";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { TOOLBAR_TRAILING } from "../../lib/toolbarRow";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { tabEngine } from "../engines/engines";
@@ -27,6 +29,7 @@ const EMPTY: WebKitExtension[] = [];
 let request = 0;
 let settingsHost: { profileId: string } | null = null;
 const refreshes = new Map<string, number>();
+const inFlight = new Map<string, Promise<WebKitExtensionList | undefined>>();
 
 export const WEBKIT_PERMISSION_DETAILS: Record<string, string> = {
   activeTab: "Access the current tab when you click the extension",
@@ -88,19 +91,27 @@ export function useWebKitExtensionError(profileId: string) {
   return useWebKitExtensions((s) => s.errors[profile] ?? null);
 }
 
-export async function refreshWebKitExtensions(profileId: string) {
+export async function refreshWebKitExtensions(profileId: string, fresh = false) {
   if (!regularProfile(profileId)) return;
   const profile = profileOf(profileId);
+  const existing = inFlight.get(profile);
+  if (!fresh && existing) return existing;
   const key = (refreshes.get(profile) ?? 0) + 1;
   refreshes.set(profile, key);
-  try {
-    const result = await listWebKitExtensions(profile);
-    if (refreshes.get(profile) !== key || !regularProfile(profileId) || profileOf(profileId) !== profile) return;
-    useWebKitExtensions.setState((s) => ({ available: result.available, lists: { ...s.lists, [profile]: result.extensions } }));
-    return result;
-  } catch (error) {
-    if (refreshes.get(profile) === key) fail(profile, error);
-  }
+  const pending = Promise.resolve().then(async () => {
+    try {
+      const result = await listWebKitExtensions(profile);
+      if (refreshes.get(profile) !== key || !regularProfile(profileId) || profileOf(profileId) !== profile) return;
+      useWebKitExtensions.setState((s) => ({ available: result.available, lists: { ...s.lists, [profile]: result.extensions } }));
+      return result;
+    } catch (error) {
+      if (refreshes.get(profile) === key) fail(profile, error);
+    } finally {
+      if (refreshes.get(profile) === key) inFlight.delete(profile);
+    }
+  });
+  inFlight.set(profile, pending);
+  return pending;
 }
 
 function settingsTarget(profileId: string, key: number) {
@@ -183,7 +194,7 @@ export async function acceptWebKitReview(key: number) {
   } finally {
     const pending = useWebKitExtensions.getState().review;
     if (pending?.key === key) useWebKitExtensions.setState({ review: { ...pending, busy: false } });
-    await refreshWebKitExtensions(review.profileId);
+    await refreshWebKitExtensions(review.profileId, true);
   }
 }
 
@@ -193,7 +204,7 @@ export async function disableWebKitExtension(profileId: string, id: string) {
   cancelWebKitReview();
   try { await unloadWebKitExtension(profile, id); fail(profile, null); }
   catch (error) { fail(profile, error); }
-  await refreshWebKitExtensions(profileId);
+  await refreshWebKitExtensions(profileId, true);
 }
 
 function toolbarTarget(s: BrowserState, windowId: string, tabId = shownPageId(s, windowId)) {
@@ -211,28 +222,89 @@ export function webKitToolbarMode(s: BrowserState, windowId: string, tabId = sho
 
 export const useWebKitToolbarMode = (windowId: string, tabId?: string) => useBrowser((s) => webKitToolbarMode(s, windowId, tabId));
 
-export async function openWebKitExtensionMenu(windowId: string, tabId: string) {
+export function webKitToolbarLayout(list: WebKitExtension[], limit: number, button: number) {
+  const active = list.filter((extension) => extension.enabled && extension.loaded);
+  const slots = limit === Infinity ? active.length : Math.max(0, Math.floor(Number.isFinite(limit) ? limit : 1) - 1);
+  const visible = active.slice(0, slots);
+  const overflow = active.slice(visible.length);
+  return { visible, overflow, width: (visible.length + 1) * button + visible.length * TOOLBAR_TRAILING.itemGap };
+}
+
+export function useWebKitToolbarLayout(windowId: string, limit: number, button: number, tabId?: string) {
+  const profile = useBrowser((s) => toolbarTarget(s, windowId, tabId)?.profile ?? null);
+  const list = useWebKitExtensions((s) => profile === null ? EMPTY : s.lists[profile] ?? EMPTY);
+  return webKitToolbarLayout(list, limit, button);
+}
+
+export function watchWebKitToolbar(windowId: string, tabId: string) {
   const target = toolbarTarget(useBrowser.getState(), windowId, tabId);
-  if (!target) return;
+  if (!target) return () => {};
+  const generation = usePages.getState().ready[tabId];
+  let stopped = false;
+  let attempts = 0;
+  const deadline = Date.now() + 15_000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const current = () => {
+    const next = toolbarTarget(useBrowser.getState(), windowId, tabId);
+    return !stopped && next?.profile === target.profile && next.tab.profileId === target.tab.profileId && usePages.getState().ready[tabId] === generation;
+  };
+  const refresh = async () => {
+    if (!current()) return;
+    const result = await refreshWebKitExtensions(target.tab.profileId);
+    if (!current() || !result || ++attempts >= 30 || Date.now() >= deadline) return;
+    if (result.extensions.some((extension) => extension.enabled && !extension.loaded && !extension.errors.length)) timer = setTimeout(() => void refresh(), 500);
+  };
+  void refresh();
+  return () => { stopped = true; clearTimeout(timer); };
+}
+
+export function useWebKitToolbarRefresh(windowId: string, tabId: string) {
+  const profile = useBrowser((s) => toolbarTarget(s, windowId, tabId)?.profile ?? null);
+  const profileId = useBrowser((s) => toolbarTarget(s, windowId, tabId)?.tab.profileId ?? null);
+  const generation = usePages((s) => s.ready[tabId]);
+  useEffect(() => profile === null ? undefined : watchWebKitToolbar(windowId, tabId), [windowId, tabId, profile, profileId, generation]);
+}
+
+function toolbarActionTarget(windowId: string, tabId: string) {
+  const target = toolbarTarget(useBrowser.getState(), windowId, tabId);
+  if (!target) return null;
   const generation = usePages.getState().ready[tabId];
   const current = () => {
     const next = toolbarTarget(useBrowser.getState(), windowId, tabId);
     return next?.window === target.window && next?.tab === target.tab && next.profile === target.profile && usePages.getState().ready[tabId] === generation;
   };
+  return { ...target, current, ready: typeof generation === "number" && Number.isInteger(generation) && generation > 0 };
+}
+
+export async function activateWebKitExtension(windowId: string, tabId: string, id: string, fingerprint?: string) {
+  const target = toolbarActionTarget(windowId, tabId);
+  if (!target?.ready) return;
+  const shown = useWebKitExtensions.getState().lists[target.profile]?.find((extension) => extension.id === id);
+  if (!shown?.enabled || !shown.loaded || (fingerprint !== undefined && shown.fingerprint !== fingerprint)) return;
   const result = await refreshWebKitExtensions(target.tab.profileId);
-  if (!current() || !result) return;
-  const ready = typeof generation === "number" && Number.isInteger(generation) && generation > 0;
+  const latest = result?.extensions.find((extension) => extension.id === id);
+  if (!target.current() || !latest?.enabled || !latest.loaded || latest.fingerprint !== shown.fingerprint) return;
+  try {
+    await showWebKitExtension(target.profile, id, tabId);
+    if (target.current()) fail(target.profile, null);
+  } catch (error) { if (target.current()) fail(target.profile, error); }
+}
+
+export async function openWebKitExtensionMenu(windowId: string, tabId: string, limit = 1) {
+  const target = toolbarActionTarget(windowId, tabId);
+  if (!target) return;
+  const result = await refreshWebKitExtensions(target.tab.profileId);
+  if (!target.current() || !result) return;
+  const { overflow } = webKitToolbarLayout(result.extensions, limit, 0);
   try {
     const choice = await showMenu([
-      ...result.extensions.map((extension, index) => ({ id: `extension:${index}`, title: extension.name, enabled: ready && extension.loaded && extension.enabled })),
-      ...(result.extensions.length ? [{ separator: true as const }] : []),
+      ...overflow.map((extension, index) => ({ id: `extension:${index}`, title: extension.name, enabled: target.ready })),
+      ...(overflow.length ? [{ separator: true as const }] : []),
       { id: "manage", title: "Manage WebKit Extensions…", symbol: "puzzlepiece.extension" },
     ]);
-    if (!current()) return;
+    if (!target.current()) return;
     if (choice === "manage") return openSettings("profiles", target.tab.profileId);
-    const selected = result.extensions.find((_, index) => choice === `extension:${index}`);
-    if (!ready || !selected?.loaded || !selected.enabled) return;
-    await showWebKitExtension(target.profile, selected.id, tabId);
-    fail(target.profile, null);
+    const selected = overflow.find((_, index) => choice === `extension:${index}`);
+    if (selected) await activateWebKitExtension(windowId, tabId, selected.id, selected.fingerprint);
   } catch (error) { fail(target.profile, error); }
 }

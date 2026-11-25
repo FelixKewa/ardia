@@ -25,6 +25,7 @@ final class WebKitExtensionHost: NSObject {
   private var restoring = true
   private var remainingRestores = 0
   private var ready: [() -> Void] = []
+  private let icons = NSMapTable<WKWebExtension, NSString>.weakToStrongObjects()
 
   init(profile: String) {
     self.profile = profile
@@ -71,10 +72,23 @@ final class WebKitExtensionHost: NSObject {
     guard let record = records[id] else { return nil }
     var errors = failures[id] ?? []
     if let context = contexts[id] { errors += context.errors.map(\.localizedDescription) }
-    return ["id": id, "name": record.name, "version": record.version, "path": record.path, "fingerprint": record.fingerprint,
+    var result: [String: Any] = ["id": id, "name": record.name, "version": record.version, "path": record.path, "fingerprint": record.fingerprint,
             "loaded": contexts[id]?.isLoaded == true, "enabled": record.enabled, "requestedPermissions": record.requestedPermissions,
             "requestedOrigins": record.requestedOrigins, "grantedPermissions": record.permissions, "grantedOrigins": record.origins,
             "errors": errors, "reloadRequired": false]
+    if record.enabled, let context = contexts[id], let icon = icon(for: context) { result["icon"] = icon }
+    return result
+  }
+
+  private func icon(for context: WKWebExtensionContext) -> String? {
+    guard owns(context), context.isLoaded else { return nil }
+    let resource = context.webExtension
+    if let cached = icons.object(forKey: resource) { return cached.length == 0 ? nil : cached as String }
+    let size = CGSize(width: 64, height: 64)
+    let image = resource.actionIcon(for: size) ?? resource.icon(for: size)
+    let result = image?.pngDataURL(points: 64, scale: 1)
+    icons.setObject((result ?? "") as NSString, forKey: resource)
+    return result
   }
 
   func package(_ record: WebKitExtensionRecord) -> URL {
@@ -179,7 +193,7 @@ final class WebKitExtensionHost: NSObject {
             let installed = try await WKWebExtension(resourceBaseURL: destination)
             guard self.valid, self.operations[canonical.path] == token else { throw WebKitExtensionPackage.failure("The profile or extension was closed while loading.") }
             let prior = self.contexts[id]
-            if let prior { self.closePopup(); try self.controller.unload(prior) }
+            if let prior { self.closePopup(); try self.controller.unload(prior); self.icons.removeObject(forKey: prior.webExtension) }
             self.cancelPendingTabs(contextId: id)
             do {
               try self.activate(installed, record: record)
@@ -250,6 +264,7 @@ final class WebKitExtensionHost: NSObject {
     cancelPendingTabs(contextId: id)
     for tab in tabs.values { context.clearUserGesture(in: tab) }
     try controller.unload(context)
+    icons.removeObject(forKey: context.webExtension)
     contexts.removeValue(forKey: id)
     do {
       try activate(context.webExtension, record: record)
@@ -272,7 +287,7 @@ final class WebKitExtensionHost: NSObject {
     var updated = records
     updated[id] = record
     closePopup()
-    if let context = contexts[id] { try controller.unload(context); contexts.removeValue(forKey: id) }
+    if let context = contexts[id] { try controller.unload(context); contexts.removeValue(forKey: id); icons.removeObject(forKey: context.webExtension) }
     do { try save(updated) } catch {
       failures[id] = ["The extension stopped, but its disabled state could not be saved."]
       records[id] = record
@@ -291,6 +306,7 @@ final class WebKitExtensionHost: NSObject {
     cancelPendingTabs(contextId: nil)
     for context in contexts.values { try? controller.unload(context) }
     contexts = [:]
+    icons.removeAllObjects()
     tabs = [:]
     windows = [:]
     focusObservers.forEach(NotificationCenter.default.removeObserver)

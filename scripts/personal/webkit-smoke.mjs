@@ -15,11 +15,13 @@ const manifest = {
   manifest_version: 3,
   name: "Ardia isolated extension fixture",
   version: "1.0.0",
+  icons: { "1": "icon.png" },
   permissions: ["storage", "scripting", "tabs"],
   host_permissions: ["http://127.0.0.1/*"],
   background: { scripts: ["background.js"], persistent: false },
   content_scripts: [{ matches: ["http://127.0.0.1/*"], js: ["content.js"], run_at: "document_start" }],
 };
+writeFileSync(join(extension, "icon.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP438DwHwAGgAJ/EEwb4QAAAABJRU5ErkJggg==", "base64"));
 writeFileSync(join(extension, "manifest.json"), JSON.stringify(manifest));
 writeFileSync(join(extension, "background.js"), `
 const started = (async () => {
@@ -86,6 +88,13 @@ const reload = async () => {
   await until(marker, () => value(`location.pathname === ${q(`/${marker}`)} && document.readyState === "complete"`));
 };
 const result = () => until("extension response", () => value("document.documentElement.dataset.extensionFixture ? JSON.parse(document.documentElement.dataset.extensionFixture) : null"));
+const assertIcon = row => {
+  assert.match(row.icon, /^data:image\/png;base64,/);
+  const png = Buffer.from(row.icon.split(",")[1], "base64");
+  assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  assert.equal(png.readUInt32BE(16), 64);
+  assert.equal(png.readUInt32BE(20), 64);
+};
 const assertResponse = async previousCount => {
   const response = await result();
   assert.equal(response.error, undefined, response.error);
@@ -112,6 +121,8 @@ try {
   let loaded = await engine("webKit.extensionLoad", approval);
   const id = loaded.id;
   assert.equal(loaded.loaded, true);
+  assertIcon(loaded);
+  assert.equal((await engine("webKit.extensionList", { profile: "" })).extensions[0].icon, loaded.icon);
   assert.deepEqual(loaded.grantedOrigins, []);
   assert.deepEqual((await engine("webKit.extensionList", { profile: "other" })).extensions, []);
   await reload();
@@ -125,6 +136,7 @@ try {
   console.log("PASS document-start script, messaging, active-tab query, script injection and extension storage");
 
   await engine("webKit.extensionUnload", { profile: "", id });
+  assert.equal((await engine("webKit.extensionList", { profile: "" })).extensions[0].icon, undefined);
   await reload();
   assert.equal(await value("document.documentElement.dataset.extensionFixture ?? null"), null);
   loaded = await engine("webKit.extensionLoad", { ...approval, permissions: grants.permissions, origins: grants.origins });
@@ -138,6 +150,7 @@ try {
   await start(false);
   await reload();
   count = await assertResponse(count);
+  assertIcon((await engine("webKit.extensionList", { profile: "" })).extensions[0]);
   console.log("PASS grants and extension storage survive browser restart");
 
   manifest.version = "1.0.1";

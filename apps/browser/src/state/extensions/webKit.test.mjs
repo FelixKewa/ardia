@@ -8,6 +8,7 @@ let confirmation = async () => ({ confirmed: true });
 let menu = async () => "extension:0";
 let inspect;
 let load;
+let list;
 const pkg = {
   name: "Kimchi", version: "1.0", path: "/fixtures/kimchi", fingerprint: "a".repeat(64),
   requestedPermissions: ["storage", "tabs", "tabCapture"], supportedPermissions: ["storage", "tabs"],
@@ -25,7 +26,7 @@ globalThis.acTestNativeModules = {
       if (verb === "extensionInspect") answer = await inspect(args);
       else if (verb === "extensionLoad") { answer = await load(args); rows = [answer]; }
       else if (verb === "extensionUnload") { answer = { ...record(), loaded: false, enabled: false }; rows = [answer]; }
-      else if (verb === "extensionList") answer = { available: true, extensions: rows };
+      else if (verb === "extensionList") answer = await list(profile);
       else if (verb === "extensionShow") answer = { shown: true };
       else answer = null;
       return JSON.stringify(answer);
@@ -63,6 +64,7 @@ function setup() {
   rows = [];
   inspect = async () => structuredClone(pkg);
   load = async (args) => ({ ...record(), grantedPermissions: args.permissions, grantedOrigins: args.origins });
+  list = async () => ({ available: true, extensions: rows });
   confirmation = async () => ({ confirmed: true });
   menu = async () => "extension:0";
   calls.length = 0;
@@ -235,4 +237,167 @@ test("Chromium and private windows never invoke the WebKit extension menu", asyn
   assert.equal(calls.length, 0);
   S().updateTab(tabId, { engine: "chromium" });
   assert.equal(actions.webKitToolbarMode(S(), windowId, tabId), "chromium");
+});
+
+test("direct activation opens the current profile's popup without an intermediate menu", async () => {
+  const { windowId, tabId, profileId } = setup();
+  rows = [record()];
+  await actions.refreshWebKitExtensions(profileId);
+  calls.length = 0;
+  await actions.activateWebKitExtension(windowId, tabId, "kimchi", pkg.fingerprint);
+  assert.deepEqual(calls.map((call) => call.verb), ["extensionList", "extensionShow"]);
+  assert.deepEqual(calls[1], { verb: "extensionShow", profile: "", args: { id: "kimchi", tabId } });
+});
+
+test("direct activation shares an in-flight refresh and keeps a concurrent refresh from swallowing the click", async () => {
+  const { windowId, tabId, profileId } = setup();
+  rows = [record()];
+  await actions.refreshWebKitExtensions(profileId);
+  const pending = deferred();
+  list = () => pending.promise;
+  calls.length = 0;
+  const activation = actions.activateWebKitExtension(windowId, tabId, "kimchi");
+  const refresh = actions.refreshWebKitExtensions(profileId);
+  await flush();
+  assert.equal(calls.filter((call) => call.verb === "extensionList").length, 1);
+  pending.resolve({ available: true, extensions: rows });
+  await Promise.all([activation, refresh]);
+  assert.equal(calls.filter((call) => call.verb === "extensionShow").length, 1);
+});
+
+test("direct activation refuses disabled, unloaded, replaced, unready, private and Chromium targets", async () => {
+  for (const change of ["disabled", "unloaded", "replaced", "unready", "private", "chromium"]) {
+    const { windowId, tabId, profileId } = setup();
+    rows = [record()];
+    await actions.refreshWebKitExtensions(profileId);
+    if (change === "disabled") rows = [{ ...record(), enabled: false }];
+    if (change === "unloaded") rows = [{ ...record(), loaded: false }];
+    if (change === "replaced") rows = [{ ...record(), fingerprint: "b".repeat(64) }];
+    if (change === "unready") usePages.setState({ ready: {} });
+    if (change === "private") useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], kind: "private" } } }));
+    if (change === "chromium") S().updateTab(tabId, { engine: "chromium" });
+    calls.length = 0;
+    await actions.activateWebKitExtension(windowId, tabId, "kimchi", pkg.fingerprint);
+    assert.equal(calls.some((call) => call.verb === "extensionShow"), false, change);
+    assert.equal(calls.some((call) => call.verb === "menu"), false, change);
+  }
+});
+
+test("direct activation rejects a tab, profile or readiness change during native refresh", async () => {
+  for (const change of ["tab", "profile", "generation", "engine"]) {
+    const { windowId, tabId, profileId } = setup();
+    rows = [record()];
+    await actions.refreshWebKitExtensions(profileId);
+    const pending = deferred();
+    list = () => pending.promise;
+    const activation = actions.activateWebKitExtension(windowId, tabId, "kimchi");
+    await flush();
+    if (change === "tab") S().newTab(windowId, { url: "https://other.example/" });
+    if (change === "profile") S().updateTab(tabId, { profileId: S().createProfile({ name: "Other" }) });
+    if (change === "generation") usePages.setState({ ready: { [tabId]: 8 } });
+    if (change === "engine") S().updateTab(tabId, { engine: "chromium" });
+    pending.resolve({ available: true, extensions: rows });
+    await activation;
+    assert.equal(calls.some((call) => call.verb === "extensionShow"), false, change);
+  }
+});
+
+test("direct activation uses the shown tab's nondefault profile", async () => {
+  setup();
+  const profileId = S().createProfile({ name: "Work" });
+  const windowId = S().createWindow({ profileId, url: "https://www.netflix.com/" });
+  const tabId = S().windows[windowId].tabIds[0];
+  usePages.setState({ ready: { [tabId]: 1 } });
+  rows = [record()];
+  await actions.refreshWebKitExtensions(profileId);
+  await actions.activateWebKitExtension(windowId, tabId, "kimchi");
+  const shown = calls.find((call) => call.verb === "extensionShow");
+  assert.ok(shown);
+  assert.notEqual(shown.profile, "");
+  assert.equal(shown.profile, calls.find((call) => call.verb === "extensionList").profile);
+  assert.deepEqual(shown.args, { id: "kimchi", tabId });
+});
+
+test("a post-mutation fresh list wins over an older in-flight response", async () => {
+  const { profileId } = setup();
+  const old = deferred();
+  list = () => old.promise;
+  const stale = actions.refreshWebKitExtensions(profileId);
+  await flush();
+  const disabled = { ...record(), enabled: false, loaded: false };
+  list = async () => ({ available: true, extensions: [disabled] });
+  await actions.refreshWebKitExtensions(profileId, true);
+  old.resolve({ available: true, extensions: [record()] });
+  await stale;
+  assert.deepEqual(E().lists[""], [disabled]);
+});
+
+test("toolbar layout preserves native order, hides inactive rows and reserves the management slot", () => {
+  const entries = ["one", "two", "three"].map((id) => ({ ...record(), id, icon: "data:image/png;base64,AQ==" }));
+  const list = [entries[0], { ...record(), id: "disabled", enabled: false }, entries[1], { ...record(), id: "unloaded", loaded: false }, entries[2]];
+  const narrow = actions.webKitToolbarLayout(list, 2, 28);
+  assert.deepEqual(narrow.visible.map((entry) => entry.id), ["one"]);
+  assert.deepEqual(narrow.overflow.map((entry) => entry.id), ["two", "three"]);
+  assert.equal(narrow.width, 58);
+  const full = actions.webKitToolbarLayout(list, Infinity, 22);
+  assert.deepEqual(full.visible, entries);
+  assert.equal(full.width, 94);
+  assert.deepEqual(actions.webKitToolbarLayout(list, 1, 28).visible, []);
+  assert.equal(actions.webKitToolbarLayout([], Infinity, 28).width, 28);
+});
+
+test("overflow offers only hidden loaded rows and refuses a version replaced while the menu is open", async () => {
+  const { windowId, tabId } = setup();
+  rows = [record(), { ...record(), id: "other", name: "Other" }];
+  const pending = deferred();
+  menu = () => pending.promise;
+  const opening = actions.openWebKitExtensionMenu(windowId, tabId, 2);
+  await flush();
+  assert.deepEqual(calls.find((call) => call.verb === "menu").items.filter((item) => item.id?.startsWith("extension:")).map((item) => item.title), ["Other"]);
+  actions.useWebKitExtensions.setState({ lists: { "": [record(), { ...rows[1], fingerprint: "b".repeat(64) }] } });
+  pending.resolve("extension:0");
+  await opening;
+  assert.equal(calls.some((call) => call.verb === "extensionShow"), false);
+});
+
+test("toolbar restore refresh retries until loaded, then stops, and cleanup cancels pending retries", async (t) => {
+  const { windowId, tabId } = setup();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  rows = [{ ...record(), loaded: false, errors: [] }];
+  const stop = actions.watchWebKitToolbar(windowId, tabId);
+  await flush();
+  assert.equal(calls.filter((call) => call.verb === "extensionList").length, 1);
+  rows = [record()];
+  t.mock.timers.tick(500);
+  await flush();
+  assert.equal(E().lists[""][0].loaded, true);
+  t.mock.timers.tick(20_000);
+  await flush();
+  assert.equal(calls.filter((call) => call.verb === "extensionList").length, 2);
+  stop();
+  rows = [{ ...record(), loaded: false, errors: [] }];
+  const stopPending = actions.watchWebKitToolbar(windowId, tabId);
+  await flush();
+  stopPending();
+  t.mock.timers.tick(20_000);
+  await flush();
+  assert.equal(calls.filter((call) => call.verb === "extensionList").length, 3);
+});
+
+test("toolbar restore retries are bounded and stop when the active profile or page generation changes", async (t) => {
+  const { windowId, tabId } = setup();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  rows = [{ ...record(), loaded: false, errors: [] }];
+  const stop = actions.watchWebKitToolbar(windowId, tabId);
+  await flush();
+  for (let attempt = 0; attempt < 40; attempt++) { t.mock.timers.tick(500); await flush(); }
+  assert.equal(calls.filter((call) => call.verb === "extensionList").length, 30);
+  stop();
+  const next = actions.watchWebKitToolbar(windowId, tabId);
+  await flush();
+  usePages.setState({ ready: { [tabId]: 8 } });
+  t.mock.timers.tick(500);
+  await flush();
+  assert.equal(calls.filter((call) => call.verb === "extensionList").length, 31);
+  next();
 });

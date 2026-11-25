@@ -12,8 +12,10 @@ hosts needed, then confirm Review and Load. Background extension code starts onl
 Selected grants are validated and applied before the background starts. Unsupported permissions remain denied;
 compatibility notices do not imply that every extension feature works.
 
-On a regular WebKit tab, the toolbar's extension button lists enabled WebKit extensions and opens their actions
-against that tab. Private WebKit tabs have no extension host. Disable turns off an extension, while keeping its
+On a regular WebKit tab, loaded extensions appear directly in the toolbar with their own icons. Clicking one
+opens its action against that tab. The puzzle menu remains available for management and overflow when space is
+limited. Toolbar visibility follows the same address-bar hover preference as Chromium extensions. Private
+WebKit tabs have no extension host. Disable turns off an extension, while keeping its
 stored data. Reload already open pages after loading, disabling, or changing permissions because scripts
 previously injected into a page can remain until navigation.
 
@@ -78,7 +80,8 @@ uses a synthetic extension and a loopback page; it never records or captures the
 are available only in test instances. The test exercises inspected-byte approval, private-profile refusal,
 profile separation, document-start injection, background startup with approved storage access, messaging,
 active-tab queries, script execution, disable/re-enable, restart persistence and approved package updates.
-It also checks that invalid update grants preserve the previous working extension.
+It also checks that invalid update grants preserve the previous working extension, and that extension icons
+are bounded PNGs, survive restart, and are removed when the extension is disabled.
 
 ```bash
 METRO_PORT=8097 node scripts/personal/webkit-smoke.mjs /absolute/path/to/Debug/Ardia.app
