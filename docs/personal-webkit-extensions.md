@@ -66,11 +66,11 @@ WebKit documents the generated-background-page UTF-8 fix in
 Prepare a local copy before choosing Load Folder:
 
 ```bash
-node scripts/personal/prepare-webkit-extension.mjs --kimchi-dictionary /path/to/extracted-firefox-package /path/to/new-prepared-folder
+node scripts/personal/prepare-webkit-extension.mjs --kimchi-dictionary --kimchi-netflix-seek /path/to/original-extracted-firefox-package /path/to/new-prepared-folder
 ```
 
-Without the optional `--kimchi-dictionary` flag, the preparation command adds only a UTF-8 marker to non-ASCII
-`background.scripts` files that lack one. The flag also adapts the reviewed Kimchi Reader 0.21.7 dictionary
+Without either optional compatibility flag, the preparation command adds only a UTF-8 marker to non-ASCII
+`background.scripts` files that lack one. `--kimchi-dictionary` also adapts the reviewed Kimchi Reader 0.21.7 dictionary
 decoder. It requires the exact original content-script SHA-256 and its declared manifest entry, and refuses
 unfamiliar versions, changed scripts, or an already adapted script before creating the destination.
 
@@ -81,6 +81,17 @@ The adaptation inserts a local stream transform that copies each Uint8Array chun
 before decompression. It applies only to Kimchi's dictionary helper, including entry, pair, translated-language,
 idiom and proverb resources. It preserves subarray offsets and content, and malformed gzip still rejects.
 It changes no global API, background frequency updater, capture feature, host grant, or manifest permission.
+
+`--kimchi-netflix-seek` adapts subtitle navigation for the tested WebKit runtime. Kimchi originally puts its seek
+time in the injected script's URL, but the page sees `document.currentScript.src` as
+`webkit-masked-url://hidden/`. Reading that masked URL produces a nonfinite target. The preparation instead
+passes milliseconds through a numeric attribute on each one-shot script element. The helper validates the
+attribute before calling Netflix's existing player API. Zero is valid; missing, blank, malformed, negative and
+nonfinite values are ignored. Scripts execute in insertion order and are removed on load or error, so rapid
+next/previous/repeat requests keep their separate target times. WebKit's URL masking stays enabled.
+The option requires the exact original content-script and seek-helper hashes and their manifest declarations.
+Generate from the original official folder with both flags to retain the dictionary correction; a previously
+adapted content script is refused as input. Existing shortcut bindings and cue selection are preserved.
 
 Preparation leaves the original folder untouched, refuses an existing destination or symbolic links, and does
 not download or redistribute the extension. Normal inspection and fingerprint approval apply to the prepared
@@ -109,6 +120,9 @@ The content-script fixture uses a Korean filename to cover the macOS filename-no
 Dictionary preparation tests cover multi-chunk Korean JSON, typed-array offsets, corrupt gzip, strict package
 guards and unchanged originals. A standalone nonpersistent WKWebExtension probe reproduced the original
 ArrayBuffer rejection in an isolated content-script world and verified the local chunk-copy correction.
+The seek probe exercises the real injected helper with a synthetic Netflix player: original query targets become
+nonfinite under page-visible URL masking, while distinct, repeated and zero millisecond attributes reach the
+player correctly. Invalid targets do not invoke the player, and rapid requests preserve insertion order.
 
 ```bash
 METRO_PORT=8097 node scripts/personal/webkit-smoke.mjs /absolute/path/to/Debug/Ardia.app

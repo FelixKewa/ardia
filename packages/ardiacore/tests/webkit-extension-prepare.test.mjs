@@ -5,10 +5,12 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { gzipSync } from "node:zlib";
-import { adaptKimchiDictionarySource, prepareWebKitExtension } from "../../../scripts/personal/prepare-webkit-extension.mjs";
+import { adaptKimchiDictionarySource, adaptKimchiNetflixSeekSource, adaptKimchiNetflixSeekHelper, prepareWebKitExtension } from "../../../scripts/personal/prepare-webkit-extension.mjs";
 
 const dictionaryHelper = "async function decode(e){let t=(await e.blob()).stream().pipeThrough(new DecompressionStream(`gzip`));return await(await new Response(t).blob()).text()}";
 const adaptedDecoder = () => new Function(`return (${adaptKimchiDictionarySource(dictionaryHelper)})`)();
+const netflixSeekMethod = "seekTo(e){let t=document.createElement(`script`);t.src=chrome.runtime.getURL(`inject/netflix_seek.js?`)+new URLSearchParams({t:(e/1e3).toString()}),t.onload=function(){this.remove()},(document.head||document.documentElement).appendChild(t)}";
+const netflixSeekHelper = '(()=>{const params = new URLSearchParams(document.currentScript.src.split("?")[1]);const player=globalThis.testPlayer;player.seek(parseFloat(params.get("t")) * 1000);})();';
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ardia-extension-preparation-"));
@@ -124,4 +126,68 @@ test("dictionary opt-in rejects unfamiliar versions scripts and hashes without c
   assert.equal(fs.existsSync(output), false);
   assert.deepEqual(fs.readFileSync(manifestPath), beforeManifest);
   assert.deepEqual(fs.readFileSync(path.join(source, "contentScripts/index.global.js")), beforeScript);
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiNetflixSeek: true }), /differs from the reviewed original/);
+  assert.throws(() => prepareWebKitExtension(source, output, { kimchiDictionary: true, kimchiNetflixSeek: true }), /differs from the reviewed original/);
+  assert.equal(fs.existsSync(output), false);
+});
+
+test("Netflix next previous repeat and zero targets use ordered per-script millisecond attributes", () => {
+  const calls = [], nodes = [];
+  const helper = new vm.Script(adaptKimchiNetflixSeekHelper(netflixSeekHelper));
+  let page;
+  const document = {
+    currentScript: null,
+    createElement() {
+      const attributes = new Map();
+      return { async: true, assignedSrc: "", removed: false,
+        setAttribute(key, value) { attributes.set(key, value); },
+        getAttribute(key) { return attributes.get(key) ?? null; },
+        set src(value) { this.assignedSrc = value; },
+        get src() { return "webkit-masked-url://hidden/"; },
+        remove() { this.removed = true; },
+      };
+    },
+    head: { appendChild(node) { nodes.push(node); } },
+  };
+  page = vm.createContext({ document, testPlayer: { seek(value) { calls.push(value); } } });
+  const sender = vm.runInNewContext(`({${adaptKimchiNetflixSeekSource(netflixSeekMethod)}})`, {
+    document, chrome: { runtime: { getURL: (resource) => `webkit-extension://fixture/${resource}` } },
+  });
+  const targets = [125500, 94123, 94123, 0, 1234.5];
+  for (const target of targets) sender.seekTo(target);
+  assert.equal(new Set(nodes).size, targets.length);
+  for (const [index, node] of nodes.entries()) {
+    assert.equal(node.async, false);
+    assert.equal(node.assignedSrc, "webkit-extension://fixture/inject/netflix_seek.js");
+    assert.equal(node.getAttribute("data-kimchi-seek-ms"), String(targets[index]));
+    document.currentScript = node;
+    helper.runInContext(page);
+    (index % 2 ? node.onerror : node.onload).call(node);
+    assert.equal(node.removed, true);
+  }
+  assert.deepEqual(calls, targets);
+  for (const invalid of [undefined, null, NaN, Infinity, -Infinity, -1, "100"]) sender.seekTo(invalid);
+  assert.equal(nodes.length, targets.length);
+});
+
+test("Netflix seek helper ignores missing blank malformed negative and nonfinite targets without reading masked URLs", () => {
+  const calls = [];
+  const source = adaptKimchiNetflixSeekHelper(netflixSeekHelper);
+  for (const value of [null, undefined, "", " ", "NaN", "Infinity", "-Infinity", "-1", "12invalid"]) {
+    vm.runInNewContext(source, {
+      document: { currentScript: { getAttribute: () => value, get src() { throw new Error("Masked URL must not be read"); } } },
+      testPlayer: { seek(target) { calls.push(target); } },
+    });
+  }
+  vm.runInNewContext(source, { document: { currentScript: null }, testPlayer: { seek(target) { calls.push(target); } } });
+  assert.deepEqual(calls, []);
+});
+
+test("Netflix seek adaptation composes with dictionary correction and refuses ambiguous helpers", () => {
+  const combined = dictionaryHelper + `\nconst player={${netflixSeekMethod}};`;
+  assert.equal(adaptKimchiNetflixSeekSource(adaptKimchiDictionarySource(combined)), adaptKimchiDictionarySource(adaptKimchiNetflixSeekSource(combined)));
+  assert.throws(() => adaptKimchiNetflixSeekSource("seekTo(){}"), /exactly once/);
+  assert.throws(() => adaptKimchiNetflixSeekSource(netflixSeekMethod + netflixSeekMethod), /exactly once/);
+  assert.throws(() => adaptKimchiNetflixSeekHelper("(()=>{})()"), /exactly once/);
+  assert.throws(() => adaptKimchiNetflixSeekHelper(netflixSeekHelper + netflixSeekHelper), /exactly once/);
 });

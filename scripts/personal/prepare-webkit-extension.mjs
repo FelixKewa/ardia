@@ -8,20 +8,48 @@ const maxBytes = 512 * 1024 * 1024;
 const maxFiles = 50000;
 const kimchiContentScript = "contentScripts/index.global.js";
 const kimchiContentHash = "891ea6e2a765ed997fd6348aa0cd02a7a38469fe4e305bbca561a1df073716f6";
+const kimchiSeekScript = "inject/netflix_seek.js";
+const kimchiSeekHash = "3917264cd20d5e3919f0b2b2d216f3ff85aaceed09c30484d57cf6644599daed";
+
+function replaceOnce(source, original, replacement, label) {
+  if (source.split(original).length !== 2) throw new Error(`The known Kimchi ${label} was not found exactly once.`);
+  return source.replace(original, replacement);
+}
 
 export function adaptKimchiDictionarySource(source) {
   const original = "(await e.blob()).stream().pipeThrough(new DecompressionStream(`gzip`))";
   const replacement = "(await e.blob()).stream().pipeThrough(new TransformStream({transform(chunk,controller){controller.enqueue(new Uint8Array(chunk).buffer)}})).pipeThrough(new DecompressionStream(`gzip`))";
-  if (source.split(original).length !== 2) throw new Error("The known Kimchi dictionary decoder was not found exactly once.");
-  return source.replace(original, replacement);
+  return replaceOnce(source, original, replacement, "dictionary decoder");
 }
 
-function prepareKimchiDictionary(manifest, files) {
-  if (manifest.name !== "Kimchi Reader" || manifest.version !== "0.21.7") throw new Error("Dictionary compatibility supports only the reviewed Kimchi Reader 0.21.7 package.");
+export function adaptKimchiNetflixSeekSource(source) {
+  const original = "seekTo(e){let t=document.createElement(`script`);t.src=chrome.runtime.getURL(`inject/netflix_seek.js?`)+new URLSearchParams({t:(e/1e3).toString()}),t.onload=function(){this.remove()},(document.head||document.documentElement).appendChild(t)}";
+  const replacement = "seekTo(e){if(!Number.isFinite(e)||e<0)return;let t=document.createElement(`script`);t.async=!1,t.setAttribute(`data-kimchi-seek-ms`,String(e)),t.src=chrome.runtime.getURL(`inject/netflix_seek.js`),t.onload=t.onerror=function(){this.remove()},(document.head||document.documentElement).appendChild(t)}";
+  return replaceOnce(source, original, replacement, "Netflix seek sender");
+}
+
+export function adaptKimchiNetflixSeekHelper(source) {
+  const original = 'const params = new URLSearchParams(document.currentScript.src.split("?")[1]);';
+  const replacement = 'const rawTimeMs = document.currentScript?.getAttribute("data-kimchi-seek-ms");\n  if (rawTimeMs == null || rawTimeMs.trim() === "") return;\n  const timeMs = Number(rawTimeMs);\n  if (!Number.isFinite(timeMs) || timeMs < 0) return;';
+  const result = replaceOnce(source, original, replacement, "Netflix seek parameter reader");
+  return replaceOnce(result, 'player.seek(parseFloat(params.get("t")) * 1000);', "player.seek(timeMs);", "Netflix seek target");
+}
+
+function prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek }) {
+  if (manifest.name !== "Kimchi Reader" || manifest.version !== "0.21.7") throw new Error("Compatibility preparation supports only the reviewed Kimchi Reader 0.21.7 package.");
   if (!manifest.content_scripts?.some((script) => Array.isArray(script.js) && script.js.includes(kimchiContentScript))) throw new Error("The expected Kimchi content script is not declared.");
   const data = files.get(kimchiContentScript);
   if (!data || createHash("sha256").update(data).digest("hex") !== kimchiContentHash) throw new Error("The Kimchi content script differs from the reviewed original. Use an unchanged official package.");
-  files.set(kimchiContentScript, Buffer.from(adaptKimchiDictionarySource(new TextDecoder("utf-8", { fatal: true }).decode(data))));
+  let source = new TextDecoder("utf-8", { fatal: true }).decode(data);
+  if (kimchiDictionary) source = adaptKimchiDictionarySource(source);
+  if (kimchiNetflixSeek) {
+    if (!manifest.web_accessible_resources?.some((entry) => Array.isArray(entry.resources) && entry.resources.includes(kimchiSeekScript))) throw new Error("The expected Netflix seek helper is not declared.");
+    const helper = files.get(kimchiSeekScript);
+    if (!helper || createHash("sha256").update(helper).digest("hex") !== kimchiSeekHash) throw new Error("The Netflix seek helper differs from the reviewed original. Use an unchanged official package.");
+    source = adaptKimchiNetflixSeekSource(source);
+    files.set(kimchiSeekScript, Buffer.from(adaptKimchiNetflixSeekHelper(new TextDecoder("utf-8", { fatal: true }).decode(helper))));
+  }
+  files.set(kimchiContentScript, Buffer.from(source));
 }
 
 function inside(root, candidate) {
@@ -64,7 +92,7 @@ function readPackage(root) {
   return files;
 }
 
-export function prepareWebKitExtension(source, output, { kimchiDictionary = false } = {}) {
+export function prepareWebKitExtension(source, output, { kimchiDictionary = false, kimchiNetflixSeek = false } = {}) {
   if (!source || !output) throw new Error("Provide the extracted extension folder and a new output folder.");
   if (!fs.lstatSync(source).isDirectory()) throw new Error("Choose a regular extension folder.");
   const root = fs.realpathSync(source);
@@ -80,7 +108,7 @@ export function prepareWebKitExtension(source, output, { kimchiDictionary = fals
   if (!Array.isArray(scripts) || !scripts.length || manifest.background.page || manifest.background.service_worker) {
     throw new Error("Use the extracted Firefox package with background scripts.");
   }
-  if (kimchiDictionary) prepareKimchiDictionary(manifest, files);
+  if (kimchiDictionary || kimchiNetflixSeek) prepareKimchi(manifest, files, { kimchiDictionary, kimchiNetflixSeek });
   const preparedScripts = [];
   for (const script of new Set(scripts)) {
     if (typeof script !== "string" || !script || path.isAbsolute(script) || /[\\?#\0]/.test(script)) throw new Error("The manifest contains an unsupported background script path.");
@@ -105,20 +133,21 @@ export function prepareWebKitExtension(source, output, { kimchiDictionary = fals
     fs.rmSync(destination, { recursive: true, force: true });
     throw error;
   }
-  return { directory: destination, preparedScripts, dictionaryStreams: kimchiDictionary };
+  return { directory: destination, preparedScripts, dictionaryStreams: kimchiDictionary, netflixSeek: kimchiNetflixSeek };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const args = process.argv.slice(2);
-  const kimchiDictionary = args[0] === "--kimchi-dictionary";
-  if (kimchiDictionary) args.shift();
+  const options = { kimchiDictionary: false, kimchiNetflixSeek: false };
+  const flags = { "--kimchi-dictionary": "kimchiDictionary", "--kimchi-netflix-seek": "kimchiNetflixSeek" };
+  while (Object.hasOwn(flags, args[0])) options[flags[args.shift()]] = true;
   if (args.length !== 2) {
-    console.error("Usage: node scripts/personal/prepare-webkit-extension.mjs [--kimchi-dictionary] <extracted-firefox-folder> <new-output-folder>");
+    console.error("Usage: node scripts/personal/prepare-webkit-extension.mjs [--kimchi-dictionary] [--kimchi-netflix-seek] <extracted-firefox-folder> <new-output-folder>");
     process.exitCode = 1;
   } else {
     try {
-      const result = prepareWebKitExtension(args[0], args[1], { kimchiDictionary });
-      console.log(`Prepared ${result.preparedScripts.length} background script(s)${result.dictionaryStreams ? " and Kimchi dictionary stream compatibility" : ""} in ${result.directory}. The original folder is unchanged. Inspect and approve this new folder in Ardia before loading it.`);
+      const result = prepareWebKitExtension(args[0], args[1], options);
+      console.log(`Prepared ${result.preparedScripts.length} background script(s)${result.dictionaryStreams ? ", Kimchi dictionary stream compatibility" : ""}${result.netflixSeek ? ", Netflix subtitle seeking" : ""} in ${result.directory}. The original folder is unchanged. Inspect and approve this new folder in Ardia before loading it.`);
     } catch (error) {
       console.error(error.message);
       process.exitCode = 1;
