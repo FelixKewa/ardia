@@ -46,21 +46,39 @@ test('signed feeds verify exact UTF-8 bytes and reject wrong keys, tampering and
 
 test('workflow keeps signing and publication on separate workers with immutable artifact selection', () => {
   const source = readFileSync(new URL('../../.github/workflows/personal-nightly.yml', import.meta.url), 'utf8');
-  const jobs = Object.fromEntries([...source.matchAll(/^  (plan|build|sign|proof|publish):\n([\s\S]*?)(?=^  [a-z]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
-  assert.deepEqual(Object.keys(jobs), ['plan', 'build', 'sign', 'proof', 'publish']);
+  const jobs = Object.fromEntries([...source.matchAll(/^  (plan|build|graph|sign|proof|publish):\n([\s\S]*?)(?=^  [a-z]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
+  assert.deepEqual(Object.keys(jobs), ['plan', 'build', 'graph', 'sign', 'proof', 'publish']);
   for (const action of source.matchAll(/uses: ([^\s]+)/g)) assert.match(action[1], /^actions\/[a-z-]+@[a-f0-9]{40}$/);
   assert.match(jobs.plan, /github.repository == 'FelixKewa\/ardia'.*github.ref == 'refs\/heads\/main'/);
   assert.match(jobs.plan, /PERSONAL_NIGHTLY_ENABLED/);
   assert.match(jobs.sign, /environment: personal-signing/);
   assert.equal((jobs.sign.match(/secrets\./g) ?? []).length, 3);
-  for (const name of ['plan', 'build', 'proof', 'publish']) assert.doesNotMatch(jobs[name], /secrets\.|environment: personal-signing/);
-  for (const name of ['plan', 'build', 'sign', 'proof']) assert.doesNotMatch(jobs[name], /contents: write/);
+  for (const name of ['plan', 'build', 'graph', 'proof', 'publish']) assert.doesNotMatch(jobs[name], /secrets\.|environment: personal-signing/);
+  for (const name of ['plan', 'build', 'graph', 'sign', 'proof']) assert.doesNotMatch(jobs[name], /contents: write/);
   assert.match(jobs.publish, /contents: write/);
   assert.doesNotMatch(jobs.sign + jobs.publish, /materialize|check-candidate|webkit-smoke|npm |pnpm |uses: \.\//);
   assert.match(jobs.sign, /EXPECTED_SHA256/);
   assert.match(jobs.proof, /update-proof\.mjs/);
   assert.doesNotMatch(source, /pull_request_target|pull_request:|\n  push:|actions\/cache@/);
   for (const download of source.split(/- uses: actions\/download-artifact@/).slice(1)) assert.match(download.split(/\n      - /)[0], /artifact-ids:/);
+});
+
+test('the desktop graph tests run in their own job that must pass before signing', () => {
+  const source = readFileSync(new URL('../../.github/workflows/personal-nightly.yml', import.meta.url), 'utf8');
+  const gate = readFileSync(new URL('./check-candidate.sh', import.meta.url), 'utf8');
+  const jobs = Object.fromEntries([...source.matchAll(/^  (plan|build|graph|sign|proof|publish):\n([\s\S]*?)(?=^  [a-z]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
+  const condition = job => /^    if: (.*)$/m.exec(job)?.[1];
+  assert.match(jobs.graph, /^    needs: plan$/m);
+  assert.match(jobs.graph, /^    runs-on: ubuntu-latest$/m);
+  assert.equal(condition(jobs.graph), condition(jobs.build));
+  assert.match(jobs.graph, /run: bash scripts\/personal\/check-candidate\.sh "\$RUNNER_TEMP\/source" graph$/m);
+  assert.doesNotMatch(jobs.graph, /continue-on-error/);
+  assert.match(jobs.sign, /^    needs: \[plan, build, graph\]$/m);
+  assert.doesNotMatch(condition(jobs.sign), /always|failure|cancelled/);
+  assert.equal(source.match(/PERSONAL_GRAPH_IN_SEPARATE_JOB/g).length, 1);
+  assert.match(jobs.build, /^          PERSONAL_GRAPH_IN_SEPARATE_JOB: '1'$/m);
+  assert.deepEqual(gate.match(/\$\{PERSONAL_\w+[^}]*\}" == \S+/g), ['${PERSONAL_GRAPH_IN_SEPARATE_JOB:-}" == 1']);
+  assert.equal(gate.match(/scripts\/module-graph\.test\.mjs/g).length, 1);
 });
 
 test('bundle metadata replaces upstream release notes with the exact personal release', { skip: process.platform !== 'darwin' }, () => {
