@@ -83,9 +83,9 @@ final class WebKitExtensions {
     } catch { reply(.failure(error)) }
   }
 
-  func list(profile: String) -> [[String: Any]] {
-    guard #available(macOS 15.4, *), let host = try? host(profile) else { return [] }
-    return host.rows
+  func list(profile: String, completion: @escaping ([[String: Any]]) -> Void) {
+    guard #available(macOS 15.4, *), let host = try? host(profile) else { return completion([]) }
+    host.list(completion: completion)
   }
 
   func grant(profile: String, id: String, permissions: [String], origins: [String], completion: @escaping Reply) {

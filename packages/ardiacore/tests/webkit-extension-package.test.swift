@@ -52,6 +52,37 @@ struct ExtensionPackageTests {
     #expect(changed.fingerprint != renamed.fingerprint)
   }
 
+  @Test func `checking an installed package writes nothing and refuses changes links and special files`() throws {
+    let root = try temporary()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let folder = try source(root)
+    let resource = folder.appendingPathComponent("resource.txt")
+    try Data("first".utf8).write(to: resource)
+    let approved = try WebKitExtensionPackage.snapshot(folder.path, into: root.appendingPathComponent("approved")).fingerprint
+    let before = try FileManager.default.subpathsOfDirectory(atPath: root.path).sorted()
+    #expect(try WebKitExtensionPackage.unchanged(folder.path, since: approved))
+    #expect(try FileManager.default.subpathsOfDirectory(atPath: root.path).sorted() == before)
+    try Data("other".utf8).write(to: resource)
+    #expect(try !WebKitExtensionPackage.unchanged(folder.path, since: approved))
+    try Data("first".utf8).write(to: resource)
+    let added = folder.appendingPathComponent(".added")
+    try Data().write(to: added)
+    #expect(try !WebKitExtensionPackage.unchanged(folder.path, since: approved))
+    try FileManager.default.removeItem(at: added)
+    try FileManager.default.createSymbolicLink(at: added, withDestinationURL: resource)
+    #expect(throws: (any Error).self) { try WebKitExtensionPackage.unchanged(folder.path, since: approved) }
+    try FileManager.default.removeItem(at: added)
+    #expect(mkfifo(added.path, 0o600) == 0)
+    #expect(throws: (any Error).self) { try WebKitExtensionPackage.unchanged(folder.path, since: approved) }
+    try FileManager.default.removeItem(at: added)
+    #expect(try WebKitExtensionPackage.unchanged(folder.path, since: approved))
+    let linked = root.appendingPathComponent("linked")
+    try FileManager.default.createSymbolicLink(at: linked, withDestinationURL: folder)
+    #expect(throws: (any Error).self) { try WebKitExtensionPackage.unchanged(linked.path, since: approved) }
+    try FileManager.default.removeItem(at: folder.appendingPathComponent("manifest.json"))
+    #expect(throws: (any Error).self) { try WebKitExtensionPackage.unchanged(folder.path, since: approved) }
+  }
+
   @Test func `a package cannot follow a resource or directory symlink outside the chosen folder`() throws {
     let root = try temporary()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -91,8 +122,9 @@ struct ExtensionPackageTests {
     #expect(first.fingerprint == equivalent.fingerprint)
     #expect(first.fingerprint == repeated.fingerprint)
     #expect(first.legacyFingerprint != equivalent.legacyFingerprint)
-    #expect(equivalent.matches(equivalent.legacyFingerprint))
-    #expect(!equivalent.matches(String(repeating: "0", count: 64)))
+    #expect(try WebKitExtensionPackage.unchanged(decomposed.path, since: equivalent.fingerprint))
+    #expect(try WebKitExtensionPackage.unchanged(decomposed.path, since: equivalent.legacyFingerprint))
+    #expect(try !WebKitExtensionPackage.unchanged(decomposed.path, since: String(repeating: "0", count: 64)))
     #expect(try Data(contentsOf: repeated.directory.appendingPathComponent(name)) == data)
   }
 

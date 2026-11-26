@@ -52,8 +52,6 @@ enum WebKitExtensionPackage {
     let directory: URL
     let fingerprint: String
     let legacyFingerprint: String
-
-    func matches(_ approved: String) -> Bool { fingerprint == approved || legacyFingerprint == approved }
   }
 
   static func failure(_ message: String) -> WebKitExtensionFailure { WebKitExtensionFailure(message: message) }
@@ -71,7 +69,30 @@ enum WebKitExtensionPackage {
   static func snapshot(_ path: String, into directory: URL) throws -> Snapshot {
     let root = try source(path)
     let manager = FileManager.default
-    guard let entries = manager.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]) else {
+    let names = try resources(root)
+    try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    do {
+      let fingerprints = try fingerprints(names, root: root) { name, data in
+        let target = directory.appendingPathComponent(name)
+        try manager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard !manager.fileExists(atPath: target.path) else { throw failure("The extension contains colliding resource paths.") }
+        try data.write(to: target, options: .atomic)
+      }
+      return Snapshot(source: root, directory: directory, fingerprint: fingerprints.current, legacyFingerprint: fingerprints.legacy)
+    } catch {
+      try? manager.removeItem(at: directory)
+      throw error
+    }
+  }
+
+  static func unchanged(_ path: String, since approved: String) throws -> Bool {
+    let root = try source(path)
+    let found = try fingerprints(resources(root), root: root) { _, _ in }
+    return found.current == approved || found.legacy == approved
+  }
+
+  private static func resources(_ root: URL) throws -> [String: String] {
+    guard let entries = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]) else {
       throw failure("The extension folder could not be read.")
     }
     var names: [String: String] = [:]
@@ -89,34 +110,28 @@ enum WebKitExtensionPackage {
       guard names.count <= maxFiles, size <= maxBytes else { throw failure("The extension exceeds the package size limit.") }
     }
     guard names["manifest.json"] != nil else { throw failure("The selected folder has no manifest.json.") }
-    try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    do {
-      var digest = SHA256()
-      var legacyDigest = SHA256()
-      var copied = 0
-      for canonical in names.keys.sorted() {
-        guard let name = names[canonical] else { throw failure("The extension contains an invalid resource path.") }
-        let original = root.appendingPathComponent(name)
-        let values = try original.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true else { throw failure("The extension changed while it was being inspected.") }
-        let data = try readFile(name, root: root, limit: min(maxBytes - copied, name == "manifest.json" ? 1024 * 1024 : maxBytes))
-        copied += data.count
-        guard copied <= maxBytes, name != "manifest.json" || data.count <= 1024 * 1024 else { throw failure("The extension exceeds the package size limit.") }
-        digest.update(data: Data("\(canonical.utf8.count):\(canonical):\(data.count):".utf8))
-        digest.update(data: data)
-        legacyDigest.update(data: Data("\(name.utf8.count):\(name):\(data.count):".utf8))
-        legacyDigest.update(data: data)
-        let target = directory.appendingPathComponent(name)
-        try manager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-        guard !manager.fileExists(atPath: target.path) else { throw failure("The extension contains colliding resource paths.") }
-        try data.write(to: target, options: .atomic)
-      }
-      return Snapshot(source: root, directory: directory, fingerprint: digest.finalize().map { String(format: "%02x", $0) }.joined(),
-        legacyFingerprint: legacyDigest.finalize().map { String(format: "%02x", $0) }.joined())
-    } catch {
-      try? manager.removeItem(at: directory)
-      throw error
+    return names
+  }
+
+  private static func fingerprints(_ names: [String: String], root: URL, each: (String, Data) throws -> Void) throws -> (current: String, legacy: String) {
+    var digest = SHA256()
+    var legacyDigest = SHA256()
+    var read = 0
+    for canonical in names.keys.sorted() {
+      guard let name = names[canonical] else { throw failure("The extension contains an invalid resource path.") }
+      let original = root.appendingPathComponent(name)
+      let values = try original.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+      guard values.isRegularFile == true, values.isSymbolicLink != true else { throw failure("The extension changed while it was being inspected.") }
+      let data = try readFile(name, root: root, limit: min(maxBytes - read, name == "manifest.json" ? 1024 * 1024 : maxBytes))
+      read += data.count
+      guard read <= maxBytes, name != "manifest.json" || data.count <= 1024 * 1024 else { throw failure("The extension exceeds the package size limit.") }
+      digest.update(data: Data("\(canonical.utf8.count):\(canonical):\(data.count):".utf8))
+      digest.update(data: data)
+      legacyDigest.update(data: Data("\(name.utf8.count):\(name):\(data.count):".utf8))
+      legacyDigest.update(data: data)
+      try each(name, data)
     }
+    return (digest.finalize().map { String(format: "%02x", $0) }.joined(), legacyDigest.finalize().map { String(format: "%02x", $0) }.joined())
   }
 
   private static func readFile(_ name: String, root: URL, limit: Int) throws -> Data {

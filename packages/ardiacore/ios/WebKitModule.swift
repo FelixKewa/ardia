@@ -18,7 +18,7 @@ public class WebKitModule: Module {
     },
     extensionList: { args, reply in
       let profile = try extensionProfile(args)
-      reply.ok(["available": WebKitExtensions.shared.available, "extensions": WebKitExtensions.shared.list(profile: profile)])
+      WebKitExtensions.shared.list(profile: profile) { reply.ok(["available": WebKitExtensions.shared.available, "extensions": $0]) }
     },
     extensionLoad: { args, reply in
       WebKitExtensions.shared.load(profile: try extensionProfile(args), path: try args.text("path"), fingerprint: try args.text("fingerprint"), permissions: try args.strings("permissions"), origins: try args.strings("origins")) { extensionReply($0, reply) }

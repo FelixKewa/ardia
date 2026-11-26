@@ -68,10 +68,22 @@ final class WebKitExtensionHost: NSObject {
 
   var rows: [[String: Any]] { records.keys.sorted().compactMap(row) }
 
+  func list(within seconds: TimeInterval = 30, completion: @escaping ([[String: Any]]) -> Void) {
+    var pending: (([[String: Any]]) -> Void)? = completion
+    let answer = { [self] in
+      let reply = pending
+      pending = nil
+      reply?(rows)
+    }
+    whenReady(answer)
+    if pending != nil { DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: answer) }
+  }
+
   func row(_ id: String) -> [String: Any]? {
     guard let record = records[id] else { return nil }
     var errors = failures[id] ?? []
     if let context = contexts[id] { errors += context.errors.map(\.localizedDescription) }
+    else if restoring, record.enabled, errors.isEmpty { errors = ["Still loading. Open this page again in a moment."] }
     var result: [String: Any] = ["id": id, "name": record.name, "version": record.version, "path": record.path, "fingerprint": record.fingerprint,
             "loaded": contexts[id]?.isLoaded == true, "enabled": record.enabled, "requestedPermissions": record.requestedPermissions,
             "requestedOrigins": record.requestedOrigins, "grantedPermissions": record.permissions, "grantedOrigins": record.origins,
@@ -108,17 +120,15 @@ final class WebKitExtensionHost: NSObject {
     remainingRestores = saved.count
     for record in saved {
       let source = package(record)
-      let check = FileManager.default.temporaryDirectory.appendingPathComponent("ardia-extension-verify-" + UUID().uuidString)
       WebKitExtensionPackage.files.async { [weak self] in
-        let checked = Result { try WebKitExtensionPackage.snapshot(source.path, into: check) }
-        try? FileManager.default.removeItem(at: check)
+        let checked = Result { try WebKitExtensionPackage.unchanged(source.path, since: record.fingerprint) }
         DispatchQueue.main.async { [weak self] in
           Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.remainingRestores -= 1; if self.remainingRestores == 0 { self.finishRestore() } }
             guard self.valid, self.records[record.id]?.enabled == true else { return }
             do {
-              guard try checked.get().matches(record.fingerprint) else { throw WebKitExtensionPackage.failure("The installed extension changed. Inspect and load it again.") }
+              guard try checked.get() else { throw WebKitExtensionPackage.failure("The installed extension changed. Inspect and load it again.") }
               let resource = try await WKWebExtension(resourceBaseURL: source)
               guard self.valid, self.records[record.id]?.enabled == true else { return }
               try self.activate(resource, record: record)
@@ -162,9 +172,7 @@ final class WebKitExtensionHost: NSObject {
         if let previousPackage, let existing { checks.append((previousPackage, existing.fingerprint)) }
         if FileManager.default.fileExists(atPath: destination.path), previousPackage != destination { checks.append((destination, fingerprint)) }
         for (package, expected) in checks {
-          let check = FileManager.default.temporaryDirectory.appendingPathComponent("ardia-extension-verify-" + UUID().uuidString)
-          defer { try? FileManager.default.removeItem(at: check) }
-          guard try WebKitExtensionPackage.snapshot(package.path, into: check).matches(expected) else {
+          guard try WebKitExtensionPackage.unchanged(package.path, since: expected) else {
             throw WebKitExtensionPackage.failure("The installed extension package changed. Restore its reviewed package before updating.")
           }
         }
