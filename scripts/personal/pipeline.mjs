@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertPublishable, feedBranch, hexCommit, nextBuild, repository, sha256, sourceBranch, validatePlan, validateRelease, verifySignedFeed } from './release-policy.mjs';
@@ -110,6 +110,14 @@ async function previous(folder, planFile) {
   if (await sha256(archive) !== prior.sha256) throw new Error('Previous personal archive digest mismatch.');
   run('python3', ['-I', join(root, 'scripts/personal/artifact.py'), 'unzip', archive, join(folder, 'extracted')]);
 }
+export async function uploadAsset(uploadURL, name, path, token) {
+  const response = await fetch(`${uploadURL.replace(/\{.*$/, '')}?name=${encodeURIComponent(name)}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' }, body: readFileSync(path), signal: AbortSignal.timeout(600000),
+  });
+  if (!response.ok) throw new Error(`Release asset upload failed (${response.status}). The feed was not changed.`);
+  const asset = await response.json();
+  if (asset.digest && asset.digest !== `sha256:${await sha256(path)}`) throw new Error('Uploaded asset digest mismatch. The feed was not changed.');
+}
 async function publish(folder, planFolder, proofFile) {
   controllerGuard();
   const plan = validatePlan(json(join(planFolder, 'plan.json')));
@@ -139,14 +147,7 @@ async function publish(folder, planFolder, proofFile) {
   const made = await api('releases', 'POST', { tag_name: release.tag, target_commitish: plan.candidate, name: `Ardia Personal ${release.build}`, draft: true, prerelease: true,
     body: `Source: ${plan.candidate}\nUpstream: ${plan.upstream}\nController: ${plan.controller}\nEngine: ${release.engine ?? 'recorded in signed app metadata'}\nArchive SHA-256: ${release.sha256}\nActual signed Sparkle update proof: ${proof.previousBuild} → ${proof.installedBuild}.` });
   const uploads = [archive, join(folder, 'release.json'), join(folder, 'updates/appcast.xml'), proofFile];
-  for (const path of uploads) {
-    const response = await fetch(`${made.upload_url.replace(/\{.*$/, '')}?name=${encodeURIComponent(path === proofFile ? 'update-proof.json' : basename(path))}`, {
-      method: 'POST', headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, 'Content-Type': 'application/octet-stream' }, body: createReadStream(path), duplex: 'half', signal: AbortSignal.timeout(600000),
-    });
-    if (!response.ok) throw new Error(`Release asset upload failed (${response.status}). The feed was not changed.`);
-    const asset = await response.json();
-    if (asset.digest && asset.digest !== `sha256:${await sha256(path)}`) throw new Error('Uploaded asset digest mismatch. The feed was not changed.');
-  }
+  for (const path of uploads) await uploadAsset(made.upload_url, path === proofFile ? 'update-proof.json' : basename(path), path, process.env.GH_TOKEN);
   await api(`releases/${made.id}`, 'PATCH', { draft: false, make_latest: 'false' });
   git(root, ['fetch', '--no-tags', remote, `refs/heads/${feedBranch}:refs/remotes/personal-publish/feed`]);
   if (git(root, ['rev-parse', 'refs/remotes/personal-publish/feed']) !== plan.feedHead) throw new Error('Feed branch moved; release exists but feed remains unchanged.');
@@ -163,11 +164,13 @@ async function publish(folder, planFolder, proofFile) {
   console.log(`Published ${release.tag}; signed feed advanced last to ${commit}.`);
 }
 
-const [command, ...args] = process.argv.slice(2);
-if (command === 'prepare' && args.length === 1) await prepare(resolve(args[0]));
-else if (command === 'materialize' && args.length === 2) await materialize(resolve(args[0]), resolve(args[1]));
-else if (command === 'engine' && args.length === 1) await engine(resolve(args[0]));
-else if (command === 'verify-build' && args.length === 2) await verifyBuild(resolve(args[0]), resolve(args[1]));
-else if (command === 'previous' && args.length === 2) await previous(resolve(args[0]), resolve(args[1]));
-else if (command === 'publish' && args.length === 3) await publish(resolve(args[0]), resolve(args[1]), resolve(args[2]));
-else throw new Error('Usage: pipeline.mjs prepare|materialize|verify-build|previous|publish <paths>');
+async function dispatch([command, ...args]) {
+  if (command === 'prepare' && args.length === 1) await prepare(resolve(args[0]));
+  else if (command === 'materialize' && args.length === 2) await materialize(resolve(args[0]), resolve(args[1]));
+  else if (command === 'engine' && args.length === 1) await engine(resolve(args[0]));
+  else if (command === 'verify-build' && args.length === 2) await verifyBuild(resolve(args[0]), resolve(args[1]));
+  else if (command === 'previous' && args.length === 2) await previous(resolve(args[0]), resolve(args[1]));
+  else if (command === 'publish' && args.length === 3) await publish(resolve(args[0]), resolve(args[1]), resolve(args[2]));
+  else throw new Error('Usage: pipeline.mjs prepare|materialize|verify-build|previous|publish <paths>');
+}
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) await dispatch(process.argv.slice(2));
