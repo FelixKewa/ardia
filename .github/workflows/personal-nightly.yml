@@ -1,0 +1,249 @@
+name: Ardia Personal nightly
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build unchanged source to verify the update pipeline
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 23 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ardia-personal-release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.repository == 'FelixKewa/ardia' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.PERSONAL_NIGHTLY_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      ready: ${{ steps.plan.outputs.ready }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      build: ${{ steps.plan.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - run: node --test scripts/personal/pipeline.test.mjs scripts/personal/artifact.test.mjs scripts/personal/signing-policy.test.mjs
+      - id: plan
+        env:
+          PERSONAL_FORCE: ${{ inputs.force == true && 'true' || 'false' }}
+        run: node scripts/personal/pipeline.mjs prepare "$RUNNER_TEMP/plan"
+      - id: upload
+        if: steps.plan.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: frozen-plan
+          path: |
+            ${{ runner.temp }}/plan/plan.json
+            ${{ runner.temp }}/plan/candidate.bundle
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    outputs:
+      ready: ${{ steps.engine.outputs.ready }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.plan.outputs.artifact }}
+          path: ${{ runner.temp }}/plan
+          merge-multiple: true
+      - run: node scripts/personal/pipeline.mjs materialize "$RUNNER_TEMP/plan" "$RUNNER_TEMP/source"
+      - id: engine
+        run: node scripts/personal/pipeline.mjs engine "$RUNNER_TEMP/source"
+      - if: steps.engine.outputs.ready == 'true'
+        run: |
+          test "$(uname -m)" = arm64
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          command -v pod || brew install cocoapods
+          test -x "$HOME/.cargo/bin/rustup"
+      - if: steps.engine.outputs.ready == 'true'
+        env:
+          ARDIA_PERSONAL_SOURCE: ${{ runner.temp }}/source
+          PERSONAL_BUILD: ${{ needs.plan.outputs.build }}
+        run: bash scripts/personal/build-personal.sh "$RUNNER_TEMP/candidate" "$PERSONAL_BUILD"
+      - if: steps.engine.outputs.ready == 'true'
+        run: bash scripts/personal/check-candidate.sh "$RUNNER_TEMP/source"
+      - id: pack
+        if: steps.engine.outputs.ready == 'true'
+        run: |
+          node scripts/personal/pipeline.mjs verify-build "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/plan/plan.json"
+          python3 -I scripts/personal/artifact.py pack "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/candidate.tar"
+          echo "sha256=$(shasum -a 256 "$RUNNER_TEMP/candidate.tar" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - id: upload
+        if: steps.engine.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: unsigned-candidate
+          path: ${{ runner.temp }}/candidate.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: build-logs
+          path: ${{ runner.temp }}/candidate/*.log
+          retention-days: 14
+
+  sign:
+    needs: [plan, build]
+    if: needs.build.outputs.ready == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    environment: personal-signing
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.plan.outputs.artifact }}
+          path: ${{ runner.temp }}/plan
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact }}
+          path: ${{ runner.temp }}/input
+          merge-multiple: true
+      - env:
+          EXPECTED_SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          test "$(shasum -a 256 "$RUNNER_TEMP/input/candidate.tar" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          python3 -I scripts/personal/artifact.py unpack "$RUNNER_TEMP/input/candidate.tar" "$RUNNER_TEMP/candidate"
+          node scripts/personal/pipeline.mjs verify-build "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/plan/plan.json"
+          bash scripts/personal/fetch-sparkle.sh "$RUNNER_TEMP/sparkle"
+      - env:
+          PERSONAL_CERTIFICATE_P12: ${{ secrets.PERSONAL_CERTIFICATE_P12 }}
+          PERSONAL_CERTIFICATE_PASSWORD: ${{ secrets.PERSONAL_CERTIFICATE_PASSWORD }}
+          PERSONAL_SPARKLE_SEED: ${{ secrets.PERSONAL_SPARKLE_SEED }}
+          SPARKLE_BIN: ${{ runner.temp }}/sparkle/bin
+        run: node scripts/personal/ci-sign.mjs "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/private-signing"
+      - if: always()
+        run: |
+          if test -e "$RUNNER_TEMP/private-signing/signing.keychain-db"; then security delete-keychain "$RUNNER_TEMP/private-signing/signing.keychain-db"; fi
+          rm -rf "$RUNNER_TEMP/private-signing"
+      - id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: signed-candidate
+          path: |
+            ${{ runner.temp }}/candidate/updates
+            ${{ runner.temp }}/candidate/proof
+            ${{ runner.temp }}/candidate/release.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+  proof:
+    needs: [plan, sign]
+    runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.plan.outputs.artifact }}
+          path: ${{ runner.temp }}/plan
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact }}
+          path: ${{ runner.temp }}/signed
+          merge-multiple: true
+      - run: |
+          bash scripts/personal/fetch-sparkle.sh "$RUNNER_TEMP/sparkle"
+          node scripts/personal/pipeline.mjs previous "$RUNNER_TEMP/previous" "$RUNNER_TEMP/plan/plan.json"
+      - env:
+          SPARKLE_FRAMEWORK_ROOT: ${{ runner.temp }}/sparkle
+        run: node scripts/personal/update-proof.mjs "$RUNNER_TEMP/previous/extracted/Ardia.app" "$RUNNER_TEMP/signed" "$RUNNER_TEMP/proof/update-proof.json"
+      - run: |
+          node scripts/personal/pipeline.mjs materialize "$RUNNER_TEMP/plan" "$RUNNER_TEMP/source"
+          python3 -I scripts/personal/artifact.py unzip "$RUNNER_TEMP"/signed/updates/Ardia-Personal-*-arm64.zip "$RUNNER_TEMP/runtime"
+          node "$RUNNER_TEMP/source/scripts/personal/webkit-smoke.mjs" "$RUNNER_TEMP/runtime/Ardia.app" --release > "$RUNNER_TEMP/proof/webkit.log" 2>&1
+          node "$RUNNER_TEMP/source/scripts/personal/prove-profile-import.mjs" "$RUNNER_TEMP/runtime/Ardia.app" > "$RUNNER_TEMP/proof/chromium.log" 2>&1
+      - id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verified-upgrade
+          path: ${{ runner.temp }}/proof/update-proof.json
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: update-proof-logs
+          path: ${{ runner.temp }}/proof/*.log
+          retention-days: 14
+
+  publish:
+    needs: [plan, sign, proof]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.plan.outputs.artifact }}
+          path: ${{ runner.temp }}/plan
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact }}
+          path: ${{ runner.temp }}/signed
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.proof.outputs.artifact }}
+          path: ${{ runner.temp }}/proof
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/personal/pipeline.mjs publish "$RUNNER_TEMP/signed" "$RUNNER_TEMP/plan" "$RUNNER_TEMP/proof/update-proof.json"
