@@ -13,6 +13,7 @@ const values = {
   ACPersonalBuild: true,
   ACPersonalSigningCertificateSHA256: config.certificateSHA256,
   ACUpdateChannel: config.channel,
+  ACReleaseNotesURL: `https://github.com/${config.repository}/releases/tag/personal-${buildNumber}`,
   SUFeedURL: config.feedURL,
   SUPublicEDKey: config.updatePublicKey,
   SUVerifyUpdateBeforeExtraction: true,

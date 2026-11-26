@@ -81,6 +81,9 @@ jobs:
       - if: steps.engine.outputs.ready == 'true'
         run: |
           test "$(uname -m)" = arm64
+          xcodebuild -version
+          xcrun swiftc -version
+          node --test scripts/personal/pipeline.test.mjs
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           command -v pod || brew install cocoapods
           if ! test -x "$HOME/.cargo/bin/rustup"; then
