@@ -22,6 +22,9 @@ jobs:
     if: github.repository == 'FelixKewa/ardia' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.PERSONAL_NIGHTLY_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
     outputs:
       ready: ${{ steps.plan.outputs.ready }}
       artifact: ${{ steps.upload.outputs.artifact-id }}
@@ -38,6 +41,7 @@ jobs:
       - run: node --test scripts/personal/pipeline.test.mjs scripts/personal/artifact.test.mjs scripts/personal/signing-policy.test.mjs
       - id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           PERSONAL_FORCE: ${{ inputs.force == true && 'true' || 'false' }}
         run: node scripts/personal/pipeline.mjs prepare "$RUNNER_TEMP/plan"
       - id: upload
