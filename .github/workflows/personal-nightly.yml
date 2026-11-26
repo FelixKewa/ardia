@@ -240,6 +240,7 @@ jobs:
           node scripts/personal/pipeline.mjs materialize "$RUNNER_TEMP/plan" "$RUNNER_TEMP/source"
           python3 -I scripts/personal/artifact.py unzip "$RUNNER_TEMP"/signed/updates/Ardia-Personal-*-arm64.zip "$RUNNER_TEMP/runtime"
           node "$RUNNER_TEMP/source/scripts/personal/webkit-smoke.mjs" "$RUNNER_TEMP/runtime/Ardia.app" --release > "$RUNNER_TEMP/proof/webkit.log" 2>&1
+          node "$RUNNER_TEMP/source/scripts/personal/webkit-upgrade-smoke.mjs" "$RUNNER_TEMP/previous/extracted/Ardia.app" "$RUNNER_TEMP/runtime/Ardia.app" --release > "$RUNNER_TEMP/proof/webkit-upgrade.log" 2>&1
           node "$RUNNER_TEMP/source/scripts/personal/prove-profile-import.mjs" "$RUNNER_TEMP/runtime/Ardia.app" > "$RUNNER_TEMP/proof/chromium.log" 2>&1
       - id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
