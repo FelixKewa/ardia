@@ -11,12 +11,28 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [oldArgument, signedArgument, resultArgument] = process.argv.slice(2);
 if (!oldArgument || !signedArgument || !resultArgument || !process.env.SPARKLE_FRAMEWORK_ROOT) throw new Error('Usage: SPARKLE_FRAMEWORK_ROOT=<verified Sparkle directory> node update-proof.mjs <old Ardia.app> <signed candidate directory> <proof.json>');
 if (spawnSync('pgrep', ['-x', 'Ardia'], { stdio: 'ignore' }).status !== 1) throw new Error('Close existing Ardia instances before running the isolated update proof.');
-for (const domain of [`user/${process.getuid()}`, `gui/${process.getuid()}`, 'system']) {
-  for (const label of ['com.ardia.browser-sparkle-updater', 'com.ardia.browser-sparkle-progress']) {
-    const probe = spawnSync('launchctl', ['print', `${domain}/${label}`], { encoding: 'utf8' });
-    if (probe.status === 0) throw new Error('An existing Ardia update helper is registered. Finish or retire that update before the isolated proof.');
-    if (!/Could not find (service|domain)|could not find (service|domain)/.test(probe.stderr ?? '')) throw new Error('Could not safely check for an existing Ardia update helper.');
+function helpersRegistered() {
+  let registered = false;
+  for (const domain of [`user/${process.getuid()}`, `gui/${process.getuid()}`, 'system']) {
+    for (const label of ['com.ardia.browser-sparkle-updater', 'com.ardia.browser-sparkle-progress']) {
+      const probe = spawnSync('launchctl', ['print', `${domain}/${label}`], { encoding: 'utf8' });
+      if (probe.status === 0) registered = true;
+      else if (!/Could not find (service|domain)|could not find (service|domain)/.test(probe.stderr ?? '')) throw new Error('Could not safely check for an existing Ardia update helper.');
+    }
   }
+  return registered;
+}
+if (helpersRegistered()) throw new Error('An existing Ardia update helper is registered. Finish or retire that update before the isolated proof.');
+async function waitForHelperExit() {
+  const deadline = Date.now() + 30000;
+  let quietSince;
+  while (Date.now() < deadline) {
+    if (helpersRegistered()) quietSince = undefined;
+    else if (quietSince === undefined) quietSince = Date.now();
+    else if (Date.now() - quietSince >= 2000) return;
+    await new Promise(done => setTimeout(done, 250));
+  }
+  throw new Error('The owned update helper did not finish within its cleanup deadline.');
 }
 const old = realpathSync(oldArgument), signed = realpathSync(signedArgument);
 const config = JSON.parse(readFileSync(join(root, 'scripts/personal/release-config.json'), 'utf8'));
@@ -77,8 +93,9 @@ try {
     else assert.ok(archiveRequests > 0, 'The signed archive path was exercised.');
     if (expected === 'reject') {
       assert.match(log, /REJECTED invalid update signature/);
-      assert.equal(info(installed).CFBundleVersion, before.CFBundleVersion);
+      assert.equal(verifyApp(installed).CFBundleVersion, before.CFBundleVersion);
     }
+    await waitForHelperExit();
   };
   await attempt('bad-feed', 'reject');
   await attempt('bad-archive', 'reject');
@@ -92,5 +109,6 @@ try {
   console.log(`PASS actual Sparkle update ${before.CFBundleVersion} -> ${after.CFBundleVersion}; invalid feed and archive rejected.`);
 } finally {
   server.close();
+  await waitForHelperExit();
   rmSync(work, { recursive: true, force: true });
 }
