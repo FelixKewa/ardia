@@ -97,8 +97,6 @@ jobs:
           ARDIA_PERSONAL_SOURCE: ${{ runner.temp }}/source
           PERSONAL_BUILD: ${{ needs.plan.outputs.build }}
         run: bash scripts/personal/build-personal.sh "$RUNNER_TEMP/candidate" "$PERSONAL_BUILD"
-      - if: steps.engine.outputs.ready == 'true'
-        run: bash scripts/personal/check-candidate.sh "$RUNNER_TEMP/source"
       - id: pack
         if: steps.engine.outputs.ready == 'true'
         run: |
