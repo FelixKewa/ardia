@@ -13,6 +13,9 @@ export AC_LOCKED_AS=personal-release
 cd "$root"
 manager="$(node -p 'require("./package.json").packageManager')"
 scripts/agent/locked pod --as personal-release --wait 120 -- npm exec --yes --package="$manager" -- pnpm install --frozen-lockfile > "$output/dependencies.log" 2>&1
+printf 'Checking candidate before the native build.\n'
+bash "$controller/scripts/personal/check-candidate.sh" "$root" > "$output/checks.log" 2>&1
+printf 'Candidate checks passed; building the Release app.\n'
 export ARDIACORE_PREBUILT_REPO=ardia-browser/ardia
 export ARDIACORE_FRAMEWORK="$(packages/ardiacore/scripts/fetch-engine.sh)"
 (
