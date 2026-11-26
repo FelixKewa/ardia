@@ -96,3 +96,15 @@ test('bundle metadata replaces upstream release notes with the exact personal re
     assert.equal(actual.CFBundleShortVersionString, '0.2.49-nightly.1002');
   } finally { rmSync(work, { recursive: true, force: true }); }
 });
+
+test('the plan job reads the signing environment with a read-only workflow token', () => {
+  const source = readFileSync(new URL('../../.github/workflows/personal-nightly.yml', import.meta.url), 'utf8');
+  const jobs = Object.fromEntries([...source.split('\njobs:\n')[1].matchAll(/^  ([a-z]+):\n([\s\S]*?)(?=^  [a-z]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
+  assert.match(jobs.plan, /^    permissions:\n      contents: read\n      actions: read\n    [a-z]/m);
+  const step = jobs.plan.split(/^      - /m).find(text => text.startsWith('id: plan\n'));
+  assert.match(step, /^          GH_TOKEN: \$\{\{ github\.token \}\}$/m);
+  assert.match(step, /run: node scripts\/personal\/pipeline\.mjs prepare /);
+  assert.equal(jobs.plan.match(/GH_TOKEN|github\.token/g).length, 2);
+  assert.doesNotMatch(jobs.plan, /secrets\.|environment:|: write|write-all/);
+  assert.deepEqual(Object.keys(jobs).filter(name => /GH_TOKEN|github\.token/.test(jobs[name])), ['plan', 'publish']);
+});
