@@ -85,7 +85,13 @@ public enum FieldGlowGeometry {
   static func fadingPast(body: Double, front: Double, falloff: [Double]) -> [(Double, Double)] {
     let span = body + front
     guard span > 0, falloff.count > 1 else { return [(0, 1)] }
-    return [(0, 1)] + falloff.enumerated().map { i, alpha in ((body + front * Double(i) / Double(falloff.count - 1)) / span, alpha) }
+    let intervals = Double(falloff.count - 1)
+    let stops: [(Double, Double)] = falloff.enumerated().map { i, alpha in
+      let distance = front * Double(i) / intervals
+      let position = (body + distance) / span
+      return (position, alpha)
+    }
+    return [(0, 1)] + stops
   }
 
   static func plate(_ look: FieldGlowLook, _ stops: [(Double, Double)], _ fade: [(Double, Double)], extra: Double) -> FieldGlowPlateStops {
