@@ -7,7 +7,11 @@ guard args.count == 4 || args.count == 5, let host = Bundle(path: args[1]) else 
   exit(2)
 }
 let appPath = args[1], feed = args[2], expected = args[3]
-guard let proofHome = ProcessInfo.processInfo.environment["ARDIA_UPDATE_PROOF_HOME"], NSHomeDirectory() == proofHome else { exit(3) }
+guard let proofHome = ProcessInfo.processInfo.environment["ARDIA_UPDATE_PROOF_HOME"],
+      URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath() == URL(fileURLWithPath: proofHome).resolvingSymlinksInPath() else {
+  FileHandle.standardError.write("Isolated preferences home was not applied.\n".data(using: .utf8)!)
+  exit(3)
+}
 let channels = Set((args.count == 5 ? args[4] : "").split(separator: ",").map(String.init))
 let expectsNone = expected == "none"
 func log(_ s: String) { print("sparkle: \(s)"); fflush(stdout) }
@@ -72,7 +76,7 @@ final class Delegate: NSObject, SPUUpdaterDelegate {
   }
   func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) { log("downloaded") }
   func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: Error) { fail("download: \(error)") }
-  func updater(_ updater: SPUUpdater, didExtractUpdate item: SUAppcastItem) { log("extracted and validated (EdDSA)") }
+  func updater(_ updater: SPUUpdater, didExtractUpdate item: SUAppcastItem) { log("extraction stage completed") }
   func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) { log("installer starting") }
   func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
     log("ready to install on quit; installing now")
