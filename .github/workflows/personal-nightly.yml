@@ -96,6 +96,7 @@ jobs:
         env:
           ARDIA_PERSONAL_SOURCE: ${{ runner.temp }}/source
           PERSONAL_BUILD: ${{ needs.plan.outputs.build }}
+          PERSONAL_GRAPH_IN_SEPARATE_JOB: '1'
         run: bash scripts/personal/build-personal.sh "$RUNNER_TEMP/candidate" "$PERSONAL_BUILD"
       - id: pack
         if: steps.engine.outputs.ready == 'true'
@@ -119,8 +120,33 @@ jobs:
           path: ${{ runner.temp }}/candidate/*.log
           retention-days: 14
 
+  graph:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: ${{ needs.plan.outputs.artifact }}
+          path: ${{ runner.temp }}/plan
+          merge-multiple: true
+      - run: node scripts/personal/pipeline.mjs materialize "$RUNNER_TEMP/plan" "$RUNNER_TEMP/source"
+      - run: |
+          cd "$RUNNER_TEMP/source"
+          npm exec --yes --package="$(node -p 'require("./package.json").packageManager')" -- pnpm install --frozen-lockfile
+      - run: bash scripts/personal/check-candidate.sh "$RUNNER_TEMP/source" graph
+
   sign:
-    needs: [plan, build]
+    needs: [plan, build, graph]
     if: needs.build.outputs.ready == 'true'
     runs-on: macos-26
     timeout-minutes: 30
