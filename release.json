@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "tag": "personal-1001",
+  "build": "1001",
+  "version": "0.2.49-nightly.1001",
+  "archive": "Ardia-Personal-1001-arm64.zip",
+  "sha256": "ee9bbbba57e96d3e767a13826a187f4a99be6a0a779d5c0d4e188fd26935dfc6",
+  "bytes": 193731307,
+  "source": "bdefc1a8d76cc42f5e0a09f863028d1b3f2aa69c",
+  "bundleIdentifier": "com.ardia.browser",
+  "certificateSHA256": "27189ccdd1e66e23977c1b6f420e915bc1f2e64bdceebe0e57a6cfd7ba3a1c3f",
+  "updatePublicKey": "veoN4diTWu/FtooPS2ExDyRet4/daRHLnoGyHt4Tbt0=",
+  "feedURL": "https://raw.githubusercontent.com/FelixKewa/ardia/personal-updates/appcast.xml"
+}

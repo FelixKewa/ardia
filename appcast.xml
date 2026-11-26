@@ -1,0 +1,25 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Ardia</title>
+        <item>
+            <title>0.2.49-nightly.1001</title>
+            <pubDate>Thu, 26 Nov 2026 11:11:23 +0400</pubDate>
+            <link>https://github.com/FelixKewa/ardia</link>
+            <sparkle:channel>nightly</sparkle:channel>
+            <sparkle:version>1001</sparkle:version>
+            <sparkle:shortVersionString>0.2.49-nightly.1001</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="plain-text"><![CDATA[Ardia Personal 1001
+
+Upstream Ardia improvements with the personal WebKit extension support and Kimchi compatibility tooling.
+]]></description>
+            <enclosure url="https://github.com/FelixKewa/ardia/releases/download/personal-1001/Ardia-Personal-1001-arm64.zip" length="193731307" type="application/octet-stream" sparkle:edSignature="NHf2LjO5MFG4qigY+FuBX3EbiGOhC70fzbEPKLaTvbrKv9Bzo3Vn5ivWQFxcv1K8ak63DvNm5qvJbzShLeChBw=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: JQA5dZ8tjNTc4NT75OG1uiPXcLGo4SnC3bdm55LO+qfpx3H8PjECXJ3Zx7edg+zrchsWw2RuuIgWEJUXXl35Dg==
+length: 1487
+-->
