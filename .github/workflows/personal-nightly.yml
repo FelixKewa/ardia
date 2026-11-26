@@ -34,6 +34,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
+          package-manager-cache: false
       - run: node --test scripts/personal/pipeline.test.mjs scripts/personal/artifact.test.mjs scripts/personal/signing-policy.test.mjs
       - id: plan
         env:
@@ -68,6 +69,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
+          package-manager-cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.plan.outputs.artifact }}
@@ -81,7 +83,12 @@ jobs:
           test "$(uname -m)" = arm64
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           command -v pod || brew install cocoapods
-          test -x "$HOME/.cargo/bin/rustup"
+          if ! test -x "$HOME/.cargo/bin/rustup"; then
+            curl --fail --location --retry 3 --proto '=https' https://static.rust-lang.org/rustup/archive/1.28.2/aarch64-apple-darwin/rustup-init -o "$RUNNER_TEMP/rustup-init"
+            test "$(shasum -a 256 "$RUNNER_TEMP/rustup-init" | cut -d ' ' -f 1)" = 20ef5516c31b1ac2290084199ba77dbbcaa1406c45c1d978ca68558ef5964ef5
+            chmod 700 "$RUNNER_TEMP/rustup-init"
+            "$RUNNER_TEMP/rustup-init" -y --no-modify-path --default-toolchain none
+          fi
       - if: steps.engine.outputs.ready == 'true'
         env:
           ARDIA_PERSONAL_SOURCE: ${{ runner.temp }}/source
@@ -127,6 +134,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
+          package-manager-cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.plan.outputs.artifact }}
@@ -180,6 +188,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
+          package-manager-cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.plan.outputs.artifact }}
@@ -229,6 +238,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
+          package-manager-cache: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.plan.outputs.artifact }}
