@@ -49,6 +49,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 });
 `);
 writeFileSync(join(extension, "한글.js"), `
+document.documentElement.dataset.injected = "yes";
 document.addEventListener("DOMContentLoaded", () => {
   chrome.runtime.sendMessage({ kind: "fixture" }).then(reply => {
     document.documentElement.dataset.extensionFixture = JSON.stringify(reply);
@@ -103,8 +104,10 @@ const assertResponse = async previousCount => {
   assert(response.activeIds.includes(response.senderId), "active-tab query must return the WebKit page");
   assert(response.url.startsWith(base), "script must execute in the WebKit page");
   assert.equal(await value("document.documentElement.dataset.scripted"), "yes");
+  assert.equal(await value("document.documentElement.dataset.injected"), "yes");
   return response.count;
 };
+const assertNotInjected = async () => assert.equal(await value("document.documentElement.dataset.injected ?? null"), null, "the content script must not be injected");
 const start = async first => {
   instance = await launch(resolve(app), { data, onboarded: true, ...(release ? { probe: true, js: "none" } : {}), ...(first ? { session: initial } : {}) });
   await until("WebKit page", () => value('document.title === "WebKit fixture"'));
@@ -127,7 +130,7 @@ try {
   assert.deepEqual(loaded.grantedOrigins, []);
   assert.deepEqual((await engine("webKit.extensionList", { profile: "other" })).extensions, []);
   await reload();
-  assert.equal(await value("document.documentElement.dataset.extensionFixture ?? null"), null);
+  await assertNotInjected();
   console.log("PASS load requires inspected bytes; host access starts off; profiles are separate");
 
   const grants = { profile: "", id, permissions: manifest.permissions, origins: manifest.host_permissions };
@@ -139,7 +142,7 @@ try {
   await engine("webKit.extensionUnload", { profile: "", id });
   assert.equal((await engine("webKit.extensionList", { profile: "" })).extensions[0].icon, undefined);
   await reload();
-  assert.equal(await value("document.documentElement.dataset.extensionFixture ?? null"), null);
+  await assertNotInjected();
   loaded = await engine("webKit.extensionLoad", { ...approval, permissions: grants.permissions, origins: grants.origins });
   assert.equal(loaded.id, id);
   await reload();
