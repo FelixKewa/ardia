@@ -95,6 +95,7 @@ async function verifyBuild(folder, planFile) {
   const info = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', join(folder, 'Ardia.app/Contents/Info.plist')]));
   if (info.ArdiaEngineMatch !== 'exact' || !readFileSync(join(folder, 'engine.json'), 'utf8').startsWith('match=exact ')) throw new Error('Only the exact published engine can be signed.');
   if (info.CFBundleVersion !== String(plan.build)) throw new Error('Build number differs from frozen plan.');
+  if (info.ACReleaseNotesURL !== `https://github.com/${repository}/releases/tag/personal-${plan.build}`) throw new Error('Release notes do not point to this personal build.');
 }
 async function previous(folder, planFile) {
   const plan = validatePlan(json(planFile));

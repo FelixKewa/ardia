@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { assertPublishable, nextBuild, validatePlan, validateRelease, verifySignedFeed } from './release-policy.mjs';
 
@@ -58,4 +61,20 @@ test('workflow keeps signing and publication on separate workers with immutable 
   assert.match(jobs.proof, /update-proof\.mjs/);
   assert.doesNotMatch(source, /pull_request_target|pull_request:|\n  push:|actions\/cache@/);
   for (const download of source.split(/- uses: actions\/download-artifact@/).slice(1)) assert.match(download.split(/\n      - /)[0], /artifact-ids:/);
+});
+
+test('bundle metadata replaces upstream release notes with the exact personal release', { skip: process.platform !== 'darwin' }, () => {
+  const work = mkdtempSync('/tmp/ardia-personal-bundle-fixture-');
+  try {
+    const app = join(work, 'Ardia.app');
+    mkdirSync(join(app, 'Contents'), { recursive: true });
+    const plist = join(app, 'Contents/Info.plist');
+    writeFileSync(plist, JSON.stringify({ CFBundleIdentifier: config.bundleIdentifier, CFBundleVersion: '1001', CFBundleShortVersionString: '0.2.49-nightly.1001', ACReleaseNotesURL: 'https://ardia.dev/release-notes/' }));
+    execFileSync('plutil', ['-convert', 'xml1', plist]);
+    execFileSync(process.execPath, [fileURLToPath(new URL('./configure-bundle.mjs', import.meta.url)), app, '1002']);
+    const actual = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', plist], { encoding: 'utf8' }));
+    assert.equal(actual.ACReleaseNotesURL, 'https://github.com/FelixKewa/ardia/releases/tag/personal-1002');
+    assert.equal(actual.CFBundleVersion, '1002');
+    assert.equal(actual.CFBundleShortVersionString, '0.2.49-nightly.1002');
+  } finally { rmSync(work, { recursive: true, force: true }); }
 });
