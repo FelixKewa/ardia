@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "repository": "FelixKewa/ardia",
+  "upstream": "ardia-browser/ardia",
+  "branch": "codex/webkit-kimchi",
+  "bundleIdentifier": "com.ardia.browser",
+  "certificateSHA256": "27189ccdd1e66e23977c1b6f420e915bc1f2e64bdceebe0e57a6cfd7ba3a1c3f",
+  "certificateSHA1": "58e946979f4b184d80ee443cfb35b713d452d533",
+  "updatePublicKey": "veoN4diTWu/FtooPS2ExDyRet4/daRHLnoGyHt4Tbt0=",
+  "feedURL": "https://raw.githubusercontent.com/FelixKewa/ardia/personal-updates/appcast.xml",
+  "channel": "nightly"
+}

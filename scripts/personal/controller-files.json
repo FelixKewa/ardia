@@ -1,0 +1,21 @@
+[
+  ".github/workflows/personal-nightly.yml",
+  "scripts/personal/artifact.py",
+  "scripts/personal/artifact.test.mjs",
+  "scripts/personal/build-personal.sh",
+  "scripts/personal/check-candidate.sh",
+  "scripts/personal/ci-sign.mjs",
+  "scripts/personal/configure-bundle.mjs",
+  "scripts/personal/controller-files.json",
+  "scripts/personal/fetch-sparkle.sh",
+  "scripts/personal/pipeline.mjs",
+  "scripts/personal/pipeline.test.mjs",
+  "scripts/personal/proof-feeds.mjs",
+  "scripts/personal/release-config.json",
+  "scripts/personal/release-policy.mjs",
+  "scripts/personal/sign-personal.mjs",
+  "scripts/personal/signing-policy.mjs",
+  "scripts/personal/signing-policy.test.mjs",
+  "scripts/personal/update-proof-host.swift",
+  "scripts/personal/update-proof.mjs"
+]
