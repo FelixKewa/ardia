@@ -84,6 +84,26 @@ test('the desktop graph tests run in their own job that must pass before signing
   assert.equal(gate.match(/scripts\/module-graph\.test\.mjs/g).length, 1);
 });
 
+test('publication waits for the extension approval to survive the update from the previous release', () => {
+  const source = readFileSync(new URL('../../.github/workflows/personal-nightly.yml', import.meta.url), 'utf8');
+  const jobs = Object.fromEntries([...source.split('\njobs:\n')[1].matchAll(/^  ([a-z]+):\n([\s\S]*?)(?=^  [a-z]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
+  const command = 'node "$RUNNER_TEMP/source/scripts/personal/webkit-upgrade-smoke.mjs" "$RUNNER_TEMP/previous/extracted/Ardia.app" "$RUNNER_TEMP/runtime/Ardia.app" --release > "$RUNNER_TEMP/proof/webkit-upgrade.log" 2>&1';
+  const steps = jobs.proof.split(/^      - /m).slice(1);
+  const step = steps.findIndex(text => text.split('\n').includes(`          ${command}`));
+  assert.ok(step >= 0, 'the proof job runs the upgrade check with exactly these apps');
+  assert.match(steps[step], /^run: \|\n/);
+  const fetched = steps.findIndex(text => text.includes('pipeline.mjs previous "$RUNNER_TEMP/previous" '));
+  assert.ok(fetched >= 0 && fetched < step, 'the previous release is fetched before the upgrade check');
+  const order = ['pipeline.mjs materialize "$RUNNER_TEMP/plan" "$RUNNER_TEMP/source"', 'artifact.py unzip "$RUNNER_TEMP"/signed/updates/Ardia-Personal-*-arm64.zip "$RUNNER_TEMP/runtime"', 'scripts/personal/webkit-smoke.mjs" ', command].map(text => steps[step].indexOf(text));
+  assert.ok(order.every((position, index) => position > (order[index - 1] ?? -1)), 'the source and the signed app exist before the upgrade check');
+  assert.equal(source.match(/webkit-upgrade-smoke\.mjs/g).length, 1);
+  assert.doesNotMatch(jobs.proof, /secrets\.|environment:|GH_TOKEN|github\.token|: write|write-all|continue-on-error|^        if:|^    if:|\|\| |set \+e/m);
+  assert.doesNotMatch(source.split('\njobs:\n')[0], /secrets\.|GH_TOKEN|: write|write-all/);
+  assert.match(jobs.proof, /path: \$\{\{ runner\.temp \}\}\/proof\/\*\.log/);
+  assert.match(jobs.publish, /^    needs: \[plan, sign, proof\]$/m);
+  assert.doesNotMatch(jobs.publish, /^    if:/m);
+});
+
 test('bundle metadata replaces upstream release notes with the exact personal release', { skip: process.platform !== 'darwin' }, () => {
   const work = mkdtempSync('/tmp/ardia-personal-bundle-fixture-');
   try {
