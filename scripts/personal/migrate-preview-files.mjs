@@ -120,15 +120,15 @@ export async function packageFingerprint(root) {
 
 export async function removeOwned(path) { if (await exists(path)) { await owned(path, (await lstat(path)).isDirectory()); await rm(path, { recursive: true, force: false }); } }
 
-export async function exclusively(destination, action) {
+export async function exclusively(destination, action, { interpreter = "/usr/bin/python3", startTimeout = 60000 } = {}) {
   const code = "import fcntl,os,stat,sys\nfd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)\ns=os.fstat(fd)\nif not stat.S_ISREG(s.st_mode) or s.st_uid!=os.getuid(): sys.exit(2)\ntry: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)\nexcept BlockingIOError: sys.exit(3)\nprint('locked',flush=True)\nsys.stdin.buffer.read()\n";
-  const guardian = spawn("/usr/bin/python3", ["-u", "-c", code, `${destination}.preview-import.mutex`], { stdio: ["pipe", "pipe", "ignore"] });
+  const guardian = spawn(interpreter, ["-u", "-c", code, `${destination}.preview-import.mutex`], { stdio: ["pipe", "pipe", "ignore"] });
   guardian.stdin.on("error", () => {});
   let active = false;
   const exited = new Promise((resolve) => guardian.once("close", () => { active = false; resolve(); }));
   try {
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { guardian.kill("SIGKILL"); reject(Error("Migration lock timed out.")); }, 5000);
+      const timer = setTimeout(() => { guardian.kill("SIGKILL"); reject(Error("The migration lock helper did not start in time.")); }, startTimeout);
       const done = (error) => { clearTimeout(timer); error ? reject(error) : resolve(); };
       guardian.once("error", () => done(Error("Could not create the migration transaction lock.")));
       guardian.once("exit", () => done(Error("Another migration or recovery is running.")));
