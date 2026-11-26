@@ -10,7 +10,7 @@ export const webKit = defineDomain({
   },
   calls: {
     extensionInspect: {
-      args: "{ path: string }",
+      args: "{ path: string; allWebsites?: boolean }",
       result: "WebKitExtensionInspection",
       desktop: "absent",
       mac: "custom",
@@ -24,14 +24,14 @@ export const webKit = defineDomain({
       windows: "absent",
     },
     extensionLoad: {
-      args: "Profile & { path: string; fingerprint: string; permissions: string[]; origins: string[] }",
+      args: "Profile & { path: string; fingerprint: string; permissions: string[]; origins: string[]; allWebsites?: boolean; allProfiles?: boolean }",
       result: "WebKitExtension",
       desktop: "absent",
       mac: "custom",
       windows: "absent",
     },
     extensionGrant: {
-      args: "Profile & { id: string; permissions: string[]; origins: string[] }",
+      args: "Profile & { id: string; permissions: string[]; origins: string[]; allProfiles?: boolean }",
       result: "WebKitExtension",
       desktop: "absent",
       mac: "custom",
@@ -45,7 +45,7 @@ export const webKit = defineDomain({
       windows: "absent",
     },
     extensionUnload: {
-      args: "Profile & { id: string }",
+      args: "Profile & { id: string; allProfiles?: boolean }",
       result: "WebKitExtension",
       desktop: "absent",
       mac: "custom",

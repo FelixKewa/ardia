@@ -7,7 +7,7 @@ struct WebKitExtensionFailure: LocalizedError {
   var errorDescription: String? { message }
 }
 
-struct WebKitExtensionRecord: Codable {
+struct WebKitExtensionRecord: Codable, Equatable {
   var id: String
   var path: String
   var fingerprint: String
@@ -18,6 +18,19 @@ struct WebKitExtensionRecord: Codable {
   var requestedOrigins: [String]
   var permissions: [String]
   var origins: [String]
+  var allWebsites: Bool? = nil
+  var canUseAllWebsites: Bool? = nil
+  var allProfiles: Bool? = nil
+}
+
+extension WebKitExtensionRecord {
+  func grantsWithin(_ shared: WebKitExtensionRecord) -> Bool {
+    Set(permissions).isSubset(of: shared.permissions) && (shared.allWebsites == true || (allWebsites != true && Set(origins).isSubset(of: shared.origins)))
+  }
+
+  func staysWithin(_ shared: WebKitExtensionRecord) -> Bool {
+    shared.enabled && fingerprint == shared.fingerprint && grantsWithin(shared)
+  }
 }
 
 struct WebKitExtensionDocument: Codable {
@@ -52,6 +65,8 @@ enum WebKitExtensionPackage {
     let directory: URL
     let fingerprint: String
     let legacyFingerprint: String
+    var canPrepareAllWebsites = false
+    var preparedForAllWebsites = false
 
     func matches(_ approved: String) -> Bool { fingerprint == approved || legacyFingerprint == approved }
   }
@@ -68,7 +83,7 @@ enum WebKitExtensionPackage {
     return URL(fileURLWithPath: String(cString: canonical), isDirectory: true)
   }
 
-  static func snapshot(_ path: String, into directory: URL) throws -> Snapshot {
+  static func snapshot(_ path: String, into directory: URL, allWebsites: Bool = false, knownHashes: Set<String> = WebKitExtensionPreparation.kimchiHashes) throws -> Snapshot {
     let root = try source(path)
     let manager = FileManager.default
     guard let entries = manager.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]) else {
@@ -89,6 +104,13 @@ enum WebKitExtensionPackage {
       guard names.count <= maxFiles, size <= maxBytes else { throw failure("The extension exceeds the package size limit.") }
     }
     guard names["manifest.json"] != nil else { throw failure("The selected folder has no manifest.json.") }
+    let manifest = try readFile("manifest.json", root: root, limit: 1024 * 1024)
+    var inspected: [String: Data] = [:]
+    let prepared = try WebKitExtensionPreparation.manifest(manifest, allWebsites: allWebsites, knownHashes: knownHashes) { name in
+      let data = try readFile(name, root: root, limit: 8 * 1024 * 1024)
+      inspected[name] = data
+      return data
+    }
     try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     do {
       var digest = SHA256()
@@ -99,7 +121,7 @@ enum WebKitExtensionPackage {
         let original = root.appendingPathComponent(name)
         let values = try original.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true else { throw failure("The extension changed while it was being inspected.") }
-        let data = try readFile(name, root: root, limit: min(maxBytes - copied, name == "manifest.json" ? 1024 * 1024 : maxBytes))
+        let data = name == "manifest.json" ? prepared.data : try inspected[name] ?? readFile(name, root: root, limit: maxBytes - copied)
         copied += data.count
         guard copied <= maxBytes, name != "manifest.json" || data.count <= 1024 * 1024 else { throw failure("The extension exceeds the package size limit.") }
         digest.update(data: Data("\(canonical.utf8.count):\(canonical):\(data.count):".utf8))
@@ -112,7 +134,8 @@ enum WebKitExtensionPackage {
         try data.write(to: target, options: .atomic)
       }
       return Snapshot(source: root, directory: directory, fingerprint: digest.finalize().map { String(format: "%02x", $0) }.joined(),
-        legacyFingerprint: legacyDigest.finalize().map { String(format: "%02x", $0) }.joined())
+        legacyFingerprint: legacyDigest.finalize().map { String(format: "%02x", $0) }.joined(), canPrepareAllWebsites: prepared.supported,
+        preparedForAllWebsites: prepared.data != manifest)
     } catch {
       try? manager.removeItem(at: directory)
       throw error

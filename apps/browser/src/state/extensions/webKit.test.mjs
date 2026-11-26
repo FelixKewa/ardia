@@ -13,7 +13,7 @@ const pkg = {
   name: "Kimchi", version: "1.0", path: "/fixtures/kimchi", fingerprint: "a".repeat(64),
   requestedPermissions: ["storage", "tabs", "tabCapture"], supportedPermissions: ["storage", "tabs"],
   requestedOrigins: ["https://www.netflix.com/*", "https://*.example.com/*", "<all_urls>"],
-  errors: ["tabCapture is unsupported"],
+  errors: ["tabCapture is unsupported"], allWebsites: false, canUseAllWebsites: true, preparedForAllWebsites: false,
 };
 const record = () => ({ ...pkg, id: "kimchi", enabled: true, loaded: true, grantedPermissions: [], grantedOrigins: [], reloadRequired: false });
 globalThis.acTestNativeModules = {
@@ -62,7 +62,7 @@ function setup() {
   unbind = actions.bindWebKitSettings(profileId);
   native.chosenExtensionFolder.next = pkg.path;
   rows = [];
-  inspect = async () => structuredClone(pkg);
+  inspect = async (args) => ({ ...structuredClone(pkg), allWebsites: args.allWebsites, fingerprint: args.allWebsites ? "b".repeat(64) : pkg.fingerprint, preparedForAllWebsites: args.allWebsites });
   load = async (args) => ({ ...record(), grantedPermissions: args.permissions, grantedOrigins: args.origins });
   list = async () => ({ available: true, extensions: rows });
   confirmation = async () => ({ confirmed: true });
@@ -423,4 +423,309 @@ test("toolbar restore retries are bounded and stop when the active profile or pa
   await flush();
   assert.equal(calls.filter((call) => call.verb === "extensionList").length, 31);
   next();
+});
+
+test("reviewing an installed extension preserves only its already approved supported grants", async () => {
+  const { profileId } = setup();
+  const saved = { ...record(), grantedPermissions: ["storage", "tabCapture"], grantedOrigins: ["https://www.netflix.com/*", "https://reader.example.com/*"] };
+  await actions.reviewWebKitExtension(profileId, saved);
+  assert.deepEqual(E().review.permissions, ["storage"]);
+  assert.deepEqual(E().review.origins, saved.grantedOrigins);
+  assert.equal(E().review.allWebsites, false);
+  assert.equal(E().review.allProfiles, false);
+  assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+});
+
+test("all websites and profiles requires an explicit choice, new inspection and final trust", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId);
+  const key = E().review.key;
+  assert.deepEqual(E().review.permissions, []);
+  await actions.selectWebKitScope(key, true, true, true);
+  assert.deepEqual(E().review.permissions, ["storage", "tabs"]);
+  assert.equal(E().review.pkg.fingerprint, "b".repeat(64));
+  assert.deepEqual(calls.filter((call) => call.verb === "extensionInspect").map((call) => call.args.allWebsites), [false, true]);
+  assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+  confirmation = async () => ({ confirmed: false });
+  await actions.acceptWebKitReview(key);
+  assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+  confirmation = async () => ({ confirmed: true });
+  await actions.acceptWebKitReview(key);
+  const loaded = calls.find((call) => call.verb === "extensionLoad");
+  assert.equal(loaded.args.fingerprint, "b".repeat(64));
+  assert.equal(loaded.args.allWebsites, true);
+  assert.equal(loaded.args.allProfiles, true);
+  assert.deepEqual(loaded.args.permissions, ["storage", "tabs"]);
+  const consent = calls.find((call) => call.verb === "confirm").options.message;
+  assert.match(consent, /all regular profiles, including future profiles/);
+  assert.match(consent, /Each profile keeps its own extension data and account/);
+  assert.match(consent, /all HTTP and HTTPS websites/);
+  assert.match(consent, /Private windows are excluded/);
+  assert.match(consent, /source folder is unchanged/);
+});
+
+test("opening existing shared access preserves its selected API subset", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId, { ...record(), allWebsites: true, allProfiles: true, grantedPermissions: ["storage"], grantedOrigins: ["http://*/*", "https://*/*"] });
+  assert.equal(E().review.allWebsites, true);
+  assert.equal(E().review.allProfiles, true);
+  assert.deepEqual(E().review.permissions, ["storage"]);
+  await actions.acceptWebKitReview(E().review.key);
+  assert.deepEqual(calls.find((call) => call.verb === "extensionLoad").args.permissions, ["storage"]);
+});
+
+test("scope inspection preserves exact grants when toggled back and never approves new APIs implicitly", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId, { ...record(), grantedPermissions: ["storage"], grantedOrigins: ["https://www.netflix.com/*"] });
+  const key = E().review.key;
+  await actions.selectWebKitScope(key, true, false);
+  assert.deepEqual(E().review.permissions, ["storage"]);
+  await actions.selectWebKitScope(key, false, true);
+  assert.equal(E().review.pkg.fingerprint, pkg.fingerprint);
+  assert.deepEqual(E().review.origins, ["https://www.netflix.com/*"]);
+  assert.deepEqual(E().review.permissions, ["storage"]);
+  assert.equal(E().review.allProfiles, true);
+});
+
+test("a failed broader inspection keeps the previous review and does not start code", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId);
+  const original = E().review;
+  inspect = async () => { throw new Error("Package changed"); };
+  await actions.selectWebKitScope(original.key, true, true, true);
+  assert.deepEqual(E().review, original);
+  assert.match(E().errors[""], /Package changed/);
+  assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+});
+
+test("leaving the profile during broader inspection prevents stale review and loading", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId);
+  const pending = deferred();
+  inspect = () => pending.promise;
+  const selecting = actions.selectWebKitScope(E().review.key, true, true, true);
+  actions.cancelWebKitReview();
+  useSettingsNav.setState({ profileId: S().createProfile({ name: "Other" }) });
+  pending.resolve({ ...pkg, allWebsites: true });
+  await selecting;
+  assert.equal(E().review, null);
+  assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+});
+
+test("another scope choice and loading are blocked while fingerprint inspection is pending", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId);
+  const key = E().review.key;
+  const pending = deferred();
+  inspect = () => pending.promise;
+  const selecting = actions.selectWebKitScope(key, true, true, true);
+  await actions.selectWebKitScope(key, false, false);
+  await actions.acceptWebKitReview(key);
+  assert.equal(calls.some((call) => call.verb === "confirm" || call.verb === "extensionLoad"), false);
+  pending.resolve({ ...pkg, allWebsites: true, fingerprint: "c".repeat(64) });
+  await selecting;
+  assert.equal(E().review.pkg.fingerprint, "c".repeat(64));
+  assert.equal(E().review.allProfiles, true);
+});
+
+test("global approval removal and disabling refresh cached regular profiles without starting unopened or private sessions", async () => {
+  const { profileId } = setup();
+  const other = S().createProfile({ name: "Other" });
+  S().createWindow({ kind: "private", profileId: other });
+  S().createProfile({ name: "Unopened" });
+  await actions.refreshWebKitExtensions(other);
+  calls.length = 0;
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true });
+  const key = E().review.key;
+  await actions.selectWebKitScope(key, false, false);
+  await actions.acceptWebKitReview(key);
+  assert.equal(calls.find((call) => call.verb === "extensionLoad").args.allProfiles, false);
+  const refreshed = calls.filter((call) => call.verb === "extensionList").map((call) => call.profile);
+  assert.equal(new Set(refreshed).size, 2);
+  assert.equal(refreshed.some((profile) => profile.includes("incognito")), false);
+  calls.length = 0;
+  await actions.disableWebKitExtension(profileId, "kimchi");
+  assert.equal(new Set(calls.filter((call) => call.verb === "extensionList").map((call) => call.profile)).size, 2);
+});
+
+test("narrowing shared website access restores the profile's previous exact hosts", async () => {
+  const { profileId } = setup();
+  const baseline = ["https://www.netflix.com/*", "https://reader.example.com/*"];
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: true,
+    grantedPermissions: ["storage", "tabs"], grantedOrigins: ["http://*/*", "https://*/*"], localGrantedOrigins: baseline, localGrantedPermissions: ["storage"] });
+  const key = E().review.key;
+  assert.deepEqual(E().review.origins, baseline);
+  await actions.selectWebKitScope(key, false, false);
+  await actions.acceptWebKitReview(key);
+  const loaded = calls.find((call) => call.verb === "extensionLoad");
+  assert.equal(loaded.args.allWebsites, false);
+  assert.equal(loaded.args.allProfiles, false);
+  assert.deepEqual(loaded.args.origins, baseline);
+  assert.deepEqual(loaded.args.permissions, ["storage"]);
+  assert.match(calls.find((call) => call.verb === "confirm").options.message, /removes shared access from other profiles/);
+});
+
+test("disabling all profiles requires the explicit shared-row action", async () => {
+  const { profileId } = setup();
+  await actions.disableWebKitExtension(profileId, "kimchi");
+  assert.equal(calls.find((call) => call.verb === "extensionUnload").args.allProfiles, false);
+  calls.length = 0;
+  await actions.disableWebKitExtension(profileId, "kimchi", true);
+  assert.equal(calls.find((call) => call.verb === "extensionUnload").args.allProfiles, true);
+});
+
+test("a profile rename during scope inspection clears the stale busy review", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId);
+  const pending = deferred();
+  inspect = () => pending.promise;
+  const selecting = actions.selectWebKitScope(E().review.key, true, true, true);
+  S().updateProfile(profileId, { name: "Renamed" });
+  pending.resolve({ ...pkg, allWebsites: true });
+  await selecting;
+  assert.equal(E().review, null);
+  assert.equal(E().choosing, false);
+  assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+});
+
+test("narrowing does not replace permissions explicitly edited during this review", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: true,
+    grantedPermissions: ["storage", "tabs"], localGrantedPermissions: ["storage"] });
+  const key = E().review.key;
+  actions.selectWebKitGrant(key, "permissions", "storage", false);
+  await actions.selectWebKitScope(key, false, false);
+  assert.deepEqual(E().review.permissions, ["tabs"]);
+});
+
+test("an unchanged review keeps effective shared exact sites instead of substituting the local baseline", async () => {
+  const { profileId } = setup();
+  const effective = ["https://www.netflix.com/*", "https://account.example.com/*"];
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: false,
+    grantedOrigins: effective, localGrantedOrigins: ["https://www.netflix.com/*"] });
+  assert.deepEqual(E().review.origins, effective);
+  await actions.acceptWebKitReview(E().review.key);
+  assert.deepEqual(calls.find((call) => call.verb === "extensionLoad").args.origins, effective);
+});
+
+test("narrowing shared exact sites restores the local baseline unless the user edited sites", async () => {
+  for (const edit of [false, true]) {
+    const { profileId } = setup();
+    const effective = ["https://www.netflix.com/*", "https://account.example.com/*"];
+    await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: false,
+      grantedOrigins: effective, localGrantedOrigins: ["https://www.netflix.com/*"] });
+    const key = E().review.key;
+    if (edit) actions.selectWebKitGrant(key, "origins", "https://www.netflix.com/*", false);
+    await actions.selectWebKitScope(key, false, false);
+    assert.deepEqual(E().review.origins, edit ? ["https://account.example.com/*"] : ["https://www.netflix.com/*"]);
+  }
+});
+
+test("turning shared scope off and back on restores its untouched original sites and APIs", async () => {
+  const { profileId } = setup();
+  const effective = ["https://www.netflix.com/*", "https://account.example.com/*"];
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: false,
+    grantedPermissions: ["storage", "tabs"], localGrantedPermissions: ["storage"],
+    grantedOrigins: effective, localGrantedOrigins: ["https://www.netflix.com/*"] });
+  const key = E().review.key;
+  await actions.selectWebKitScope(key, false, false);
+  assert.deepEqual(E().review.origins, ["https://www.netflix.com/*"]);
+  assert.deepEqual(E().review.permissions, ["storage"]);
+  await actions.selectWebKitScope(key, false, true);
+  assert.deepEqual(E().review.origins, effective);
+  assert.deepEqual(E().review.permissions, ["storage", "tabs"]);
+  await actions.acceptWebKitReview(key);
+  const loaded = calls.find((call) => call.verb === "extensionLoad");
+  assert.deepEqual(loaded.args.origins, effective);
+  assert.deepEqual(loaded.args.permissions, ["storage", "tabs"]);
+});
+
+test("the main checkbox off and on restores the untouched shared values instead of widening them", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: true,
+    grantedPermissions: ["storage"], localGrantedPermissions: [], grantedOrigins: ["http://*/*", "https://*/*"], localGrantedOrigins: ["https://www.netflix.com/*"] });
+  const key = E().review.key;
+  await actions.selectWebKitScope(key, false, false, false);
+  assert.deepEqual(E().review.permissions, []);
+  await actions.selectWebKitScope(key, true, true, true);
+  assert.deepEqual(E().review.permissions, ["storage"]);
+  assert.deepEqual(E().review.origins, ["https://www.netflix.com/*"]);
+  assert.equal(E().review.permissionsEdited, false);
+  assert.equal(E().review.originsEdited, false);
+  await actions.selectWebKitScope(key, false, false, false);
+  await actions.selectWebKitScope(key, true, true, true);
+  await actions.acceptWebKitReview(key);
+  assert.deepEqual(calls.find((call) => call.verb === "extensionLoad").args.permissions, ["storage"]);
+});
+
+test("undoing the main checkbox on a new review drops the APIs it selected, while hand edits stay", async () => {
+  const { profileId } = setup();
+  await actions.reviewWebKitExtension(profileId);
+  const key = E().review.key;
+  await actions.selectWebKitScope(key, true, true, true);
+  await actions.selectWebKitScope(key, false, false, false);
+  assert.deepEqual(E().review.permissions, []);
+  assert.equal(E().review.permissionsEdited, false);
+  actions.selectWebKitGrant(key, "permissions", "storage", true);
+  await actions.selectWebKitScope(key, true, true, true);
+  await actions.selectWebKitScope(key, false, false, false);
+  assert.deepEqual(E().review.permissions, ["storage", "tabs"]);
+});
+
+test("a shared all-websites extension that this version cannot offer opens narrowed with the saved profile values", async () => {
+  const { profileId } = setup();
+  inspect = async () => ({ ...structuredClone(pkg), allWebsites: false, canUseAllWebsites: false, preparedForAllWebsites: false });
+  await actions.reviewWebKitExtension(profileId, { ...record(), allProfiles: true, allWebsites: true,
+    grantedPermissions: ["storage"], localGrantedPermissions: ["storage"], grantedOrigins: ["http://*/*", "https://*/*"], localGrantedOrigins: ["https://www.netflix.com/*"] });
+  assert.equal(calls.find((call) => call.verb === "extensionInspect").args.allWebsites, true);
+  assert.equal(E().errors[""], null);
+  const review = E().review;
+  assert.equal(review.allWebsites, false);
+  assert.equal(review.allWebsitesWithdrawn, true);
+  assert.equal(review.allProfiles, true);
+  assert.deepEqual(review.permissions, ["storage"]);
+  assert.deepEqual(review.origins, ["https://www.netflix.com/*"]);
+  assert.deepEqual(review.localOrigins, ["https://www.netflix.com/*"]);
+  await actions.selectWebKitScope(review.key, true, true, true);
+  assert.equal(E().review.allWebsites, false);
+  await actions.acceptWebKitReview(review.key);
+  const loaded = calls.find((call) => call.verb === "extensionLoad");
+  assert.equal(loaded.args.allWebsites, false);
+  assert.deepEqual(loaded.args.origins, ["https://www.netflix.com/*"]);
+});
+
+test("ending sharing says which earlier profile approvals stay off", async () => {
+  for (const enabled of [true, false]) {
+    const { profileId } = setup();
+    await actions.reviewWebKitExtension(profileId, { ...record(), enabled, allProfiles: true });
+    const key = E().review.key;
+    await actions.selectWebKitScope(key, false, false);
+    await actions.acceptWebKitReview(key);
+    const message = calls.find((call) => call.verb === "confirm").options.message;
+    assert.match(message, /removes shared access from other profiles/);
+    assert.doesNotMatch(message, /approvals stay in place/);
+    assert.match(message, /until you choose Review and Enable there/);
+    assert.equal(/exactly the shared version/.test(message), enabled);
+  }
+});
+
+test("an unreadable shared approvals file is remembered for the listed profile and clears once readable", async () => {
+  const { profileId } = setup();
+  list = async () => ({ available: true, extensions: rows, sharedCatalogUnreadable: true });
+  await actions.refreshWebKitExtensions(profileId, true);
+  assert.equal(E().sharedUnreadable[""], true);
+  list = async () => ({ available: true, extensions: rows, sharedCatalogUnreadable: false });
+  await actions.refreshWebKitExtensions(profileId, true);
+  assert.equal(E().sharedUnreadable[""], false);
+});
+
+test("approving for all profiles says broader profile approvals are turned off until reviewed", async () => {
+  for (const allProfiles of [true, false]) {
+    const { profileId } = setup();
+    await actions.reviewWebKitExtension(profileId);
+    await actions.selectWebKitScope(E().review.key, false, allProfiles);
+    await actions.acceptWebKitReview(E().review.key);
+    const message = calls.find((call) => call.verb === "confirm").options.message;
+    assert.equal(/broader than this, including this one, is turned off until you choose Review and Enable there/.test(message), allProfiles);
+  }
 });

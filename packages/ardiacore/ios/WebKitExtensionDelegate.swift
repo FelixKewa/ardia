@@ -117,7 +117,7 @@ extension WebKitExtensionHost: WKWebExtensionControllerDelegate, NSPopoverDelega
                              in tab: (any WKWebExtensionTab)?, for context: WKWebExtensionContext,
                              completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
     guard owns(context), permittedTab(tab, context: context) else { return completionHandler([], nil) }
-    let approved = Set(records[context.uniqueIdentifier]?.permissions ?? [])
+    let approved = Set(effectiveRecords[context.uniqueIdentifier]?.permissions ?? [])
     completionHandler(Set(permissions.filter { approved.contains($0.rawValue) }), nil)
   }
 
@@ -125,8 +125,10 @@ extension WebKitExtensionHost: WKWebExtensionControllerDelegate, NSPopoverDelega
                              in tab: (any WKWebExtensionTab)?, for context: WKWebExtensionContext,
                              completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
     guard owns(context), permittedTab(tab, context: context) else { return completionHandler([], nil) }
-    let approved = Set(records[context.uniqueIdentifier]?.origins ?? [])
-    completionHandler(Set(patterns.filter { approved.contains($0.string) }), nil)
+    guard let record = effectiveRecords[context.uniqueIdentifier] else { return completionHandler([], nil) }
+    completionHandler(Set(patterns.filter {
+      record.allWebsites == true ? WebKitExtensionPolicy.covers(record.origins, requested: $0) : record.origins.contains($0.string)
+    }), nil)
   }
 
   func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>,

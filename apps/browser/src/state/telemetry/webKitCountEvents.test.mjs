@@ -37,6 +37,8 @@ test("extension counts exclude disabled sharing and callbacks from an earlier co
     extensionGrant: "webkit_extension_grants",
     extensionAction: "webkit_extension_actions",
     extensionUnload: "webkit_extension_unloads",
+    extensionSharedApproval: "webkit_extension_shared_approvals",
+    extensionAllWebsitesLoad: "webkit_extension_all_websites_loads",
   };
   client.setSharing(true, "settings");
   startWebKitCounts();

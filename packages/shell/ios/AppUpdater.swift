@@ -136,9 +136,7 @@ public final class AppUpdater: NSObject {
   }
 
   static func displayVersion(of version: String) -> String {
-    guard let range = version.range(of: #"-nightly\.(\d+)$"#, options: .regularExpression) else { return version }
-    let number = version[range].split(separator: ".").last.map(String.init) ?? ""
-    return "\(version[..<range.lowerBound]) Nightly \(number)"
+    AppBuildIdentity(info: Bundle.main.infoDictionary ?? [:]).displayVersion(version)
   }
 
   static let aboutNotice = "© 2026 Mantra Patel. Ardia is free software under the GNU General Public License v3, with ABSOLUTELY NO WARRANTY. Its source is at the link below. It's built on Chromium and uBlock Origin, each under its own license."
@@ -148,19 +146,13 @@ public final class AppUpdater: NSObject {
   }
 
   private static var aboutCredits: NSAttributedString {
-    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-    let repository = "https://github.com/ardia-browser/ardia"
+    let links = AppBuildIdentity(info: Bundle.main.infoDictionary ?? [:]).links
     let centered = NSMutableParagraphStyle()
     centered.alignment = .center
     let plain: [NSAttributedString.Key: Any] = [
       .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
       .foregroundColor: NSColor.secondaryLabelColor,
       .paragraphStyle: centered,
-    ]
-    let links = [
-      ("Source code", "\(repository)/tree/v\(version)"),
-      ("License", "\(repository)/blob/v\(version)/LICENSE"),
-      ("Credits", "\(repository)/blob/v\(version)/NOTICE"),
     ]
     let credits = NSMutableAttributedString(string: "\(aboutNotice)\n\n", attributes: plain)
     for (index, (title, url)) in links.enumerated() {

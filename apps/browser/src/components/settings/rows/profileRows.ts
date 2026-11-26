@@ -141,8 +141,8 @@ export const profileRows = {
       rows: {
         webKitExtensions: {
           title: "Load WebKit extension",
-          description: "Choose a trusted extension folder for this profile, then review its permissions and exact HTTPS hosts before loading.",
-          keywords: ["webkit extensions", "load folder", "unpacked", "extension permissions", "host access", "disable extension", "kimchi"],
+          description: "Choose a trusted extension folder, then review access for selected sites or all websites and regular profiles before loading.",
+          keywords: ["webkit extensions", "load folder", "unpacked", "extension permissions", "host access", "disable extension", "kimchi", "all websites", "all profiles"],
           shown: () => PLATFORM_FEATURES.webKit,
         },
       },

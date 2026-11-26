@@ -1,15 +1,19 @@
-# Personal WebKit extension preview
+# Personal WebKit extensions
 
-This work lives on `codex/webkit-kimchi` in `FelixKewa/ardia`, based on official Ardia `v0.2.48`.
+This work lives on `codex/webkit-kimchi` in `FelixKewa/ardia` and incorporates upstream Ardia updates.
 It adds Apple's public WebKit extension host on macOS 15.4 and later. Chromium tabs retain their existing
 extension implementation. The private fork is separate from the upstream contribution.
 
 ## What the preview supports
 
-Settings → Profiles → Extensions has a WebKit Extensions section. Load Folder inspects an unpacked extension,
-shows its requested APIs and websites, and leaves every grant off initially. Select the APIs and exact HTTPS
-hosts needed, then confirm Review and Load. Background extension code starts only after that confirmation.
-Selected grants are validated and applied before the background starts. Unsupported permissions remain denied;
+Settings → Profiles → Extensions has a WebKit Extensions section. Load Folder inspects an unpacked extension.
+Reviewing an installed extension starts with its saved access choices. **Use on all websites and profiles**
+provides the simple setup; the detailed API and individual-site controls are under **Individual Permissions…**. All profiles means
+current and future regular profiles. Private windows are excluded, and each profile keeps separate extension
+settings and sign-ins.
+
+The review identifies the package and requested access before loading. Background extension code starts only
+after confirmation, with the selected grants validated and applied first. Unsupported APIs remain denied;
 compatibility notices do not imply that every extension feature works.
 
 On a regular WebKit tab, loaded extensions appear directly in the toolbar with their own icons. Clicking one
@@ -21,10 +25,10 @@ stored data. Reload already open pages after loading, disabling, or changing per
 previously injected into a page can remain until navigation.
 
 Approved API permissions are `activeTab`, `scripting`, `storage`, `unlimitedStorage`, `contextMenus`, and `tabs`.
-Host grants are exact HTTPS hosts, including all paths; WebKit's match patterns do not isolate ports. A broad
-manifest request can be narrowed to explicitly entered hosts. The `tabs` API can expose tab metadata in the
-same profile. Chromium `tabCapture`, offscreen documents, screen/audio recording and unrestricted host grants
-are not enabled. WebKit has a public visible-tab snapshot API; this preview does not add an alternative
+Host grants cover explicitly selected websites or approved HTTP/HTTPS match patterns. All-websites access
+excludes file, browser-internal and extension URLs. A broad manifest request can still be narrowed to individual
+hosts. The `tabs` API can expose tab metadata in the same profile. Chromium `tabCapture`, offscreen documents
+and screen/audio recording are not enabled. WebKit has a public visible-tab snapshot API; this fork does not add an alternative
 Netflix image/audio mining implementation.
 
 ## Package and data handling
@@ -41,12 +45,21 @@ hash. The actual Kimchi Reader managed copy now reproduces its original approved
 grants, account data, or saved metadata.
 
 Each regular profile has its own controller, website data store, saved grant records and stable extension
-identifiers. The controller namespace also includes the application's data directory, so scratch tests do not
+identifiers. All-profile approval shares a verified package and access policy, not account data or extension
+storage. The controller namespace also includes the application's data directory, so scratch tests do not
 share extension data with the installed browser. Disabling and re-enabling the same folder, or approving an
 update from that folder, keeps its extension storage. Updated code can therefore read its previous data; the
-trust screen explains this. Review access starts with new explicit grant choices. Browser restart restores only
+trust screen explains this. Review access starts with the saved choices and requires confirmation for changes. Browser restart restores only
 verified managed packages and their saved grants. Saved metadata uses an explicit version-1 document and rejects
 unsupported versions or malformed shapes. Profile deletion unloads extensions and removes their data.
+
+Shared access fails closed. A global disable also marks the same folder disabled in every profile's own saved
+copy, so a damaged shared-approvals file or a rollback to an older build cannot revive it. Ending shared access,
+or reducing the shared permissions, brings back another profile's own earlier approval only when it is enabled,
+uses the same package fingerprint and grants no more than the shared policy did; any other copy stays disabled
+and shows **Review and Enable…**. If a package in the same folder changes and can no longer be prepared for all
+websites (a new Kimchi release, for example), the review opens narrowed to that profile's saved websites instead
+of failing. An unreadable shared-approvals file is reported on the WebKit Extensions list.
 
 Ordinary website sign-ins may still follow Ardia's existing engine-switch data setting. This feature does not
 copy Chromium extension storage or authentication tokens into WebKit.
@@ -157,8 +170,10 @@ The debug JavaScript server must serve this checkout on the chosen port. The pac
 `packages/ardiacore/tests/webkit-extension-package.test.mjs`; settings race tests live beside the extension
 state. Native event counts reuse the consent-stamped WebKit telemetry channel. While sharing is on, hourly
 counts include `webkit_extension_loads`, `webkit_extension_load_failures`, `webkit_extension_grants`,
-`webkit_extension_actions` and `webkit_extension_unloads`. They contain no extension identities, URLs,
-permissions, folder paths, error text or extension data. Watch load failures and successful popup actions.
+`webkit_extension_actions`, `webkit_extension_unloads`, `webkit_extension_shared_approvals` (approvals or access
+changes applied to all profiles) and `webkit_extension_all_websites_loads` (loads that allowed all websites). They
+contain no extension identities, URLs, permissions, folder paths, error text or extension data. Watch load
+failures, successful popup actions, and all-websites loads relative to all loads after the shared option ships.
 
 ## Building and updates
 
@@ -176,8 +191,13 @@ can be removed by macOS. It fetches the pinned prebuilt engine; it does not rebu
 This preview retains upstream app identity and update settings. Use a separate scratch `ARDIA_DATA_DIR` and
 do not replace or normally launch it against the installed browser's profile.
 
-The preview is not yet the everyday personal browser with automatic updates. That still requires a stable
-personal identity, separate secret/configuration namespaces, a suitable signing setup, and a separately signed
-update feed pointing at the fork. App replacement can preserve profile data when those identifiers remain
-stable. Upstream source updates must first be merged and tested on the personal branch; an upstream release
-must not overwrite this fork's WebKit support.
+The everyday installation uses `/Applications/Ardia.app`, the existing Dock icon and the original browser
+identity. **Ardia → About Ardia** identifies the personal build and links to its exact source in Felix's fork. The original profile remains
+available; the imported preview profile has **(Preview)** appended to its name and retains the working Kimchi
+setup. Selecting a profile in Settings changes which profile's extension settings are shown. Switch the browser
+window to that profile as well when using its extensions.
+
+The everyday build and signed personal update feed are described in [Ardia Personal](personal-browser.md).
+The scratch preview command above is only for development; do not use its old launcher after transferring its
+data into the everyday installation. Upstream source updates are merged and tested on the personal branch
+before publication, preserving this fork's WebKit support.

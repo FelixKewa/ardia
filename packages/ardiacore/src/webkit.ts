@@ -10,12 +10,18 @@ export type WebKitExtensionInspection = {
   requestedPermissions: string[];
   requestedOrigins: string[];
   supportedPermissions: string[];
+  allWebsites?: boolean;
+  canUseAllWebsites?: boolean;
+  preparedForAllWebsites?: boolean;
   errors: string[];
 };
 
 export type WebKitExtension = Omit<WebKitExtensionInspection, "supportedPermissions"> & {
   id: string;
   icon?: string;
+  allProfiles?: boolean;
+  localGrantedOrigins?: string[];
+  localGrantedPermissions?: string[];
   loaded: boolean;
   enabled: boolean;
   grantedPermissions: string[];
@@ -23,7 +29,7 @@ export type WebKitExtension = Omit<WebKitExtensionInspection, "supportedPermissi
   reloadRequired: boolean;
 };
 
-export type WebKitExtensionList = { available: boolean; extensions: WebKitExtension[] };
+export type WebKitExtensionList = { available: boolean; extensions: WebKitExtension[]; sharedCatalogUnreadable: boolean };
 
 export type PageCookie = {
   name: string;
@@ -74,6 +80,8 @@ export type WebKitCount =
   | "extensionGrant"
   | "extensionAction"
   | "extensionUnload"
+  | "extensionSharedApproval"
+  | "extensionAllWebsitesLoad"
   | "autofillAddressFill"
   | "autofillCardFill"
   | "autofillCardReauthRefused"

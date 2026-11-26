@@ -16,15 +16,16 @@ import { openSettings, SETTINGS_WINDOW_ID, useSettingsNav } from "../settings/se
 
 export type { WebKitExtension };
 
-type Review = { key: number; profileId: string; profile: string; pkg: WebKitExtensionInspection; permissions: string[]; origins: string[]; busy: boolean };
+type Review = { key: number; profileId: string; profile: string; pkg: WebKitExtensionInspection; permissions: string[]; origins: string[]; allWebsites: boolean; allProfiles: boolean; savedAllWebsites: boolean; savedAllProfiles: boolean; savedEnabled: boolean; allWebsitesWithdrawn: boolean; localPermissions?: string[]; localOrigins?: string[]; initialPermissions: string[]; initialOrigins: string[]; permissionsEdited: boolean; originsEdited: boolean; editedByHand: boolean; busy: boolean; inspecting: boolean };
 type State = {
   lists: Record<string, WebKitExtension[]>;
   errors: Record<string, string | null>;
+  sharedUnreadable: Record<string, boolean>;
   available: boolean | null;
   review: Review | null;
   choosing: boolean;
 };
-export const useWebKitExtensions = create<State>()(() => ({ lists: {}, errors: {}, available: null, review: null, choosing: false }));
+export const useWebKitExtensions = create<State>()(() => ({ lists: {}, errors: {}, sharedUnreadable: {}, available: null, review: null, choosing: false }));
 const EMPTY: WebKitExtension[] = [];
 let request = 0;
 let settingsHost: { profileId: string } | null = null;
@@ -91,6 +92,11 @@ export function useWebKitExtensionError(profileId: string) {
   return useWebKitExtensions((s) => s.errors[profile] ?? null);
 }
 
+export function useWebKitSharedApprovalsUnreadable(profileId: string) {
+  const profile = useBrowser((s) => engineProfile(s, profileId));
+  return useWebKitExtensions((s) => s.sharedUnreadable[profile] === true);
+}
+
 export async function refreshWebKitExtensions(profileId: string, fresh = false) {
   if (!regularProfile(profileId)) return;
   const profile = profileOf(profileId);
@@ -102,7 +108,7 @@ export async function refreshWebKitExtensions(profileId: string, fresh = false) 
     try {
       const result = await listWebKitExtensions(profile);
       if (refreshes.get(profile) !== key || !regularProfile(profileId) || profileOf(profileId) !== profile) return;
-      useWebKitExtensions.setState((s) => ({ available: result.available, lists: { ...s.lists, [profile]: result.extensions } }));
+      useWebKitExtensions.setState((s) => ({ available: result.available, lists: { ...s.lists, [profile]: result.extensions }, sharedUnreadable: { ...s.sharedUnreadable, [profile]: result.sharedCatalogUnreadable === true } }));
       return result;
     } catch (error) {
       if (refreshes.get(profile) === key) fail(profile, error);
@@ -125,7 +131,7 @@ function settingsTarget(profileId: string, key: number) {
 
 let reviewCurrent: (() => boolean) | null = null;
 
-export async function reviewWebKitExtension(profileId: string, savedPath?: string) {
+export async function reviewWebKitExtension(profileId: string, saved?: string | WebKitExtension) {
   if (!regularProfile(profileId) || settingsHost?.profileId !== profileId || useWebKitExtensions.getState().review?.busy) return;
   const key = ++request;
   const current = settingsTarget(profileId, key);
@@ -133,17 +139,70 @@ export async function reviewWebKitExtension(profileId: string, savedPath?: strin
   useWebKitExtensions.setState({ review: null, choosing: true });
   fail(profile, null);
   try {
-    const path = savedPath ?? await chooseExtensionFolder();
+    const path = (typeof saved === "string" ? saved : saved?.path) ?? await chooseExtensionFolder();
     if (!current() || !path) return;
-    const pkg = await inspectWebKitExtension(path);
+    const existing = typeof saved === "object" ? saved : useWebKitExtensions.getState().lists[profile]?.find((row) => row.path === path);
+    const pkg = await inspectWebKitExtension(path, existing?.allWebsites === true);
     if (!current()) return;
     reviewCurrent = current;
-    useWebKitExtensions.setState({ review: { key, profileId, profile, pkg, permissions: [], origins: [], busy: false } });
+    const permissions = existing?.grantedPermissions.filter((permission) => pkg.requestedPermissions.includes(permission) && pkg.supportedPermissions.includes(permission)) ?? [];
+    const origins = (existing?.allWebsites ? existing.localGrantedOrigins : existing?.grantedOrigins)?.filter((origin) => requestedHost(origin, pkg.requestedOrigins)) ?? [];
+    useWebKitExtensions.setState({ review: {
+      key, profileId, profile, pkg, permissions, origins, initialPermissions: permissions, initialOrigins: origins,
+      allWebsites: pkg.allWebsites === true, allProfiles: existing?.allProfiles === true, savedAllWebsites: pkg.allWebsites === true, savedAllProfiles: existing?.allProfiles === true,
+      savedEnabled: existing?.enabled === true, allWebsitesWithdrawn: existing?.allWebsites === true && !pkg.canUseAllWebsites,
+      localPermissions: existing?.localGrantedPermissions, localOrigins: existing?.localGrantedOrigins,
+      permissionsEdited: false, originsEdited: false, editedByHand: false, busy: false, inspecting: false,
+    } });
   } catch (error) {
     if (current()) fail(profile, error);
   } finally {
     if (request === key) useWebKitExtensions.setState({ choosing: false });
   }
+}
+
+export async function selectWebKitScope(key: number, allWebsites: boolean, allProfiles: boolean, allowRequested = false) {
+  const review = useWebKitExtensions.getState().review;
+  const current = reviewCurrent;
+  if (!review || review.key !== key || review.busy || !current?.() || (allWebsites && !review.pkg.canUseAllWebsites)) return;
+  const restore = !review.editedByHand && allWebsites === review.savedAllWebsites && allProfiles === review.savedAllProfiles;
+  const widen = allowRequested && !restore;
+  const saved = (edited: boolean, current: string[], initial: string[], local: string[] | undefined) =>
+    restore ? initial : review.savedAllProfiles && !edited ? (allProfiles ? initial : local ?? initial) : current;
+  const permissions = saved(review.permissionsEdited, review.permissions, review.initialPermissions, review.localPermissions);
+  const origins = saved(review.originsEdited, review.origins, review.initialOrigins, review.localOrigins);
+  const edits = { permissionsEdited: !restore && (review.permissionsEdited || allowRequested), originsEdited: !restore && review.originsEdited };
+  const approvable = (pkg: WebKitExtensionInspection) => (widen ? pkg.requestedPermissions : permissions).filter((permission) => pkg.requestedPermissions.includes(permission) && pkg.supportedPermissions.includes(permission));
+  if (allWebsites === review.allWebsites) {
+    useWebKitExtensions.setState({ review: { ...review, ...edits, allProfiles, origins: origins.filter((origin) => requestedHost(origin, review.pkg.requestedOrigins)), permissions: approvable(review.pkg) } });
+    return;
+  }
+  useWebKitExtensions.setState({ review: { ...review, busy: true, inspecting: true } });
+  try {
+    const pkg = await inspectWebKitExtension(review.pkg.path, allWebsites);
+    if (!current()) return;
+    if ((pkg.allWebsites === true) !== allWebsites) throw new Error("The extension's requested website access could not be reviewed.");
+    useWebKitExtensions.setState({ review: { ...review, ...edits, pkg, allWebsites, allProfiles, permissions: approvable(pkg),
+      origins: origins.filter((origin) => requestedHost(origin, pkg.requestedOrigins)), busy: false, inspecting: false } });
+    fail(review.profile, null);
+  } catch (error) {
+    if (current()) {
+      useWebKitExtensions.setState({ review: { ...review, busy: false, inspecting: false } });
+      fail(review.profile, error);
+    }
+  } finally {
+    if (!current() && useWebKitExtensions.getState().review?.key === key) cancelWebKitReview();
+  }
+}
+
+async function refreshRegularWebKitExtensions(currentProfileId: string) {
+  const cached = useWebKitExtensions.getState().lists;
+  const profiles = new Set<string>();
+  await Promise.all(Object.keys(useBrowser.getState().profiles).filter((profileId) => {
+    if (!regularProfile(profileId) || profiles.has(profileOf(profileId)) || (profileId !== currentProfileId && !cached[profileOf(profileId)])) return false;
+    profiles.add(profileOf(profileId));
+    return true;
+  }).map((profileId) => refreshWebKitExtensions(profileId, true)));
 }
 
 export function selectWebKitGrant(key: number, kind: "permissions" | "origins", value: string, on: boolean) {
@@ -154,7 +213,7 @@ export function selectWebKitGrant(key: number, kind: "permissions" | "origins", 
     : requestedHost(value, review.pkg.requestedOrigins);
   if (!allowed) return;
   const values = review[kind].filter((entry) => entry !== value);
-  useWebKitExtensions.setState({ review: { ...review, [kind]: on ? [...values, value] : values } });
+  useWebKitExtensions.setState({ review: { ...review, [kind]: on ? [...values, value] : values, permissionsEdited: review.permissionsEdited || kind === "permissions", originsEdited: review.originsEdited || kind === "origins", editedByHand: true } });
 }
 
 export function addWebKitHost(key: number, input: string): boolean {
@@ -167,9 +226,19 @@ export function addWebKitHost(key: number, input: string): boolean {
     const pattern = `https://${url.hostname}/*`;
     if (url.protocol !== "https:" || url.username || url.password || url.port || url.search || url.hash ||
       !["/", "/*"].includes(url.pathname) || !requestedHost(pattern, review.pkg.requestedOrigins)) return false;
-    useWebKitExtensions.setState({ review: { ...review, origins: [...new Set([...review.origins, pattern])] } });
+    useWebKitExtensions.setState({ review: { ...review, origins: [...new Set([...review.origins, pattern])], originsEdited: true, editedByHand: true } });
     return true;
   } catch { return false; }
+}
+
+const BROADER_PROFILE_ACCESS_NOTICE = " Any profile whose own saved access to this folder is broader than this, including this one, is turned off until you choose Review and Enable there.";
+
+function endSharingNotice(review: Review): string {
+  if (!review.savedAllProfiles || review.allProfiles) return "";
+  const others = review.savedEnabled
+    ? "Another profile's own earlier approval stays on only if it is for exactly the shared version and allows no more than the shared access; otherwise it is off until you choose Review and Enable there."
+    : "Other profiles' own earlier approvals stay off until you choose Review and Enable there.";
+  return ` This removes shared access from other profiles. ${others}`;
 }
 
 export async function acceptWebKitReview(key: number) {
@@ -180,12 +249,12 @@ export async function acceptWebKitReview(key: number) {
   try {
     const { confirmed } = await confirm({
       title: `Trust ${review.pkg.name} ${review.pkg.version}?`,
-      message: `This loads extension code and starts its background code in this profile. Only continue if you trust its source. Updated code retains this extension's saved data.\n\nPermissions: ${review.permissions.map((p) => WEBKIT_PERMISSION_DETAILS[p] ?? p).join("; ") || "None"}.\n\nSite access: ${review.origins.map((p) => new URL(p).hostname).join(", ") || "None"}. Access covers all HTTPS pages on each selected host, not just a URL path. Private windows are excluded.`,
+      message: `This loads extension code and starts its background code ${review.allProfiles ? "in all regular profiles, including future profiles" : "in this profile"}. Only continue if you trust its source. Updated code retains this extension's saved data. Each profile keeps its own extension data and account.${review.allProfiles ? BROADER_PROFILE_ACCESS_NOTICE : endSharingNotice(review)}\n\nPermissions: ${review.permissions.map((p) => WEBKIT_PERMISSION_DETAILS[p] ?? p).join("; ") || "None"}.\n\nSite access: ${review.allWebsites ? "Read and change all HTTP and HTTPS websites, including future sites you visit" : `${review.origins.map((p) => new URL(p).hostname).join(", ") || "None"}. Access covers all HTTPS pages on each selected host, not just a URL path`}. Private windows are excluded.${review.pkg.preparedForAllWebsites ? "\n\nA managed copy of this extension's manifest will be prepared to request all HTTP and HTTPS websites. Its source folder is unchanged." : ""}`,
       confirmTitle: "Trust and Load",
       windowId: SETTINGS_WINDOW_ID,
     });
     if (!confirmed || !current()) return;
-    await loadWebKitExtension(review.profile, review.pkg.path, review.pkg.fingerprint, review.permissions, review.origins);
+    await loadWebKitExtension(review.profile, review.pkg.path, review.pkg.fingerprint, review.permissions, review.origins, review.allWebsites, review.allProfiles);
     if (!current()) return;
     fail(review.profile, null);
     cancelWebKitReview();
@@ -194,17 +263,17 @@ export async function acceptWebKitReview(key: number) {
   } finally {
     const pending = useWebKitExtensions.getState().review;
     if (pending?.key === key) useWebKitExtensions.setState({ review: { ...pending, busy: false } });
-    await refreshWebKitExtensions(review.profileId, true);
+    await refreshRegularWebKitExtensions(review.profileId);
   }
 }
 
-export async function disableWebKitExtension(profileId: string, id: string) {
+export async function disableWebKitExtension(profileId: string, id: string, allProfiles = false) {
   if (!regularProfile(profileId)) return;
   const profile = profileOf(profileId);
   cancelWebKitReview();
-  try { await unloadWebKitExtension(profile, id); fail(profile, null); }
+  try { await unloadWebKitExtension(profile, id, allProfiles); fail(profile, null); }
   catch (error) { fail(profile, error); }
-  await refreshWebKitExtensions(profileId, true);
+  await refreshRegularWebKitExtensions(profileId);
 }
 
 function toolbarTarget(s: BrowserState, windowId: string, tabId = shownPageId(s, windowId)) {

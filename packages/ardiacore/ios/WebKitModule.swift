@@ -14,23 +14,24 @@ public class WebKitModule: Module {
   }
   static let calls = webKitCallTable(
     extensionInspect: { args, reply in
-      WebKitExtensions.shared.inspect(path: try args.text("path")) { extensionReply($0, reply) }
+      WebKitExtensions.shared.inspect(path: try args.text("path"), allWebsites: try args.optionalBool("allWebsites") ?? false) { extensionReply($0, reply) }
     },
     extensionList: { args, reply in
       let profile = try extensionProfile(args)
-      reply.ok(["available": WebKitExtensions.shared.available, "extensions": WebKitExtensions.shared.list(profile: profile)])
+      let extensions = WebKitExtensions.shared.list(profile: profile)
+      reply.ok(["available": WebKitExtensions.shared.available, "extensions": extensions, "sharedCatalogUnreadable": WebKitExtensions.shared.sharedCatalogUnreadable(profile: profile)])
     },
     extensionLoad: { args, reply in
-      WebKitExtensions.shared.load(profile: try extensionProfile(args), path: try args.text("path"), fingerprint: try args.text("fingerprint"), permissions: try args.strings("permissions"), origins: try args.strings("origins")) { extensionReply($0, reply) }
+      WebKitExtensions.shared.load(profile: try extensionProfile(args), path: try args.text("path"), fingerprint: try args.text("fingerprint"), permissions: try args.strings("permissions"), origins: try args.strings("origins"), allWebsites: try args.optionalBool("allWebsites") ?? false, allProfiles: try args.optionalBool("allProfiles") ?? false) { extensionReply($0, reply) }
     },
     extensionGrant: { args, reply in
-      WebKitExtensions.shared.grant(profile: try extensionProfile(args), id: try args.text("id"), permissions: try args.strings("permissions"), origins: try args.strings("origins")) { extensionReply($0, reply) }
+      WebKitExtensions.shared.grant(profile: try extensionProfile(args), id: try args.text("id"), permissions: try args.strings("permissions"), origins: try args.strings("origins"), allProfiles: try args.optionalBool("allProfiles") ?? false) { extensionReply($0, reply) }
     },
     extensionShow: { args, reply in
       WebKitExtensions.shared.show(profile: try extensionProfile(args), id: try args.text("id"), tabId: try args.text("tabId")) { extensionReply($0, reply) }
     },
     extensionUnload: { args, reply in
-      WebKitExtensions.shared.unload(profile: try extensionProfile(args), id: try args.text("id")) { extensionReply($0, reply) }
+      WebKitExtensions.shared.unload(profile: try extensionProfile(args), id: try args.text("id"), allProfiles: try args.optionalBool("allProfiles") ?? false) { extensionReply($0, reply) }
     },
     removeDownloadStaging: { args, reply in
       reply.ok(WebKitDownloads.removeStaging(try args.text("path")))

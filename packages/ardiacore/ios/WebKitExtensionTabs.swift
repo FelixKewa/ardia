@@ -38,9 +38,8 @@ final class WebKitExtensionTabAdapter: NSObject, WKWebExtensionTab {
   func indexInWindow(for context: WKWebExtensionContext) -> Int { hostWindow?.orderedTabs.firstIndex(where: { $0 === self }) ?? 0 }
   func shouldBypassPermissions(for context: WKWebExtensionContext) -> Bool { false }
   func shouldGrantPermissionsOnUserGesture(for context: WKWebExtensionContext) -> Bool {
-    guard accepts(context), active, let url = view?.backForwardList.currentItem?.url, url == view?.url,
-      let origins = host?.records[context.uniqueIdentifier]?.origins else { return false }
-    return WebKitExtensionPackage.allows(url, origins: origins, allowLoopback: LaunchConfig.shared.testInstance)
+    guard accepts(context), active, let url = view?.backForwardList.currentItem?.url, url == view?.url else { return false }
+    return host?.allows(url, context: context) == true
   }
 
 }
@@ -166,6 +165,6 @@ extension WebKitExtensionHost {
   }
 
   func allowsNavigation(_ url: URL, context: WKWebExtensionContext) -> Bool {
-    owns(context) && WebKitExtensionPackage.allows(url, origins: records[context.uniqueIdentifier]?.origins ?? [], allowLoopback: LaunchConfig.shared.testInstance)
+    allows(url, context: context)
   }
 }

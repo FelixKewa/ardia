@@ -9,6 +9,10 @@ final class WebKitExtensionHost: NSObject {
   let directory: URL
   var contexts: [String: WKWebExtensionContext] = [:]
   var records: [String: WebKitExtensionRecord] = [:]
+  let catalog: WebKitExtensionCatalog
+  var sharedRecords: [String: WebKitExtensionRecord]
+  var effectiveRecords: [String: WebKitExtensionRecord] { records.merging(sharedRecords) { _, shared in shared } }
+  var revision = UUID()
   var failures: [String: [String]] = [:]
   var tabs: [Int32: WebKitExtensionTabAdapter] = [:]
   var windows: [ObjectIdentifier: WebKitExtensionWindowAdapter] = [:]
@@ -21,13 +25,15 @@ final class WebKitExtensionHost: NSObject {
   var popupAction: WKWebExtension.Action?
   var focusObservers: [NSObjectProtocol] = []
   var valid = true
-  private var operations: [String: UUID] = [:]
-  private var restoring = true
+  var operations: [String: UUID] = [:]
+  var restoring = true
   private var remainingRestores = 0
   private var ready: [() -> Void] = []
   private let icons = NSMapTable<WKWebExtension, NSString>.weakToStrongObjects()
 
-  init(profile: String) {
+  init(profile: String, catalog: WebKitExtensionCatalog) {
+    self.catalog = catalog
+    sharedRecords = [:]
     self.profile = profile
     store = WebKitHub.shared.stores.dataStore(for: profile)
     let identifier = WebKitStores.storeIdentifier(profile)
@@ -46,6 +52,7 @@ final class WebKitExtensionHost: NSObject {
         records[record.id] = record
       }
     }
+    sharedRecords = sharedOverlay()
   }
 
   static func requestedPermissions(_ resource: WKWebExtension) -> [String] {
@@ -66,17 +73,24 @@ final class WebKitExtensionHost: NSObject {
             "requestedOrigins": requestedOrigins(resource), "errors": errors, "supportedPermissions": WebKitExtensionPackage.supportedPermissions.sorted()]
   }
 
-  var rows: [[String: Any]] { records.keys.sorted().compactMap(row) }
+  var rows: [[String: Any]] { effectiveRecords.keys.sorted().compactMap(row) }
+
+  var sharedCatalogUnreadable: Bool { catalog.failure != nil }
 
   func row(_ id: String) -> [String: Any]? {
-    guard let record = records[id] else { return nil }
+    guard let record = effectiveRecords[id] else { return nil }
     var errors = failures[id] ?? []
     if let context = contexts[id] { errors += context.errors.map(\.localizedDescription) }
     var result: [String: Any] = ["id": id, "name": record.name, "version": record.version, "path": record.path, "fingerprint": record.fingerprint,
             "loaded": contexts[id]?.isLoaded == true, "enabled": record.enabled, "requestedPermissions": record.requestedPermissions,
             "requestedOrigins": record.requestedOrigins, "grantedPermissions": record.permissions, "grantedOrigins": record.origins,
-            "errors": errors, "reloadRequired": false]
+            "errors": errors, "reloadRequired": false, "allWebsites": record.allWebsites == true,
+            "allProfiles": sharedRecords[id] != nil, "canUseAllWebsites": record.canUseAllWebsites == true]
     if record.enabled, let context = contexts[id], let icon = icon(for: context) { result["icon"] = icon }
+    if let local = records[id] {
+      result["localGrantedOrigins"] = local.origins.filter { WebKitExtensionPackage.exactOrigin($0, allowLoopback: LaunchConfig.shared.testInstance) }
+      result["localGrantedPermissions"] = local.permissions
+    }
     return result
   }
 
@@ -92,6 +106,11 @@ final class WebKitExtensionHost: NSObject {
   }
 
   func package(_ record: WebKitExtensionRecord) -> URL {
+    if sharedRecords[record.id] == record, let shared = catalog.records.values.first(where: { $0.path == record.path }) { return catalog.package(shared) }
+    return localPackage(record)
+  }
+
+  func localPackage(_ record: WebKitExtensionRecord) -> URL {
     directory.appendingPathComponent(record.id).appendingPathComponent(record.fingerprint)
   }
 
@@ -102,8 +121,76 @@ final class WebKitExtensionHost: NSObject {
     records = updated
   }
 
+  func sharedOverlay() -> [String: WebKitExtensionRecord] {
+    catalog.overlay(local: records)
+  }
+
+  func disableCopies(path: String, unless keep: (WebKitExtensionRecord) -> Bool) {
+    let previous = records
+    records = records.mapValues { WebKitExtensionCatalog.disabled($0, path: path, unless: keep) }
+    for id in records.keys where records[id] != previous[id] && sharedRecords[id] == nil {
+      do { try deactivate(id) } catch { failures[id] = [error.localizedDescription] }
+    }
+  }
+
+  func reconcile() {
+    let before = effectiveRecords
+    sharedRecords = sharedOverlay()
+    let changed = Set(before.keys).union(effectiveRecords.keys).filter { before[$0] != effectiveRecords[$0] }
+    for id in changed {
+      do { try deactivate(id) } catch { failures[id] = [error.localizedDescription] }
+    }
+    restore()
+  }
+
+  func deactivate(_ id: String) throws {
+    closePopup()
+    cancelPendingTabs(contextId: id)
+    guard let context = contexts[id] else { return }
+    for tab in tabs.values { context.clearUserGesture(in: tab) }
+    context.grantedPermissions = [:]
+    context.grantedPermissionMatchPatterns = [:]
+    defer { contexts.removeValue(forKey: id); icons.removeObject(forKey: context.webExtension) }
+    try controller.unload(context)
+  }
+
+  func install(_ resource: WKWebExtension, record: WebKitExtensionRecord, allProfiles: Bool, commit: () throws -> Void) throws {
+    let previousRecords = records
+    let previousShared = sharedRecords
+    var selected = record
+    if allProfiles, let local = records.values.first(where: { $0.path == record.path }) { selected.id = local.id }
+    let prior = contexts[selected.id]
+    closePopup()
+    cancelPendingTabs(contextId: selected.id)
+    if let prior {
+      for tab in tabs.values { prior.clearUserGesture(in: tab) }
+      try controller.unload(prior)
+      contexts.removeValue(forKey: selected.id)
+    }
+    if allProfiles { sharedRecords[selected.id] = selected }
+    else { records[selected.id] = selected; sharedRecords.removeValue(forKey: selected.id) }
+    do {
+      try activate(resource, record: selected)
+      try commit()
+      if let prior { icons.removeObject(forKey: prior.webExtension) }
+      failures.removeValue(forKey: selected.id)
+    } catch {
+      if let replacement = contexts.removeValue(forKey: selected.id) { try? controller.unload(replacement) }
+      records = previousRecords
+      sharedRecords = previousShared
+      if let prior {
+        contexts[selected.id] = prior
+        do { try controller.load(prior) } catch { contexts.removeValue(forKey: selected.id) }
+      }
+      throw error
+    }
+  }
+
   func restore() {
-    let saved = Array(records.values.filter(\.enabled))
+    revision = UUID()
+    let expected = revision
+    let saved = Array(effectiveRecords.values.filter { $0.enabled && contexts[$0.id] == nil })
+    restoring = true
     guard !saved.isEmpty else { return finishRestore() }
     remainingRestores = saved.count
     for record in saved {
@@ -114,15 +201,23 @@ final class WebKitExtensionHost: NSObject {
         try? FileManager.default.removeItem(at: check)
         DispatchQueue.main.async { [weak self] in
           Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { self.remainingRestores -= 1; if self.remainingRestores == 0 { self.finishRestore() } }
-            guard self.valid, self.records[record.id]?.enabled == true else { return }
+            guard let self, self.valid, self.revision == expected else { return }
+            defer {
+              if self.revision == expected {
+                self.remainingRestores -= 1
+                if self.remainingRestores == 0 { self.finishRestore() }
+              }
+            }
+            guard self.effectiveRecords[record.id] == record else { return }
             do {
               guard try checked.get().matches(record.fingerprint) else { throw WebKitExtensionPackage.failure("The installed extension changed. Inspect and load it again.") }
               let resource = try await WKWebExtension(resourceBaseURL: source)
-              guard self.valid, self.records[record.id]?.enabled == true else { return }
+              guard self.valid, self.revision == expected, self.effectiveRecords[record.id] == record else { return }
               try self.activate(resource, record: record)
-            } catch { self.failures[record.id] = [error.localizedDescription] }
+              self.failures.removeValue(forKey: record.id)
+            } catch {
+              if self.valid, self.revision == expected, self.effectiveRecords[record.id] == record { self.failures[record.id] = [error.localizedDescription] }
+            }
           }
         }
       }
@@ -140,85 +235,8 @@ final class WebKitExtensionHost: NSObject {
     if restoring { ready.append(callback) } else { callback() }
   }
 
-  func load(path: String, fingerprint: String, permissions: [String], origins: [String], completion: @escaping WebKitExtensions.Reply) {
-    guard fingerprint.count == 64, fingerprint.allSatisfy({ $0.isHexDigit }) else {
-      return completion(.failure(WebKitExtensionPackage.failure("Inspect and approve the extension before loading it.")))
-    }
-    let canonical: URL
-    do { canonical = try WebKitExtensionPackage.source(path) } catch { return completion(.failure(error)) }
-    let existing = records.values.first { $0.path == canonical.path }
-    let id = existing?.id ?? UUID().uuidString.lowercased()
-    guard !restoring, operations[canonical.path] == nil else { return completion(.failure(WebKitExtensionPackage.failure("Extensions are still loading. Try again shortly."))) }
-    let token = UUID()
-    operations[canonical.path] = token
-    let staging = directory.appendingPathComponent("staging-" + token.uuidString)
-    let destination = directory.appendingPathComponent(id).appendingPathComponent(fingerprint)
-    let previousPackage = existing.map(package)
-    WebKitExtensionPackage.files.async { [weak self] in
-      let snapshot = Result {
-        let copied = try WebKitExtensionPackage.snapshot(canonical.path, into: staging)
-        guard copied.fingerprint == fingerprint else { throw WebKitExtensionPackage.failure("The extension changed after inspection. Inspect it again before loading.") }
-        var checks: [(URL, String)] = []
-        if let previousPackage, let existing { checks.append((previousPackage, existing.fingerprint)) }
-        if FileManager.default.fileExists(atPath: destination.path), previousPackage != destination { checks.append((destination, fingerprint)) }
-        for (package, expected) in checks {
-          let check = FileManager.default.temporaryDirectory.appendingPathComponent("ardia-extension-verify-" + UUID().uuidString)
-          defer { try? FileManager.default.removeItem(at: check) }
-          guard try WebKitExtensionPackage.snapshot(package.path, into: check).matches(expected) else {
-            throw WebKitExtensionPackage.failure("The installed extension package changed. Restore its reviewed package before updating.")
-          }
-        }
-        return copied
-      }
-      DispatchQueue.main.async { [weak self] in
-        Task { @MainActor [weak self] in
-          defer { WebKitExtensionPackage.files.async { try? FileManager.default.removeItem(at: staging) } }
-          guard let self, self.valid, self.operations[canonical.path] == token else { return completion(.failure(WebKitExtensionPackage.failure("The profile or extension was closed while loading."))) }
-          defer { if self.operations[canonical.path] == token { self.operations.removeValue(forKey: canonical.path) } }
-          do {
-            _ = try snapshot.get()
-            let resource = try await WKWebExtension(resourceBaseURL: staging)
-            guard self.valid, self.operations[canonical.path] == token else { throw WebKitExtensionPackage.failure("The profile or extension was closed while loading.") }
-            try Self.validateGrants(permissions: permissions, origins: origins, resource: resource)
-            let info = Self.description(resource)
-            var record = WebKitExtensionRecord(id: id, path: canonical.path, fingerprint: fingerprint, name: resource.displayName ?? "Extension",
-              version: resource.version ?? "", enabled: true, requestedPermissions: Self.requestedPermissions(resource), requestedOrigins: Self.requestedOrigins(resource),
-              permissions: Array(Set(permissions)).sorted(), origins: Array(Set(origins)).sorted())
-            record.permissions = record.permissions.filter { record.requestedPermissions.contains($0) && WebKitExtensionPackage.supportedPermissions.contains($0) }
-            record.origins = record.origins.filter { Self.permits($0, resource: resource) }
-            if !FileManager.default.fileExists(atPath: destination.path) {
-              try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-              try FileManager.default.moveItem(at: staging, to: destination)
-            }
-            let installed = try await WKWebExtension(resourceBaseURL: destination)
-            guard self.valid, self.operations[canonical.path] == token else { throw WebKitExtensionPackage.failure("The profile or extension was closed while loading.") }
-            let prior = self.contexts[id]
-            if let prior { self.closePopup(); try self.controller.unload(prior); self.icons.removeObject(forKey: prior.webExtension) }
-            self.cancelPendingTabs(contextId: id)
-            do {
-              try self.activate(installed, record: record)
-              var updated = self.records
-              updated[id] = record
-              try self.save(updated)
-            } catch {
-              if let replacement = self.contexts.removeValue(forKey: id) { try? self.controller.unload(replacement) }
-              if let prior {
-                self.contexts[id] = prior
-                do { try self.controller.load(prior) } catch { self.contexts.removeValue(forKey: id) }
-              }
-              throw error
-            }
-            self.failures[id] = info["errors"] as? [String] ?? []
-            var result = self.row(id) ?? [:]
-            result["reloadRequired"] = !self.tabs.isEmpty
-            completion(.success(result))
-          } catch { completion(.failure(error)) }
-        }
-      }
-    }
-  }
-
   func activate(_ resource: WKWebExtension, record: WebKitExtensionRecord) throws {
+    try Self.validateGrants(permissions: record.permissions, origins: record.origins, resource: resource, allWebsites: record.allWebsites == true)
     let context = WKWebExtensionContext(for: resource)
     context.uniqueIdentifier = record.id
     context.baseURL = URL(string: "webkit-extension://" + record.id + "/")!
@@ -229,33 +247,38 @@ final class WebKitExtensionHost: NSObject {
     do { try controller.load(context) } catch { contexts.removeValue(forKey: record.id); throw error }
   }
 
-  static func permits(_ origin: String, resource: WKWebExtension) -> Bool {
-    guard WebKitExtensionPackage.exactOrigin(origin, allowLoopback: LaunchConfig.shared.testInstance),
-      let pattern = try? WKWebExtension.MatchPattern(string: origin) else { return false }
-    return resource.allRequestedMatchPatterns.union(resource.optionalPermissionMatchPatterns).contains { $0.matches(pattern) }
+  static func permits(_ origin: String, resource: WKWebExtension, allWebsites: Bool = false) -> Bool {
+    WebKitExtensionPolicy.permits(origin, resource: resource, allWebsites: allWebsites, allowLoopback: LaunchConfig.shared.testInstance)
   }
 
-  static func validateGrants(permissions: [String], origins: [String], resource: WKWebExtension) throws {
+  static func validateGrants(permissions: [String], origins: [String], resource: WKWebExtension, allWebsites: Bool = false) throws {
     guard Set(permissions).isSubset(of: WebKitExtensionPackage.supportedPermissions),
       Set(permissions).isSubset(of: Set(requestedPermissions(resource))),
-      origins.allSatisfy({ permits($0, resource: resource) }) else {
-      throw WebKitExtensionPackage.failure("Only declared APIs and explicitly approved exact HTTPS hosts are supported.")
+      !allWebsites || WebKitExtensionPolicy.allWebsites(resource),
+      origins.allSatisfy({ permits($0, resource: resource, allWebsites: allWebsites) }) else {
+      throw WebKitExtensionPackage.failure("Only declared APIs and explicitly approved website access are supported.")
     }
   }
 
   func applyGrants(_ record: WebKitExtensionRecord, to context: WKWebExtensionContext) {
-    context.grantedPermissions = Dictionary(uniqueKeysWithValues: record.permissions.filter {
+    context.grantedPermissions = Dictionary(uniqueKeysWithValues: Set(record.permissions).filter {
       WebKitExtensionPackage.supportedPermissions.contains($0) && Self.requestedPermissions(context.webExtension).contains($0)
     }.map { (WKWebExtension.Permission(rawValue: $0), Date.distantFuture) })
-    context.grantedPermissionMatchPatterns = Dictionary(uniqueKeysWithValues: record.origins.filter {
-      Self.permits($0, resource: context.webExtension)
+    context.grantedPermissionMatchPatterns = Dictionary(uniqueKeysWithValues: Set(record.origins).filter {
+      Self.permits($0, resource: context.webExtension, allWebsites: record.allWebsites == true)
     }.compactMap { try? WKWebExtension.MatchPattern(string: $0) }.map { ($0, Date.distantFuture) })
   }
 
+  func allows(_ url: URL, context: WKWebExtensionContext) -> Bool {
+    guard owns(context), let record = effectiveRecords[context.uniqueIdentifier] else { return false }
+    return WebKitExtensionPolicy.allows(url, origins: record.origins, allWebsites: record.allWebsites == true, allowLoopback: LaunchConfig.shared.testInstance)
+  }
+
   func grant(id: String, permissions: [String], origins: [String]) throws -> [String: Any] {
-    guard valid, let context = contexts[id], var record = records[id] else { throw WebKitExtensionPackage.failure("Load the extension before changing its permissions.") }
+    guard valid, let context = contexts[id], var record = records[id], sharedRecords[id] == nil else { throw WebKitExtensionPackage.failure("Load the extension before changing its permissions.") }
     guard !restoring, operations[record.path] == nil else { throw WebKitExtensionPackage.failure("Wait for the extension to finish loading before changing its permissions.") }
     try Self.validateGrants(permissions: permissions, origins: origins, resource: context.webExtension)
+    record.allWebsites = false
     record.permissions = Array(Set(permissions)).sorted()
     record.origins = Array(Set(origins)).sorted()
     var updated = records
@@ -281,8 +304,8 @@ final class WebKitExtensionHost: NSObject {
   }
 
   func unload(id: String) throws -> [String: Any] {
-    guard var record = records[id] else { throw WebKitExtensionPackage.failure("The extension is not installed in this profile.") }
-    operations.removeValue(forKey: record.path)
+    guard var record = records[id], sharedRecords[id] == nil else { throw WebKitExtensionPackage.failure("The extension is not installed in this profile.") }
+    if let token = operations.removeValue(forKey: record.path) { catalog.finish(token) }
     record.enabled = false
     var updated = records
     updated[id] = record

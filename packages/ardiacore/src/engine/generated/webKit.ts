@@ -4,12 +4,12 @@ import type { CookieRemoval, PageCookie, PasskeyAccess, SiteData, SiteDataWritte
 import type { Profile } from "../wire";
 
 export type WebKitCalls = {
-  "webKit.extensionInspect": [{ path: string }, WebKitExtensionInspection];
+  "webKit.extensionInspect": [{ path: string; allWebsites?: boolean }, WebKitExtensionInspection];
   "webKit.extensionList": [Profile, WebKitExtensionList];
-  "webKit.extensionLoad": [Profile & { path: string; fingerprint: string; permissions: string[]; origins: string[] }, WebKitExtension];
-  "webKit.extensionGrant": [Profile & { id: string; permissions: string[]; origins: string[] }, WebKitExtension];
+  "webKit.extensionLoad": [Profile & { path: string; fingerprint: string; permissions: string[]; origins: string[]; allWebsites?: boolean; allProfiles?: boolean }, WebKitExtension];
+  "webKit.extensionGrant": [Profile & { id: string; permissions: string[]; origins: string[]; allProfiles?: boolean }, WebKitExtension];
   "webKit.extensionShow": [Profile & { id: string; tabId: string }, { shown: boolean }];
-  "webKit.extensionUnload": [Profile & { id: string }, WebKitExtension];
+  "webKit.extensionUnload": [Profile & { id: string; allProfiles?: boolean }, WebKitExtension];
   "webKit.removeDownloadStaging": [{ path: string }, boolean];
   "webKit.endPrivateSession": [{ session: string }, null];
   "webKit.cookieStoreKey": [Profile, string];

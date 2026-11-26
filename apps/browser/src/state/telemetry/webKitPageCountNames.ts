@@ -4,6 +4,8 @@ export type WebKitCount =
   | "extensionGrant"
   | "extensionAction"
   | "extensionUnload"
+  | "extensionSharedApproval"
+  | "extensionAllWebsitesLoad"
   | "autofillFill"
   | "autofillSaveOffer"
   | "autofillSave"
@@ -68,6 +70,8 @@ export const WEBKIT_COUNTS = {
   extensionGrant: "webKitExtensionGrants",
   extensionAction: "webKitExtensionActions",
   extensionUnload: "webKitExtensionUnloads",
+  extensionSharedApproval: "webKitExtensionSharedApprovals",
+  extensionAllWebsitesLoad: "webKitExtensionAllWebsitesLoads",
   autofillFill: "webKitAutofillFills",
   autofillSaveOffer: "webKitAutofillSaveOffers",
   autofillSave: "webKitAutofillSaves",
