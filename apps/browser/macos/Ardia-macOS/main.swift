@@ -3,6 +3,11 @@ import ArdiaCore
 import ArdiaShell
 import ArdiaSync
 
+guard ArdiaHost.authorizePersonalLaunch(protectingLegacyBundle: LegacyName.bundleId) else {
+  fputs("Ardia Personal refused to open: \(ArdiaHost.personalLaunchFailure ?? "Launch verification failed.")\n", stderr)
+  exit(78)
+}
+
 ArdiaHost.markMainStarted()
 
 let config = LaunchConfig.shared

@@ -5,13 +5,15 @@ import Sparkle
 public final class AppUpdater: NSObject {
   public static let shared = AppUpdater()
 
+  private static var personalPolicy: PersonalUpdatePolicy { PersonalUpdatePolicy(info: Bundle.main.infoDictionary ?? [:]) }
+
   static var feedOverride: String? {
     let config = LaunchConfig.shared
-    if let feed = config.instance("updateFeed") ?? UserDefaults.standard.string(forKey: "ACUpdateFeedURL") { return feed }
-    return config.background ? "https://github.com/ardia-browser/ardia/releases/latest/download/appcast.xml" : nil
+    return personalPolicy.feed(isolated: config.isolated, instance: config.instance("updateFeed"),
+                               saved: UserDefaults.standard.string(forKey: "ACUpdateFeedURL"), background: config.background)
   }
 
-  static let channelDefaultsKey = "ACUpdateChannel"
+  static var channelDefaultsKey: String { personalPolicy.channelDefaultsKey }
 
   static var buildChannel: UpdateChannel {
     Bundle.main.object(forInfoDictionaryKey: "ACUpdateChannel") as? String == "nightly" ? .nightly : .stable
@@ -193,6 +195,7 @@ public final class AppUpdater: NSObject {
   private var sessionObservation: NSKeyValueObservation?
   private var firstCheckPending = false
   private var started = false
+  private var stagedUpdateBlocked = false
   private var downloading = false
   private var updateCycle = UpdateCycleStamp<ArdiaConsentStamp>()
 
@@ -212,6 +215,11 @@ public final class AppUpdater: NSObject {
   public func start() {
     rememberChannel()
     guard !started, isConfigured else { return }
+    stagedUpdateBlocked = !acceptsStagedUpdates()
+    guard !stagedUpdateBlocked else {
+      NSLog("Ardia Personal: updates are paused because an existing staged update does not match this installation.")
+      return
+    }
     started = true
     firstCheckPending = updater.lastUpdateCheckDate == nil
     do {
@@ -226,6 +234,17 @@ public final class AppUpdater: NSObject {
     NotificationCenter.default.addObserver(self, selector: #selector(fullScreenChanged), name: NSWindow.didExitFullScreenNotification, object: nil)
   }
 
+  private func acceptsStagedUpdates() -> Bool {
+    guard Self.personalPolicy.isPersonal else { return true }
+    guard let caches = StagedUpdateCopies.userCaches, let bundleId = Bundle.main.bundleIdentifier else { return false }
+    let survey = StagedSurvey.survey(caches: caches, bundleId: bundleId)
+    guard !survey.blind, survey.residue.isEmpty else { return false }
+    return survey.found.allSatisfy { staged in
+      guard let bundle = Bundle(url: staged.bundle) else { return false }
+      return Self.personalPolicy.acceptsStaged(bundle.infoDictionary ?? [:], signatureValid: UpdatePrewarm.signedLikeThisApp(staged.bundle))
+    }
+  }
+
 
   @objc public func checkForUpdates(_ sender: Any?) {
     guard isConfigured else {
@@ -235,6 +254,11 @@ public final class AppUpdater: NSObject {
       return showNotSetUp()
     }
     start()
+    guard !stagedUpdateBlocked else {
+      if LaunchConfig.shared.background { return NSLog("Ardia Personal: a staged update from another build is blocking this update check.") }
+      return showNotSetUp(stagedUpdate: true)
+    }
+    guard started else { return }
     let switchPending = switchCheck.pending
     switchCheck.handle(.manualCheck)
     guard !switchPending else { return userDriver.quietCheck = false }
@@ -267,11 +291,13 @@ public final class AppUpdater: NSObject {
     updater.automaticallyDownloadsUpdates = on
   }
 
-  private func showNotSetUp() {
+  private func showNotSetUp(stagedUpdate: Bool = false) {
     let alert = NSAlert()
     let name = ProcessInfo.processInfo.processName
-    alert.messageText = "Updates aren't set up for this build"
-    alert.informativeText = "This copy of \(name) doesn't have an update feed, so it can't check for new versions. Get newer versions from wherever you got this one."
+    alert.messageText = stagedUpdate ? "A previous Ardia update is still pending" : "Updates aren't set up for this build"
+    alert.informativeText = stagedUpdate
+      ? "This copy will not resume an update from another build. Complete the Ardia Personal replacement and remove the previous staged update before checking again."
+      : "This copy of \(name) doesn't have an update feed, so it can't check for new versions. Get newer versions from wherever you got this one."
     alert.addButton(withTitle: "OK")
     if let window = NSApp.keyWindow, window.attachedSheet == nil {
       alert.beginSheetModal(for: window)

@@ -1,5 +1,6 @@
 #import "ArdiaHostInternal.h"
 #import "ArdiaLaunchConfig.h"
+#import "ArdiaPersonalSigning.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
@@ -79,6 +80,24 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
 }
 
 @implementation ArdiaHost
+
++ (BOOL)authorizePersonalLaunchProtectingLegacyBundle:(NSString *)bundleIdentifier {
+  ArdiaAuthorizePersonalLaunch(bundleIdentifier);
+  return self.allowsPersonalLaunch;
+}
+
++ (BOOL)allowsPersonalLaunch {
+  return self.personalLaunchFailure == nil;
+}
+
++ (NSString *)personalLaunchFailure {
+  switch (ArdiaCurrentPersonalLaunch()) {
+    case ArdiaPersonalLaunchRefused: return @"The signature or test-data location failed verification.";
+    case ArdiaPersonalLaunchMigrationPending:
+      return @"A preview import is unfinished. Keep both browsers closed and recover from the verified backup before opening Ardia Personal. Do not remove the import lock by hand.";
+    default: return nil;
+  }
+}
 
 static void (^gQuitCancelledHandler)(void);
 

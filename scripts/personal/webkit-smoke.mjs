@@ -6,7 +6,8 @@ import { join, resolve } from "node:path";
 import { launch, session, sleep } from "../lib/instance.mjs";
 
 const app = process.argv[2];
-if (!app) throw new Error("Usage: node scripts/personal/webkit-smoke.mjs <Debug Ardia.app>");
+const release = process.argv.slice(3).includes("--release");
+if (!app) throw new Error("Usage: node scripts/personal/webkit-smoke.mjs <Ardia.app> [--release]");
 const scratch = mkdtempSync(join(tmpdir(), "ardia-webkit-smoke-"));
 const extension = join(scratch, "extension");
 const data = join(scratch, "data");
@@ -105,7 +106,7 @@ const assertResponse = async previousCount => {
   return response.count;
 };
 const start = async first => {
-  instance = await launch(resolve(app), { data, onboarded: true, ...(first ? { session: initial } : {}) });
+  instance = await launch(resolve(app), { data, onboarded: true, ...(release ? { probe: true, js: "none" } : {}), ...(first ? { session: initial } : {}) });
   await until("WebKit page", () => value('document.title === "WebKit fixture"'));
   assert.equal((await instance.targets()).some(target => target.url.startsWith(base)), false, "fixture must not be a Chromium page");
 };

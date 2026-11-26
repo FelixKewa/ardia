@@ -2747,6 +2747,29 @@
     "apps/browser/src/hostileInputs.test.mjs#a clipboard another app filled reaches the address field"
    ],
    "detected": false
+  },
+  {
+   "id": "profile-import:personal-webkit-store",
+   "source": "import",
+   "guard": "Installed builds only; an owned regular non-symlink file is read once with a 1 MiB limit. The version, exact destination, unique profiles and stores, normalized source scopes and deterministic profile/store identities must match. Scratch profiles cannot adopt installed stores. The offline importer requires closed browsers and a verified backup before publishing; a pending migration blocks normal launch.",
+   "checks": [
+    "packages/ardiacore/ios/WebKitImportedStores.swift",
+    "packages/ardiacore/tests/webkit-imported-stores.test.mjs",
+    "packages/ardiacore/tests/webkit-preview-migration.test.mjs"
+   ],
+   "detected": false
+  },
+  {
+   "id": "update:personal-signing",
+   "source": "update",
+   "guard": "A personal build requires a fixed bundle identifier and exact signing certificate, validated against running and sealed nested code before profile or credential access. The updater pins its own HTTPS signed feed and update key; incompatible staged official updates are refused. Scratch test instances use isolated data and credentials.",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaPersonalSigning.mm",
+    "packages/ardiacore/tests/personal-signing.test.mjs",
+    "packages/shell/ios/UpdaterCore/PersonalUpdatePolicy.swift",
+    "packages/shell/tests/PersonalUpdatePolicyTests.swift"
+   ],
+   "detected": false
   }
  ]
 }

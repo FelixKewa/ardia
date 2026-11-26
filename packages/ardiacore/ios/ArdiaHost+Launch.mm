@@ -1,5 +1,6 @@
 #import "ArdiaHostInternal.h"
 #import "ArdiaLaunchConfig.h"
+#import "ArdiaPersonalSigning.h"
 #import "ArdiaLittleFitMath.h"
 #import "ArdiaSavedSession.h"
 #import "ArdiaSavedDocument.h"
@@ -414,6 +415,7 @@ void StartEarlyWindow() {
 }
 
 + (int)runWithArgc:(int)argc argv:(char **)argv delegate:(id<NSApplicationDelegate> (^)(void))makeDelegate {
+  if (!ArdiaHost.allowsPersonalLaunch) return 78;
   ArdiaLaunchConfig *config = ArdiaLaunchConfig.shared;
   gScratchDataDir = config.dataDirectory != nil;
 #if DEBUG
@@ -492,7 +494,7 @@ void StartEarlyWindow() {
       "--profile-directory=Default",
       "--js-flags=--no-memory-reducer",
   };
-  const bool mockKeychain = gScratchDataDir || !IsTeamSigned();
+  const bool mockKeychain = gScratchDataDir || !(IsTeamSigned() || ArdiaCurrentPersonalLaunch() == ArdiaPersonalLaunchVerified);
   if (mockKeychain) extra.push_back("--use-mock-keychain");
   ardia_host::PrepareStartup(gDataDirectory);
   ArdiaLaunchSequence.shared.startupPreparedAt = LaunchNowMs();

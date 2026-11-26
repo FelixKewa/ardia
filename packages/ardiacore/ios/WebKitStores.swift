@@ -53,11 +53,7 @@ final class WebKitStores {
   }
 
   static func storeIdentifier(_ profile: String) -> UUID {
-    let scope = LaunchConfig.shared.dataDirectory ?? ""
-    var bytes = Array(SHA256.hash(data: Data("ardia.webkit|\(scope)|\(profile)".utf8)).prefix(16))
-    bytes[6] = (bytes[6] & 0x0F) | 0x50
-    bytes[8] = (bytes[8] & 0x3F) | 0x80
-    return bytes.withUnsafeBufferPointer { NSUUID(uuidBytes: $0.baseAddress!) as UUID }
+    WebKitImportedStores.resolve(profile) ?? WebKitImportedStores.identifier(scope: LaunchConfig.shared.dataDirectory ?? "", profile: profile)
   }
 
   func dataStore(for profile: String) -> WKWebsiteDataStore {

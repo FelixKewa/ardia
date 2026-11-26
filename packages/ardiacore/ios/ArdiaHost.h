@@ -5,6 +5,9 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ArdiaHost : NSObject
 
 @property(class, readonly) BOOL isStarted;
++ (BOOL)authorizePersonalLaunchProtectingLegacyBundle:(NSString *)bundleIdentifier NS_SWIFT_NAME(authorizePersonalLaunch(protectingLegacyBundle:));
+@property(class, readonly) BOOL allowsPersonalLaunch;
+@property(class, readonly, nullable) NSString *personalLaunchFailure;
 @property(class, readonly) NSString *dataDirectory;
 @property(class, readonly) NSDictionary<NSString *, id> *engineInfo;
 @property(class, readonly) NSArray<NSDictionary<NSString *, id> *> *chromeWindows;

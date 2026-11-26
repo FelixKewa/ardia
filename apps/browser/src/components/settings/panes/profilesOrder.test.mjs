@@ -15,5 +15,5 @@ test("Settings › Profiles opens with the profile picker on top, the picked pro
 
 test("the search index lists the Profiles sections in the order the page shows them", () => {
   const sections = [...new Set(SETTINGS.filter((s) => s.pane === "profiles").map((s) => s.section))];
-  assert.deepEqual(sections, ["Profiles", "This profile", "Search", "Passwords and autofill", "Extensions", "Data", "For all profiles"]);
+  assert.deepEqual(sections, ["Profiles", "This profile", "Search", "Passwords and autofill", "Extensions", "WebKit Extensions", "Data", "For all profiles"]);
 });
