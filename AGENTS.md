@@ -2,6 +2,13 @@
 
 For the architecture and the test tooling, read `docs/agent-brief.md`.
 
+## Personal fork contributions
+
+When Felix invokes `ardia-upstream-fix`, or asks to fix a browser bug and contribute it upstream, read
+[the shared contribution skill](.claude/skills/ardia-upstream-fix/SKILL.md). Its canonical instructions live in
+this repository and apply to Claude, Codex and other agents. Keep this personal routing addition, the skill and
+contribution tracking records out of upstream bug-fix PRs. Reading the skill alone does not authorize publishing.
+
 ## How work gets done
 - **Move fast.** Don't break work into phases or ask about details you can decide. Ask only when the answer changes what you build.
 - **Be thorough in analysis, bold in suggestions.** Read the real code before you judge it, and propose the
