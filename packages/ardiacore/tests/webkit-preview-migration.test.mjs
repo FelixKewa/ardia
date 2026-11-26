@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyMigration, planMigration, recoverMigration } from "../../../scripts/personal/migrate-preview.mjs";
 import { importedProfile, mergeSessions, restoreLastWindow, storeIdentifier } from "../../../scripts/personal/migrate-preview-session.mjs";
-import { fileHash, inventory, packageFingerprint, parseJSON, readJSON, exists } from "../../../scripts/personal/migrate-preview-files.mjs";
+import { fileHash, inventory, packageFingerprint, parseJSON, readJSON, exists, exclusively } from "../../../scripts/personal/migrate-preview-files.mjs";
 
 const session = (label) => ({ version: 11, profiles: { default: { id: "default", name: label, color: "blue", createdAt: 1, syncTabs: true } }, profileOrder: ["default"],
   settings: { label, defaultEngine: "chromium" }, settingsMeta: { chosen: [label] }, windows: [{ id: "w", profileId: "default", tabIds: ["a", "b"], activeTabIds: { default: "a" }, frame: [0, 0, 800, 600] }], windowOrder: ["w"], focusedWindowId: "w", lastProfileId: "default",
@@ -249,6 +249,31 @@ test("an interruption before any backup manifest can safely cancel without modif
   assert.deepEqual(await recoverMigration(f), { recovered: true, published: false });
   assert.deepEqual(await inventory(f.destination), before);
   assert.equal(await exists(lock.stage), false);
+});
+
+test("the transaction lock waits for a slow helper to start but fails at once when it is held or the helper exits", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ardia-migrate-lock-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const destination = join(root, "installed");
+  const helper = async (name, body) => {
+    const path = join(root, name);
+    await writeFile(path, `#!/usr/bin/python3\nimport os,sys,time\n${body}\n`, { mode: 0o700 });
+    return path;
+  };
+  const slow = await helper("slow", "time.sleep(6)\nos.execv('/usr/bin/python3',['/usr/bin/python3']+sys.argv[1:])");
+  let started = Date.now();
+  assert.equal(await exclusively(destination, async (assertLocked) => { assertLocked(); return "locked"; }, { interpreter: slow }), "locked");
+  assert.ok(Date.now() - started >= 6000);
+  const refused = () => assert.fail("an unlocked action must not run");
+  await exclusively(destination, async () => {
+    started = Date.now();
+    await assert.rejects(exclusively(destination, refused), /Another migration or recovery is running/);
+    assert.ok(Date.now() - started < 30000);
+  });
+  started = Date.now();
+  await assert.rejects(exclusively(destination, refused, { interpreter: await helper("broken", "sys.exit(2)") }), /Another migration or recovery is running/);
+  assert.ok(Date.now() - started < 30000);
+  await assert.rejects(exclusively(destination, refused, { interpreter: await helper("silent", "time.sleep(600)"), startTimeout: 2000 }), /did not start in time/);
 });
 
 test("invalid private documents never appear in parse errors", () => {
