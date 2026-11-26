@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
-import { createReadStream, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -178,4 +178,149 @@ test('the pipeline still runs its command when started directly or through a lin
       assert.throws(() => execFileSync(process.execPath, [script], { stdio: 'pipe', timeout: 30000 }), /Usage: pipeline\.mjs/);
     }
   } finally { rmSync(work, { recursive: true, force: true }); }
+});
+
+test('prepare and publish authenticate every GitHub git call, as a throttled hosted runner requires', async () => {
+  const work = mkdtempSync(join(tmpdir(), 'ardia-personal-github-fixture-'));
+  const token = 'fixture-token';
+  const credential = Buffer.from(`x-access-token:${token}`).toString('base64');
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const isolated = { PATH: process.env.PATH, HOME: work, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0', GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' };
+  const seed = join(work, 'seed');
+  const git = (...args) => execFileSync(realGit, args, { cwd: seed, env: isolated, encoding: 'utf8', stdio: 'pipe' }).trim();
+  const commit = (name, value) => {
+    writeFileSync(join(seed, name), typeof value === 'string' || Buffer.isBuffer(value) ? value : JSON.stringify(value));
+    git('add', '.');
+    git('commit', '--quiet', '-m', name);
+    return git('rev-parse', 'HEAD');
+  };
+  const requests = [];
+  let base;
+  const server = createServer((request, response) => {
+    const url = new URL(request.url, base);
+    const chunks = [];
+    const reply = (status, value) => response.writeHead(status).end(JSON.stringify(value));
+    if (url.pathname.startsWith('/git/')) {
+      requests.push({ path: url.pathname, authorization: request.headers.authorization });
+      if (request.headers.authorization !== `basic ${credential}`) return response.writeHead(403).end();
+      const backend = spawn(realGit, ['http-backend'], { env: { ...isolated, GIT_PROJECT_ROOT: join(work, 'repositories'), GIT_HTTP_EXPORT_ALL: '1', REMOTE_USER: 'x-access-token', PATH_INFO: url.pathname.slice('/git'.length), QUERY_STRING: url.search.slice(1), REQUEST_METHOD: request.method, CONTENT_TYPE: request.headers['content-type'] ?? '', GIT_PROTOCOL: request.headers['git-protocol'] ?? '', HTTP_CONTENT_ENCODING: request.headers['content-encoding'] ?? '' } });
+      request.pipe(backend.stdin);
+      backend.stdout.on('data', chunk => chunks.push(chunk));
+      return backend.on('close', () => {
+        const output = Buffer.concat(chunks);
+        const end = output.indexOf('\r\n\r\n');
+        const headers = Object.fromEntries(output.subarray(0, end).toString().split('\r\n').map(line => line.split(': ')));
+        const status = Number.parseInt(headers.Status ?? '200', 10);
+        delete headers.Status;
+        response.writeHead(status, headers).end(output.subarray(end + 4));
+      });
+    }
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      if (url.pathname.endsWith('/environments/personal-signing')) return reply(200, { deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } });
+      if (url.pathname.endsWith('/deployment-branch-policies')) return reply(200, { branch_policies: [{ name: 'main', type: 'branch' }] });
+      if (url.pathname.endsWith('/releases') && request.method === 'POST') return reply(201, { id: 1, upload_url: `${base}/uploads{?name,label}` });
+      if (url.pathname === '/uploads') return reply(201, { digest: `sha256:${createHash('sha256').update(Buffer.concat(chunks)).digest('hex')}` });
+      if (url.pathname.endsWith('/releases/1') && request.method === 'PATCH') return reply(200, {});
+      return reply(404, {});
+    });
+  });
+  try {
+    await new Promise(done => server.listen(0, '127.0.0.1', done));
+    base = `http://127.0.0.1:${server.address().port}`;
+    const keys = generateKeyPairSync('ed25519');
+    const fixtureConfig = { ...config, updatePublicKey: Buffer.from(keys.publicKey.export({ format: 'jwk' }).x, 'base64url').toString('base64') };
+    const feed = build => {
+      const bytes = Buffer.from(`<rss><channel><title>${build}</title></channel></rss>\n`);
+      return Buffer.concat([bytes, Buffer.from(`<!-- sparkle-signatures:\nedSignature: ${sign(null, bytes, keys.privateKey).toString('base64')}\nlength: ${bytes.length}\n-->\n`)]);
+    };
+    const described = (build, source, bytes) => ({ ...release, tag: `personal-${build}`, build, archive: `Ardia-Personal-${build}-arm64.zip`, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length, source, updatePublicKey: fixtureConfig.updatePublicKey });
+    const personalRepository = join(work, 'repositories', `${config.repository}.git`);
+    const upstreamRepository = join(work, 'repositories', `${config.upstream}.git`);
+    mkdirSync(seed);
+    for (const folder of [personalRepository, upstreamRepository]) execFileSync(realGit, ['init', '--quiet', '--bare', '--initial-branch=main', folder], { env: isolated });
+    git('init', '--quiet', '--initial-branch=main');
+    commit('base', 'base');
+    git('checkout', '--quiet', '-b', 'upstream');
+    commit('upstream', 'upstream');
+    git('push', '--quiet', upstreamRepository, 'upstream:main');
+    git('checkout', '--quiet', '-b', config.branch, 'main');
+    const personal = commit('personal', 'personal');
+    git('tag', 'personal-1001');
+    git('push', '--quiet', personalRepository, 'main', config.branch, 'personal-1001');
+    git('checkout', '--quiet', '--orphan', 'personal-updates');
+    git('rm', '--quiet', '-rf', '.');
+    commit('appcast.xml', feed('1001'));
+    const feedHead = commit('release.json', described('1001', personal, Buffer.from('previous')));
+    git('push', '--quiet', personalRepository, 'personal-updates');
+    const controller = join(work, 'controller');
+    mkdirSync(join(controller, 'scripts/personal'), { recursive: true });
+    for (const name of ['pipeline.mjs', 'release-policy.mjs']) copyFileSync(new URL(`./${name}`, import.meta.url), join(controller, 'scripts/personal', name));
+    writeFileSync(join(controller, 'scripts/personal/release-config.json'), JSON.stringify(fixtureConfig));
+    for (const args of [['init', '--quiet', '--initial-branch=main'], ['add', '.'], ['commit', '--quiet', '-m', 'controller']]) execFileSync(realGit, args, { cwd: controller, env: isolated });
+    const controllerCommit = execFileSync(realGit, ['rev-parse', 'HEAD'], { cwd: controller, env: isolated, encoding: 'utf8' }).trim();
+    const calls = join(work, 'git-calls.jsonl');
+    mkdirSync(join(work, 'bin'));
+    writeFileSync(join(work, 'git-to-fixture.mjs'), `import { spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+const config = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.startsWith('GIT_CONFIG_') || name === 'GIT_ASKPASS'));
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ args, config }) + '\\n');
+const local = value => value.replaceAll('https://github.com/', ${JSON.stringify(`${base}/git/`)});
+const env = Object.fromEntries(Object.entries(process.env).map(([name, value]) => [name, name.startsWith('GIT_CONFIG_KEY_') ? local(value) : value]));
+process.exit(spawnSync(${JSON.stringify(realGit)}, args.map(local), { env, stdio: 'inherit' }).status ?? 1);
+`);
+    writeFileSync(join(work, 'bin/git'), `#!/bin/sh\nexec "${process.execPath}" "${join(work, 'git-to-fixture.mjs')}" "$@"\n`, { mode: 0o700 });
+    writeFileSync(join(work, 'local-github-api.mjs'), `const real = globalThis.fetch;
+globalThis.fetch = (input, options) => {
+  const url = String(input).replace('https://api.github.com', ${JSON.stringify(base)});
+  if (!url.startsWith(${JSON.stringify(`${base}/`)})) throw new Error('The fixture refuses a request outside itself.');
+  return real(url, options);
+};
+`);
+    let printed = '';
+    const pipeline = async (...args) => {
+      const child = spawn(process.execPath, ['--import', join(work, 'local-github-api.mjs'), join(controller, 'scripts/personal/pipeline.mjs'), ...args], {
+        cwd: controller, timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'],
+        env: { PATH: `${join(work, 'bin')}:${process.env.PATH}`, HOME: work, GIT_ALLOW_PROTOCOL: 'file:http', GITHUB_REPOSITORY: config.repository, GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'schedule', GITHUB_SHA: controllerCommit, GH_TOKEN: token },
+      });
+      let output = '';
+      for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { output += chunk; });
+      const status = await new Promise(done => child.on('close', done));
+      printed += output;
+      assert.equal(status, 0, output);
+    };
+    const planFolder = join(work, 'plan');
+    await pipeline('prepare', planFolder);
+    const frozen = JSON.parse(readFileSync(join(planFolder, 'plan.json')));
+    assert.deepEqual([frozen.build, frozen.personal, frozen.feedHead], [1002, personal, feedHead]);
+    const signed = join(work, 'signed');
+    mkdirSync(join(signed, 'updates'), { recursive: true });
+    const archive = Buffer.from('signed archive');
+    const candidate = described('1002', frozen.candidate, archive);
+    writeFileSync(join(signed, 'updates', candidate.archive), archive);
+    writeFileSync(join(signed, 'updates/appcast.xml'), feed('1002'));
+    writeFileSync(join(signed, 'release.json'), JSON.stringify(candidate));
+    writeFileSync(join(work, 'update-proof.json'), JSON.stringify({ ...proof, archiveSHA256: candidate.sha256, source: frozen.candidate }));
+    await pipeline('publish', signed, planFolder, join(work, 'update-proof.json'));
+    const published = name => execFileSync(realGit, ['rev-parse', name], { cwd: personalRepository, env: isolated, encoding: 'utf8' }).trim();
+    assert.equal(published('refs/tags/personal-1002'), frozen.candidate);
+    assert.equal(published(`refs/heads/${config.branch}`), frozen.candidate);
+    assert.equal(published('refs/heads/personal-updates^'), feedHead);
+    const logged = readFileSync(calls, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    const online = logged.filter(call => call.args.some(value => value.startsWith('https://')));
+    assert.deepEqual(online.map(call => call.args[4]), ['clone', 'fetch', 'fetch', 'ls-remote', 'ls-remote', 'push', 'fetch', 'push']);
+    for (const call of online) assert.deepEqual(call.config, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader', GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${credential}` }, call.args.join(' '));
+    for (const call of logged.filter(value => !online.includes(value))) assert.doesNotMatch(JSON.stringify(call.config), /extraheader|AUTHORIZATION/, call.args.join(' '));
+    assert.ok(requests.length >= online.length);
+    for (const request of requests) assert.equal(request.authorization, `basic ${credential}`, request.path);
+    const secret = new RegExp(`${token}|${credential}`);
+    assert.doesNotMatch(printed + JSON.stringify(logged.map(call => call.args)), secret);
+    const written = folder => readdirSync(folder, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name));
+    for (const path of [planFolder, signed, join(controller, '.git')].flatMap(written)) assert.doesNotMatch(readFileSync(path, 'latin1'), secret, path);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+    rmSync(work, { recursive: true, force: true });
+  }
 });

@@ -7,12 +7,18 @@ import { assertPublishable, feedBranch, hexCommit, nextBuild, repository, sha256
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const config = JSON.parse(readFileSync(join(root, 'scripts/personal/release-config.json'), 'utf8'));
 if (config.repository !== repository || config.branch !== sourceBranch || config.upstream !== 'ardia-browser/ardia') throw new Error('Unexpected personal pipeline repository configuration.');
-const remote = `https://github.com/${repository}.git`;
+const github = 'https://github.com/';
+const remote = `${github}${repository}.git`;
 const run = (tool, args, options = {}) => execFileSync(tool, args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024, ...options });
-const git = (cwd, args, options = {}) => run('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args], {
+const git = (cwd, args, { env, ...options } = {}) => run('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args], {
   cwd, env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0',
-    GIT_AUTHOR_NAME: 'Ardia Personal CI', GIT_AUTHOR_EMAIL: 'ardia-personal@users.noreply.github.com', GIT_COMMITTER_NAME: 'Ardia Personal CI', GIT_COMMITTER_EMAIL: 'ardia-personal@users.noreply.github.com' }, ...options,
+    GIT_AUTHOR_NAME: 'Ardia Personal CI', GIT_AUTHOR_EMAIL: 'ardia-personal@users.noreply.github.com', GIT_COMMITTER_NAME: 'Ardia Personal CI', GIT_COMMITTER_EMAIL: 'ardia-personal@users.noreply.github.com', ...env }, ...options,
 }).trim();
+const githubGit = (cwd, args) => {
+  if (!process.env.GH_TOKEN) throw new Error('GitHub git access needs GH_TOKEN.');
+  const credential = Buffer.from(`x-access-token:${process.env.GH_TOKEN}`).toString('base64');
+  return git(cwd, args, { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: `http.${github}.extraheader`, GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${credential}` } });
+};
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const save = (path, value) => writeFileSync(path, JSON.stringify(value, null, 2) + '\n');
 const summary = message => {
@@ -43,15 +49,15 @@ async function prepare(folder) {
   if (existsSync(folder)) throw new Error('The plan output must be a new directory.');
   mkdirSync(folder, { recursive: true });
   const source = join(folder, 'source');
-  git(root, ['clone', '--no-checkout', remote, source]);
-  git(source, ['fetch', '--no-tags', remote, `refs/heads/${sourceBranch}:refs/remotes/frozen/personal`, `refs/heads/${feedBranch}:refs/remotes/frozen/feed`]);
-  git(source, ['fetch', '--no-tags', `https://github.com/${config.upstream}.git`, 'refs/heads/main:refs/remotes/frozen/upstream']);
+  githubGit(root, ['clone', '--no-checkout', remote, source]);
+  githubGit(source, ['fetch', '--no-tags', remote, `refs/heads/${sourceBranch}:refs/remotes/frozen/personal`, `refs/heads/${feedBranch}:refs/remotes/frozen/feed`]);
+  githubGit(source, ['fetch', '--no-tags', `${github}${config.upstream}.git`, 'refs/heads/main:refs/remotes/frozen/upstream']);
   const personal = git(source, ['rev-parse', 'refs/remotes/frozen/personal']);
   const upstream = git(source, ['rev-parse', 'refs/remotes/frozen/upstream']);
   const feedHead = git(source, ['rev-parse', 'refs/remotes/frozen/feed']);
   const previous = validateRelease(JSON.parse(git(source, ['show', `${feedHead}:release.json`])), config);
   verifySignedFeed(Buffer.from(run('git', ['show', `${feedHead}:appcast.xml`], { cwd: source, encoding: null })), config.updatePublicKey);
-  const tags = git(source, ['ls-remote', '--tags', remote]).split('\n').map(line => line.split('\t')[1]?.replace('refs/tags/', '')).filter(Boolean);
+  const tags = githubGit(source, ['ls-remote', '--tags', remote]).split('\n').map(line => line.split('\t')[1]?.replace('refs/tags/', '')).filter(Boolean);
   if (!tags.includes(previous.tag)) throw new Error('The published feed has no corresponding personal release tag.');
   const build = Math.max(nextBuild(tags), Number(previous.build) + 1);
   git(source, ['checkout', '-b', 'personal-candidate', personal]);
@@ -127,19 +133,16 @@ async function publish(folder, planFolder, proofFile) {
   const archive = join(folder, 'updates', release.archive);
   if (await sha256(archive) !== release.sha256) throw new Error('Signed archive digest mismatch.');
   verifySignedFeed(readFileSync(join(folder, 'updates/appcast.xml')), config.updatePublicKey);
-  const refs = git(root, ['ls-remote', remote, `refs/heads/${sourceBranch}`, `refs/heads/${feedBranch}`, `refs/tags/${release.tag}`]);
+  const refs = githubGit(root, ['ls-remote', remote, `refs/heads/${sourceBranch}`, `refs/heads/${feedBranch}`, `refs/tags/${release.tag}`]);
   const map = new Map(refs.split('\n').filter(Boolean).map(line => { const [hash, ref] = line.split('\t'); return [ref, hash]; }));
   if (map.has(`refs/tags/${release.tag}`)) throw new Error('Release tags and assets are immutable; this build number already exists.');
   assertPublishable(plan, release, proof, { personal: map.get(`refs/heads/${sourceBranch}`), feedHead: map.get(`refs/heads/${feedBranch}`) ?? null });
   if (await sha256(join(planFolder, 'candidate.bundle')) !== plan.bundleSHA256) throw new Error('Candidate bundle digest mismatch.');
   git(root, ['fetch', join(planFolder, 'candidate.bundle'), 'personal-candidate:refs/heads/personal-release-candidate']);
   git(root, ['merge-base', '--is-ancestor', plan.personal, plan.candidate]);
-  const askpass = join(folder, 'git-askpass.sh');
-  writeFileSync(askpass, '#!/bin/sh\ncase "$1" in *Username*) printf "%s\\n" x-access-token ;; *) printf "%s\\n" "$GH_TOKEN" ;; esac\n', { mode: 0o700 });
-  const pushEnv = { ...process.env, GIT_ASKPASS: askpass, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
   try {
-    git(root, ['push', '--atomic', `--force-with-lease=refs/heads/${sourceBranch}:${plan.personal}`, remote,
-      `${plan.candidate}:refs/heads/${sourceBranch}`, `${plan.candidate}:refs/tags/${release.tag}`], { env: pushEnv });
+    githubGit(root, ['push', '--atomic', `--force-with-lease=refs/heads/${sourceBranch}:${plan.personal}`, remote,
+      `${plan.candidate}:refs/heads/${sourceBranch}`, `${plan.candidate}:refs/tags/${release.tag}`]);
   } catch (error) {
     if (/refusing to allow[\s\S]*workflow|workflow[\s\S]*(?:permission|scope)/i.test(error.stderr?.toString() ?? '')) return skip('GitHub requires an owner-approved source merge for changed workflow files. Push that reviewed merge to the personal branch, then retry. Atomic publication stopped before any release or feed changed.');
     throw error;
@@ -149,10 +152,10 @@ async function publish(folder, planFolder, proofFile) {
   const uploads = [archive, join(folder, 'release.json'), join(folder, 'updates/appcast.xml'), proofFile];
   for (const path of uploads) await uploadAsset(made.upload_url, path === proofFile ? 'update-proof.json' : basename(path), path, process.env.GH_TOKEN);
   await api(`releases/${made.id}`, 'PATCH', { draft: false, make_latest: 'false' });
-  git(root, ['fetch', '--no-tags', remote, `refs/heads/${feedBranch}:refs/remotes/personal-publish/feed`]);
+  githubGit(root, ['fetch', '--no-tags', remote, `refs/heads/${feedBranch}:refs/remotes/personal-publish/feed`]);
   if (git(root, ['rev-parse', 'refs/remotes/personal-publish/feed']) !== plan.feedHead) throw new Error('Feed branch moved; release exists but feed remains unchanged.');
   const index = join(folder, 'feed.index');
-  const indexEnv = { ...pushEnv, GIT_INDEX_FILE: index };
+  const indexEnv = { GIT_INDEX_FILE: index };
   git(root, ['read-tree', '--empty'], { env: indexEnv });
   for (const [name, path] of [['appcast.xml', join(folder, 'updates/appcast.xml')], ['release.json', join(folder, 'release.json')]]) {
     const blob = git(root, ['hash-object', '-w', '--stdin'], { input: readFileSync(path) });
@@ -160,7 +163,7 @@ async function publish(folder, planFolder, proofFile) {
   }
   const tree = git(root, ['write-tree'], { env: indexEnv });
   const commit = git(root, ['commit-tree', tree, '-p', plan.feedHead, '-m', `Publish verified personal build ${release.build}`]);
-  git(root, ['push', `--force-with-lease=refs/heads/${feedBranch}:${plan.feedHead}`, remote, `${commit}:refs/heads/${feedBranch}`], { env: pushEnv });
+  githubGit(root, ['push', `--force-with-lease=refs/heads/${feedBranch}:${plan.feedHead}`, remote, `${commit}:refs/heads/${feedBranch}`]);
   console.log(`Published ${release.tag}; signed feed advanced last to ${commit}.`);
 }
 
