@@ -138,7 +138,10 @@ export async function reviewWebKitExtension(profileId: string, savedPath?: strin
     const pkg = await inspectWebKitExtension(path);
     if (!current()) return;
     reviewCurrent = current;
-    useWebKitExtensions.setState({ review: { key, profileId, profile, pkg, permissions: [], origins: [], busy: false } });
+    const installed = useWebKitExtensions.getState().lists[profile]?.find((extension) => extension.path === pkg.path);
+    const permissions = installed?.grantedPermissions.filter((permission) => pkg.requestedPermissions.includes(permission) && pkg.supportedPermissions.includes(permission)) ?? [];
+    const origins = installed?.grantedOrigins.filter((origin) => requestedHost(origin, pkg.requestedOrigins)) ?? [];
+    useWebKitExtensions.setState({ review: { key, profileId, profile, pkg, permissions, origins, busy: false } });
   } catch (error) {
     if (current()) fail(profile, error);
   } finally {

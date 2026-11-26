@@ -103,6 +103,55 @@ test("inspection never starts code; unsupported requests remain denied and trust
   assert.match(consent.message, /not just a URL path/);
 });
 
+test("a new review starts from the saved grants the inspected package still requests and supports", async () => {
+  for (const enabled of [true, false]) {
+    const { profileId } = setup();
+    const saved = {
+      ...record(), enabled, loaded: false,
+      grantedPermissions: ["storage", "tabCapture", "dropped"],
+      grantedOrigins: ["https://gone.test/*", "https://player.example.com/*", "https://www.netflix.com/*", "<all_urls>", "http://127.0.0.1/*"],
+    };
+    rows = [saved];
+    inspect = async () => ({ ...pkg, fingerprint: "b".repeat(64), requestedOrigins: ["https://www.netflix.com/*", "https://*.example.com/*"] });
+    await actions.refreshWebKitExtensions(profileId);
+    calls.length = 0;
+    await actions.reviewWebKitExtension(profileId, saved.path);
+    assert.deepEqual(E().review.permissions, ["storage"]);
+    assert.deepEqual(E().review.origins, ["https://player.example.com/*", "https://www.netflix.com/*"]);
+    assert.deepEqual(calls.map((call) => call.verb), ["extensionInspect"], "saved grants never load code by themselves");
+    const key = E().review.key;
+    actions.selectWebKitGrant(key, "origins", "https://player.example.com/*", false);
+    actions.selectWebKitGrant(key, "permissions", "tabs", true);
+    confirmation = async () => ({ confirmed: false });
+    await actions.acceptWebKitReview(key);
+    assert.equal(calls.some((call) => call.verb === "extensionLoad"), false);
+    confirmation = async () => ({ confirmed: true });
+    await actions.acceptWebKitReview(key);
+    const loaded = calls.find((call) => call.verb === "extensionLoad");
+    assert.equal(loaded.args.fingerprint, "b".repeat(64));
+    assert.deepEqual(loaded.args.permissions, ["storage", "tabs"]);
+    assert.deepEqual(loaded.args.origins, ["https://www.netflix.com/*"]);
+    assert.match(calls.filter((call) => call.verb === "confirm").at(-1).options.message, /Site access: www\.netflix\.com\./);
+  }
+});
+
+test("saved grants belong to one folder in one profile", async () => {
+  const { profileId } = setup();
+  rows = [{ ...record(), grantedPermissions: ["storage"], grantedOrigins: ["https://www.netflix.com/*"] }];
+  await actions.refreshWebKitExtensions(profileId);
+  inspect = async () => ({ ...pkg, path: "/fixtures/another" });
+  await actions.reviewWebKitExtension(profileId, "/fixtures/another");
+  assert.deepEqual([E().review.permissions, E().review.origins], [[], []]);
+  inspect = async () => structuredClone(pkg);
+  await actions.reviewWebKitExtension(profileId);
+  assert.deepEqual([E().review.permissions, E().review.origins], [["storage"], ["https://www.netflix.com/*"]], "loading the installed folder again starts from its grants");
+  const other = S().createProfile({ name: "Other" });
+  useSettingsNav.setState({ profileId: other });
+  unbind = actions.bindWebKitSettings(other);
+  await actions.reviewWebKitExtension(other, pkg.path);
+  assert.deepEqual([E().review.profileId, E().review.permissions, E().review.origins], [other, [], []]);
+});
+
 test("declining trust starts no extension code", async () => {
   const { profileId } = setup();
   confirmation = async () => ({ confirmed: false });
