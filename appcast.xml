@@ -4,22 +4,22 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Ardia</title>
         <item>
-            <title>0.2.49-nightly.1003</title>
-            <pubDate>Thu, 26 Nov 2026 18:17:23 +0000</pubDate>
+            <title>0.2.49-nightly.1004</title>
+            <pubDate>Thu, 26 Nov 2026 20:48:36 +0000</pubDate>
             <link>https://github.com/FelixKewa/ardia</link>
             <sparkle:channel>nightly</sparkle:channel>
-            <sparkle:version>1003</sparkle:version>
-            <sparkle:shortVersionString>0.2.49-nightly.1003</sparkle:shortVersionString>
+            <sparkle:version>1004</sparkle:version>
+            <sparkle:shortVersionString>0.2.49-nightly.1004</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="plain-text"><![CDATA[Ardia Personal 1003
+            <description sparkle:format="plain-text"><![CDATA[Ardia Personal 1004
 
 Upstream Ardia improvements with the personal WebKit extension support and Kimchi compatibility tooling.
 ]]></description>
-            <enclosure url="https://github.com/FelixKewa/ardia/releases/download/personal-1003/Ardia-Personal-1003-arm64.zip" length="192776540" type="application/octet-stream" sparkle:edSignature="YYBbDhwn5fNEP+lJsb9vKl5gwRy45ltXiNkZKtSykzbCo/12eUi7dZvZdfJX7NVzqGLz/qq9EBYWFq3TccTjBw=="></enclosure>
+            <enclosure url="https://github.com/FelixKewa/ardia/releases/download/personal-1004/Ardia-Personal-1004-arm64.zip" length="192780131" type="application/octet-stream" sparkle:edSignature="hAZygNwEguZmbB1OQ+vor5OUUb8O3qVmJWgco+vfAcq92za6yOLPTXgIGJYycvwegHchSjbYrfgqEfPLC/LFDQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: iAGtrp5GMWaFzjBAt9uGDMVuTzCFz5STqSEXBpwGsw+nXM+6Y69QcRWOis/Vc7HrEN1RnjYakjQesSCZH3K3CQ==
+edSignature: /ZzmE+OTVbk/SQHGN1istprJ4aYPWVQu2fNb4SW0I1HlYQB+Q/cQ9X+y2SVj44wGnjcjxznzcMlh3cJkLmytBw==
 length: 1487
 -->
