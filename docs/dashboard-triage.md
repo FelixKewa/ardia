@@ -4,7 +4,7 @@
 
 The dashboard's `/settings` page, which settings opted-in users change, is described in `docs/dashboard-settings.md`.
 
-The `/health` page's Protected video panel (`server/sections/protected-video.ts`, section `health.protectedVideo`) shows protected video in Chromium tabs (Ardia has no Widevine support; protected video plays in WebKit): the share of installs whose latest `settings_snapshot` reports `setting_widevine_installed = "true"`, then `usage_counts`' `drm_refusals` with its stages (`drm_refusals_access`, `drm_refusals_create_keys`, `drm_refusals_licence`, `drm_refusals_keystatus`), summed per app version. Refusals counted with no stage show as No stage. The same `setting_widevine_installed` also lists on `/settings` like any setting, with default `false`.
+The `/health` page's Protected video panel (`server/sections/protected-video.ts`, section `health.protectedVideo`) shows protected video in Chromium tabs (Ardia has no Widevine support; protected video plays in WebKit): the share of installs whose latest `settings_snapshot` reports `setting_widevine_installed = "true"`, then `usage_counts`' `drm_refusals` with its stages (`drm_refusals_access`, `drm_refusals_create_keys`, `drm_refusals_licence`, `drm_refusals_keystatus`), summed per app version. Refusals counted with no stage show as No stage. Left in Chromium is `drm_refusals_webkit_sites`, refusals on a site Ardia's settings open in WebKit (the streaming list or a WebKit rule, in Automatic), which means either a page missed its move to WebKit or a tab a page opened stayed in Chromium on purpose because its opener can still reach it through `window.opener` (`engine_site_moves_kept_for_opener` counts those); its sub-line is `drm_refusals_listed_sites`, refusals on a streaming-list site whatever the settings (both from 0.2.49). WebKit full screen is `webkit_fullscreens`, pages in WebKit tabs that went full screen, with `webkit_fullscreen_frames_kept` as its sub-line: sessions in which the tab laid out while WebKit's full-screen window held the page, so the tab left the page's size to WebKit instead of shrinking it back to the windowed size (#4260; sent by builds after 0.2.49-nightly.1, so older versions show full screens with none kept). It counts that layout, not a measured page size. Both have table columns, and a version shows when it has refusals or full screens. Kept should track Full screen, since the sidebar hides on entry; on a version that sends `webkit_fullscreen_frames_kept`, full screens with none kept mean that layout path in `WebKitTab.fillWithPage` stopped running. The same `setting_widevine_installed` also lists on `/settings` like any setting, with default `false`.
 
 ## Credentials
 
@@ -126,8 +126,11 @@ The Site page's **Where they clicked Download** panel splits `download_clicked` 
 
 Performance › Freezes reads `app_freeze` over the last 7 days, grouped by `signature`: people (`uniqExact(distinct_id)`),
 freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and job, the latest version, and the top
-three frames from Ardia's own images (hover the place). Offsets symbolicate with the engine's uploaded symbols
-(`scripts/symbolicate-crash.sh`) and Hermes's with the release framework's local symbols.
+three frames from Ardia's own images. Frames read as function names wherever the build's symbols are published; hover
+a place to see each name with its raw offset. The summary line says how many places are named. The names come from
+`sandbox.ardia_frame_symbols`, which the hourly frame-naming job fills (`docs/symbolication.md`). Errors names the native
+frames of the crashes it shows the same way, and each crash row says how many native frames were named. Hermes frames
+stay raw.
 
 Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
 

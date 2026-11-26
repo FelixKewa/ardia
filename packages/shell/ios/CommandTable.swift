@@ -26,14 +26,22 @@ enum CommandTable {
     case reload
     case forceReload
     case toggleTabLayout
+    case setTabLayout
     case toggleSidebarSide
     case toggleSidebar
+    case toggleCompactToolbar
+    case togglePinnedFold
     case openSplitPane
+    case openSplitPaneBelow
     case useSelectionForFind
     case findAndReplace
     case jumpToSelection
     case focusNextPane
     case focusPreviousPane
+    case moveSplitPaneLeft
+    case moveSplitPaneRight
+    case moveSplitPaneUp
+    case moveSplitPaneDown
     case toggleFullUrl
     case toggleJavaScriptFromAppleEvents
     case toggleAddressBar
@@ -143,14 +151,24 @@ enum CommandTable {
     "reload": "Refresh",
     "forceReload": "Force Refresh the Page",
     "toggleTabLayout": "Show Tabs in Sidebar",
+    "setTabLayout:sidebarLeft": "Sidebar on Left",
+    "setTabLayout:sidebarRight": "Sidebar on Right",
+    "setTabLayout:top": "Top Tab Bar",
     "toggleSidebarSide": "Sidebar on Right",
     "toggleSidebar": "Auto-Hide Tabs",
+    "toggleCompactToolbar": "Compact Toolbar",
+    "togglePinnedFold": "Collapse Pinned Tabs",
     "openSplitPane": "Open Split Pane",
+    "openSplitPaneBelow": "Open Split Pane Below",
     "useSelectionForFind": "Use Selection for Find",
     "findAndReplace": "Find and Replace…",
     "jumpToSelection": "Jump to Selection",
     "focusNextPane": "Focus Next Split Pane",
     "focusPreviousPane": "Focus Previous Split Pane",
+    "moveSplitPaneLeft": "Move Split Pane Left",
+    "moveSplitPaneRight": "Move Split Pane Right",
+    "moveSplitPaneUp": "Move Split Pane Up",
+    "moveSplitPaneDown": "Move Split Pane Down",
     "toggleFullUrl": "Show Full URL",
     "toggleJavaScriptFromAppleEvents": "Allow JavaScript from Apple Events",
     "toggleAddressBar": "Show Address Bar in Sidebar",
@@ -261,11 +279,16 @@ enum CommandTable {
     "toggleTabLayout": [("s", [.shift, .command])],
     "toggleSidebar": [("s", [.command]), ("l", [.shift, .command]), ("f", [.shift, .command])],
     "openSplitPane": [("=", [.control, .shift]), ("+", [.control])],
+    "openSplitPaneBelow": [("-", [.control, .shift]), ("_", [.control])],
     "useSelectionForFind": [("e", [.command])],
     "findAndReplace": [("f", [.option, .command])],
     "jumpToSelection": [("j", [.command])],
     "focusNextPane": [("]", [.control, .shift]), ("}", [.control])],
     "focusPreviousPane": [("[", [.control, .shift]), ("{", [.control])],
+    "moveSplitPaneLeft": [("\u{F702}", [.control, .option])],
+    "moveSplitPaneRight": [("\u{F703}", [.control, .option])],
+    "moveSplitPaneUp": [("\u{F700}", [.control, .option])],
+    "moveSplitPaneDown": [("\u{F701}", [.control, .option])],
     "toggleMinimalism": [("m", [.control, .command])],
     "zoomReset": [("0", [.command])],
     "zoomIn": [("+", [.command]), ("=", [.command])],
@@ -277,8 +300,8 @@ enum CommandTable {
     "viewSource": [("u", [.option, .command])],
     "back": [("[", [.command]), ("\u{F702}", [.command])],
     "forward": [("]", [.command]), ("\u{F703}", [.command])],
-    "nextTab": [("]", [.shift, .command]), ("}", [.command]), ("\u{9}", [.control]), ("\u{F72D}", [.control]), ("\u{F701}", [.option, .command])],
-    "previousTab": [("[", [.shift, .command]), ("{", [.command]), ("\u{9}", [.control, .shift]), ("\u{F72C}", [.control]), ("\u{F700}", [.option, .command])],
+    "nextTab": [("]", [.shift, .command]), ("}", [.command]), ("\u{F72D}", [.control]), ("\u{F701}", [.option, .command])],
+    "previousTab": [("[", [.shift, .command]), ("{", [.command]), ("\u{F72C}", [.control]), ("\u{F700}", [.option, .command])],
     "selectTab:1": [("1", [.command])],
     "selectTab:2": [("2", [.command])],
     "selectTab:3": [("3", [.command])],
@@ -305,6 +328,8 @@ enum CommandTable {
     "cleanUpTabs": [("k", [.option, .command])],
     "searchTabs": [("a", [.shift, .command])],
     "returnToPinnedUrl": [("\u{D}", [.command])],
+    "tabSwitcher:forward": [("\u{9}", [.control])],
+    "tabSwitcher:backward": [("\u{9}", [.control, .shift])],
     "share": [("s", [.option, .command])],
     "reportProblem": [("i", [.option, .shift, .command])],
     "openFile": [("o", [.command])],

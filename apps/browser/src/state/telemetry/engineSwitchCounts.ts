@@ -23,6 +23,10 @@ const none = () => ({
   webKitExtensionGrants: 0,
   webKitExtensionActions: 0,
   webKitExtensionUnloads: 0,
+  siteMoves: 0,
+  siteMovesOpenedTabs: 0,
+  siteMovesDropped: 0,
+  siteMovesKeptForOpener: 0,
   webKitAutofillFills: 0,
   webKitAutofillSaveOffers: 0,
   webKitAutofillSaves: 0,
@@ -72,8 +76,10 @@ const none = () => ({
   webKitWebAudioAudible: 0,
   webKitPageMuteFallbacks: 0,
   webKitFullscreens: 0,
+  webKitFullscreenFramesKept: 0,
   webKitDiscards: 0,
   webKitDiscardWakes: 0,
+  webKitBackdropsHidden: 0,
   webKitHistoryRestores: 0,
   webKitUnresponsive: 0,
   webKitUnresponsiveEnded: 0,
@@ -108,6 +114,17 @@ function addSwap(to: "chromium" | "webkit", swap: EngineSwap) {
   const ms = Math.max(0, Math.round(swap.ms));
   tally.switchMsTotal += ms;
   tally.switchMsMax = Math.max(tally.switchMsMax, ms);
+}
+
+export type SiteMoveOutcome = "moved" | "dropped" | "keptForOpener";
+
+export function noteSiteMove(outcome: SiteMoveOutcome, openedByPage: boolean, consent: ConsentToken | null) {
+  counted(consent, () => {
+    if (outcome === "dropped") return void tally.siteMovesDropped++;
+    if (outcome === "keptForOpener") return void tally.siteMovesKeptForOpener++;
+    tally.siteMoves++;
+    if (openedByPage) tally.siteMovesOpenedTabs++;
+  });
 }
 
 export function noteCookiesCarried(to: "chromium" | "webkit", count: number, consent: ConsentToken | null) {
@@ -163,6 +180,10 @@ export function takeEngineSwitchCounts() {
     webkit_extension_grants: taken.webKitExtensionGrants,
     webkit_extension_actions: taken.webKitExtensionActions,
     webkit_extension_unloads: taken.webKitExtensionUnloads,
+    engine_site_moves: taken.siteMoves,
+    engine_site_moves_opened_tabs: taken.siteMovesOpenedTabs,
+    engine_site_moves_dropped: taken.siteMovesDropped,
+    engine_site_moves_kept_for_opener: taken.siteMovesKeptForOpener,
     webkit_autofill_fills: taken.webKitAutofillFills,
     webkit_autofill_save_offers: taken.webKitAutofillSaveOffers,
     webkit_autofill_saves: taken.webKitAutofillSaves,
@@ -212,8 +233,10 @@ export function takeEngineSwitchCounts() {
     webkit_web_audio_audible: taken.webKitWebAudioAudible,
     webkit_page_mute_fallbacks: taken.webKitPageMuteFallbacks,
     webkit_fullscreens: taken.webKitFullscreens,
+    webkit_fullscreen_frames_kept: taken.webKitFullscreenFramesKept,
     webkit_discards: taken.webKitDiscards,
     webkit_discard_wakes: taken.webKitDiscardWakes,
+    webkit_backdrops_hidden: taken.webKitBackdropsHidden,
     webkit_history_restores: taken.webKitHistoryRestores,
     webkit_unresponsive: taken.webKitUnresponsive,
     webkit_unresponsive_ended: taken.webKitUnresponsiveEnded,
