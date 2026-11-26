@@ -15,7 +15,7 @@ After the first manual update succeeds and `PERSONAL_NIGHTLY_ENABLED=true` is se
 
 Each update freezes the source commits, merges upstream normally, builds with the exact published engine, checks the personal features, signs on a separate worker, and proves an actual Sparkle upgrade on another worker. Invalid update-feed and archive signatures must be rejected. Only then may the source branch and release advance; the signed feed is published last. Conflicts and failed checks leave the previous working feed in place. Unchanged source and an unavailable exact engine produce a skip summary. A manual dispatch with `force=true` verifies the pipeline even when the source is unchanged.
 
-Use Ardia's **Check for Updates…** command for published personal builds. The personal build pins its own feed and keeps updater preferences separate from the official channel. It refuses an incompatible staged official update. The old **Personal Mac preview** workflow remains disabled.
+Use Ardia's **Check for Updates…** command for published personal builds. The personal build pins its own feed and keeps updater preferences separate from the official channel. It refuses an incompatible staged official update. The old **Personal Mac preview** workflow remains disabled. The fork's inherited **Checks**, **Deploy** and **Windows engine inputs** workflows are also disabled; the personal nightly controller runs its own checks and does not deploy upstream services.
 
 ## Signing material
 
