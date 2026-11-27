@@ -157,8 +157,9 @@ The debug JavaScript server must serve this checkout on the chosen port. The pac
 `packages/ardiacore/tests/webkit-extension-package.test.mjs`; settings race tests live beside the extension
 state. Native event counts reuse the consent-stamped WebKit telemetry channel. While sharing is on, hourly
 counts include `webkit_extension_loads`, `webkit_extension_load_failures`, `webkit_extension_grants`,
-`webkit_extension_actions` and `webkit_extension_unloads`. They contain no extension identities, URLs,
-permissions, folder paths, error text or extension data. Watch load failures and successful popup actions.
+`webkit_extension_actions`, `webkit_extension_action_failures` and `webkit_extension_unloads`. They contain
+no extension identities, URLs, permissions, folder paths, error text or extension data. Watch load failures,
+successful popup actions and popup action failures.
 
 ## Building and updates
 

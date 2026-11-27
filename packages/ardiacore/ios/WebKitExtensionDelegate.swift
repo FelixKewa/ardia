@@ -33,15 +33,17 @@ extension WebKitExtensionHost: WKWebExtensionControllerDelegate, NSPopoverDelega
 
   func closePopup(error: Error = WebKitExtensionPackage.failure("The extension popup was closed.")) {
     let action = popup
+    let popover = presentedPopover
     let pendingAction = popupAction
     let reply = popupReply
     popup = nil
+    presentedPopover = nil
     popupReply = nil
     popupToken = nil
     popupTab = nil
     popupContext = nil
     popupAction = nil
-    action?.popupPopover?.delegate = nil
+    popover?.delegate = nil
     action?.closePopup()
     if pendingAction !== action { pendingAction?.closePopup() }
     reply?(.failure(error))
@@ -80,6 +82,7 @@ extension WebKitExtensionHost: WKWebExtensionControllerDelegate, NSPopoverDelega
       return completionHandler(WebKitExtensionPackage.failure("Background test instances do not present extension popups."))
     }
     popup = action
+    presentedPopover = popover
     popover.behavior = .transient
     popover.animates = false
     popover.delegate = self

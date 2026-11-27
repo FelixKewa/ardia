@@ -14,6 +14,7 @@ final class WebKitExtensionHost: NSObject {
   var windows: [ObjectIdentifier: WebKitExtensionWindowAdapter] = [:]
   var pendingTabs: [ObjectIdentifier: WebKitExtensionPendingTab] = [:]
   var popup: WKWebExtension.Action?
+  var presentedPopover: NSPopover?
   var popupReply: WebKitExtensions.Reply?
   var popupToken: UUID?
   var popupTab: WebKitExtensionTabAdapter?

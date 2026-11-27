@@ -36,6 +36,7 @@ test("extension counts exclude disabled sharing and callbacks from an earlier co
     extensionLoadFailure: "webkit_extension_load_failures",
     extensionGrant: "webkit_extension_grants",
     extensionAction: "webkit_extension_actions",
+    extensionActionFailure: "webkit_extension_action_failures",
     extensionUnload: "webkit_extension_unloads",
   };
   client.setSharing(true, "settings");

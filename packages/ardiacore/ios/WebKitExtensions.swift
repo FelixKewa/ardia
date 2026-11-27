@@ -97,7 +97,7 @@ final class WebKitExtensions {
   }
 
   func show(profile: String, id: String, tabId: String, completion: @escaping Reply) {
-    let reply = counted("extensionAction", completion: completion)
+    let reply = counted("extensionAction", failure: "extensionActionFailure", completion: completion)
     do {
       try check(profile)
       guard let tab = WebKitHub.shared.transfers.liveTab(tabId), tab.profile == profile, tab.transferKey == tabId, !tab.closed else {
