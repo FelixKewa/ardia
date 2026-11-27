@@ -14,10 +14,10 @@
 | Contribution branch | FelixKewa/ardia `fix/mac-fullscreen-sidebar-gap` on upstream `main` aac043a937f8 |
 | Fix and revisions | 6476c7a71aa9 Mac full screen: pinned tabs move up into the traffic lights' band |
 | Personal integration | `codex/webkit-kimchi`: 2bd6b5a04, cherry-picked from 6476c7a71aa9 with no adaptation. Window and sidebar tests 540 of 540, the desktop module-graph test 11 of 11 and the `apps/browser` typecheck pass on the personal tree. |
-| Issue and PR | https://github.com/ardia-browser/ardia/issues/4541 (open, `bug`, assigned FelixKewa). PR pending. |
-| Evidence | Full-screen side-by-side, before on the left and after on the right, SHA-256 2b91fe4b01a6679e5b77ef87f56bff7ec8bb1cd818d78c204b7e55ceee8df27e. Felix uploads it while creating the PR. |
-| Review and CI | pending |
+| Issue and PR | https://github.com/ardia-browser/ardia/issues/4541 (open, `bug`, assigned FelixKewa). https://github.com/ardia-browser/ardia/pull/4605 (ready for review, `ready`, `vouch:unvouched`, closes #4541), created by Felix from the prefilled compare page. |
+| Evidence | Full-screen side-by-side, before on the left and after on the right, SHA-256 2b91fe4b01a6679e5b77ef87f56bff7ec8bb1cd818d78c204b7e55ceee8df27e. Uploaded by Felix while creating the PR (https://github.com/user-attachments/assets/b20ba8f0-fefe-4d8c-888e-48a1b181ff10), then moved under its caption. |
+| Review and CI | Head 6476c7a71aa9. `bug-fix-only`, `cla` and `linked-issue` pass. CodeRabbit and the gated platform builds wait for a maintainer. No review comments yet. |
 | Personal delivery | Integrated in source; not yet published or installed. |
 | Accepted upstream change | not applicable yet |
 | Reconciliation | not applicable yet |
-| Last checked | 2026-11-27: PR page prepared for Felix to add the screenshot and create. |
+| Last checked | 2026-11-27: #4605 is `ready`; Felix is at the 3-open-PR limit. Next: maintainer review and gated CI; answer findings through Developer #2. |
