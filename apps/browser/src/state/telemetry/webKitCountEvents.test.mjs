@@ -55,3 +55,12 @@ test("each automatic Picture in Picture a WebKit page in full screen held back i
   assert.equal(counts.webkit_fullscreens, 1);
   assert.equal(takeEngineSwitchCounts().webkit_auto_pip_fullscreen_holds, 0);
 });
+
+test("each time a WebKit page is kept from taking the keyboard from a field being typed in is counted in the hourly engine counts", () => {
+  startWebKitCounts();
+  takeEngineSwitchCounts();
+  counted("typingKeptFromPage");
+  counted("typingKeptFromPage");
+  assert.equal(takeEngineSwitchCounts().webkit_typing_kept_from_pages, 2);
+  assert.equal(takeEngineSwitchCounts().webkit_typing_kept_from_pages, 0);
+});

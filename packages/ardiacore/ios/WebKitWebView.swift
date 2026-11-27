@@ -26,6 +26,7 @@ final class WebKitWebView: WKWebView {
 
   override init(frame: CGRect, configuration: WKWebViewConfiguration) {
     super.init(frame: frame, configuration: configuration)
+    ArdiaKeepTypingFromPage(self)
     if WebKitHub.silenced { mutePageAudio() }
     if LaunchConfig.shared.background && !LaunchConfig.shared.instanceFlag("allowOcclusion") { treatWindowAsVisible() }
   }
