@@ -67,10 +67,11 @@ await new Promise((done, fail) => {
   server.listen(0, "127.0.0.1", done);
 });
 const base = `http://127.0.0.1:${server.address().port}`;
+const cover = `http://localhost:${server.address().port}/cover`;
 const initial = session({
   profiles: ["Personal", "Other"],
-  tabs: [{ id: "fixture", url: `${base}/fixture`, title: "WebKit fixture" }],
-  settings: { websiteEngines: { [base]: "webkit" }, engineSwitchCarriesSiteData: false },
+  tabs: [{ id: "fixture", url: `${base}/fixture`, title: "WebKit fixture" }, { id: "cover", url: cover, title: "Chromium cover" }],
+  settings: { websiteEngines: { [base]: "webkit", [new URL(cover).origin]: "chromium" }, engineSwitchCarriesSiteData: false },
 });
 let instance;
 const q = JSON.stringify;
@@ -170,8 +171,17 @@ try {
   assert.deepEqual(loaded.grantedPermissions, []);
   await engine("webKit.extensionGrant", grants);
   await reload();
-  await assertResponse(count);
+  count = await assertResponse(count);
   console.log("PASS inspected update resets grants and retains extension data");
+
+  await engine("webKit.extensionUnload", { profile: "", id });
+  await reload();
+  await instance.eval(`ac.store.getState().activate("cover"); return true`);
+  await until("the Chromium page over the WebKit page", async () => (await instance.targets()).some(target => target.type === "page" && target.url === cover));
+  await engine("webKit.extensionLoad", { ...approval, fingerprint: updated.fingerprint, permissions: grants.permissions, origins: grants.origins });
+  await reload();
+  await assertResponse(count);
+  console.log("PASS a page covered by another tab when the extension loads still reaches the extension");
 } finally {
   if (instance) await instance.quit();
   server.closeAllConnections();

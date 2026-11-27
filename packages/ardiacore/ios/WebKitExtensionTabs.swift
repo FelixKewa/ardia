@@ -49,6 +49,7 @@ final class WebKitExtensionTabAdapter: NSObject, WKWebExtensionTab {
 final class WebKitExtensionWindowAdapter: NSObject, WKWebExtensionWindow {
   weak var host: WebKitExtensionHost?
   weak var native: NSWindow?
+  weak var lastActive: WebKitExtensionTabAdapter?
 
   init(host: WebKitExtensionHost, window: NSWindow) {
     self.host = host
@@ -63,7 +64,8 @@ final class WebKitExtensionWindowAdapter: NSObject, WKWebExtensionWindow {
   func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
     guard host?.owns(context) == true else { return nil }
     if host?.popupContext === context, let target = host?.popupTab, target.hostWindow === self, target.active { return target }
-    return orderedTabs.first(where: \.active)
+    let open = orderedTabs
+    return open.first(where: \.active) ?? open.first { $0 === lastActive } ?? open.first
   }
 
   func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { host?.owns(context) == true ? orderedTabs : [] }
@@ -103,7 +105,7 @@ extension WebKitExtensionHost {
     let adapter = WebKitExtensionTabAdapter(host: self, tab: tab, window: windowAdapter)
     tabs[tab.browserId] = adapter
     controller.didOpenTab(adapter)
-    if adapter.active { controller.didActivateTab(adapter, previousActiveTab: nil) }
+    if adapter.active { reportActive(adapter) }
     if focusObservers.isEmpty {
       for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
         focusObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.focusChanged() })
@@ -123,12 +125,17 @@ extension WebKitExtensionHost {
     adapter.reportedURL = adapter.view?.url?.absoluteString
     controller.didChangeTabProperties([.URL, .title, .loading], for: adapter)
     if adapter.active {
-      controller.didActivateTab(adapter, previousActiveTab: nil)
+      reportActive(adapter)
       controller.didSelectTabs([adapter])
     } else {
       controller.didDeselectTabs([adapter])
       if popupTab === adapter { closePopup() }
     }
+  }
+
+  private func reportActive(_ adapter: WebKitExtensionTabAdapter) {
+    adapter.hostWindow?.lastActive = adapter
+    controller.didActivateTab(adapter, previousActiveTab: nil)
   }
 
   func detach(_ tab: WebKitTab) {

@@ -63,7 +63,7 @@ writeFileSync(join(extension, "content.js"), `
 document.documentElement.dataset.injected = document.readyState;
 document.addEventListener("DOMContentLoaded", () => {
   chrome.runtime.sendMessage({ kind: "fixture", token: document.documentElement.dataset.token ?? null }).then(reply => {
-    document.documentElement.dataset.extensionFixture = JSON.stringify(reply);
+    document.documentElement.dataset.extensionFixture = JSON.stringify(reply ?? { error: "no reply" });
   }).catch(error => {
     document.documentElement.dataset.extensionFixture = JSON.stringify({ error: error.message });
   });
@@ -81,8 +81,17 @@ await new Promise((done, fail) => {
 });
 const base = `http://127.0.0.1:${server.address().port}`;
 const elsewhere = `http://localhost:${server.address().port}/elsewhere`;
+const restored = [
+  { id: "fixture", windowId: "first", path: "/approved" },
+  { id: "second", windowId: "second", path: "/second" },
+];
+const unloaded = [
+  { id: "behind-first", windowId: "first", path: "/behind-first" },
+  { id: "behind-second", windowId: "second", path: "/behind-second" },
+];
 const initial = session({
-  tabs: [{ id: "fixture", url: `${base}/start`, title: "WebKit upgrade fixture" }],
+  windows: [{ id: "first" }, { id: "second", frame: [160, 120, 1100, 700] }],
+  tabs: [...restored, ...unloaded].map(({ id, windowId, path }) => ({ id, windowId, url: `${base}${path === "/approved" ? "/start" : path}`, title: id })),
   settings: { websiteEngines: { [base]: "webkit", [new URL(elsewhere).origin]: "chromium" }, engineSwitchCarriesSiteData: false },
 });
 
@@ -93,7 +102,7 @@ const engine = (name, args = {}, timeout = 120000) => {
   assert(approving || name === "webKit.extensionList", `the upgraded app must not need ${name}`);
   return instance.eval(`return ac.engine.call(${q(name)}, ${q(args)})`, { timeout });
 };
-const value = expression => instance.eval(`return ac.webviews.get("fixture")?.evaluate(${q(`post("result", JSON.stringify(${expression}))`)}) ?? null`);
+const value = (id, expression) => instance.eval(`return ac.webviews.get(${q(id)})?.evaluate(${q(`post("result", JSON.stringify(${expression}))`)}) ?? null`);
 const until = async (name, test, timeout = 15000) => {
   let last;
   for (const end = Date.now() + timeout; Date.now() < end; await sleep(100)) {
@@ -105,23 +114,30 @@ const until = async (name, test, timeout = 15000) => {
   }
   throw new Error(`Timed out waiting for ${name}${last ? `: ${last}` : ""}`);
 };
-const pageLoaded = (path, phase) => until(`the ${phase} page at ${path}`, () => value(`location.pathname === ${q(path)} && document.documentElement.dataset.served === ${q(phase)} && document.readyState === "complete"`), 30000);
+const pageLoaded = (id, path, phase) => until(`the ${phase} page at ${path}`, () => value(id, `location.pathname === ${q(path)} && document.documentElement.dataset.served === ${q(phase)} && document.readyState === "complete"`), 30000);
+const navigate = (id, url) => instance.eval(`ac.store.getState().navigate(${q(id)}, ${q(url)}, { userInitiated: true }); return true`);
+const activate = id => instance.eval(`ac.store.getState().activate(${q(id)}); return true`);
 const open = async (path, phase) => {
   served = phase;
-  await instance.eval(`ac.store.getState().navigate("fixture", ${q(`${base}${path}`)}, { userInitiated: true }); return true`);
-  await pageLoaded(path, phase);
+  await navigate("fixture", `${base}${path}`);
+  await pageLoaded("fixture", path, phase);
 };
-const extensionReply = async path => {
-  assert.equal(await value("document.documentElement.dataset.injected ?? null"), "loading", "the content script must be injected at document start");
-  const reply = await until("the extension's reply", () => value("document.documentElement.dataset.extensionFixture ? JSON.parse(document.documentElement.dataset.extensionFixture) : null"));
-  assert.equal(reply.error, undefined, reply.error);
+const extensionReply = async (id, path) => {
+  assert.equal(await value(id, "document.documentElement.dataset.injected ?? null"), "loading", "the content script must be injected at document start");
+  const reply = await until("the extension's reply", () => value(id, "document.documentElement.dataset.extensionFixture ? JSON.parse(document.documentElement.dataset.extensionFixture) : null"));
+  assert.equal(reply.error, undefined, `${id}: ${reply.error}`);
   assert.equal(reply.scriptedURL, `${base}${path}`, "script injection must reach the page");
   assert.equal(reply.token, token, "the value saved in extension storage must be readable");
   return reply;
 };
 const listed = async () => (await engine("webKit.extensionList", { profile: "" })).extensions;
 const approvalOf = row => Object.fromEntries(["id", "path", "fingerprint", "name", "version", "enabled", "loaded", "requestedPermissions", "requestedOrigins", "grantedPermissions", "grantedOrigins", "errors"].map(key => [key, row[key]]));
-const chromiumPage = async () => (await instance.targets()).some(target => target.type === "page" && target.url === elsewhere);
+const chromiumPages = async () => (await instance.targets()).filter(target => target.type === "page" && target.url === elsewhere).length;
+const coveredByNewTab = () => instance.eval(`const s = ac.store.getState(), w = s.windows.first, front = w.activeTabIds[w.profileId]; return !${q([...restored, ...unloaded].map(tab => tab.id))}.includes(front) && ["loaded", "adopted"].includes(s.tabs.fixture?.page.kind)`);
+const savedTabs = () => {
+  const { tabs } = JSON.parse(readFileSync(join(data, "session.json"), "utf8"));
+  return Array.isArray(tabs) ? tabs : Object.values(tabs);
+};
 const stored = () => {
   const root = join(data, "Chromium", "WebKit Extensions");
   const profiles = readdirSync(root);
@@ -153,12 +169,13 @@ const check = async (name, body) => {
 
 try {
   await start(oldApp, { onboarded: true, session: initial });
-  await pageLoaded("/start", "approval");
+  await pageLoaded("fixture", "/start", "approval");
+  await pageLoaded("second", "/second", "approval");
   const inspection = await engine("webKit.extensionInspect", { path: extension });
   assert.equal(inspection.name, manifest.name);
   const approval = await engine("webKit.extensionLoad", { profile: "", path: extension, fingerprint: inspection.fingerprint, permissions: manifest.permissions, origins: manifest.host_permissions });
   await open("/approved", "approval");
-  const before = await extensionReply("/approved");
+  const before = await extensionReply("fixture", "/approved");
   const rows = await listed();
   assert.equal(rows.length, 1);
   const approved = approvalOf(rows[0]);
@@ -179,11 +196,24 @@ try {
 
   approving = false;
   served = "restored";
-  await start(newApp, {});
-  await check("the restored tab runs the content script without a reload", async () => {
-    await pageLoaded("/approved", "restored");
-    await extensionReply("/approved");
+  if (!release) writeFileSync(join(data, "release-notes.json"), JSON.stringify({ version: 1, lastVersion: "0.0.0", pending: null }));
+  await start(newApp, { instance: { releaseNotes: true }, switches: "--proxy-server=http://127.0.0.1:9" });
+  await check("the update opens its release notes over a restored WebKit tab", async () => {
+    await until("the release notes tab over the restored tab", coveredByNewTab);
   });
+  for (const { id, path } of restored) {
+    await check(`the restored tab in the ${id === "fixture" ? "covered" : "other"} window gets a reply without a reload`, async () => {
+      await pageLoaded(id, path, "restored");
+      await extensionReply(id, path);
+    });
+  }
+  for (const { id, windowId, path } of unloaded) {
+    await check(`the unloaded tab in the ${windowId} window gets a reply without a reload once opened`, async () => {
+      await activate(id);
+      await pageLoaded(id, path, "restored");
+      await extensionReply(id, path);
+    });
+  }
   await check("the approval is listed unchanged, enabled and loaded, with no review", async () => {
     let current = [];
     await until("the extension to load", async () => {
@@ -196,13 +226,16 @@ try {
   });
   await check("a fresh page load keeps the context id, granted access, stored value and content script", async () => {
     await open("/fresh", "fresh");
-    const after = await extensionReply("/fresh");
+    const after = await extensionReply("fixture", "/fresh");
     for (const key of ["runtimeId", "baseURL", "permissions", "origins"]) assert.deepEqual(after[key], before[key], key);
   });
-  await check("the shown tab moves to a Chromium page before the next launch", async () => {
-    await instance.eval(`ac.store.getState().navigate("fixture", ${q(elsewhere)}, { userInitiated: true }); return true`);
-    await until("the Chromium page", chromiumPage, 30000);
-    await until("the saved session", () => readFileSync(join(data, "session.json"), "utf8").includes("/elsewhere"));
+  await check("both windows show a Chromium page before the next launch", async () => {
+    for (const { id } of restored) {
+      await activate(id);
+      await navigate(id, elsewhere);
+    }
+    await until("the Chromium pages", async () => await chromiumPages() === restored.length, 30000);
+    await until("the saved session", () => restored.every(({ id }) => savedTabs().some(tab => tab.id === id && tab.url === elsewhere)));
   });
   await quit();
 
@@ -220,8 +253,8 @@ try {
     assert(elapsed !== undefined, "the first extension list never answered");
     assert(elapsed < 15000, `it took ${elapsed} ms`);
   });
-  await check("that launch showed the Chromium page", async () => {
-    await until("the restored Chromium page", chromiumPage, 30000);
+  await check("that launch showed the Chromium pages", async () => {
+    await until("the restored Chromium pages", async () => await chromiumPages() === restored.length, 30000);
   });
   await quit();
   await check("the stored approval and installed package are untouched on disk", async () => {
