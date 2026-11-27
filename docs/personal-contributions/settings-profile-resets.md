@@ -14,10 +14,10 @@
 | Contribution branch | FelixKewa/ardia `fix/settings-profile-resets` on upstream `main` aac043a937f8 |
 | Fix and revisions | 9b0d5402d730 Settings keeps your picked profile when you visit another pane |
 | Personal integration | `codex/webkit-kimchi`: e85e72c8f, cherry-picked from 9b0d5402d730 with no adaptation. Settings and extensions tests 423 of 423 and the `apps/browser` typecheck pass on the personal tree. |
-| Issue and PR | https://github.com/ardia-browser/ardia/issues/4593 (open, unlabelled). https://github.com/ardia-browser/ardia/pull/4594 (draft, `incomplete`, `vouch:unvouched`, `not-a-bug-fix`). |
-| Evidence | Side-by-side screenshot of the "General, then Profiles" step, before on the left and after on the right, SHA-256 b6cec0656e7dfe3d73e481fe03ef0d529a86b15e00ced7c2c1789d062084047a. Not yet attached: an automated public upload was refused, so Felix attaches it to the PR description. Before and after step results and test output are in the PR body. |
-| Review and CI | Head 9b0d5402d730. Gated builds wait for a maintainer. The CLA bot will ask Felix; signing is his. |
+| Issue and PR | https://github.com/ardia-browser/ardia/issues/4593 (open, unlabelled). https://github.com/ardia-browser/ardia/pull/4594 (ready for review, `incomplete`, `vouch:unvouched`, `not-a-bug-fix`). |
+| Evidence | Side-by-side screenshot of the "General, then Profiles" step, before on the left and after on the right, SHA-256 b6cec0656e7dfe3d73e481fe03ef0d529a86b15e00ced7c2c1789d062084047a. Felix uploaded it to the PR description through the web UI (https://github.com/user-attachments/assets/aa882ab5-b748-49bb-b7af-b4838f63996c), after an automated public upload was refused. Before and after step results and test output are in the PR body. |
+| Review and CI | Head 9b0d5402d730. `cla` fails until Felix signs; `bug-fix-only` fails until a maintainer labels #4593 `bug`; `linked-issue` and `vouch` pass. CodeRabbit and gated builds wait for a maintainer. No review comments yet. |
 | Personal delivery | Integrated in source; not yet published or installed. |
 | Accepted upstream change | not applicable yet |
 | Reconciliation | not applicable yet |
-| Last checked | 2026-11-27: waiting for Felix to attach the screenshot and for a maintainer to label #4593 `bug`; then mark #4594 ready. |
+| Last checked | 2026-11-27: #4594 marked ready. Waiting for Felix's decision on the CLA and for a maintainer to label #4593 `bug`. |
