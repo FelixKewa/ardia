@@ -21,7 +21,7 @@ export function WebKitExtensionsSection({ profileId }: { profileId: string }) {
     <>
       <SectionHeader title="WebKit Extensions" />
       <Group>
-        <Row anchor="profiles.webKitExtensions" description={available === false ? "WebKit extensions require macOS 15.4 or later." : "Load a trusted extension folder for this profile's WebKit tabs. Private windows are excluded. Reload existing WebKit tabs after loading, disabling, or changing access: previously injected scripts may remain until reload."}>
+        <Row anchor="profiles.webKitExtensions" description={available === false ? "WebKit extensions require macOS 15.4 or later." : "Load a trusted extension folder for this profile's WebKit tabs. Private windows are excluded. Loading an extension again reloads the open pages it runs on. After disabling one, reload its pages yourself: injected scripts remain until then."}>
           <Button title={choosing ? "Inspecting…" : "Load Folder…"} disabled={available !== true || choosing || !!review?.busy} onPress={() => void reviewWebKitExtension(profileId)} />
         </Row>
         {list.map((extension) => (

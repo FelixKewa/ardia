@@ -17,8 +17,9 @@ opens its action against that tab. Direct icons take priority in narrow toolbars
 space allows; right-clicking an icon also opens extension management and overflow. Toolbar visibility follows
 the same address-bar hover preference as Chromium extensions. Private
 WebKit tabs have no extension host. Disable turns off an extension, while keeping its
-stored data. Reload already open pages after loading, disabling, or changing permissions because scripts
-previously injected into a page can remain until navigation.
+stored data. Loading an extension again after it has run reloads the open pages its content scripts run on,
+because WebKit leaves their earlier scripts unable to reach the new background. After disabling one, reload its
+pages yourself: injected scripts can remain until navigation.
 
 Approved API permissions are `activeTab`, `scripting`, `storage`, `unlimitedStorage`, `contextMenus`, and `tabs`.
 Host grants are exact HTTPS hosts, including all paths; WebKit's match patterns do not isolate ports. A broad
@@ -112,8 +113,8 @@ Kimchi adaptations.
 Preparation leaves the original folder untouched, refuses an existing destination or symbolic links, and does
 not download or redistribute the extension. Normal inspection and fingerprint approval apply to the prepared
 copy. For an existing installation, keep the existing source-folder path when replacing its prepared contents
-after backing them up; then use Review access, select the required grants, approve the changed package, and
-reload the page. Using the same source path preserves the extension identity and its stored data.
+after backing them up; then use Review access, select the required grants and approve the changed package;
+its open pages then reload. Using the same source path preserves the extension identity and its stored data.
 
 Allow the requested storage/script permissions and the requested hosts needed for the selected site and
 Kimchi Reader account page. Keep unsupported capture APIs off. Audio/image mining and Netflix subtitle parsing
@@ -157,9 +158,9 @@ The debug JavaScript server must serve this checkout on the chosen port. The pac
 `packages/ardiacore/tests/webkit-extension-package.test.mjs`; settings race tests live beside the extension
 state. Native event counts reuse the consent-stamped WebKit telemetry channel. While sharing is on, hourly
 counts include `webkit_extension_loads`, `webkit_extension_load_failures`, `webkit_extension_grants`,
-`webkit_extension_actions`, `webkit_extension_action_failures` and `webkit_extension_unloads`. They contain
-no extension identities, URLs, permissions, folder paths, error text or extension data. Watch load failures,
-successful popup actions and popup action failures.
+`webkit_extension_actions`, `webkit_extension_action_failures`, `webkit_extension_page_reloads` and
+`webkit_extension_unloads`. They contain no extension identities, URLs, permissions, folder paths, error text
+or extension data. Watch load failures, successful popup actions, popup action failures and page reloads.
 
 ## Building and updates
 

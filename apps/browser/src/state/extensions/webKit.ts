@@ -183,7 +183,7 @@ export async function acceptWebKitReview(key: number) {
   try {
     const { confirmed } = await confirm({
       title: `Trust ${review.pkg.name} ${review.pkg.version}?`,
-      message: `This loads extension code and starts its background code in this profile. Only continue if you trust its source. Updated code retains this extension's saved data.\n\nPermissions: ${review.permissions.map((p) => WEBKIT_PERMISSION_DETAILS[p] ?? p).join("; ") || "None"}.\n\nSite access: ${review.origins.map((p) => new URL(p).hostname).join(", ") || "None"}. Access covers all HTTPS pages on each selected host, not just a URL path. Private windows are excluded.`,
+      message: `This loads extension code and starts its background code in this profile. Only continue if you trust its source. Updated code retains this extension's saved data. If it already ran, the open pages it runs on will reload.\n\nPermissions: ${review.permissions.map((p) => WEBKIT_PERMISSION_DETAILS[p] ?? p).join("; ") || "None"}.\n\nSite access: ${review.origins.map((p) => new URL(p).hostname).join(", ") || "None"}. Access covers all HTTPS pages on each selected host, not just a URL path. Private windows are excluded.`,
       confirmTitle: "Trust and Load",
       windowId: SETTINGS_WINDOW_ID,
     });

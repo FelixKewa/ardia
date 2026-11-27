@@ -172,6 +172,17 @@ extension WebKitExtensionHost {
     }
   }
 
+  func reloadPages(running id: String, origins: [String]) -> Int {
+    guard let context = contexts[id] else { return 0 }
+    let stale = tabs.values.compactMap { adapter -> WebKitTab? in
+      guard adapter.live, let url = adapter.view?.url, context.hasInjectedContent(for: url),
+        WebKitExtensionPackage.allows(url, origins: origins, allowLoopback: LaunchConfig.shared.testInstance) else { return nil }
+      return adapter.tab
+    }
+    stale.forEach { $0.reload() }
+    return stale.count
+  }
+
   func allowsNavigation(_ url: URL, context: WKWebExtensionContext) -> Bool {
     owns(context) && WebKitExtensionPackage.allows(url, origins: records[context.uniqueIdentifier]?.origins ?? [], allowLoopback: LaunchConfig.shared.testInstance)
   }

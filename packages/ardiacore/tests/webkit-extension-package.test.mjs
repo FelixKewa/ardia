@@ -15,13 +15,17 @@ test("extension snapshots and origin grants reject changed packages and unsafe b
   }
 });
 
-test("a dismissed extension popup opens again on the next click", (t) => {
-  const home = mkdtempSync(join(tmpdir(), "ardia-webkit-extension-popup-home-"));
+const runAgainstWebKit = (t, name) => {
+  const home = mkdtempSync(join(tmpdir(), `ardia-${name}-home-`));
   try {
-    runSwiftTests(t, "webkit-extension-popup",
-      ["../ios/WebKitExtensionPackage.swift", "../ios/WebKitExtensionHost.swift", "../ios/WebKitExtensionDelegate.swift", "../ios/WebKitExtensionTabs.swift", "./webkit-extension-popup.test.swift"],
+    runSwiftTests(t, name,
+      ["../ios/WebKitExtensionPackage.swift", "../ios/WebKitExtensionHost.swift", "../ios/WebKitExtensionDelegate.swift", "../ios/WebKitExtensionTabs.swift", "./webkit-extension-host-stubs.swift", `./${name}.test.swift`],
       { env: { HOME: home, CFFIXED_USER_HOME: home } });
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
-});
+};
+
+test("a dismissed extension popup opens again on the next click", (t) => runAgainstWebKit(t, "webkit-extension-popup"));
+
+test("open pages recover when an extension is loaded again", (t) => runAgainstWebKit(t, "webkit-extension-reload"));

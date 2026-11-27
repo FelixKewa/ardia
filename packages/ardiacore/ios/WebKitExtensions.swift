@@ -12,7 +12,9 @@ final class WebKitExtensions {
     let stamp = ArdiaConsentStamp.begin()
     return { result in
       switch result {
-      case .success: ArdiaEvents.emit("webKit.counted", data: stamp.onto(["name": name]))
+      case .success(let value):
+        ArdiaEvents.emit("webKit.counted", data: stamp.onto(["name": name]))
+        if value["pagesReloaded"] as? Int ?? 0 > 0 { ArdiaEvents.emit("webKit.counted", data: stamp.onto(["name": "extensionPageReload"])) }
       case .failure: if let failure { ArdiaEvents.emit("webKit.counted", data: stamp.onto(["name": failure])) }
       }
       completion(result)

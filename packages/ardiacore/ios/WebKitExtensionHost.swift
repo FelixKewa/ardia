@@ -23,6 +23,7 @@ final class WebKitExtensionHost: NSObject {
   var focusObservers: [NSObjectProtocol] = []
   var valid = true
   private var operations: [String: UUID] = [:]
+  private var ranInThisSession = Set<String>()
   private var restoring = true
   private var remainingRestores = 0
   private var ready: [() -> Void] = []
@@ -202,6 +203,8 @@ final class WebKitExtensionHost: NSObject {
             let installed = try await WKWebExtension(resourceBaseURL: destination)
             guard self.valid, self.operations[canonical.path] == token else { throw WebKitExtensionPackage.failure("The profile or extension was closed while loading.") }
             let prior = self.contexts[id]
+            let replacing = self.ranInThisSession.contains(id)
+            let previousOrigins = self.records[id]?.origins ?? []
             if let prior { self.closePopup(); try self.controller.unload(prior); self.icons.removeObject(forKey: prior.webExtension) }
             self.cancelPendingTabs(contextId: id)
             do {
@@ -220,6 +223,7 @@ final class WebKitExtensionHost: NSObject {
             self.failures[id] = info["errors"] as? [String] ?? []
             var result = self.row(id) ?? [:]
             result["reloadRequired"] = !self.tabs.isEmpty
+            if replacing { result["pagesReloaded"] = self.reloadPages(running: id, origins: previousOrigins + record.origins) }
             completion(.success(result))
           } catch { completion(.failure(error)) }
         }
@@ -236,6 +240,7 @@ final class WebKitExtensionHost: NSObject {
     applyGrants(record, to: context)
     contexts[record.id] = context
     do { try controller.load(context) } catch { contexts.removeValue(forKey: record.id); throw error }
+    ranInThisSession.insert(record.id)
   }
 
   static func permits(_ origin: String, resource: WKWebExtension) -> Bool {
@@ -265,6 +270,7 @@ final class WebKitExtensionHost: NSObject {
     guard valid, let context = contexts[id], var record = records[id] else { throw WebKitExtensionPackage.failure("Load the extension before changing its permissions.") }
     guard !restoring, operations[record.path] == nil else { throw WebKitExtensionPackage.failure("Wait for the extension to finish loading before changing its permissions.") }
     try Self.validateGrants(permissions: permissions, origins: origins, resource: context.webExtension)
+    let previousOrigins = record.origins
     record.permissions = Array(Set(permissions)).sorted()
     record.origins = Array(Set(origins)).sorted()
     var updated = records
@@ -286,6 +292,7 @@ final class WebKitExtensionHost: NSObject {
     }
     var result = row(id) ?? [:]
     result["reloadRequired"] = !tabs.isEmpty
+    result["pagesReloaded"] = reloadPages(running: id, origins: previousOrigins + record.origins)
     return result
   }
 

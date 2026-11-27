@@ -25,6 +25,7 @@ final class WebKitExtensionPendingTab {}
 extension WebKitExtensionHost: WKWebExtensionControllerDelegate {
   func closePopup() {}
   func cancelPendingTabs(contextId: String?) {}
+  func reloadPages(running id: String, origins: [String]) -> Int { 0 }
 }
 extension NSImage { func pngDataURL(points: CGFloat, scale: CGFloat) -> String? { nil } }
 
