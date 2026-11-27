@@ -34,6 +34,7 @@ export type WebKitCount =
   | "linkSplit"
   | "littleArdiaLink"
   | "scrollZoom"
+  | "typingKeptFromPage"
   | "mouseNavigation"
   | "sampledTint"
   | "authPrompt"
@@ -106,6 +107,7 @@ export const WEBKIT_COUNTS = {
   linkSplit: "webKitLinkSplits",
   littleArdiaLink: "webKitLittleArdiaLinks",
   scrollZoom: "webKitScrollZooms",
+  typingKeptFromPage: "webKitTypingKeptFromPages",
   mouseNavigation: "webKitMouseNavigations",
   sampledTint: "webKitSampledTints",
   authPrompt: "webKitAuthPrompts",
