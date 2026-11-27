@@ -78,7 +78,7 @@ Prefer in-process captures and synthetic pages. Never record the user's desktop 
 
 Store evidence outside the source tree and record hashes. Put the screenshot or recording in the PR description itself, uploaded through GitHub's web editor. The readiness automation reads only the description; images in comments do not count.
 - Upload it with the signed-in browser's file upload when Felix has allowed that.
-- Otherwise give him the prepared file and say exactly where in the description to drop it.
+- Otherwise push the branch and open a prefilled compare page in his browser (`/compare/main...FelixKewa:ardia:<branch>?quick_pull=1&title=…&body=…`), with the image on his Desktop selected in Finder. He drops the image anywhere in the description and presses Create pull request. Then move the image under its caption with `gh pr edit --body-file`, keeping the model line last and any bot footer intact.
 
 Scripted public hosting, such as gists, release assets or other sites, is not an attachment method. Do not commit screenshots/videos, invent attachment URLs, or call a local-only path accessible to reviewers. Open the PR with its evidence already in the description. Keep it a draft only while required evidence is genuinely pending, and report the exact missing step.
 
