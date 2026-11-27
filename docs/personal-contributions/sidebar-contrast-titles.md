@@ -14,10 +14,10 @@
 | Contribution branch | FelixKewa/ardia `fix/sidebar-contrast-titles` on upstream `main` aac043a937f8 |
 | Fix and revisions | 0397de548e7a Sidebar: tab titles keep their colour with higher contrast text |
 | Personal integration | `codex/webkit-kimchi`: 5ee423d1a, cherry-picked from 0397de548e7a with no adaptation. `components/ui` tests 137 of 137 and the `apps/browser` typecheck pass on the personal tree. |
-| Issue and PR | https://github.com/ardia-browser/ardia/issues/2727 (open, `bug`, assigned FelixKewa). PR pending. |
-| Evidence | Side-by-side of the sidebar after a live switch to dark with higher contrast, before on the left and after on the right, SHA-256 73218dd8b73f0b9c7b83789faf9300bdf306b50074d2ea7138a43a50d850902c. Felix uploads it in the PR description. |
-| Review and CI | pending |
+| Issue and PR | https://github.com/ardia-browser/ardia/issues/2727 (open, `bug`, assigned FelixKewa). https://github.com/ardia-browser/ardia/pull/4601 (ready for review, `ready`, `vouch:unvouched`, closes #2727). Felix created it from a prefilled compare page opened in Zen. |
+| Evidence | Side-by-side of the sidebar after a live switch to dark with higher contrast, before on the left and after on the right, SHA-256 73218dd8b73f0b9c7b83789faf9300bdf306b50074d2ea7138a43a50d850902c. Felix uploaded it while creating the PR (https://github.com/user-attachments/assets/844c73c6-9a4c-4215-bfe4-630c015f7640); it was then moved under its caption so the model line stays last. |
+| Review and CI | Head 0397de548e7a. `bug-fix-only`, `cla` and `linked-issue` pass; the CLA bot found the stored signature and asked nothing. CodeRabbit and the gated platform builds wait for a maintainer. No review comments yet. |
 | Personal delivery | Integrated in source; not yet published or installed. |
 | Accepted upstream change | not applicable yet |
 | Reconciliation | not applicable yet |
-| Last checked | 2026-11-27: PR page prepared for Felix to add the screenshot and create. |
+| Last checked | 2026-11-27: #4601 is `ready`. Next: maintainer review and gated CI; answer Greptile or maintainer findings through Developer #1. |
