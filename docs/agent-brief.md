@@ -381,7 +381,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `pip` · `pipZoom` | PiP windows to `/tmp/ac-pip-trace.log` · PiP zoom gestures, `[pip-zoom]` |
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |
 | | `profileGate` | The browser process's parsed and gated command lines, at startup and after chrome://flags |
-| `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain |
+| `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain. The app reads it too for WebKit's WebCrypto master key (`LaunchKeychain.swift`): `Test WebCrypto Master Key` stands for WebKit's keychain item (base64 of 16 bytes), and each read and outcome is logged to `Chromium/Test App Keychain Log`. Without this seam, the mock keychain keeps that key in `Chromium/Mock WebCrypto Master Key` |
 | | `safeStorageAnswer=start-over` | Answers the Safe Storage dialog with Start Over (background mode) |
 | | `reauth=granted` | Grants macOS re-auth requests in background mode (otherwise refused) |
 | | `bluetoothChooser` · `mediaRouteProvider` · `externalProtocolNoLaunch` · `systemMediaPermission=denied\|ask\|ask-slow` | Engine fakes: Bluetooth chooser events, a test Cast sink, external protocols recorded instead of opened, camera and microphone permission |

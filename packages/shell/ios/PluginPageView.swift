@@ -126,7 +126,9 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     web = nil
     guard PluginFolders.isName(plugin) else { return }
     let configuration = WKWebViewConfiguration()
-    configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: Self.storeIdentifier(plugin))
+    let store = WKWebsiteDataStore(forIdentifier: Self.storeIdentifier(plugin))
+    WebCryptoStoreKeys.cover(store)
+    configuration.websiteDataStore = store
     configuration.setURLSchemeHandler(
       PluginSchemeHandler(plugin: plugin, folderId: folderId, approved: approved, policy: network ? nil : Self.offlinePolicy), forURLScheme: PluginSchemeHandler.scheme)
     configuration.userContentController.addUserScript(pageScript())

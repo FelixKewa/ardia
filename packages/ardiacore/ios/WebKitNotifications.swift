@@ -262,11 +262,10 @@ final class WebKitNotifications {
   }
 
   func attachWorkers(to store: WKWebsiteDataStore, profile: String) {
-    let setter = NSSelectorFromString("set_delegate:")
-    guard !WebKitStores.isPrivate(profile), workerDelegates[ObjectIdentifier(store)] == nil, store.responds(to: setter) else { return }
+    guard !WebKitStores.isPrivate(profile), workerDelegates[ObjectIdentifier(store)] == nil else { return }
     let delegate = WebKitWorkerNotifications(profile: profile, owner: self)
+    guard delegate.attach(to: store) else { return }
     workerDelegates[ObjectIdentifier(store)] = delegate
-    store.perform(setter, with: delegate)
     for origin in Set(granted.values.flatMap(\.keys)) { announceShared(origin) }
     primePermissions(profile)
   }
@@ -388,13 +387,14 @@ final class WebKitNotifications {
   optional func processPersistentNotificationClose(_ notification: NSDictionary, completionHandler: @escaping (Bool) -> Void)
 }
 
-final class WebKitWorkerNotifications: NSObject {
+final class WebKitWorkerNotifications: WebCryptoStoreKeys {
   let profile: String
   private weak var owner: WebKitNotifications?
 
   init(profile: String, owner: WebKitNotifications) {
     self.profile = profile
     self.owner = owner
+    super.init()
   }
 
   @objc(notificationPermissionsForWebsiteDataStore:)

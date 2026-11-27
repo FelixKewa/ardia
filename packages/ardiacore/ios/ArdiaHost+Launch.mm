@@ -25,6 +25,10 @@
 #include <string>
 #include <vector>
 
+@interface ArdiaLaunchKeychain : NSObject
++ (void)prepareWithDirectory:(NSString *)directory mockKeychain:(BOOL)mockKeychain;
+@end
+
 using namespace ardia_host;
 
 static void TryEarlyLittleWindow();
@@ -497,6 +501,7 @@ void StartEarlyWindow() {
   const bool mockKeychain = gScratchDataDir || !(IsTeamSigned() || ArdiaCurrentPersonalLaunch() == ArdiaPersonalLaunchVerified);
   if (mockKeychain) extra.push_back("--use-mock-keychain");
   ardia_host::PrepareStartup(gDataDirectory);
+  [ArdiaLaunchKeychain prepareWithDirectory:gDataDirectory mockKeychain:mockKeychain];
   ArdiaLaunchSequence.shared.startupPreparedAt = LaunchNowMs();
   @autoreleasepool {
     [ArdiaEarlyWindow setDataDirectory:AppDataDirectory()];

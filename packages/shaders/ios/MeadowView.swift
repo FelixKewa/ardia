@@ -90,7 +90,9 @@ final class MeadowView: ExpoView {
     pageNight = night
     poster.isHidden = night
     let config = WKWebViewConfiguration()
-    config.websiteDataStore = .nonPersistent()
+    let store = WKWebsiteDataStore.nonPersistent()
+    WebCryptoStoreKeys.cover(store)
+    config.websiteDataStore = store
     config.userContentController.add(messages, name: MeadowMessages.name)
     config.preferences.javaScriptCanOpenWindowsAutomatically = false
     config.preferences.isElementFullscreenEnabled = false

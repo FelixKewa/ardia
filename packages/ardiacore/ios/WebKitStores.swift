@@ -35,6 +35,7 @@ final class WebKitStores {
   private func session(_ name: String) -> PrivateSession {
     if let live = privateSessions[name] { return live }
     let made = PrivateSession(store: .nonPersistent(), token: UUID().uuidString)
+    WebCryptoStoreKeys.cover(made.store)
     privateSessions[name] = made
     return made
   }
@@ -61,6 +62,7 @@ final class WebKitStores {
     if let store = persistent[profile] ?? deletedProfiles[profile] { return store }
     let identifier = Self.storeIdentifier(profile)
     let store = WKWebsiteDataStore(forIdentifier: identifier)
+    WebCryptoStoreKeys.cover(store)
     persistent[profile] = store
     UserDefaults.standard.set(true, forKey: Self.storeMadeKey(identifier))
     WebKitHub.shared.notifications.attachWorkers(to: store, profile: profile)
@@ -137,8 +139,12 @@ final class WebKitStores {
   func takeResumeHost(of profile: String) -> WKWebView? { resumeHosts.removeValue(forKey: .profile(profile)) }
 
   func forgetProfile(_ profile: String) -> WKWebsiteDataStore? {
-    deletedProfiles[profile] = .nonPersistent()
-    return persistent.removeValue(forKey: profile)
+    let standIn = WKWebsiteDataStore.nonPersistent()
+    WebCryptoStoreKeys.cover(standIn)
+    deletedProfiles[profile] = standIn
+    let removed = persistent.removeValue(forKey: profile)
+    if let removed { WebCryptoStoreKeys.cover(removed) }
+    return removed
   }
 
   func holdForTest(_ profile: String) { heldForTest[profile] = dataStore(for: profile) }
