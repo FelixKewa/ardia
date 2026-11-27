@@ -3,7 +3,7 @@ import Security
 
 final class WebCryptoMasterKey {
   enum Source: String {
-    case file, migrated, generated, rewrapped, legacy, unavailable
+    case file, migrated, generated, regenerated, rewrapped, legacy, unavailable
   }
 
   struct Resolution: Equatable {
@@ -105,15 +105,20 @@ final class WebCryptoMasterKey {
       let unsaved = Resolution(key: key, source: .legacy)
       switch stored {
       case .absent: return Attempt(outcome: save(key, secret, as: .migrated) ?? unsaved)
-      case .contents:
-        if let winner = current(secret) { return Attempt(outcome: winner) }
-        guard WebCryptoKeyFile.setAside(file) else { return Attempt(outcome: unsaved) }
-        return Attempt(outcome: save(key, secret, as: .rewrapped) ?? unsaved)
+      case .contents: return Attempt(outcome: replace(with: key, secret, as: .rewrapped) ?? unsaved)
       case .unreadable: return Attempt(outcome: unsaved)
       }
     case .missing:
-      guard stored == .absent, let fresh = random(), fresh.count == WebCryptoKeyFile.keyLength else { return Attempt(outcome: .unavailable) }
-      return Attempt(outcome: save(fresh, secret, as: .generated) ?? .unavailable)
+      switch stored {
+      case .absent:
+        guard let fresh = newKey() else { return Attempt(outcome: .unavailable) }
+        return Attempt(outcome: save(fresh, secret, as: .generated) ?? .unavailable)
+      case .contents(let contents) where WebCryptoKeyFile.isSealed(contents):
+        guard let fresh = newKey() else { return Attempt(outcome: .unavailable) }
+        return Attempt(outcome: replace(with: fresh, secret, as: .regenerated) ?? .unavailable)
+      case .contents, .unreadable:
+        return Attempt(outcome: .unavailable)
+      }
     case .unusable:
       return Attempt(outcome: .unavailable)
     }
@@ -140,6 +145,10 @@ final class WebCryptoMasterKey {
     }
   }
 
+  private func newKey() -> Data? {
+    random().flatMap { $0.count == WebCryptoKeyFile.keyLength ? $0 : nil }
+  }
+
   private func open(_ stored: WebCryptoKeyFile.Stored, _ secret: Data) -> Data? {
     guard case .contents(let contents) = stored else { return nil }
     return WebCryptoKeyFile.open(contents, secret: secret)
@@ -147,6 +156,14 @@ final class WebCryptoMasterKey {
 
   private func current(_ secret: Data) -> Resolution? {
     open(WebCryptoKeyFile.read(file), secret).map { Resolution(key: $0, source: .file) }
+  }
+
+  private func replace(with key: Data, _ secret: Data, as source: Source) -> Resolution? {
+    switch WebCryptoKeyFile.setAside(file, unlessOpenedBy: secret) {
+    case .moved: save(key, secret, as: source)
+    case .opened(let winner): Resolution(key: winner, source: .file)
+    case .failed: nil
+    }
   }
 
   private func save(_ key: Data, _ secret: Data, as source: Source) -> Resolution? {

@@ -9,6 +9,12 @@ enum WebCryptoKeyFile {
     case unreadable
   }
 
+  enum SetAside: Equatable {
+    case moved
+    case opened(Data)
+    case failed
+  }
+
   static let keyLength = 16
   static let magic = Data("ArdiaWCK".utf8)
   static let header = magic + Data([1])
@@ -26,8 +32,12 @@ enum WebCryptoKeyFile {
     return header + box
   }
 
+  static func isSealed(_ contents: Data) -> Bool {
+    contents.count == length && contents.starts(with: header)
+  }
+
   static func open(_ contents: Data, secret: Data) -> Data? {
-    guard !secret.isEmpty, contents.count == length, contents.prefix(header.count) == header,
+    guard !secret.isEmpty, isSealed(contents),
       let box = try? AES.GCM.SealedBox(combined: Data(contents.dropFirst(header.count))),
       let key = try? AES.GCM.open(box, using: sealingKey(secret), authenticating: header), key.count == keyLength
     else { return nil }
@@ -83,8 +93,11 @@ enum WebCryptoKeyFile {
     close(folder)
   }
 
-  static func setAside(_ file: URL, at date: Date = Date()) -> Bool {
+  static func setAside(_ file: URL, unlessOpenedBy secret: Data, at date: Date = Date()) -> SetAside {
     let kept = file.path + ".unreadable-\(Int(date.timeIntervalSince1970 * 1000))"
-    return renamex_np(file.path, kept, UInt32(RENAME_EXCL)) == 0
+    guard renamex_np(file.path, kept, UInt32(RENAME_EXCL)) == 0 else { return .failed }
+    guard case .contents(let contents) = read(URL(fileURLWithPath: kept)), let key = open(contents, secret: secret) else { return .moved }
+    _ = renamex_np(kept, file.path, UInt32(RENAME_EXCL))
+    return .opened(key)
   }
 }

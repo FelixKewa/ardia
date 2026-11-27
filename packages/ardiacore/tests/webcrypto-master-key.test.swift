@@ -97,6 +97,22 @@ final class FakeKeychain: AppKeychain {
     #expect(WebCryptoKeyFile.seal(original, secret: Data()) == nil)
   }
 
+  @Test func `setting a file aside keeps one that does not open and puts back one that does`() throws {
+    let folder = try Folder()
+    let good = try sealed(original, secret)
+    try good.write(to: folder.file)
+    #expect(WebCryptoKeyFile.setAside(folder.file, unlessOpenedBy: secret) == .opened(original))
+    #expect(folder.contents == good)
+    #expect(folder.names == ["WebCrypto Master Key"])
+    #expect(WebCryptoKeyFile.setAside(folder.file, unlessOpenedBy: Data("a lost secret".utf8)) == .moved)
+    #expect(folder.contents == nil)
+    let aside = folder.url.appendingPathComponent(try #require(folder.names.first))
+    #expect(aside.lastPathComponent.hasPrefix("WebCrypto Master Key.unreadable-"))
+    #expect(try Data(contentsOf: aside) == good)
+    #expect(folder.names.count == 1)
+    #expect(WebCryptoKeyFile.setAside(folder.file, unlessOpenedBy: secret) == .failed)
+  }
+
   @Test func `a new key file is private and complete and never replaces an existing one`() throws {
     let folder = try Folder()
     let mask = umask(0o277)
@@ -167,7 +183,8 @@ final class FakeKeychain: AppKeychain {
     #expect(await answer(master) == (hasItem ? original : fresh))
     #expect(keychain.secretReads == 2)
     #expect(keychain.itemReads == 1)
-    #expect(try WebCryptoKeyFile.open(#require(folder.contents), secret: secret) == (hasItem ? original : fresh))
+    let written = try #require(folder.contents)
+    #expect(WebCryptoKeyFile.open(written, secret: secret) == (hasItem ? original : fresh))
   }
 
   @Test func `while the secret is only missing nothing is cached or created until it appears`() async throws {
@@ -262,19 +279,20 @@ final class FakeKeychain: AppKeychain {
     try newer.write(to: folder.file)
     #expect(WebCryptoKeyFile.read(folder.file) == .unreadable)
     #expect(await answer(launch(FakeKeychain(secret: .found(secret), item: stored), folder)) == original)
+    #expect(await answer(launch(FakeKeychain(secret: .found(secret), item: .missing), folder)) == Data())
     #expect(folder.contents == newer)
     #expect(folder.names == ["WebCrypto Master Key"])
   }
 
-  @Test(arguments: [true, false])
-  func `a good file written by another instance during migration or repair is used and kept`(damaged: Bool) async throws {
+  @Test(arguments: ["migration", "repair", "regeneration"])
+  func `a good file written by another instance meanwhile is used and kept`(path: String) async throws {
     let folder = try Folder()
-    if damaged { #expect(WebCryptoKeyFile.create(try sealed(fresh, Data("a lost secret".utf8)), at: folder.file)) }
+    if path != "migration" { #expect(WebCryptoKeyFile.create(try sealed(fresh, Data("a lost secret".utf8)), at: folder.file)) }
     let other = Data(repeating: 3, count: 16)
     let winner = try sealed(other, secret)
     let file = folder.file
     let outcomes = Outcomes()
-    let keychain = FakeKeychain(secret: .found(secret), item: stored)
+    let keychain = FakeKeychain(secret: .found(secret), item: path == "regeneration" ? .missing : stored)
     keychain.beforeItem = {
       try? FileManager.default.removeItem(at: file)
       _ = WebCryptoKeyFile.create(winner, at: file)
@@ -309,18 +327,91 @@ final class FakeKeychain: AppKeychain {
     let kept = folder.names.filter { $0.hasPrefix("WebCrypto Master Key.unreadable-") }
     #expect(kept.count == 1)
     #expect(folder.names.count == 2)
-    #expect(try Data(contentsOf: folder.url.appendingPathComponent(#require(kept.first))) == damaged)
-    #expect(try WebCryptoKeyFile.open(#require(folder.contents), secret: secret) == original)
+    let aside = folder.url.appendingPathComponent(try #require(kept.first))
+    #expect(try Data(contentsOf: aside) == damaged)
+    let rebuilt = try #require(folder.contents)
+    #expect(WebCryptoKeyFile.open(rebuilt, secret: secret) == original)
     #expect(outcomes.sources == [.rewrapped])
   }
 
-  @Test(arguments: [KeychainRead.missing, .failed(errSecAuthFailed)])
-  func `a key file that does not open stays untouched without the old item`(item: KeychainRead) async throws {
+  @Test func `a key file sealed under a lost secret is kept aside and replaced when there is no old item`() async throws {
     let folder = try Folder()
-    let damaged = try sealed(original, Data("a lost secret".utf8))
-    #expect(WebCryptoKeyFile.create(damaged, at: folder.file))
+    let lost = try sealed(original, Data("a lost secret".utf8))
+    #expect(WebCryptoKeyFile.create(lost, at: folder.file))
+    let outcomes = Outcomes()
+    let first = FakeKeychain(secret: .found(secret), item: .missing)
+    #expect(await answer(launch(first, folder, outcomes)) == fresh)
+    let kept = folder.names.filter { $0.hasPrefix("WebCrypto Master Key.unreadable-") }
+    #expect(kept.count == 1)
+    #expect(folder.names.count == 2)
+    let aside = folder.url.appendingPathComponent(try #require(kept.first))
+    #expect(try Data(contentsOf: aside) == lost)
+    let rebuilt = try #require(folder.contents)
+    #expect(WebCryptoKeyFile.open(rebuilt, secret: secret) == fresh)
+    #expect(folder.mode == 0o600)
+    let later = FakeKeychain(secret: .found(secret), item: .missing)
+    #expect(await answer(launch(later, folder, outcomes, random: { Data(repeating: 1, count: 16) })) == fresh)
+    #expect(first.itemReads == 1)
+    #expect(later.itemReads == 0)
+    #expect(outcomes.sources == [.regenerated, .file])
+  }
+
+  @Test(arguments: [
+    KeychainRead.failed(errSecAuthFailed), .failed(errSecUserCanceled), .failed(errSecInteractionNotAllowed),
+    .found(Data("not base64!".utf8)), .found(Data(Data(repeating: 1, count: 32).base64EncodedString().utf8)),
+  ])
+  func `a failing key file is not replaced while the old item might hold the key`(item: KeychainRead) async throws {
+    let folder = try Folder()
+    let lost = try sealed(original, Data("a lost secret".utf8))
+    #expect(WebCryptoKeyFile.create(lost, at: folder.file))
     #expect(await answer(launch(FakeKeychain(secret: .found(secret), item: item), folder)) == Data())
-    #expect(folder.contents == damaged)
+    #expect(folder.contents == lost)
+    #expect(folder.names == ["WebCrypto Master Key"])
+  }
+
+  @Test(arguments: ["empty", "truncated", "extended", "foreign", "renamed"])
+  func `an incomplete or foreign key file is never replaced`(kind: String) async throws {
+    let folder = try Folder()
+    let whole = try sealed(original, Data("a lost secret".utf8))
+    let contents: Data
+    switch kind {
+    case "empty": contents = Data()
+    case "truncated": contents = Data(whole.dropLast())
+    case "extended": contents = whole + Data([0])
+    case "foreign": contents = Data(repeating: 0x41, count: 53)
+    default: contents = Data("ArdiaWCX".utf8) + whole.dropFirst(8)
+    }
+    try contents.write(to: folder.file)
+    #expect(!WebCryptoKeyFile.isSealed(contents))
+    #expect(await answer(launch(FakeKeychain(secret: .found(secret), item: .missing), folder)) == Data())
+    #expect(folder.contents == contents)
+    #expect(folder.names == ["WebCrypto Master Key"])
+  }
+
+  @Test(arguments: [KeychainRead.missing, .failed(errSecAuthFailed)])
+  func `a failing key file stays while the secret cannot be read`(read: KeychainRead) async throws {
+    let folder = try Folder()
+    let lost = try sealed(original, Data("a lost secret".utf8))
+    #expect(WebCryptoKeyFile.create(lost, at: folder.file))
+    let keychain = FakeKeychain(secret: read, item: .missing)
+    #expect(await answer(launch(keychain, folder)) == Data())
+    #expect(keychain.itemReads == 0)
+    #expect(folder.contents == lost)
+    #expect(folder.names == ["WebCrypto Master Key"])
+  }
+
+  @Test(arguments: ["random", "folder"])
+  func `a failing key file stays when a replacement cannot be made or the old one moved`(failure: String) async throws {
+    let folder = try Folder()
+    let lost = try sealed(original, Data("a lost secret".utf8))
+    #expect(WebCryptoKeyFile.create(lost, at: folder.file))
+    if failure == "folder" { #expect(chmod(folder.url.path, 0o500) == 0) }
+    defer { _ = chmod(folder.url.path, 0o700) }
+    let outcomes = Outcomes()
+    let random: (() -> Data?)? = failure == "random" ? { nil } : nil
+    #expect(await answer(launch(FakeKeychain(secret: .found(secret), item: .missing), folder, outcomes, random: random)) == Data())
+    #expect(outcomes.sources == [.unavailable])
+    #expect(folder.contents == lost)
     #expect(folder.names == ["WebCrypto Master Key"])
   }
 
@@ -391,15 +482,29 @@ final class FakeKeychain: AppKeychain {
     let hostile = try #require(ProcessInfo.processInfo.environment["ARDIA_HOSTILE_DIR"])
     let names = try FileManager.default.contentsOfDirectory(atPath: hostile)
     #expect(names.count > 100)
+    var replaced = 0
+    var left = 0
     for name in names {
       let contents = try Data(contentsOf: URL(fileURLWithPath: hostile).appendingPathComponent(name))
       #expect(WebCryptoKeyFile.open(contents, secret: secret) == nil)
       let folder = try Folder()
       try contents.write(to: folder.file)
-      #expect(await answer(launch(FakeKeychain(secret: .found(secret), item: .missing), folder)) == Data())
-      #expect(folder.contents == contents)
-      #expect(folder.names == ["WebCrypto Master Key"])
+      let key = await answer(launch(FakeKeychain(secret: .found(secret), item: .missing), folder))
+      if contents.count == 53 && contents.starts(with: Data("ArdiaWCK".utf8) + Data([1])) {
+        replaced += 1
+        #expect(key == fresh)
+        let kept = try #require(folder.names.first { $0.hasPrefix("WebCrypto Master Key.unreadable-") })
+        #expect(try Data(contentsOf: folder.url.appendingPathComponent(kept)) == contents)
+        let rebuilt = try #require(folder.contents)
+        #expect(WebCryptoKeyFile.open(rebuilt, secret: secret) == fresh)
+      } else {
+        left += 1
+        #expect(key == Data())
+        #expect(folder.contents == contents)
+        #expect(folder.names == ["WebCrypto Master Key"])
+      }
     }
+    #expect(replaced > 0 && left > 0)
   }
 
   @Test func `the system queries name exactly the engine's item and WebKit's item`() {
@@ -476,23 +581,26 @@ final class FakeKeychain: AppKeychain {
     }
   }
 
-  @Test(arguments: ["fresh", "migration", "repair"])
+  @Test(arguments: ["fresh", "migration", "repair", "regeneration"])
   func `a key that cannot be saved is used only if WebKit already holds it`(path: String) async throws {
     let folder = try Folder()
     let file = folder.url.appendingPathComponent(String(repeating: "k", count: 220))
     let damaged = try sealed(fresh, Data("a lost secret".utf8))
-    if path == "repair" { try damaged.write(to: file) }
+    let replacing = path == "repair" || path == "regeneration"
+    let makesItsOwn = path == "fresh" || path == "regeneration"
+    if replacing { try damaged.write(to: file) }
     let outcomes = Outcomes()
     let made = fresh
-    let master = WebCryptoMasterKey(keychain: FakeKeychain(secret: .found(secret), item: path == "fresh" ? .missing : stored), file: file, random: { made }) {
+    let master = WebCryptoMasterKey(keychain: FakeKeychain(secret: .found(secret), item: makesItsOwn ? .missing : stored), file: file, random: { made }) {
       outcomes.sources.append($0)
     }
     master.prepare()
-    #expect(await answer(master) == (path == "fresh" ? Data() : original))
-    #expect(outcomes.sources == [path == "fresh" ? .unavailable : .legacy])
-    #expect(folder.names.count == (path == "repair" ? 1 : 0))
-    if path == "repair" {
-      #expect(try Data(contentsOf: folder.url.appendingPathComponent(#require(folder.names.first))) == damaged)
+    #expect(await answer(master) == (makesItsOwn ? Data() : original))
+    #expect(outcomes.sources == [makesItsOwn ? .unavailable : .legacy])
+    #expect(folder.names.count == (replacing ? 1 : 0))
+    if replacing {
+      let aside = folder.url.appendingPathComponent(try #require(folder.names.first))
+      #expect(try Data(contentsOf: aside) == damaged)
     }
   }
 

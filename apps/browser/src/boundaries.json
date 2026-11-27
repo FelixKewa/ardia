@@ -2800,10 +2800,10 @@
   {
    "id": "local-key-file:WebCryptoKeyFile.swift",
    "source": "other-app",
-   "guard": "The WebCrypto master key file is read without following links, only from a regular file and at most 54 bytes. Only an exact 53-byte version 1 file that AES-GCM opens under a key derived from the Safe Storage secret is used. Anything else is never overwritten: with the secret held, a file that does not open is moved aside and rebuilt from WebKit's own keychain item when that item can be read. Without the secret or the item, or for another format version, it is left alone, and a page's WebCrypto operation fails when no old key can serve it.",
+   "guard": "The WebCrypto master key file is read without following links, only from a regular file and at most 54 bytes. Only an exact 53-byte version 1 file that AES-GCM opens under a key derived from the Safe Storage secret is used. Anything else is never used or overwritten. With the secret held, a file that does not open is moved aside, kept, and rebuilt from WebKit's own keychain item; when that item does not exist, only a complete version 1 file that fails authentication is moved aside and replaced by a new random key. Without the secret, when the item cannot be read, for another format version or for an incomplete file with no item, it is left alone, and a page's WebCrypto operation fails when no old key can serve it.",
    "checks": [
     "packages/ardiacore/ios/WebCryptoKeyFile.swift#static func open",
-    "packages/ardiacore/ios/WebCryptoMasterKey.swift#setAside",
+    "packages/ardiacore/ios/WebCryptoKeyFile.swift#setAside",
     "packages/ardiacore/tests/webcrypto-master-key.test.mjs#HOSTILE_VALUES"
    ],
    "detected": false
