@@ -9,6 +9,7 @@ const FIELDS = {
   pasteMatchStyleOptionKeys: "paste_match_style_option_keys",
   textFieldUndos: "text_field_undos",
   textFieldRedos: "text_field_redos",
+  heldKeysKeptFromPages: "held_keys_kept_from_pages",
 } as const;
 
 type Field = (typeof FIELDS)[keyof typeof FIELDS];

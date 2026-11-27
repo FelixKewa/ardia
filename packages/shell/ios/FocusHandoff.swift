@@ -214,6 +214,7 @@ final class FocusHandoff {
   func install() {
     PasteRefusal.install()
     guard monitor == nil else { return }
+    FieldKeyRepeats.shared.install { [weak self] in self?.countEditKeyAck("heldKeysKeptFromPages") }
     monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .leftMouseDown, .rightMouseDown]) { [weak self] event in
       guard let self, let window = event.window else { return event }
       let gate = self.gates[ObjectIdentifier(window)]
