@@ -52,7 +52,7 @@ If the bug cannot yet be reproduced, retain the useful evidence and state what i
 
 Reuse the matching issue when possible. Otherwise file it through the live upstream web bug form, never through the API or `gh issue create`. GitHub drops labels set by an account without triage access, so an API-created issue arrives without the form's `bug` label. Then `/take` is refused and the PR fails `bug-fix-only` until a maintainer labels it. Submit the form from a browser signed in as Felix:
 - drive his own signed-in browser when he has allowed that for GitHub;
-- otherwise send him a prefilled form link (`/issues/new?template=<form file>&title=…&<field id>=…`) and let him press Create.
+- otherwise open a prefilled form link (`/issues/new?template=<form file>&title=…&<field id>=…`) in his own browser for him (he uses Zen: `open -a /Applications/Zen.app '<url>'`). Then ask for exactly one action: press Create.
 
 Fill the current form's required fields truthfully, including version and reproduction details.
 
