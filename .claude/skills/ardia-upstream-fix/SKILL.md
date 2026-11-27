@@ -50,7 +50,13 @@ If the bug cannot yet be reproduced, retain the useful evidence and state what i
 
 ## Claim and implement one focused change
 
-Use the current upstream bug form or its exact required fields, including truthful version/reproduction details. Reuse the matching issue when possible. Claim it using the live contribution procedure and verify the resulting ownership before starting the proposed fix. Respect eligibility and concurrent-PR limits; do not label yourself trusted or add maintainer-only CI controls to bypass them.
+Reuse the matching issue when possible. Otherwise file it through the live upstream web bug form, never through the API or `gh issue create`. GitHub drops labels set by an account without triage access, so an API-created issue arrives without the form's `bug` label. Then `/take` is refused and the PR fails `bug-fix-only` until a maintainer labels it. Submit the form from a browser signed in as Felix:
+- drive his own signed-in browser when he has allowed that for GitHub;
+- otherwise send him a prefilled form link (`/issues/new?template=<form file>&title=…&<field id>=…`) and let him press Create.
+
+Fill the current form's required fields truthfully, including version and reproduction details.
+
+Before claiming, confirm from GitHub that the issue exists, is authored by Felix and carries `bug`. A form that was opened but never submitted leaves no issue. If a reused issue lacks `bug`, ask a maintainer on it rather than filing a duplicate. Claim it using the live contribution procedure and verify the resulting ownership before starting the proposed fix. Respect eligibility and concurrent-PR limits; do not label yourself trusted or add maintainer-only CI controls to bypass them.
 
 An occupied claim or PR limit blocks a new upstream submission, not a separately verified personal remedy. Keep that personal work distinct, record the upstream dependency, and do not steal the claim or open a competing PR.
 
@@ -70,7 +76,11 @@ Use the same reproduction, neutral fixture, layout, viewport and relevant settin
 
 Prefer in-process captures and synthetic pages. Never record the user's desktop or live accounts to satisfy a PR checklist, and honor any active ban on recording/capture. Keep profile data, tokens, browsing history and unrelated windows out of all evidence. A required capture that cannot be obtained is a real limitation, not permission to fabricate one.
 
-Store evidence outside the source tree, record hashes and upload the intended files through a supported GitHub attachment method. Do not commit screenshots/videos, invent attachment URLs, or call a local-only path accessible to reviewers. If upload or required evidence is unavailable, prepare the remaining work, keep the PR draft when appropriate and report the exact missing step.
+Store evidence outside the source tree and record hashes. Put the screenshot or recording in the PR description itself, uploaded through GitHub's web editor. The readiness automation reads only the description; images in comments do not count.
+- Upload it with the signed-in browser's file upload when Felix has allowed that.
+- Otherwise give him the prepared file and say exactly where in the description to drop it.
+
+Scripted public hosting, such as gists, release assets or other sites, is not an attachment method. Do not commit screenshots/videos, invent attachment URLs, or call a local-only path accessible to reviewers. Open the PR with its evidence already in the description. Keep it a draft only while required evidence is genuinely pending, and report the exact missing step.
 
 ## Deliver to the personal branch and upstream PR
 
@@ -82,7 +92,9 @@ A personal commit is not an installed update. Report the integration SHA and use
 
 Push the clean contribution branch to Felix's fork and open the upstream PR with the verified base/head repositories. Follow the current template, link the claimed issue using its required closing syntax, and explain the trigger, cause, user-visible result, test evidence and material limitations. Use [the record reference](references/contribution-record.md) for the evidence/PR contents, not as a replacement for upstream's current template.
 
-Check the final diff yourself. Do not attest that Felix performed a human review or signed an agreement when he has not. Honor active user instructions about attribution. If live upstream disclosure requirements genuinely conflict with those instructions, identify the precise conflict and leave the affected submission step pending; do not falsely claim full compliance or silently invent an attribution line.
+Check the final diff yourself. Do not attest that Felix performed a human review or signed an agreement when he has not. The CLA is his to sign, once per account; read the PR's `cla` status before asking him again. Honor active user instructions about attribution.
+
+Upstream's `CONTRIBUTING.md` asks the PR description to end with the model and harness that did the work. A plain final line such as `Model: <model> (<role>). Harness: <harness>.` meets that without the `Co-Authored-By`, "Generated with" or session-link lines that `AGENTS.md` forbids. Name every model that actually took part. If live upstream disclosure requirements genuinely conflict with those instructions, identify the precise conflict and leave the affected submission step pending; do not falsely claim full compliance or silently invent an attribution line.
 
 Use structured text arguments or a body file for multiline issue/PR text. Verify the resulting issue, PR and attachment links after creation. Public descriptions contain no local operational paths, private profile details or signing material.
 
