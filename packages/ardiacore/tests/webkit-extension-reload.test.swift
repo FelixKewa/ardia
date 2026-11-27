@@ -1,31 +1,7 @@
 import AppKit
 import Foundation
-import Network
 import Testing
 import WebKit
-
-final class LoopbackPages: @unchecked Sendable {
-  private let listener: NWListener
-
-  var port: UInt16 { listener.port?.rawValue ?? 0 }
-
-  init() throws {
-    let parameters = NWParameters.tcp
-    parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
-    listener = try NWListener(using: parameters)
-    listener.newConnectionHandler = { connection in
-      connection.start(queue: .global())
-      connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, _, _ in
-        let body = "<!doctype html><title>page</title>"
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nCache-Control: no-store\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
-        connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
-      }
-    }
-    listener.start(queue: .global())
-  }
-
-  func stop() { listener.cancel() }
-}
 
 @Suite(.serialized) @MainActor struct ExtensionReloadTests {
   func pause(_ seconds: Double = 1) async { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) }

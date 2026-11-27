@@ -26,6 +26,7 @@ extension WebKitExtensionHost: WKWebExtensionControllerDelegate {
   func closePopup() {}
   func cancelPendingTabs(contextId: String?) {}
   func reloadPages(running id: String, origins: [String]) -> Int { 0 }
+  func scheduleKeepAliveRefresh() {}
 }
 extension NSImage { func pngDataURL(points: CGFloat, scale: CGFloat) -> String? { nil } }
 

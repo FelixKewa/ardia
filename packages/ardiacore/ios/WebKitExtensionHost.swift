@@ -22,6 +22,8 @@ final class WebKitExtensionHost: NSObject {
   var popupAction: WKWebExtension.Action?
   var focusObservers: [NSObjectProtocol] = []
   var valid = true
+  let keepAlive = WebKitExtensionKeepAlive()
+  var keepAliveRefreshScheduled = false
   private var operations: [String: UUID] = [:]
   private var ranInThisSession = Set<String>()
   private var restoring = true
@@ -205,6 +207,7 @@ final class WebKitExtensionHost: NSObject {
             let prior = self.contexts[id]
             let replacing = self.ranInThisSession.contains(id)
             let previousOrigins = self.records[id]?.origins ?? []
+            self.keepAlive.stop(id)
             if let prior { self.closePopup(); try self.controller.unload(prior); self.icons.removeObject(forKey: prior.webExtension) }
             self.cancelPendingTabs(contextId: id)
             do {
@@ -217,6 +220,7 @@ final class WebKitExtensionHost: NSObject {
               if let prior {
                 self.contexts[id] = prior
                 do { try self.controller.load(prior) } catch { self.contexts.removeValue(forKey: id) }
+                self.scheduleKeepAliveRefresh()
               }
               throw error
             }
@@ -241,6 +245,7 @@ final class WebKitExtensionHost: NSObject {
     contexts[record.id] = context
     do { try controller.load(context) } catch { contexts.removeValue(forKey: record.id); throw error }
     ranInThisSession.insert(record.id)
+    scheduleKeepAliveRefresh()
   }
 
   static func permits(_ origin: String, resource: WKWebExtension) -> Bool {
@@ -278,6 +283,7 @@ final class WebKitExtensionHost: NSObject {
     closePopup()
     cancelPendingTabs(contextId: id)
     for tab in tabs.values { context.clearUserGesture(in: tab) }
+    keepAlive.stop(id)
     try controller.unload(context)
     icons.removeObject(forKey: context.webExtension)
     contexts.removeValue(forKey: id)
@@ -288,6 +294,7 @@ final class WebKitExtensionHost: NSObject {
       if let replacement = contexts.removeValue(forKey: id) { try? controller.unload(replacement) }
       contexts[id] = context
       do { try controller.load(context) } catch { contexts.removeValue(forKey: id) }
+      scheduleKeepAliveRefresh()
       throw error
     }
     var result = row(id) ?? [:]
@@ -303,6 +310,7 @@ final class WebKitExtensionHost: NSObject {
     var updated = records
     updated[id] = record
     closePopup()
+    keepAlive.stop(id)
     if let context = contexts[id] { try controller.unload(context); contexts.removeValue(forKey: id); icons.removeObject(forKey: context.webExtension) }
     do { try save(updated) } catch {
       failures[id] = ["The extension stopped, but its disabled state could not be saved."]
@@ -318,6 +326,7 @@ final class WebKitExtensionHost: NSObject {
   func forget(completion: @escaping (Bool) -> Void) {
     valid = false
     operations = [:]
+    keepAlive.stopAll()
     closePopup()
     cancelPendingTabs(contextId: nil)
     for context in contexts.values { try? controller.unload(context) }

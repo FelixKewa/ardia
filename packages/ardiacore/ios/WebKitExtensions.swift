@@ -38,6 +38,7 @@ final class WebKitExtensions {
     try check(profile)
     if let host = hosts[profile] as? WebKitExtensionHost { return host }
     let host = WebKitExtensionHost(profile: profile)
+    host.keepAlive.started = { ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "extensionKeepAlive"])) }
     hosts[profile] = host
     host.restore()
     return host

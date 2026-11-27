@@ -65,6 +65,7 @@ final class QuitFlow {
 
   func shouldTerminate() -> NSApplication.TerminateReply {
     PluginProgramLinks.holdAfterUpdates()
+    NotificationCenter.default.post(name: ArdiaQuit.changed, object: true)
     guard ShellEvents.isAttached(.app), ShellEvents.isAttached(.window) else {
       guard AppUpdater.shared.holdsQuitForStagedUpdate || PluginProgramLinks.afterUpdatesRunning else { return .terminateNow }
       quitAfterUpdaterSettles()
@@ -72,6 +73,7 @@ final class QuitFlow {
     }
     guard confirmActiveDownloads() else {
       PluginProgramLinks.resumeAfterUpdates()
+      NotificationCenter.default.post(name: ArdiaQuit.changed, object: false)
       return .terminateCancel
     }
     attempt += 1
@@ -142,6 +144,7 @@ final class QuitFlow {
       attempt += 1
       PluginProgramLinks.resumeAfterUpdates()
       Self.cancelHeldHoverLoss()
+      NotificationCenter.default.post(name: ArdiaQuit.changed, object: false)
       return NSApp.reply(toApplicationShouldTerminate: false)
     }
     guard isSaving else { return }

@@ -17,7 +17,10 @@ opens its action against that tab. Direct icons take priority in narrow toolbars
 space allows; right-clicking an icon also opens extension management and overflow. Toolbar visibility follows
 the same address-bar hover preference as Chromium extensions. Private
 WebKit tabs have no extension host. Disable turns off an extension, while keeping its
-stored data. Loading an extension again after it has run reloads the open pages its content scripts run on,
+stored data. While at least one open page is running an extension's content scripts, its background stays
+awake, because WebKit otherwise unloads it after 30 seconds even while a request is still waiting for its
+reply. It can unload again once no such page is left, and nothing wakes it while the Mac sleeps or the browser
+is quitting. Loading an extension again after it has run reloads the open pages its content scripts run on,
 because WebKit leaves their earlier scripts unable to reach the new background. After disabling one, reload its
 pages yourself: injected scripts can remain until navigation.
 
@@ -158,9 +161,10 @@ The debug JavaScript server must serve this checkout on the chosen port. The pac
 `packages/ardiacore/tests/webkit-extension-package.test.mjs`; settings race tests live beside the extension
 state. Native event counts reuse the consent-stamped WebKit telemetry channel. While sharing is on, hourly
 counts include `webkit_extension_loads`, `webkit_extension_load_failures`, `webkit_extension_grants`,
-`webkit_extension_actions`, `webkit_extension_action_failures`, `webkit_extension_page_reloads` and
-`webkit_extension_unloads`. They contain no extension identities, URLs, permissions, folder paths, error text
-or extension data. Watch load failures, successful popup actions, popup action failures and page reloads.
+`webkit_extension_actions`, `webkit_extension_action_failures`, `webkit_extension_page_reloads`,
+`webkit_extension_keep_alives` and `webkit_extension_unloads`. They contain no extension identities, URLs,
+permissions, folder paths, error text or extension data. Watch load failures, successful popup actions, popup
+action failures, page reloads and keep-awake starts.
 
 ## Building and updates
 

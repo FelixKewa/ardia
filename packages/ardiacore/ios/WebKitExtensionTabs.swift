@@ -115,11 +115,13 @@ extension WebKitExtensionHost {
       if owns(pending.context) { pending.completion(adapter, nil) }
       else { pending.completion(nil, WebKitExtensionPackage.failure("The extension closed before its new tab was ready.")) }
     }
+    scheduleKeepAliveRefresh()
   }
 
   func changed(_ tab: WebKitTab) {
     if tab.closed || tab.window == nil || tab.webView == nil { return detach(tab) }
     attach(tab)
+    scheduleKeepAliveRefresh()
     guard let adapter = tabs[tab.browserId], adapter.live else { return }
     if adapter.reportedURL != adapter.view?.url?.absoluteString, popupTab === adapter { closePopup() }
     adapter.reportedURL = adapter.view?.url?.absoluteString
@@ -144,6 +146,7 @@ extension WebKitExtensionHost {
     for context in contexts.values { context.clearUserGesture(in: adapter) }
     controller.didCloseTab(adapter, windowIsClosing: false)
     tabs.removeValue(forKey: tab.browserId)
+    scheduleKeepAliveRefresh()
     if let oldWindow = adapter.hostWindow, !tabs.values.contains(where: { $0.hostWindow === oldWindow }) {
       controller.didCloseWindow(oldWindow)
       if let native = oldWindow.native { windows.removeValue(forKey: ObjectIdentifier(native)) }
@@ -174,13 +177,31 @@ extension WebKitExtensionHost {
 
   func reloadPages(running id: String, origins: [String]) -> Int {
     guard let context = contexts[id] else { return 0 }
-    let stale = tabs.values.compactMap { adapter -> WebKitTab? in
-      guard adapter.live, let url = adapter.view?.url, context.hasInjectedContent(for: url),
-        WebKitExtensionPackage.allows(url, origins: origins, allowLoopback: LaunchConfig.shared.testInstance) else { return nil }
-      return adapter.tab
-    }
+    let stale = tabs.values.filter { runsContentScripts(context, in: $0, origins: origins) }.compactMap(\.tab)
     stale.forEach { $0.reload() }
     return stale.count
+  }
+
+  func runsContentScripts(_ context: WKWebExtensionContext, in adapter: WebKitExtensionTabAdapter, origins: [String]) -> Bool {
+    guard adapter.live, let url = adapter.view?.url, context.hasInjectedContent(for: url) else { return false }
+    return WebKitExtensionPackage.allows(url, origins: origins, allowLoopback: LaunchConfig.shared.testInstance)
+  }
+
+  func scheduleKeepAliveRefresh() {
+    guard !keepAliveRefreshScheduled else { return }
+    keepAliveRefreshScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.keepAliveRefreshScheduled = false
+      self.keepAlive.keep(self.valid ? self.contexts.values.filter { self.needsBackgroundAwake($0) } : [])
+    }
+  }
+
+  private func needsBackgroundAwake(_ context: WKWebExtensionContext) -> Bool {
+    let resource = context.webExtension
+    guard resource.hasBackgroundContent, !resource.hasPersistentBackgroundContent else { return false }
+    let origins = records[context.uniqueIdentifier]?.origins ?? []
+    return tabs.values.contains { runsContentScripts(context, in: $0, origins: origins) }
   }
 
   func allowsNavigation(_ url: URL, context: WKWebExtensionContext) -> Bool {
