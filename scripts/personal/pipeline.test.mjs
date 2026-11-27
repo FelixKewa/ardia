@@ -104,6 +104,19 @@ test('publication waits for the extension approval to survive the update from th
   assert.doesNotMatch(jobs.publish, /^    if:/m);
 });
 
+test('publication waits for WebKit to ask the signed app for its WebCrypto key', () => {
+  const source = readFileSync(new URL('../../.github/workflows/personal-nightly.yml', import.meta.url), 'utf8');
+  const jobs = Object.fromEntries([...source.split('\njobs:\n')[1].matchAll(/^  ([a-z]+):\n([\s\S]*?)(?=^  [a-z]+:\n|$(?![\s\S]))/gm)].map(match => [match[1], match[2]]));
+  const command = 'node "$RUNNER_TEMP/source/scripts/personal/webcrypto-smoke.mjs" "$RUNNER_TEMP/runtime/Ardia.app" --release > "$RUNNER_TEMP/proof/webcrypto.log" 2>&1';
+  const steps = jobs.proof.split(/^      - /m).slice(1);
+  const step = steps.findIndex(text => text.split('\n').includes(`          ${command}`));
+  assert.ok(step >= 0, 'the proof job runs the WebCrypto check against the signed app');
+  assert.match(steps[step], /^run: \|\n/);
+  const order = ['pipeline.mjs materialize "$RUNNER_TEMP/plan" "$RUNNER_TEMP/source"', 'artifact.py unzip "$RUNNER_TEMP"/signed/updates/Ardia-Personal-*-arm64.zip "$RUNNER_TEMP/runtime"', command].map(text => steps[step].indexOf(text));
+  assert.ok(order.every((position, index) => position > (order[index - 1] ?? -1)), 'the source and the signed app exist before the WebCrypto check');
+  assert.equal(source.match(/webcrypto-smoke\.mjs/g).length, 1);
+});
+
 test('bundle metadata replaces upstream release notes with the exact personal release', { skip: process.platform !== 'darwin' }, () => {
   const work = mkdtempSync('/tmp/ardia-personal-bundle-fixture-');
   try {

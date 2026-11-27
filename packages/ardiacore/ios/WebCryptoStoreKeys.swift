@@ -3,6 +3,7 @@ import WebKit
 
 public class WebCryptoStoreKeys: NSObject {
   private static var holding: UInt8 = 0
+  private static let announced: Void = NSLog("[webcrypto] master key: requested by WebKit")
 
   public static func cover(_ store: WKWebsiteDataStore) {
     WebCryptoStoreKeys().attach(to: store)
@@ -30,6 +31,7 @@ public class WebCryptoStoreKeys: NSObject {
 
   @objc(webCryptoMasterKey:)
   func webCryptoMasterKey(_ completion: @escaping (Data) -> Void) {
+    _ = Self.announced
     guard let master = WebCryptoMasterKey.shared else { return completion(Data()) }
     master.answer(completion)
   }

@@ -59,6 +59,14 @@ test("every Mac web data store takes the key hook before a page can use it", () 
   assert.deepEqual(found, websiteDataStores, "a website data store was added or removed: cover it with WebCryptoStoreKeys.cover, then update this list");
 });
 
+test("the release proof uses the keychain seam and waits for the line the hook logs", () => {
+  const asked = "[webcrypto] master key: requested by WebKit";
+  const smoke = read("../scripts/personal/webcrypto-smoke.mjs");
+  assert.ok(smoke.includes('test: { keychain: "file" }'));
+  assert.ok(smoke.includes(`"${asked}"`));
+  assert.ok(read("ardiacore/ios/WebCryptoStoreKeys.swift").includes(`NSLog("${asked}")`));
+});
+
 test("Safe Storage is read once at launch, before the engine starts", () => {
   const launch = read("ardiacore/ios/ArdiaHost+Launch.mm");
   const prepared = launch.indexOf("[ArdiaLaunchKeychain prepareWithDirectory:gDataDirectory mockKeychain:mockKeychain]");
